@@ -1,0 +1,212 @@
+<app-portal-layout portalTitle="Admin Portal" pageTitle="Mark Sheet" [navSections]="adminNav">
+
+  @if (toast(); as t) {
+    <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>
+  }
+
+  <header class="admin-hero">
+    <div class="admin-hero-text">
+      <p class="eyebrow">Academics · Mark schedule</p>
+      <h1 class="admin-hero-title">Class Mark Sheet</h1>
+      <p class="admin-hero-sub">
+        Generate a class mark schedule from entered exam marks. Preview or download a PDF for printing and records.
+      </p>
+    </div>
+    <div class="admin-hero-actions">
+      <a routerLink="/admin/exams" class="hero-link">Enter exam marks →</a>
+      <a routerLink="/admin/report-cards" class="hero-link">Report cards →</a>
+    </div>
+  </header>
+
+  <div class="workflow-steps">
+    <div class="step" [class.done]="filters.examTypeId"><span class="step-num">1</span> Exam type</div>
+    <div class="step-line"></div>
+    <div class="step" [class.done]="filters.termId"><span class="step-num">2</span> Term</div>
+    <div class="step-line"></div>
+    <div class="step" [class.done]="filters.classId"><span class="step-num">3</span> Class</div>
+    <div class="step-line"></div>
+    <div class="step" [class.done]="hasGenerated()"><span class="step-num">4</span> Generate</div>
+  </div>
+
+  <section class="filters-card card">
+    <div class="filters-row">
+      <label class="field">
+        <span>Exam type</span>
+        <select [(ngModel)]="filters.examTypeId" name="examType" (ngModelChange)="onFilterChange()">
+          <option value="">— Select —</option>
+          @for (t of examTypes(); track t.id) {
+            <option [value]="t.id">{{ t.name }}</option>
+          }
+        </select>
+      </label>
+      <label class="field">
+        <span>Term</span>
+        <select [(ngModel)]="filters.termId" name="term" (ngModelChange)="onFilterChange()">
+          <option value="">— Select —</option>
+          @for (t of terms(); track t.id) {
+            <option [value]="t.id">{{ t.name }}</option>
+          }
+        </select>
+      </label>
+      <label class="field">
+        <span>Class</span>
+        <select [(ngModel)]="filters.classId" name="class" (ngModelChange)="onFilterChange()">
+          <option value="">— Select —</option>
+          @for (c of classes(); track c.id) {
+            <option [value]="c.id">{{ c.name }}</option>
+          }
+        </select>
+      </label>
+      <button
+        type="button"
+        class="btn-generate"
+        (click)="generateMarkSheet()"
+        [disabled]="loading() || !filtersReady()"
+      >
+        @if (loading()) {
+          <span class="btn-spinner"></span> Generating…
+        } @else {
+          Generate
+        }
+      </button>
+    </div>
+  </section>
+
+  @if (hasGenerated() && sheet(); as data) {
+    <section class="card toolbar-card">
+      <div class="toolbar-top">
+        <div>
+          <h2>{{ data.class.name }}</h2>
+          <p class="meta">{{ sessionLabel() }} · Max {{ data.examType.maxMarks }} marks</p>
+        </div>
+        <div class="pdf-actions">
+          <button type="button" class="btn-pdf btn-preview" (click)="previewPdf()" [disabled]="pdfLoading()">
+            Preview PDF
+          </button>
+          <button type="button" class="btn-pdf btn-download" (click)="downloadPdf()" [disabled]="pdfLoading()">
+            Download PDF
+          </button>
+        </div>
+      </div>
+      <input
+        type="search"
+        class="search"
+        placeholder="Search student…"
+        [ngModel]="search()"
+        (ngModelChange)="search.set($event)"
+        name="q"
+      />
+    </section>
+
+    <section class="card sheet-preview-card">
+      <div class="sheet-preview-banner">
+        <div class="banner-text">
+          <strong>{{ data.schoolName || 'School Pro Academy' }}</strong>
+          <span class="banner-title">CLASS MARK SHEET</span>
+        </div>
+        <span class="exam-badge">{{ sessionLabel() }}</span>
+      </div>
+      <p class="sheet-meta-line">
+        <span><b>Exam:</b> {{ data.examType.name }}</span>
+        <span><b>Term:</b> {{ data.term.name }}</span>
+        <span><b>Class:</b> {{ data.class.name }}</span>
+        <span><b>Max Marks:</b> {{ data.examType.maxMarks }}</span>
+        <span><b>Students:</b> {{ data.students.length }}</span>
+      </p>
+      <div class="table-scroll">
+        <table class="mark-sheet-table">
+          <thead>
+            <tr class="group-row">
+              <th colspan="5"></th>
+              <th [attr.colspan]="data.subjects.length" class="group-label">Subject Scores</th>
+              <th colspan="2" class="group-label">Summary</th>
+              <th></th>
+              <th [attr.colspan]="gradeLetters.length" class="group-label">Grades</th>
+            </tr>
+            <tr>
+              <th class="sticky-col pos">POS</th>
+              <th class="sticky-col id">Student ID</th>
+              <th class="sticky-col name">Last Name</th>
+              <th class="sticky-col name">First Name</th>
+              <th class="sticky-col gender">Gender</th>
+              @for (sub of data.subjects; track sub.id) {
+                <th class="sub-col" [title]="sub.name">{{ subjectAbbrev(sub) }}</th>
+              }
+              <th class="summary-col">Count</th>
+              <th class="summary-col">Subj Passed</th>
+              <th class="summary-col">Average %</th>
+              @for (g of gradeLetters; track g) {
+                <th class="grade-count-col">{{ g }}</th>
+              }
+            </tr>
+          </thead>
+          <tbody>
+            @for (s of filteredStudents(); track s.studentId) {
+              <tr>
+                <td class="sticky-col pos">
+                  @if (s.position != null) {
+                    <span class="pos-badge">{{ s.position }}</span>
+                  } @else {
+                    —
+                  }
+                </td>
+                <td class="sticky-col id"><span class="student-id">{{ s.admissionNumber }}</span></td>
+                <td class="sticky-col name fw">{{ s.lastName }}</td>
+                <td class="sticky-col name">{{ s.firstName }}</td>
+                <td class="sticky-col gender" [class.g-male]="isMale(s.gender)" [class.g-female]="isFemale(s.gender)">
+                  {{ s.gender || '—' }}
+                </td>
+                @for (sub of data.subjects; track sub.id) {
+                  <td class="sub-col">
+                    @if (markFor(s, sub.id) != null) {
+                      <span class="mark" [class.pass]="isPassingMark(markFor(s, sub.id)!)">{{ markFor(s, sub.id) }}</span>
+                    } @else {
+                      <span class="empty-cell">—</span>
+                    }
+                  </td>
+                }
+                <td class="summary-col">{{ s.subjectCount }}</td>
+                <td class="summary-col">{{ s.subjectsPassed }}</td>
+                <td class="summary-col avg-cell">
+                  @if (s.averagePercent != null) {
+                    <span class="avg-pill">{{ s.averagePercent | number:'1.2-2' }}</span>
+                  } @else {
+                    —
+                  }
+                </td>
+                @for (g of gradeLetters; track g) {
+                  <td class="grade-count-col">
+                    @if (s.gradeCounts[g] > 0) {
+                      <span class="grade-pill">{{ s.gradeCounts[g] }}</span>
+                    } @else {
+                      <span class="grade-zero">0</span>
+                    }
+                  </td>
+                }
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      <p class="sheet-footer">Official Academic Record — {{ data.schoolName || 'School Pro Academy' }}</p>
+    </section>
+  }
+</app-portal-layout>
+
+@if (pdfPreviewOpen() && pdfPreviewUrl()) {
+  <div class="pdf-overlay maximized" role="dialog" aria-modal="true" aria-label="Mark sheet PDF preview">
+    <header class="pdf-toolbar">
+      <div class="pdf-toolbar-title">
+        <strong>Mark Sheet Preview</strong>
+        <span>{{ sessionLabel() }}</span>
+      </div>
+      <div class="pdf-toolbar-actions">
+        <button type="button" class="btn-pdf btn-download" (click)="downloadPdf()" [disabled]="pdfLoading()">
+          Download PDF
+        </button>
+        <button type="button" class="btn-pdf btn-close" (click)="closePdfPreview()">Close</button>
+      </div>
+    </header>
+    <iframe class="pdf-frame" [src]="pdfPreviewUrl()!" title="Mark sheet PDF preview"></iframe>
+  </div>
+}

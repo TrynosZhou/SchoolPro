@@ -1,0 +1,120 @@
+<app-portal-layout
+  [portalTitle]="portalTitle"
+  [pageTitle]="pageTitle"
+  [navSections]="isTeacherPortal ? teacherNav : adminNav"
+>
+  @if (toast(); as t) {
+    <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>
+  }
+
+  <header class="page-intro">
+    <p>Select a class and term to generate attendance totals for each student.</p>
+  </header>
+
+  <section class="card filter-card">
+    <div class="filter-row">
+      <div class="field">
+        <label for="classSelect">Class</label>
+        <select id="classSelect" [(ngModel)]="selectedClassId" name="classId" [disabled]="loadingClasses()">
+          <option value="">— Select class —</option>
+          @for (c of classes(); track c.id) {
+            <option [value]="c.id">{{ c.name }}</option>
+          }
+        </select>
+      </div>
+      <div class="field">
+        <label for="termSelect">Term</label>
+        <select id="termSelect" [(ngModel)]="selectedTermId" name="termId" [disabled]="loadingTerms()">
+          <option value="">— Select term —</option>
+          @for (t of terms(); track t.id) {
+            <option [value]="t.id">{{ t.name }}{{ t.isCurrent ? ' (current)' : '' }}</option>
+          }
+        </select>
+      </div>
+      <div class="field field-actions">
+        <label class="sr-only">Generate</label>
+        <button type="button" class="btn-primary" [disabled]="loadingReport()" (click)="generateReport()">
+          {{ loadingReport() ? 'Generating…' : 'Generate Report' }}
+        </button>
+      </div>
+    </div>
+  </section>
+
+  @if (hasGenerated() && report(); as r) {
+    <section class="card report-header">
+      <div>
+        <h2>{{ selectedClassLabel() }}</h2>
+        <p class="meta">
+          {{ r.term.name }}
+          @if (r.term.schoolYear) {
+            <span> · {{ r.term.schoolYear }}</span>
+          }
+          · {{ r.term.startDate | slice:0:10 }} to {{ r.term.endDate | slice:0:10 }}
+          @if (r.term.extendedEnd) {
+            <span class="range-note">(includes attendance through today; term calendar ends {{ r.term.configuredEndDate | slice:0:10 }})</span>
+          }
+        </p>
+      </div>
+      <div class="header-actions">
+        <input type="search" class="search" placeholder="Search student…" [ngModel]="search()" (ngModelChange)="search.set($event)" name="q" />
+        @if (r.students.length) {
+          <button type="button" class="btn-ghost" (click)="exportCsv()">Export CSV</button>
+        }
+      </div>
+    </section>
+
+    @if (filteredRows().length) {
+      <section class="card table-wrap">
+        <table class="report-table">
+          <thead>
+            <tr>
+              <th>Student ID</th>
+              <th>Last Name</th>
+              <th>First Name</th>
+              <th class="num">Days</th>
+              <th class="num">Present</th>
+              <th class="num">Late</th>
+              <th class="num">Absent</th>
+              <th class="num">Excused</th>
+              <th class="num">Rate</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (s of filteredRows(); track s.studentId) {
+              <tr>
+                <td><code>{{ s.admissionNumber }}</code></td>
+                <td>{{ s.lastName }}</td>
+                <td>{{ s.firstName }}</td>
+                <td class="num">{{ s.daysMarked }}</td>
+                <td class="num present">{{ s.present }}</td>
+                <td class="num late">{{ s.late }}</td>
+                <td class="num absent">{{ s.absent }}</td>
+                <td class="num excused">{{ s.excused }}</td>
+                <td class="num">
+                  @if (s.attendancePercent != null) {
+                    {{ s.attendancePercent | number:'1.0-1' }}%
+                  } @else {
+                    —
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+          <tfoot>
+            <tr class="totals-row">
+              <td colspan="3"><strong>Class totals</strong></td>
+              <td class="num">{{ classTotals().daysMarked }}</td>
+              <td class="num">{{ classTotals().present }}</td>
+              <td class="num">{{ classTotals().late }}</td>
+              <td class="num">{{ classTotals().absent }}</td>
+              <td class="num">{{ classTotals().excused }}</td>
+              <td></td>
+            </tr>
+          </tfoot>
+        </table>
+      </section>
+    } @else {
+      <p class="empty card">No students match your search.</p>
+    }
+  }
+</app-portal-layout>

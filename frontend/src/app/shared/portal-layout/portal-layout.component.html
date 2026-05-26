@@ -1,0 +1,70 @@
+<div class="layout">
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="brand-icon">SP</span>
+      <div>
+        <strong>School Pro</strong>
+        <small>{{ portalTitle }}</small>
+      </div>
+    </div>
+    <nav class="sidebar-nav">
+      @if (useSections) {
+        @for (section of navSections; track section.heading; let si = $index) {
+          <div
+            class="nav-section"
+            [class.expanded]="isExpanded(section.heading)"
+            [class.has-active]="sectionHasActive(section)"
+          >
+            <button
+              type="button"
+              class="nav-section-toggle"
+              (click)="toggleSection(section.heading)"
+              [attr.aria-expanded]="isExpanded(section.heading)"
+              [attr.aria-controls]="'nav-section-' + si"
+            >
+              <span class="nav-heading-text">{{ section.heading }}</span>
+              <span class="nav-chevron" aria-hidden="true"></span>
+            </button>
+            @if (isExpanded(section.heading)) {
+              <div class="nav-section-items" [id]="'nav-section-' + si">
+                @for (item of section.items; track item.path + item.label) {
+                  <a
+                    [routerLink]="item.path"
+                    routerLinkActive="active"
+                    [routerLinkActiveOptions]="{ exact: item.path === '/admin' || item.path === '/teacher' }"
+                  >
+                    @if (item.icon) {
+                      <span class="nav-icon" aria-hidden="true">{{ item.icon }}</span>
+                    }
+                    <span class="nav-label">{{ item.label }}</span>
+                  </a>
+                }
+              </div>
+            }
+          </div>
+        }
+      } @else {
+        @for (item of navItems; track item.path) {
+          <a [routerLink]="item.path" routerLinkActive="active">
+            @if (item.icon) {
+              <span class="nav-icon" aria-hidden="true">{{ item.icon }}</span>
+            }
+            <span class="nav-label">{{ item.label }}</span>
+          </a>
+        }
+      }
+    </nav>
+    <div class="user-panel">
+      <span class="user-name">{{ auth.user()?.firstName }} {{ auth.user()?.lastName }}</span>
+      <button type="button" class="btn-outline btn-logout" (click)="auth.logout()">Logout</button>
+    </div>
+  </aside>
+  <main class="content">
+    <header class="topbar">
+      <h1>{{ pageTitle }}</h1>
+    </header>
+    <div class="page-body">
+      <ng-content />
+    </div>
+  </main>
+</div>

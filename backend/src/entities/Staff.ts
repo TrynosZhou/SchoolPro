@@ -1,0 +1,41 @@
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  OneToOne,
+  JoinColumn,
+  CreateDateColumn,
+} from 'typeorm';
+import { User } from './User';
+
+@Entity('staff')
+export class Staff {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Column({ unique: true })
+  employeeNumber!: string;
+
+  @OneToOne(() => User, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'userId' })
+  user!: User;
+
+  @Column()
+  userId!: string;
+
+  @Column({ nullable: true })
+  department?: string;
+
+  @Column({ nullable: true })
+  qualification?: string;
+
+  @Column({ type: 'date', nullable: true })
+  hireDate?: string;
+
+  @Column({ default: true })
+  isActive!: boolean;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+}
+

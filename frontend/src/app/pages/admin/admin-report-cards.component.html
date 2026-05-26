@@ -1,0 +1,302 @@
+<app-portal-layout portalTitle="Admin Portal" pageTitle="Report Cards" [navSections]="adminNav">
+
+  @if (toast(); as t) {
+    <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>
+  }
+
+  <header class="admin-hero">
+    <div class="admin-hero-text">
+      <p class="eyebrow">Academics · Results</p>
+      <h1 class="admin-hero-title">Class Report Cards</h1>
+      <p class="admin-hero-sub">
+        Generate report cards from exam marks, ranked by class position. Preview or download polished PDFs for each learner.
+      </p>
+    </div>
+    <div class="admin-hero-actions">
+      <a routerLink="/admin/exams" class="hero-link">Exam marks →</a>
+      <a routerLink="/admin/settings" class="hero-link">Grade boundaries →</a>
+      @if (hasLoaded() && reports().length) {
+        <span class="live-pill light"><span class="pulse"></span> {{ reports().length }} generated</span>
+      }
+    </div>
+    @if (hasLoaded() && reports().length) {
+      <div class="hero-mini-stats">
+        <span>{{ stats().count }} students</span>
+        <span>Class avg {{ stats().classAvg | number:'1.1-1' }}%</span>
+        <span>Top {{ stats().topMark | number:'1.1-1' }}%</span>
+        <span>{{ stats().honourCount }} top 3</span>
+      </div>
+    }
+  </header>
+
+  <div class="workflow-steps">
+    <div class="step" [class.done]="filters.examTypeId"><span class="step-num">1</span> Exam type</div>
+    <div class="step-line"></div>
+    <div class="step" [class.done]="filters.termId"><span class="step-num">2</span> Term</div>
+    <div class="step-line"></div>
+    <div class="step" [class.done]="filters.classId"><span class="step-num">3</span> Class</div>
+    <div class="step-line"></div>
+    <div class="step" [class.done]="hasLoaded()"><span class="step-num">4</span> Load & review</div>
+  </div>
+
+  <section class="filters-card card">
+    <div class="filters-row">
+      <label class="field">
+        <span>Exam type</span>
+        <select [(ngModel)]="filters.examTypeId" name="examType" (ngModelChange)="onFilterChange()">
+          <option value="">— Select —</option>
+          @for (t of examTypes(); track t.id) {
+            <option [value]="t.id">{{ t.name }}</option>
+          }
+        </select>
+      </label>
+      <label class="field">
+        <span>Term</span>
+        <select [(ngModel)]="filters.termId" name="term" (ngModelChange)="onFilterChange()">
+          <option value="">— Select —</option>
+          @for (t of terms(); track t.id) {
+            <option [value]="t.id">{{ t.name }}</option>
+          }
+        </select>
+      </label>
+      <label class="field">
+        <span>Class</span>
+        <select [(ngModel)]="filters.classId" name="class" (ngModelChange)="onFilterChange()">
+          <option value="">— Select —</option>
+          @for (c of classes(); track c.id) {
+            <option [value]="c.id">{{ c.name }}</option>
+          }
+        </select>
+      </label>
+      <button
+        type="button"
+        class="btn-load"
+        (click)="loadReportCards()"
+        [disabled]="loading() || !filtersReady()"
+      >
+        @if (loading()) {
+          <span class="btn-spinner"></span> Generating…
+        } @else {
+          Load report cards
+        }
+      </button>
+    </div>
+  </section>
+
+  @if (hasLoaded()) {
+    @if (reports().length) {
+      <section class="kpi-grid">
+        <div class="kpi-card">
+          <span class="kpi-val">{{ stats().count }}</span>
+          <span class="kpi-lbl">Report cards</span>
+        </div>
+        <div class="kpi-card accent">
+          <span class="kpi-val">{{ stats().classAvg | number:'1.1-1' }}%</span>
+          <span class="kpi-lbl">Class average</span>
+        </div>
+        <div class="kpi-card gold">
+          <span class="kpi-val">{{ stats().topMark | number:'1.1-1' }}%</span>
+          <span class="kpi-lbl">Highest average</span>
+        </div>
+        <div class="kpi-card purple">
+          <span class="kpi-val">{{ stats().honourCount }}</span>
+          <span class="kpi-lbl">Top 3 positions</span>
+        </div>
+      </section>
+
+      @if (gradeDistribution().length) {
+        <section class="grade-dist card">
+          <h3>Grade distribution</h3>
+          <div class="dist-bars">
+            @for (g of gradeDistribution(); track g.grade) {
+              <div class="dist-row">
+                <span class="dist-grade">{{ g.grade }}</span>
+                <div class="dist-track">
+                  <div
+                    class="dist-fill"
+                    [style.width.%]="(g.count / maxGradeCount()) * 100"
+                  ></div>
+                </div>
+                <span class="dist-count">{{ g.count }}</span>
+              </div>
+            }
+          </div>
+        </section>
+      }
+
+      <div class="toolbar card">
+        <div class="toolbar-left">
+          <strong class="session-label">{{ sessionLabel() }}</strong>
+          <span class="muted">{{ filteredReports().length }} shown</span>
+        </div>
+        <div class="toolbar-right">
+          <input
+            type="search"
+            class="search"
+            placeholder="Search student or grade…"
+            [ngModel]="search()"
+            (ngModelChange)="search.set($event)"
+            name="search"
+          />
+          <div class="view-toggle">
+            <button type="button" [class.active]="viewMode() === 'cards'" (click)="setViewMode('cards')">Cards</button>
+            <button type="button" [class.active]="viewMode() === 'compact'" (click)="setViewMode('compact')">Compact</button>
+          </div>
+          <button type="button" class="btn-ghost" (click)="expandAll()">Expand all</button>
+          <button type="button" class="btn-ghost" (click)="collapseAll()">Collapse all</button>
+          <button type="button" class="btn-ghost" (click)="exportSummaryCsv()">Export CSV</button>
+        </div>
+      </div>
+
+      <div class="results-layout">
+        <aside class="jump-nav card" aria-label="Student navigation">
+          <h3>Class ranking</h3>
+          <ol class="jump-list">
+            @for (report of filteredReports(); track report.id) {
+              <li>
+                <button
+                  type="button"
+                  class="jump-item"
+                  [class.active]="activeStudentId() === report.studentId"
+                  (click)="scrollToReport(report.studentId)"
+                >
+                  <span class="jump-pos" [class.top]="(report.classPosition || 0) <= 3">
+                    {{ report.classPosition }}
+                  </span>
+                  <span class="jump-name">{{ report.student?.lastName }}, {{ report.student?.firstName }}</span>
+                  <span class="jump-grade">{{ report.overallGrade }}</span>
+                </button>
+              </li>
+            }
+          </ol>
+        </aside>
+
+        <div class="report-sequence" [class.compact]="viewMode() === 'compact'">
+          @for (report of filteredReports(); track report.id) {
+            <article
+              class="report-card card"
+              [class.collapsed]="!isExpanded(report.id)"
+              [attr.id]="'report-' + report.studentId"
+            >
+              <header class="report-card-head" (click)="toggleExpanded(report.id)">
+                <div class="position-badge" [class.top-three]="(report.classPosition || 0) <= 3">
+                  <span class="pos-label">Position</span>
+                  <span class="pos-value">{{ positionLabel(report.classPosition) }}</span>
+                </div>
+                <div class="student-block">
+                  <h2>{{ report.student?.firstName }} {{ report.student?.lastName }}</h2>
+                  <p class="meta">
+                    <span class="chip">{{ report.student?.admissionNumber }}</span>
+                    <span class="chip">{{ report.student?.schoolClass?.name }}</span>
+                    @if (report.overallGrade) {
+                      <span class="chip grade-chip">{{ report.overallGrade }}</span>
+                    }
+                    @if (report.averageMark != null) {
+                      <span class="chip avg-chip">{{ report.averageMark | number:'1.1-1' }}%</span>
+                    }
+                  </p>
+                </div>
+                <div class="head-actions" (click)="$event.stopPropagation()">
+                  <button type="button" class="btn-ghost" (click)="previewPdf(report)" [disabled]="pdfLoading()">
+                    Preview PDF
+                  </button>
+                  <button type="button" class="btn-primary-sm" (click)="downloadPdf(report)">Download</button>
+                  <span class="chevron" [class.open]="isExpanded(report.id)">▼</span>
+                </div>
+              </header>
+
+              @if (isExpanded(report.id)) {
+                <div class="report-body">
+                  <div class="table-wrap">
+                    <table class="results-table">
+                      <thead>
+                        <tr>
+                          <th>Subject</th>
+                          <th>Marks</th>
+                          <th>Grade</th>
+                          <th>Remarks</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        @for (row of report.subjectResults; track row.subject) {
+                          <tr>
+                            <td>
+                              {{ row.subjectName || row.subject }}
+                              @if (row.subjectCode) {
+                                <span class="subject-code">({{ row.subjectCode }})</span>
+                              }
+                            </td>
+                            <td class="marks">{{ row.marks }}</td>
+                            <td><span class="grade-pill">{{ row.grade }}</span></td>
+                            <td class="remarks">{{ row.remarks || '—' }}</td>
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
+                  </div>
+                  <div class="comments remarks-editor">
+                    <div class="comment-box">
+                      <span class="comment-label">Class Teacher Remark</span>
+                      <textarea
+                        rows="3"
+                        [value]="remarkDraft(report.id).classTeacherRemarks"
+                        (input)="onClassTeacherRemarkInput(report.id, $any($event.target).value)"
+                        [disabled]="!canEditClassTeacherRemark() || !!savingRemarks()[report.id]"
+                        placeholder="Write class teacher comment..."
+                      ></textarea>
+                    </div>
+                    <div class="comment-box">
+                      <span class="comment-label">Principal / Headmaster Remark</span>
+                      <textarea
+                        rows="3"
+                        [value]="remarkDraft(report.id).principalRemarks"
+                        (input)="onPrincipalRemarkInput(report.id, $any($event.target).value)"
+                        [disabled]="!canEditPrincipalRemark() || !!savingRemarks()[report.id]"
+                        placeholder="Write principal comment..."
+                      ></textarea>
+                    </div>
+                  </div>
+                  <div class="remarks-actions">
+                    <button
+                      type="button"
+                      class="btn-primary-sm"
+                      (click)="saveRemarks(report)"
+                      [disabled]="!!savingRemarks()[report.id]"
+                    >
+                      {{ savingRemarks()[report.id] ? 'Saving...' : 'Save Remarks' }}
+                    </button>
+                  </div>
+                </div>
+              }
+            </article>
+          }
+        </div>
+      </div>
+    } @else if (!loading()) {
+      <div class="empty card">
+        <div class="empty-icon">📄</div>
+        <h3>No report cards generated</h3>
+        <p>Enter exam marks for this class, exam type, and term on the <a routerLink="/admin/exams">Exam Marks</a> page, then try again.</p>
+      </div>
+    }
+  } @else if (!loading()) {
+    <div class="empty card muted-empty">
+      <div class="empty-icon">🎓</div>
+      <h3>Ready to generate</h3>
+      <p>Select exam type, term, and class above, then click <strong>Load report cards</strong>.</p>
+    </div>
+  }
+</app-portal-layout>
+
+@if (pdfPreviewOpen() && pdfPreviewUrl()) {
+  <div class="pdf-overlay maximized" role="dialog" aria-modal="true" aria-label="Report card PDF preview">
+    <header class="pdf-toolbar">
+      <div class="pdf-toolbar-title">
+        <strong>{{ pdfPreviewTitle() }}</strong>
+        <span>Report card preview</span>
+      </div>
+      <button type="button" class="btn-close-pdf" (click)="closePdfPreview()">Close</button>
+    </header>
+    <iframe class="pdf-frame" [src]="pdfPreviewUrl()!" title="Report card PDF preview"></iframe>
+  </div>
+}

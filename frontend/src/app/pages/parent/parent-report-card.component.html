@@ -1,0 +1,81 @@
+<app-portal-layout portalTitle="Parent Portal" pageTitle="Report Card" [navItems]="nav">
+
+  <a routerLink="/parent" class="back-link">← Back to My Children</a>
+
+  <div class="toolbar card">
+    <label class="term-field">
+      <span>Term</span>
+      <select [value]="selectedTermId()" (change)="onTermChange($any($event.target).value)">
+        @for (t of terms(); track t.id) {
+          <option [value]="t.id">{{ t.name }}</option>
+        }
+      </select>
+    </label>
+    @if (report()) {
+      <button type="button" class="btn-outline" (click)="downloadPdf()">Download PDF</button>
+    }
+  </div>
+
+  @if (loading()) {
+    <div class="empty card"><p>Loading report card…</p></div>
+  } @else if (notFound()) {
+    <div class="empty card">
+      <p>No report card for this term yet. Marks appear here after teachers enter exam results.</p>
+    </div>
+  } @else if (report()) {
+    <div class="report-header card">
+      <h2>{{ report()!.student?.firstName }} {{ report()!.student?.lastName }}</h2>
+      <p class="meta">
+        Student ID: <strong>{{ report()!.student?.admissionNumber }}</strong>
+        · Class: {{ report()!.student?.schoolClass?.name || '—' }}
+        · Form: {{ report()!.student?.schoolClass?.form?.name || '—' }}
+        · Term: {{ report()!.term?.name }}
+      </p>
+      @if (report()!.averageMark != null) {
+        <p class="summary">
+          Average: <strong>{{ report()!.averageMark | number:'1.1-1' }}%</strong>
+          · Overall grade: <strong>{{ report()!.overallGrade || '—' }}</strong>
+          @if (report()!.classPosition) {
+            · Class position: <strong>{{ report()!.classPosition }}</strong>
+          }
+        </p>
+      }
+    </div>
+
+    <div class="table-wrap card">
+      <table class="results-table">
+        <thead>
+          <tr>
+            <th>Subject / Exam</th>
+            <th>Marks</th>
+            <th>Grade</th>
+            <th>Remarks</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of report()!.subjectResults; track row.subject) {
+            <tr>
+              <td>{{ row.subject }}</td>
+              <td>{{ row.marks }}</td>
+              <td class="grade">{{ row.grade }}</td>
+              <td class="remarks">{{ row.remarks || '—' }}</td>
+            </tr>
+          } @empty {
+            <tr><td colspan="4">No subject results recorded.</td></tr>
+          }
+        </tbody>
+      </table>
+    </div>
+
+    @if (report()!.classTeacherRemarks || report()!.principalRemarks) {
+      <div class="comments card">
+        @if (report()!.classTeacherRemarks) {
+          <p><strong>Class teacher:</strong> {{ report()!.classTeacherRemarks }}</p>
+        }
+        @if (report()!.principalRemarks) {
+          <p><strong>Principal:</strong> {{ report()!.principalRemarks }}</p>
+        }
+      </div>
+    }
+  }
+</app-portal-layout>

@@ -1,0 +1,131 @@
+<app-portal-layout
+  [portalTitle]="portalTitle"
+  [pageTitle]="pageTitle"
+  [navSections]="portalTitle === 'Admin Portal' ? adminNav : teacherNav"
+>
+
+  @if (toast(); as t) {
+    <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>
+  }
+
+  <header class="page-intro">
+    <p>Select a class to view all enrolled students. Records show Student ID, name, and gender.</p>
+  </header>
+
+  <section class="filter-bar card">
+    <div class="filter-row">
+      <div class="field">
+        <label for="classSelect">Class</label>
+        <select
+          id="classSelect"
+          [(ngModel)]="selectedClassId"
+          (ngModelChange)="onClassChange()"
+          name="classId"
+          [disabled]="loadingClasses()"
+        >
+          <option value="">— Select class —</option>
+          @for (c of classes(); track c.id) {
+            <option [value]="c.id">{{ c.name }}</option>
+          }
+        </select>
+      </div>
+      <button
+        type="button"
+        class="btn-fetch"
+        (click)="fetchStudents()"
+        [disabled]="!selectedClassId || loadingStudents()"
+      >
+        {{ loadingStudents() ? 'Loading…' : 'Load students' }}
+      </button>
+    </div>
+    @if (loadingClasses()) {
+      <p class="hint">Loading classes…</p>
+    } @else if (!classes().length) {
+      <p class="hint warn">No classes available.</p>
+    }
+  </section>
+
+  @if (hasFetched()) {
+    <section class="results card">
+      <div class="results-head">
+        <div>
+          <h2>{{ selectedClassLabel() || 'Class roster' }}</h2>
+          <p>{{ filteredStudents().length }} student(s)</p>
+        </div>
+        <div class="results-actions">
+          <input
+            type="search"
+            class="search"
+            placeholder="Search by ID, name, or gender…"
+            [ngModel]="search()"
+            (ngModelChange)="search.set($event)"
+            name="search"
+          />
+          <div class="pdf-btns">
+            <button
+              type="button"
+              class="btn-pdf btn-preview"
+              (click)="previewPdf()"
+              [disabled]="!canExportPdf() || pdfLoading()"
+            >
+              {{ pdfLoading() ? 'Generating…' : 'Preview PDF' }}
+            </button>
+            <button
+              type="button"
+              class="btn-pdf btn-download"
+              (click)="downloadPdf()"
+              [disabled]="!canExportPdf() || pdfLoading()"
+            >
+              {{ pdfLoading() ? 'Generating…' : 'Download PDF' }}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      @if (filteredStudents().length) {
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Student ID</th>
+                <th>Last Name</th>
+                <th>First Name</th>
+                <th>Gender</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (s of filteredStudents(); track s.id) {
+                <tr>
+                  <td class="mono">{{ s.admissionNumber }}</td>
+                  <td>{{ s.lastName }}</td>
+                  <td>{{ s.firstName }}</td>
+                  <td>{{ s.gender || '—' }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      } @else if (!loadingStudents()) {
+        <p class="empty">No students match your search.</p>
+      }
+    </section>
+  }
+</app-portal-layout>
+
+@if (pdfPreviewOpen() && pdfPreviewUrl()) {
+  <div class="pdf-overlay maximized" role="dialog" aria-modal="true" aria-label="Class list PDF preview">
+    <header class="pdf-toolbar">
+      <div class="pdf-toolbar-title">
+        <strong>Class List Preview</strong>
+        <span>{{ selectedClassLabel() }}</span>
+      </div>
+      <div class="pdf-toolbar-actions">
+        <button type="button" class="btn-pdf btn-download" (click)="downloadPdf()" [disabled]="pdfLoading()">
+          Download PDF
+        </button>
+        <button type="button" class="btn-pdf btn-close" (click)="closePdfPreview()">Close</button>
+      </div>
+    </header>
+    <iframe class="pdf-frame" [src]="pdfPreviewUrl()!" title="Class list PDF preview"></iframe>
+  </div>
+}

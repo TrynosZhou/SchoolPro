@@ -1,0 +1,108 @@
+<app-portal-layout
+  [portalTitle]="portalTitle"
+  [pageTitle]="pageTitle"
+  [navSections]="isTeacherPortal ? teacherNav : adminNav"
+>
+  @if (toast(); as t) {
+    <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>
+  }
+
+  <header class="page-intro">
+    <p>Select a class and date, load the register, mark each student, then save.</p>
+  </header>
+
+  <section class="card filter-card">
+    <div class="filter-row">
+      <div class="field">
+        <label for="classSelect">Class</label>
+        <select id="classSelect" [(ngModel)]="selectedClassId" name="classId" [disabled]="loadingClasses()">
+          <option value="">— Select class —</option>
+          @for (c of classes(); track c.id) {
+            <option [value]="c.id">{{ c.name }}</option>
+          }
+        </select>
+      </div>
+      <div class="field field-date">
+        <label for="attDate">Date</label>
+        <input id="attDate" type="date" [(ngModel)]="selectedDate" name="attDate" />
+      </div>
+      <div class="field field-actions">
+        <label class="sr-only">Actions</label>
+        <button type="button" class="btn-secondary" [disabled]="loadingRegister() || !selectedClassId" (click)="loadRegister()">
+          {{ loadingRegister() ? 'Loading…' : 'Load Register' }}
+        </button>
+      </div>
+    </div>
+  </section>
+
+  @if (hasLoaded()) {
+    <section class="card toolbar-card">
+      <div class="toolbar-top">
+        <div>
+          <h2>{{ selectedClassLabel() }}</h2>
+          <p class="meta">{{ selectedDate }} · {{ summary().total }} students</p>
+        </div>
+        <div class="summary-chips">
+          <span class="chip present">{{ summary().present }} present</span>
+          <span class="chip late">{{ summary().late }} late</span>
+          <span class="chip absent">{{ summary().absent }} absent</span>
+          <span class="chip excused">{{ summary().excused }} excused</span>
+        </div>
+      </div>
+      <div class="toolbar-row">
+        <input type="search" class="search" placeholder="Search student…" [ngModel]="search()" (ngModelChange)="search.set($event)" name="q" />
+        <div class="bulk-btns">
+          <button type="button" class="btn-ghost" (click)="markAll('present')">All present</button>
+        </div>
+        <button type="button" class="btn-primary" [disabled]="submitting() || !students().length" (click)="saveRegister()">
+          {{ submitting() ? 'Saving…' : 'Save Attendance' }}
+        </button>
+      </div>
+    </section>
+
+    @if (filteredStudents().length) {
+      <section class="card table-wrap">
+        <div class="table-scroll">
+          <table class="register-table">
+            <thead>
+              <tr>
+                <th class="col-id">Student ID</th>
+                <th class="col-name">Last Name</th>
+                <th class="col-name">First Name</th>
+                <th class="col-gender">Gender</th>
+                <th class="col-status">Attendance</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (s of filteredStudents(); track s.id) {
+                <tr>
+                  <td class="col-id"><code>{{ s.admissionNumber }}</code></td>
+                  <td class="col-name">{{ s.lastName }}</td>
+                  <td class="col-name">{{ s.firstName }}</td>
+                  <td class="col-gender">{{ s.gender || '—' }}</td>
+                  <td class="col-status">
+                    <div class="status-btns" role="group" [attr.aria-label]="'Attendance for ' + s.firstName + ' ' + s.lastName">
+                      @for (st of statusOptions; track st) {
+                        <button
+                          type="button"
+                          class="status-chip"
+                          [attr.data-status]="st"
+                          [class.active]="marks()[s.id] === st"
+                          (click)="setStatus(s.id, st)"
+                        >
+                          {{ st }}
+                        </button>
+                      }
+                    </div>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </section>
+    } @else {
+      <p class="empty card">No students match your search.</p>
+    }
+  }
+</app-portal-layout>

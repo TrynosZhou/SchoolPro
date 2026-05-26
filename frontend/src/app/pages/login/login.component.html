@@ -1,0 +1,144 @@
+<div class="login-shell">
+  <div class="login-bg" aria-hidden="true">
+    <span class="orb orb-1"></span>
+    <span class="orb orb-2"></span>
+    <span class="orb orb-3"></span>
+  </div>
+
+  <div class="login-layout">
+    <!-- Brand panel -->
+    <aside class="brand-panel">
+      <div class="brand-panel-inner">
+        <div class="brand-lockup">
+          <span class="brand-mark">SP</span>
+          <div>
+            <h1 class="brand-name">School Pro</h1>
+            <p class="brand-tagline">School Management System</p>
+          </div>
+        </div>
+
+        <p class="brand-lead">
+          One platform for students, staff, exams, finance, and parent communication — built for modern schools.
+        </p>
+
+        <ul class="feature-list">
+          @for (f of features; track f.title) {
+            <li class="feature-item">
+              <span class="feature-icon">{{ f.icon }}</span>
+              <div>
+                <strong>{{ f.title }}</strong>
+                <span>{{ f.text }}</span>
+              </div>
+            </li>
+          }
+        </ul>
+
+        <footer class="brand-footer">
+          <span>© {{ currentYear }} School Pro Academy</span>
+          <span class="dot">·</span>
+          <span>Harare, Zimbabwe</span>
+        </footer>
+      </div>
+    </aside>
+
+    <!-- Sign-in panel -->
+    <main class="signin-panel">
+      <div class="signin-card">
+        <header class="signin-header">
+          <div class="mobile-brand">
+            <span class="brand-mark sm">SP</span>
+            <span class="mobile-brand-name">School Pro</span>
+          </div>
+          <span class="signin-badge">Secure sign in</span>
+          <h2>Welcome back</h2>
+          <p>Enter your credentials to access your portal</p>
+        </header>
+
+        <form class="signin-form" (ngSubmit)="onSubmit()">
+          <div class="field" [class.has-error]="error()">
+            <label for="email">Email address</label>
+            <div class="input-wrap">
+              <span class="input-icon" aria-hidden="true">✉</span>
+              <input
+                id="email"
+                type="email"
+                [(ngModel)]="email"
+                name="email"
+                required
+                autocomplete="email"
+                placeholder="you@schoolpro.ac.zw"
+              />
+            </div>
+          </div>
+
+          <div class="field">
+            <div class="label-row">
+              <label for="password">Password</label>
+            </div>
+            <div class="input-wrap">
+              <span class="input-icon" aria-hidden="true">🔒</span>
+              <input
+                id="password"
+                [type]="showPassword() ? 'text' : 'password'"
+                [(ngModel)]="password"
+                name="password"
+                required
+                autocomplete="current-password"
+                placeholder="Enter your password"
+              />
+              <button
+                type="button"
+                class="toggle-pw"
+                (click)="togglePassword()"
+                [attr.aria-label]="showPassword() ? 'Hide password' : 'Show password'"
+              >
+                {{ showPassword() ? '🙈' : '👁' }}
+              </button>
+            </div>
+          </div>
+
+          <div class="form-options">
+            <label class="checkbox-label">
+              <input type="checkbox" [(ngModel)]="rememberMe" name="remember" />
+              <span>Remember email</span>
+            </label>
+          </div>
+
+          @if (error()) {
+            <div class="alert-error" role="alert">
+              <span class="alert-icon">!</span>
+              {{ error() }}
+            </div>
+          }
+
+          <button type="submit" class="btn-signin" [disabled]="loading()">
+            @if (loading()) {
+              <span class="btn-spinner"></span>
+              Signing in…
+            } @else {
+              Sign in to portal
+            }
+          </button>
+        </form>
+
+        <section class="demo-section">
+          <div class="demo-head">
+            <span class="demo-title">Quick demo access</span>
+            <span class="demo-pw">Password: <code>{{ demoPassword }}</code></span>
+          </div>
+          <div class="demo-grid">
+            @for (d of demoAccounts; track d.email) {
+              <button type="button" class="demo-chip" (click)="fillDemo(d)">
+                <span class="demo-chip-icon">{{ d.icon }}</span>
+                <span class="demo-chip-body">
+                  <strong>{{ d.role }}</strong>
+                  <small>{{ d.desc }}</small>
+                </span>
+              </button>
+            }
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+</div>

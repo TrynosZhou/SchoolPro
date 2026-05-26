@@ -1,0 +1,643 @@
+<app-portal-layout portalTitle="Admin Portal" pageTitle="School Settings" [navSections]="adminNav">
+
+  @if (toast(); as t) {
+    <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>
+  }
+
+  @if (loading()) {
+    <div class="loading-state">
+      <div class="spinner"></div>
+      <p>Loading school settings…</p>
+    </div>
+  } @else {
+    <!-- Hero -->
+    <header class="page-hero">
+      <div class="hero-text">
+        <p class="hero-eyebrow">Configuration</p>
+        <h1 class="hero-title">{{ school()?.schoolName || 'School Settings' }}</h1>
+        <p class="hero-sub">{{ school()?.tagline || 'Manage your school structure, academics, and integrations' }}</p>
+      </div>
+      <div class="hero-stats">
+        <div class="stat-chip"><span class="stat-val">{{ pageStats().subjects }}</span><span class="stat-lbl">Subjects</span></div>
+        <div class="stat-chip"><span class="stat-val">{{ pageStats().classes }}</span><span class="stat-lbl">Classes</span></div>
+        <div class="stat-chip"><span class="stat-val">{{ pageStats().forms }}</span><span class="stat-lbl">Forms</span></div>
+        <div class="stat-chip accent"><span class="stat-val">{{ pageStats().years }}</span><span class="stat-lbl">Years</span></div>
+      </div>
+    </header>
+
+    <div class="settings-shell">
+      <nav class="tab-rail tab-rail--landscape" aria-label="Settings sections">
+        @for (tab of tabs; track tab.id) {
+          <button
+            type="button"
+            class="tab-item"
+            [class.active]="activeTab() === tab.id"
+            (click)="setTab(tab.id)"
+            [attr.aria-current]="activeTab() === tab.id ? 'page' : null"
+          >
+            <span class="tab-icon">{{ tab.icon }}</span>
+            <span class="tab-body">
+              <span class="tab-label">{{ tab.label }}</span>
+              <span class="tab-desc">{{ tab.desc }}</span>
+            </span>
+            @if (activeTab() === tab.id) {
+              <span class="tab-indicator" aria-hidden="true"></span>
+            }
+          </button>
+        }
+      </nav>
+
+      <main class="tab-content">
+        <div class="content-head">
+          <div>
+            <h2>{{ activeTabMeta().icon }} {{ activeTabMeta().label }}</h2>
+            <p>{{ activeTabMeta().desc }}</p>
+          </div>
+        </div>
+
+        <!-- PROFILE -->
+        @if (activeTab() === 'profile') {
+          <section class="panel panel-elevated logo-panel">
+            <div class="logo-upload-block">
+              <div class="logo-preview-wrap">
+                @if (logoFullUrl()) {
+                  <img [src]="logoFullUrl()!" alt="School logo" class="logo-preview" />
+                } @else {
+                  <div class="logo-placeholder">No logo uploaded</div>
+                }
+              </div>
+              <div class="logo-upload-actions">
+                <h3>School Logo</h3>
+                <p>Shown on report card PDFs. Use a square image (PNG or JPG, max 2 MB).</p>
+                <label class="btn-outline logo-file-btn">
+                  {{ uploadingLogo() ? 'Uploading…' : 'Upload logo' }}
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/jpg,image/webp,image/gif"
+                    (change)="onLogoSelected($event)"
+                    [disabled]="uploadingLogo()"
+                    hidden
+                  />
+                </label>
+                @if (logoFullUrl()) {
+                  <button type="button" class="btn-ghost" (click)="removeLogo()" [disabled]="uploadingLogo()">
+                    Remove logo
+                  </button>
+                }
+              </div>
+            </div>
+          </section>
+
+          <section class="panel panel-elevated">
+            <form class="settings-form" (ngSubmit)="saveProfile()">
+              <div class="form-grid">
+                <div class="field span-2">
+                  <label>School Name</label>
+                  <input [(ngModel)]="profileForm.schoolName" name="schoolName" required class="input-lg" />
+                </div>
+                <div class="field span-2">
+                  <label>Tagline</label>
+                  <input [(ngModel)]="profileForm.tagline" name="tagline" placeholder="Excellence in Education" />
+                </div>
+                <div class="field span-2">
+                  <label>Address</label>
+                  <input [(ngModel)]="profileForm.address" name="address" />
+                </div>
+                <div class="field">
+                  <label>Phone</label>
+                  <input [(ngModel)]="profileForm.phone" name="phone" />
+                </div>
+                <div class="field">
+                  <label>Email</label>
+                  <input type="email" [(ngModel)]="profileForm.email" name="email" />
+                </div>
+                <div class="field">
+                  <label>Website</label>
+                  <input [(ngModel)]="profileForm.website" name="website" />
+                </div>
+                <div class="field">
+                  <label>Currency</label>
+                  <select [(ngModel)]="profileForm.currency" name="currency">
+                    <option value="USD">USD ($)</option>
+                    <option value="ZWL">ZWL (Z$)</option>
+                  </select>
+                </div>
+                <div class="field span-2">
+                  <label>Fee Reminder Template</label>
+                  <textarea [(ngModel)]="profileForm.feeReminderTemplate" name="feeTpl" rows="3"
+                    placeholder="Fee reminder message template"></textarea>
+                  <small>Placeholders: <code>&#123;student&#125;</code> <code>&#123;class&#125;</code> <code>&#123;amount&#125;</code></small>
+                </div>
+              </div>
+              <div class="form-actions">
+                <button type="submit" class="btn-primary" [disabled]="submitting()">
+                  {{ submitting() ? 'Saving…' : 'Save Profile' }}
+                </button>
+              </div>
+            </form>
+          </section>
+        }
+
+        <!-- CALENDAR -->
+        @if (activeTab() === 'calendar') {
+          <div class="layout-2">
+            <section class="panel">
+              <div class="panel-head">
+                <h3>School Years</h3>
+                <span class="count-badge">{{ schoolYears().length }}</span>
+              </div>
+              <div class="add-bar">
+                <input [(ngModel)]="newYear.name" name="yrName" placeholder="Year e.g. 2027" class="input-sm" />
+                <input type="date" [(ngModel)]="newYear.startDate" name="yrStart" class="input-sm" />
+                <input type="date" [(ngModel)]="newYear.endDate" name="yrEnd" class="input-sm" />
+                <label class="toggle"><input type="checkbox" [(ngModel)]="newYear.isCurrent" name="yrCur" /><span>Current</span></label>
+                <button type="button" class="btn-primary btn-sm" (click)="addSchoolYear()">Add Year</button>
+              </div>
+              <div class="card-list">
+                @for (y of schoolYears(); track y.id) {
+                  <article class="timeline-card" [class.is-active]="y.isCurrent">
+                    <div class="timeline-dot"></div>
+                    <div class="timeline-body">
+                      <div class="timeline-top">
+                        <strong>{{ y.name }}</strong>
+                        @if (y.isCurrent) { <span class="badge live">Active Year</span> }
+                      </div>
+                      <span class="date-range">{{ y.startDate }} → {{ y.endDate }}</span>
+                      @if (y.terms?.length) {
+                        <div class="term-chips">
+                          @for (t of y.terms; track t.id) {
+                            <span class="term-chip" [class.live]="t.isCurrent">
+                              {{ t.name }}
+                              @if (!t.isCurrent) {
+                                <button type="button" class="micro-btn" (click)="setCurrentTerm(t)">Activate</button>
+                              }
+                            </span>
+                          }
+                        </div>
+                      }
+                    </div>
+                    @if (!y.isCurrent) {
+                      <button type="button" class="btn-outline btn-sm" (click)="setCurrentYear(y)">Set Active</button>
+                    }
+                  </article>
+                } @empty {
+                  <div class="empty-state"><span class="empty-icon">📅</span><p>No school years yet</p></div>
+                }
+              </div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-head"><h3>Add Term</h3></div>
+              <form class="settings-form compact-form" (ngSubmit)="addTerm()">
+                <div class="field">
+                  <label>School Year</label>
+                  <select [(ngModel)]="newTerm.schoolYearId" name="termYear" required>
+                    @for (y of schoolYears(); track y.id) {
+                      <option [value]="y.id">{{ y.name }}</option>
+                    }
+                  </select>
+                </div>
+                <div class="form-row">
+                  <div class="field">
+                    <label>Term Name</label>
+                    <input [(ngModel)]="newTerm.name" name="termName" placeholder="Term 2" required />
+                  </div>
+                  <div class="field">
+                    <label>Number</label>
+                    <input type="number" [(ngModel)]="newTerm.termNumber" name="termNum" min="1" max="3" />
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="field">
+                    <label>Start</label>
+                    <input type="date" [(ngModel)]="newTerm.startDate" name="termStart" required />
+                  </div>
+                  <div class="field">
+                    <label>End</label>
+                    <input type="date" [(ngModel)]="newTerm.endDate" name="termEnd" />
+                  </div>
+                </div>
+                <label class="toggle block"><input type="checkbox" [(ngModel)]="newTerm.isCurrent" name="termCur" /><span>Set as current term</span></label>
+                <button type="submit" class="btn-primary">Add Term</button>
+              </form>
+            </section>
+          </div>
+        }
+
+        <!-- CLASSES -->
+        @if (activeTab() === 'classes') {
+          <div class="layout-2">
+            <section class="panel">
+              <div class="panel-head"><h3>Forms</h3><span class="count-badge">{{ forms().length }}</span></div>
+              <div class="add-bar">
+                <input [(ngModel)]="newForm.name" name="formName" placeholder="Form name" class="grow" />
+                <input type="number" [(ngModel)]="newForm.level" name="formLevel" min="1" max="6" class="input-xs" />
+                <button type="button" class="btn-primary btn-sm" (click)="addForm()">Add</button>
+              </div>
+              <div class="mini-grid">
+                @for (f of forms(); track f.id) {
+                  <div class="mini-card">
+                    <span class="mini-card-title">{{ f.name }}</span>
+                    <span class="mini-card-meta">Level {{ f.level }} · {{ f.classes?.length || 0 }} classes</span>
+                  </div>
+                }
+              </div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-head"><h3>Classes</h3><span class="count-badge">{{ classes().length }}</span></div>
+              <div class="add-bar">
+                <input [(ngModel)]="newClass.name" name="clsName" placeholder="Class e.g. 4A" class="input-sm" />
+                <select [(ngModel)]="newClass.formId" name="clsForm" class="input-sm">
+                  <option value="">Form</option>
+                  @for (f of forms(); track f.id) {
+                    <option [value]="f.id">{{ f.name }}</option>
+                  }
+                </select>
+                <input type="number" [(ngModel)]="newClass.capacity" name="clsCap" min="1" class="input-xs" placeholder="Cap" />
+                <button type="button" class="btn-primary btn-sm" (click)="addClass()">Add</button>
+              </div>
+              <div class="table-wrap">
+                <table class="data-table">
+                  <thead>
+                    <tr><th>Class</th><th>Form</th><th>Students</th><th>Teacher</th></tr>
+                  </thead>
+                  <tbody>
+                    @for (c of classes(); track c.id) {
+                      <tr>
+                        <td>
+                          <span class="class-avatar">{{ c.name }}</span>
+                        </td>
+                        <td><span class="pill">{{ c.form?.name || '—' }}</span></td>
+                        <td>{{ classStudentCount(c) }} / {{ c.capacity }}</td>
+                        <td>
+                          <select class="select-inline" [ngModel]="c.classTeacherId || ''" (ngModelChange)="updateClassTeacher(c, $event)" [name]="'ct' + c.id">
+                            <option value="">Unassigned</option>
+                            @for (s of staff(); track s.id) {
+                              <option [value]="s.id">{{ staffName(s) }}</option>
+                            }
+                          </select>
+                        </td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+        }
+
+        <!-- SUBJECTS (featured modern layout) -->
+        @if (activeTab() === 'subjects') {
+          <div class="subjects-layout">
+            <section class="panel catalogue-panel">
+              <div class="panel-head">
+                <div>
+                  <h3>Subjects Catalogue</h3>
+                  <p class="panel-sub">Master list of subjects taught at your school</p>
+                </div>
+                <span class="count-badge">{{ subjects().length }}</span>
+              </div>
+
+              <div class="add-bar elevated">
+                <div class="input-group code-group">
+                  <label>Code</label>
+                  <input [(ngModel)]="newSubject.code" name="subCode" placeholder="MATH" maxlength="8" />
+                </div>
+                <div class="input-group grow">
+                  <label>Subject name</label>
+                  <input [(ngModel)]="newSubject.name" name="subName" placeholder="Mathematics" />
+                </div>
+                <button type="button" class="btn-primary" (click)="addSubject()">
+                  <span class="btn-icon">+</span> Add Subject
+                </button>
+              </div>
+
+              <div class="subject-grid">
+                @for (s of subjects(); track s.id) {
+                  <article class="subject-card">
+                    <div class="subject-badge" [style.background]="subjectHue(s.code)">{{ s.code }}</div>
+                    <div class="subject-info">
+                      <strong>{{ s.name }}</strong>
+                      @if (s.description) { <small>{{ s.description }}</small> }
+                    </div>
+                  </article>
+                } @empty {
+                  <div class="empty-state span-all">
+                    <span class="empty-icon">📖</span>
+                    <p>No subjects in catalogue</p>
+                    <small>Add your first subject above</small>
+                  </div>
+                }
+              </div>
+            </section>
+
+            <section class="panel assignments-panel">
+              <div class="panel-head">
+                <div>
+                  <h3>Class Assignments</h3>
+                  <p class="panel-sub">Link subjects to classes and assign teachers</p>
+                </div>
+                <span class="count-badge">{{ pageStats().assignments }} assigned</span>
+              </div>
+
+              @if (selectedClass(); as cls) {
+                <div class="class-banner">
+                  <div class="class-banner-icon">{{ cls.name }}</div>
+                  <div>
+                    <strong>{{ cls.name }}</strong>
+                    <span>{{ cls.form?.name || 'No form' }} · {{ classStudentCount(cls) }} students</span>
+                  </div>
+                </div>
+              }
+
+              <div class="field modern-select">
+                <label>Select class</label>
+                <select [ngModel]="selectedClassId()" (ngModelChange)="onClassSelect($event)" name="selClass">
+                  @for (c of classes(); track c.id) {
+                    <option [value]="c.id">{{ c.name }}</option>
+                  }
+                </select>
+              </div>
+
+              <div class="assign-toolbar">
+                <select [(ngModel)]="newAssignment.subjectId" name="asSub" class="toolbar-select">
+                  <option value="">Choose subject…</option>
+                  @for (s of subjects(); track s.id) {
+                    <option [value]="s.id">{{ s.code }} — {{ s.name }}</option>
+                  }
+                </select>
+                <select [(ngModel)]="newAssignment.teacherId" name="asTeach" class="toolbar-select">
+                  <option value="">Teacher (optional)</option>
+                  @for (s of staff(); track s.id) {
+                    <option [value]="s.id">{{ staffName(s) }}</option>
+                  }
+                </select>
+                <button type="button" class="btn-primary" (click)="assignSubject()">Assign to Class</button>
+              </div>
+
+              <div class="assignment-list">
+                @for (cs of filteredClassSubjects(); track cs.id) {
+                  <article class="assignment-row">
+                    <div class="assignment-subject">
+                      <span class="subject-badge sm" [style.background]="subjectHue(cs.subject?.code || '')">{{ cs.subject?.code }}</span>
+                      <span>{{ cs.subject?.name }}</span>
+                    </div>
+                    <select class="select-inline" [ngModel]="cs.teacherId || ''" (ngModelChange)="updateAssignmentTeacher(cs, $event)" [name]="'at' + cs.id">
+                      <option value="">No teacher</option>
+                      @for (s of staff(); track s.id) {
+                        <option [value]="s.id">{{ staffName(s) }}</option>
+                      }
+                    </select>
+                    <button type="button" class="btn-icon-danger" title="Remove" (click)="removeAssignment(cs)">✕</button>
+                  </article>
+                } @empty {
+                  <div class="empty-state">
+                    <span class="empty-icon">🔗</span>
+                    <p>No subjects assigned yet</p>
+                    <small>Select a subject and click “Assign to Class”</small>
+                  </div>
+                }
+              </div>
+            </section>
+          </div>
+        }
+
+        <!-- EXAMS -->
+        @if (activeTab() === 'exams') {
+          <section class="panel grade-panel">
+            <div class="panel-head">
+              <div>
+                <h3>Grade boundaries</h3>
+                <p class="panel-sub">
+                  Define minimum percentage for each letter grade. Exam marks and report cards use these bands automatically.
+                </p>
+              </div>
+              <div class="panel-actions">
+                <button type="button" class="btn-ghost btn-sm" (click)="resetGradeBoundaries()">Reset defaults</button>
+                <button type="button" class="btn-primary btn-sm" [disabled]="submitting()" (click)="saveGradeBoundaries()">
+                  Save boundaries
+                </button>
+              </div>
+            </div>
+
+            <div class="grade-layout">
+              <div class="grade-editor">
+                <table class="grade-table">
+                  <thead>
+                    <tr>
+                      <th>Grade</th>
+                      <th>Label</th>
+                      <th>Min %</th>
+                      <th>Mark range</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (row of gradeBoundaries(); track $index) {
+                      <tr>
+                        <td>
+                          <input
+                            class="grade-input"
+                            [(ngModel)]="row.grade"
+                            [name]="'g' + $index"
+                            placeholder="A"
+                            maxlength="4"
+                          />
+                        </td>
+                        <td>
+                          <input
+                            class="grade-input wide"
+                            [(ngModel)]="row.label"
+                            [name]="'gl' + $index"
+                            placeholder="e.g. Excellent"
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="number"
+                            class="grade-input num"
+                            [(ngModel)]="row.minPercent"
+                            [name]="'gp' + $index"
+                            min="0"
+                            max="100"
+                          />
+                        </td>
+                        <td class="range-cell">
+                          @for (r of gradeBoundaryRanges(); track r.grade + r.minPercent) {
+                            @if (row.grade.trim() && r.grade === row.grade.trim()) {
+                              <span class="range-tag">{{ r.rangeLabel }}</span>
+                            }
+                          }
+                          @if (!row.grade.trim()) {
+                            <span class="muted">—</span>
+                          }
+                        </td>
+                        <td>
+                          <button
+                            type="button"
+                            class="icon-remove"
+                            (click)="removeGradeBoundary($index)"
+                            title="Remove row"
+                            aria-label="Remove grade"
+                          >×</button>
+                        </td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+                <button type="button" class="btn-outline btn-sm add-grade-row" (click)="addGradeBoundary()">+ Add grade</button>
+              </div>
+
+              <aside class="grade-preview card-inset">
+                <h4>Preview</h4>
+                <p class="hint">Test how a percentage maps to a grade using your boundaries.</p>
+                <label class="preview-slider-label">
+                  Sample score: <strong>{{ gradePreviewMarks() }}%</strong>
+                </label>
+                <input
+                  type="range"
+                  class="preview-slider"
+                  min="0"
+                  max="100"
+                  [ngModel]="gradePreviewMarks()"
+                  (ngModelChange)="gradePreviewMarks.set(+$event)"
+                  name="gradePreview"
+                />
+                <div class="preview-result">
+                  <span class="preview-grade">{{ gradePreviewResult() }}</span>
+                  <span class="preview-caption">assigned grade</span>
+                </div>
+                <ul class="preview-list">
+                  @for (r of gradeBoundaryRanges(); track r.grade) {
+                    <li>
+                      <span class="preview-letter">{{ r.grade }}</span>
+                      <span>{{ r.label || '—' }}</span>
+                      <span class="preview-range">{{ r.rangeLabel }}</span>
+                    </li>
+                  }
+                </ul>
+              </aside>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head">
+              <div>
+                <h3>Exam type weights</h3>
+                <p class="panel-sub">Weights should total 100% for accurate report cards</p>
+              </div>
+              <span class="count-badge" [class.warn]="examWeightTotal() !== 100">{{ examWeightTotal() }}%</span>
+            </div>
+            <div class="exam-cards">
+              @for (et of examTypes(); track et.id) {
+                <article class="exam-card">
+                  <div class="exam-card-head">
+                    <strong>{{ et.name }}</strong>
+                    <code>{{ et.code }}</code>
+                  </div>
+                  <div class="exam-inputs">
+                    <div class="field-inline">
+                      <label>Weight %</label>
+                      <input type="number" [(ngModel)]="et.weight" [name]="'w' + et.id" min="0" max="100" />
+                    </div>
+                    <div class="field-inline">
+                      <label>Max marks</label>
+                      <input type="number" [(ngModel)]="et.maxMarks" [name]="'m' + et.id" min="1" />
+                    </div>
+                  </div>
+                  <div class="weight-bar">
+                    <div class="weight-fill" [style.width.%]="et.weight"></div>
+                  </div>
+                  <button type="button" class="btn-outline btn-sm" (click)="saveExamType(et)">Save</button>
+                </article>
+              }
+            </div>
+          </section>
+        }
+
+        <!-- NOTIFICATIONS -->
+        @if (activeTab() === 'notifications') {
+          <section class="panel">
+            @if (whatsapp(); as wa) {
+              <div class="status-grid">
+                <div class="status-tile" [class.on]="wa.enabled">
+                  <span class="tile-icon">{{ wa.enabled ? '✓' : '○' }}</span>
+                  <strong>{{ wa.enabled ? 'Live' : 'Mock Mode' }}</strong>
+                  <span>WhatsApp integration</span>
+                </div>
+                <div class="status-tile" [class.on]="wa.configured || !wa.enabled">
+                  <span class="tile-icon">{{ wa.configured ? '✓' : '!' }}</span>
+                  <strong>{{ wa.configured ? 'Ready' : 'Not configured' }}</strong>
+                  <span>Twilio credentials</span>
+                </div>
+                @if (wa.from) {
+                  <div class="status-tile on">
+                    <span class="tile-icon">📱</span>
+                    <strong>{{ wa.from }}</strong>
+                    <span>Sender number</span>
+                  </div>
+                }
+              </div>
+              <p class="hint">Configure <code>WHATSAPP_ENABLED</code> and Twilio keys in <code>backend/.env</code></p>
+            }
+            <form class="settings-form test-panel" (ngSubmit)="testWhatsApp()">
+              <h3>Send test message</h3>
+              <div class="form-row">
+                <div class="field">
+                  <label>Phone (E.164)</label>
+                  <input [(ngModel)]="whatsappTest.phone" name="waPhone" placeholder="+263771000005" />
+                </div>
+                <div class="field grow">
+                  <label>Message</label>
+                  <input [(ngModel)]="whatsappTest.message" name="waMsg" placeholder="Optional custom message" />
+                </div>
+              </div>
+              <button type="submit" class="btn-primary" [disabled]="submitting()">Send Test</button>
+            </form>
+          </section>
+        }
+
+        <!-- STORE -->
+        @if (activeTab() === 'store') {
+          <section class="panel">
+            <div class="panel-head">
+              <h3>Tuckshop Inventory</h3>
+              <span class="count-badge">{{ tuckshopItems().length }} items</span>
+            </div>
+            <div class="add-bar">
+              <input [(ngModel)]="newTuckshopItem.name" name="tsName" placeholder="Item name" class="grow" />
+              <input [(ngModel)]="newTuckshopItem.sku" name="tsSku" placeholder="SKU" class="input-sm" />
+              <input type="number" [(ngModel)]="newTuckshopItem.unitPrice" name="tsPrice" placeholder="Price" min="0" step="0.01" class="input-xs" />
+              <input type="number" [(ngModel)]="newTuckshopItem.stockQuantity" name="tsStock" placeholder="Qty" min="0" class="input-xs" />
+              <button type="button" class="btn-primary btn-sm" (click)="addTuckshopItem()">Add Item</button>
+            </div>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead>
+                  <tr><th>Item</th><th>SKU</th><th class="num">Price</th><th class="num">Stock</th><th class="num">Reorder</th><th>Active</th><th></th></tr>
+                </thead>
+                <tbody>
+                  @for (item of tuckshopItems(); track item.id) {
+                    <tr [class.low-stock]="item.stockQuantity <= item.reorderLevel">
+                      <td><strong>{{ item.name }}</strong></td>
+                      <td class="muted">{{ item.sku || '—' }}</td>
+                      <td class="num"><input type="number" class="num-input" [(ngModel)]="item.unitPrice" [name]="'p' + item.id" step="0.01" /></td>
+                      <td class="num"><input type="number" class="num-input" [(ngModel)]="item.stockQuantity" [name]="'q' + item.id" /></td>
+                      <td class="num"><input type="number" class="num-input" [(ngModel)]="item.reorderLevel" [name]="'r' + item.id" /></td>
+                      <td><label class="toggle sm"><input type="checkbox" [(ngModel)]="item.isActive" [name]="'a' + item.id" /><span></span></label></td>
+                      <td><button type="button" class="btn-outline btn-sm" (click)="saveTuckshopItem(item)">Save</button></td>
+                    </tr>
+                  } @empty {
+                    <tr><td colspan="7"><div class="empty-state inline"><span class="empty-icon">🛒</span><p>No tuckshop items</p></div></td></tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          </section>
+        }
+      </main>
+    </div>
+  }
+
+</app-portal-layout>

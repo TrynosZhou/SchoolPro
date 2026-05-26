@@ -1,0 +1,333 @@
+<app-portal-layout portalTitle="Admin Portal" pageTitle="Billing & Payments" [navSections]="adminNav">
+
+  @if (toast(); as t) {
+    <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>
+  }
+
+  <!-- KPI strip -->
+  <div class="kpi-grid">
+    <div class="kpi kpi-today">
+      <span class="kpi-icon">💵</span>
+      <div>
+        <span class="kpi-label">Today's Collections</span>
+        <span class="kpi-value">{{ '$' + (summary()?.todayCollections | number:'1.2-2') }}</span>
+        <small>{{ summary()?.todayPaymentCount || 0 }} payments today</small>
+      </div>
+    </div>
+    <div class="kpi kpi-month">
+      <span class="kpi-icon">📈</span>
+      <div>
+        <span class="kpi-label">This Month</span>
+        <span class="kpi-value">{{ '$' + (summary()?.monthlyCollections | number:'1.2-2') }}</span>
+      </div>
+    </div>
+    <div class="kpi kpi-debt">
+      <span class="kpi-icon">📉</span>
+      <div>
+        <span class="kpi-label">Outstanding</span>
+        <span class="kpi-value">{{ '$' + (summary()?.totalDebtors | number:'1.2-2') }}</span>
+        <small>{{ debtors().length }} students owing</small>
+      </div>
+    </div>
+    <div class="kpi kpi-pending">
+      <span class="kpi-icon">📄</span>
+      <div>
+        <span class="kpi-label">Pending Invoices</span>
+        <span class="kpi-value">{{ summary()?.pendingInvoices || 0 }}</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="billing-header">
+    <div class="tabs">
+      <button type="button" [class.active]="activeTab() === 'payment'" (click)="setTab('payment')">Record Payment</button>
+      <button type="button" [class.active]="activeTab() === 'invoice'" (click)="setTab('invoice')">Create Invoice</button>
+      <button type="button" [class.active]="activeTab() === 'invoices'" (click)="setTab('invoices')">All Invoices</button>
+      <button type="button" [class.active]="activeTab() === 'receipts'" (click)="setTab('receipts')">Receipts</button>
+      <button type="button" [class.active]="activeTab() === 'debtors'" (click)="setTab('debtors')">
+        Debtors
+        @if (debtors().length) {
+          <span class="tab-badge">{{ debtors().length }}</span>
+        }
+      </button>
+    </div>
+    <a routerLink="/admin/finance" class="btn-ghost">Full finance books →</a>
+  </div>
+
+  <!-- RECORD PAYMENT -->
+  @if (activeTab() === 'payment') {
+    <div class="layout-split">
+      <section class="panel main-panel">
+        <h2>Record Payment</h2>
+        <p class="subtitle">Accept cash, bank, EcoCash, OneMoney, or InnBucks — receipt is generated instantly.</p>
+
+        <div class="fee-chips">
+          @for (preset of feePresets; track preset.type) {
+            <button type="button" class="chip" [class.active]="payment.feeType === preset.type"
+              (click)="applyFeePreset(preset)">
+              {{ preset.icon }} {{ preset.label }}
+            </button>
+          }
+        </div>
+
+        <form class="pay-form" (ngSubmit)="recordPayment()">
+          <div class="field">
+            <label>Search student</label>
+            <input type="search" placeholder="Type name or Student ID…"
+              [ngModel]="studentSearch()" (ngModelChange)="studentSearch.set($event)" name="stuSearch" />
+          </div>
+          <div class="field">
+            <label>Student *</label>
+            <select [(ngModel)]="payment.studentId" (ngModelChange)="onStudentChange()" name="student" required>
+              <option value="">Select student</option>
+              @for (s of filteredStudents(); track s.id) {
+                <option [value]="s.id">{{ s.firstName }} {{ s.lastName }} — {{ s.admissionNumber }}</option>
+              }
+            </select>
+          </div>
+
+          @if (studentUnpaidInvoices().length) {
+            <div class="unpaid-box">
+              <label>Apply to invoice (optional)</label>
+              <div class="unpaid-list">
+                @for (inv of studentUnpaidInvoices(); track inv.id) {
+                  <button type="button" class="unpaid-item" [class.selected]="payment.invoiceId === inv.id"
+                    (click)="selectInvoiceForPayment(inv)">
+                    <span>{{ inv.invoiceNumber }} — {{ inv.description }}</span>
+                    <span class="owed">{{ '$' + ((inv.totalAmount - inv.amountPaid) | number:'1.2-2') }} due</span>
+                  </button>
+                }
+              </div>
+            </div>
+          }
+
+          <div class="form-row">
+            <div class="field">
+              <label>Amount *</label>
+              <input type="number" [(ngModel)]="payment.amount" name="amount" min="0" step="0.01" required />
+            </div>
+            <div class="field">
+              <label>Method</label>
+              <select [(ngModel)]="payment.method" name="method">
+                <option value="cash">💵 Cash</option>
+                <option value="bank">🏦 Bank Transfer</option>
+                <option value="ecocash">📱 EcoCash</option>
+                <option value="onemoney">📱 OneMoney</option>
+                <option value="innbucks">📱 InnBucks</option>
+              </select>
+            </div>
+          </div>
+          <div class="field">
+            <label>Label</label>
+            <input [(ngModel)]="payment.label" name="label" placeholder="Payment description" />
+          </div>
+          <div class="field">
+            <label>Notes (optional)</label>
+            <input [(ngModel)]="payment.notes" name="notes" placeholder="Internal note" />
+          </div>
+          <button type="submit" class="btn-primary btn-lg" [disabled]="submitting()">
+            {{ submitting() ? 'Processing…' : 'Record Payment & Generate Receipt' }}
+          </button>
+        </form>
+      </section>
+
+      <aside class="panel side-panel">
+        @if (lastReceipt(); as rcpt) {
+          <div class="success-card">
+            <div class="success-icon">✓</div>
+            <h3>Payment Successful</h3>
+            <p class="rcpt-no">{{ rcpt.receiptNumber }}</p>
+            <p class="rcpt-amt">{{ '$' + (rcpt.amount | number:'1.2-2') }}</p>
+            @if (rcpt.receiptId) {
+              <button type="button" class="btn-primary" (click)="downloadReceipt(rcpt.receiptId!)">Download PDF Receipt</button>
+            }
+            <button type="button" class="btn-ghost" (click)="lastReceipt.set(null)">Dismiss</button>
+          </div>
+        } @else {
+          <h3>Quick tips</h3>
+          <ul class="tips">
+            <li>Select a student to see their unpaid invoices</li>
+            <li>Click an invoice to auto-fill the amount owed</li>
+            <li>Parents receive WhatsApp confirmation automatically</li>
+            <li>Payment updates cashbook and student ledger</li>
+          </ul>
+        }
+      </aside>
+    </div>
+  }
+
+  <!-- CREATE INVOICE -->
+  @if (activeTab() === 'invoice') {
+    <section class="panel">
+      <h2>Create Invoice</h2>
+      <p class="subtitle">Bill a student for tuition, levies, uniform, or other fees.</p>
+      <form class="pay-form max-width" (ngSubmit)="createInvoice()">
+        <div class="fee-chips">
+          @for (preset of feePresets; track preset.type) {
+            <button type="button" class="chip"
+              [class.active]="newInvoice.feeType === preset.type" (click)="applyFeePreset(preset)">
+              {{ preset.icon }} {{ preset.label }}
+            </button>
+          }
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label>Student *</label>
+            <select [(ngModel)]="newInvoice.studentId" name="invStudent" required>
+              <option value="">Select student</option>
+              @for (s of students(); track s.id) {
+                <option [value]="s.id">{{ s.firstName }} {{ s.lastName }}</option>
+              }
+            </select>
+          </div>
+          <div class="field">
+            <label>Term</label>
+            <select [(ngModel)]="newInvoice.termId" name="invTerm">
+              <option value="">—</option>
+              @for (t of terms(); track t.id) {
+                <option [value]="t.id">{{ t.name }}</option>
+              }
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label>Description *</label>
+            <input [(ngModel)]="newInvoice.description" name="invDesc" required />
+          </div>
+          <div class="field">
+            <label>Amount *</label>
+            <input type="number" [(ngModel)]="newInvoice.totalAmount" name="invAmt" min="0" step="0.01" required />
+          </div>
+          <div class="field">
+            <label>Due Date</label>
+            <input type="date" [(ngModel)]="newInvoice.dueDate" name="invDue" />
+          </div>
+        </div>
+        <button type="submit" class="btn-primary" [disabled]="submitting()">
+          {{ submitting() ? 'Creating…' : 'Create & Send Invoice' }}
+        </button>
+      </form>
+    </section>
+  }
+
+  <!-- ALL INVOICES -->
+  @if (activeTab() === 'invoices') {
+    <div class="toolbar">
+      <input type="search" class="search grow" placeholder="Search invoices…"
+        [ngModel]="invoiceSearch()" (ngModelChange)="invoiceSearch.set($event)" name="invQ" />
+      <select [ngModel]="invoiceFilter()" (ngModelChange)="invoiceFilter.set($event)" name="invF">
+        <option value="all">All statuses</option>
+        <option value="sent">Sent</option>
+        <option value="partial">Partial</option>
+        <option value="paid">Paid</option>
+        <option value="overdue">Overdue</option>
+      </select>
+    </div>
+    <section class="panel">
+      <div class="table-wrap">
+        <table class="modern-table">
+          <thead>
+            <tr>
+              <th>Invoice #</th><th>Student</th><th>Class</th><th>Description</th>
+              <th class="num">Total</th><th class="num">Paid</th><th>Due</th><th>Status</th><th></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (inv of filteredInvoices(); track inv.id) {
+              <tr>
+                <td><code>{{ inv.invoiceNumber }}</code></td>
+                <td>{{ inv.student?.firstName }} {{ inv.student?.lastName }}</td>
+                <td><span class="pill">{{ inv.student?.schoolClass?.name || '—' }}</span></td>
+                <td>{{ inv.description }}</td>
+                <td class="num">{{ '$' + (inv.totalAmount | number:'1.2-2') }}</td>
+                <td class="num text-green">{{ '$' + (inv.amountPaid | number:'1.2-2') }}</td>
+                <td>{{ inv.dueDate }}</td>
+                <td><span class="status" [attr.data-s]="inv.status">{{ inv.status }}</span></td>
+                <td>
+                  @if (inv.status !== 'paid') {
+                    <button type="button" class="btn-ghost btn-sm"
+                      (click)="payment.studentId = inv.student?.firstName ? '' : ''; payDebtorFromInvoice(inv)">Pay</button>
+                  }
+                </td>
+              </tr>
+            } @empty {
+              <tr><td colspan="9" class="empty">No invoices found.</td></tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+  }
+
+  <!-- RECEIPTS -->
+  @if (activeTab() === 'receipts') {
+    <section class="panel">
+      <h2>Payment History & Receipts</h2>
+      <div class="table-wrap">
+        <table class="modern-table">
+          <thead>
+            <tr>
+              <th>Date</th><th>Receipt #</th><th>Student</th><th>Class</th>
+              <th>Label</th><th>Method</th><th class="num">Amount</th><th></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (p of payments(); track p.id) {
+              <tr>
+                <td>{{ p.paidAt | date:'medium' }}</td>
+                <td><code>{{ p.receipt?.receiptNumber || '—' }}</code></td>
+                <td>{{ p.student?.firstName }} {{ p.student?.lastName }}</td>
+                <td><span class="pill">{{ p.student?.schoolClass?.name || '—' }}</span></td>
+                <td>{{ p.label }}</td>
+                <td><span class="method">{{ formatMethod(p.method) }}</span></td>
+                <td class="num text-green">{{ '$' + (p.amount | number:'1.2-2') }}</td>
+                <td>
+                  @if (p.receipt?.id) {
+                    <button type="button" class="btn-outline btn-sm" (click)="downloadReceipt(p.receipt!.id)">PDF</button>
+                  }
+                </td>
+              </tr>
+            } @empty {
+              <tr><td colspan="8" class="empty">No payments recorded yet.</td></tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+  }
+
+  <!-- DEBTORS -->
+  @if (activeTab() === 'debtors') {
+    <div class="toolbar">
+      <input type="search" class="search grow" placeholder="Search debtors…"
+        [ngModel]="debtorSearch()" (ngModelChange)="debtorSearch.set($event)" name="debtQ" />
+      <span class="total-pill">Total: <strong>{{ '$' + (totalDebtorsOwed() | number:'1.2-2') }}</strong></span>
+      <button type="button" class="btn-outline" (click)="sendReminders()">📱 Send WhatsApp Reminders</button>
+    </div>
+    <section class="panel">
+      <div class="table-wrap">
+        <table class="modern-table">
+          <thead>
+            <tr><th>Student</th><th>Student ID</th><th>Class</th><th>Oldest Due</th><th class="num">Owed</th><th></th></tr>
+          </thead>
+          <tbody>
+            @for (d of filteredDebtors(); track d.id) {
+              <tr>
+                <td><strong>{{ d.firstName }} {{ d.lastName }}</strong></td>
+                <td>{{ d.admissionNumber || '—' }}</td>
+                <td><span class="pill">{{ d.className || '—' }}</span></td>
+                <td>{{ d.oldestDue || '—' }}</td>
+                <td class="num text-red"><strong>{{ '$' + (d.owed | number:'1.2-2') }}</strong></td>
+                <td><button type="button" class="btn-primary btn-sm" (click)="payDebtor(d)">Collect</button></td>
+              </tr>
+            } @empty {
+              <tr><td colspan="6" class="empty">All fees collected — no debtors!</td></tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+  }
+
+</app-portal-layout>

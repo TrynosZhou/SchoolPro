@@ -1,0 +1,389 @@
+<app-portal-layout
+  [portalTitle]="portalTitle()"
+  [pageTitle]="pageTitle"
+  [navSections]="isAdminRoute() ? adminNav : (isPrincipalRoute() ? [] : teacherNav)"
+  [navItems]="isPrincipalRoute() ? principalNav : []"
+>
+
+  @if (toast(); as t) {
+    <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>
+  }
+
+  @if (isAdminPortal()) {
+    <header class="admin-hero">
+      <div class="admin-hero-text">
+        <p class="eyebrow">Academics · Examinations</p>
+        <h1 class="admin-hero-title">Exam Marks Entry</h1>
+        <p class="admin-hero-sub">Capture scores by class and subject. Marks auto-save and sync to student report cards.</p>
+      </div>
+      <div class="admin-hero-actions">
+        <a routerLink="/admin/settings" class="hero-link">Grade boundaries →</a>
+        <a routerLink="/admin/enrollment" class="hero-link">Enrollment →</a>
+        @if (hasFetched()) {
+          <span class="live-pill light"><span class="pulse"></span> Auto-save on</span>
+        }
+      </div>
+      @if (hasFetched() && markRows().length) {
+        <div class="hero-mini-stats">
+          <span>{{ stats().total }} students</span>
+          <span>{{ stats().completion }}% complete</span>
+          <span>Avg {{ stats().average | number:'1.1-1' }}%</span>
+        </div>
+      }
+    </header>
+  } @else {
+    <header class="page-hero">
+      <div class="hero-text">
+        <h2 class="hero-title">Exam marks capture</h2>
+        <p class="hero-sub">Enter scores and remarks for enrolled learners. Changes sync to report cards automatically.</p>
+      </div>
+      @if (hasFetched()) {
+        <div class="live-pill"><span class="pulse"></span> Auto-save active</div>
+      }
+    </header>
+  }
+
+  <div class="workflow-steps">
+    <div class="step" [class.done]="filters.examTypeId"><span class="step-num">1</span> Exam type</div>
+    <div class="step-line"></div>
+    <div class="step" [class.done]="filters.classId"><span class="step-num">2</span> Class</div>
+    <div class="step-line"></div>
+    <div class="step" [class.done]="filters.subjectId"><span class="step-num">3</span> Subject</div>
+    <div class="step-line"></div>
+    <div class="step" [class.done]="filters.termId"><span class="step-num">4</span> Term</div>
+    <div class="step-line"></div>
+    <div class="step" [class.done]="hasFetched()"><span class="step-num">5</span> Fetch & enter</div>
+  </div>
+
+  <section class="filters-card card">
+    <div class="filters-row">
+      <label class="field field-exam">
+        <span>Exam type</span>
+        <select [(ngModel)]="filters.examTypeId" name="examType" (ngModelChange)="onFilterChange()">
+          <option value="">— Select —</option>
+          @for (t of examTypes(); track t.id) {
+            <option [value]="t.id">{{ t.name }}</option>
+          }
+        </select>
+      </label>
+      <label class="field field-compact">
+        <span>Class</span>
+        <select [(ngModel)]="filters.classId" name="class" (ngModelChange)="onClassChange(); onFilterChange()">
+          <option value="">— Select —</option>
+          @for (c of classes(); track c.id) {
+            <option [value]="c.id">{{ c.name }}</option>
+          }
+        </select>
+      </label>
+      <label class="field field-subject">
+        <span>Subject</span>
+        <select [(ngModel)]="filters.subjectId" name="subject" (ngModelChange)="onFilterChange()" [disabled]="!filters.classId">
+          <option value="">— Select subject —</option>
+          @for (s of subjects(); track s.id) {
+            <option [value]="s.id">{{ s.name }}</option>
+          }
+        </select>
+      </label>
+      <label class="field field-compact">
+        <span>Term</span>
+        <select [(ngModel)]="filters.termId" name="term" (ngModelChange)="onFilterChange()">
+          <option value="">— Select —</option>
+          @for (t of terms(); track t.id) {
+            <option [value]="t.id">{{ t.name }}</option>
+          }
+        </select>
+      </label>
+      <button
+        type="button"
+        class="btn-primary btn-fetch"
+        (click)="fetchStudents()"
+        [disabled]="loading() || !filters.classId"
+      >
+        @if (loading()) {
+          <span class="btn-spinner"></span> Fetching…
+        } @else {
+          Fetch
+        }
+      </button>
+      <button type="button" class="btn-ghost btn-reset" (click)="clearFilters()">Reset</button>
+    </div>
+
+    @if (filters.examTypeId || filters.classId || filters.subjectId || filters.termId) {
+      <div class="session-pills">
+        <span class="pill"><strong>Exam</strong> {{ sessionLabels().exam }}</span>
+        <span class="pill"><strong>Class</strong> {{ sessionLabels().class }}</span>
+        <span class="pill pill-subject"><strong>Subject</strong> {{ sessionLabels().subject }}</span>
+        <span class="pill"><strong>Term</strong> {{ sessionLabels().term }}</span>
+      </div>
+    }
+  </section>
+
+  @if (hasFetched() && markRows().length) {
+    <div class="kpi-grid">
+      <div class="kpi kpi-total">
+        <span class="kpi-icon">👥</span>
+        <div>
+          <span class="kpi-label">Enrolled</span>
+          <span class="kpi-value">{{ stats().total }}</span>
+          <small>Students in class</small>
+        </div>
+      </div>
+      <div class="kpi kpi-saved">
+        <span class="kpi-icon">✓</span>
+        <div>
+          <span class="kpi-label">Saved</span>
+          <span class="kpi-value">{{ stats().saved }}</span>
+          <small>On record</small>
+        </div>
+      </div>
+      <div class="kpi kpi-pending">
+        <span class="kpi-icon">⏳</span>
+        <div>
+          <span class="kpi-label">Pending</span>
+          <span class="kpi-value">{{ stats().pending }}</span>
+          <small>Not saved yet</small>
+        </div>
+      </div>
+      <div class="kpi kpi-avg">
+        <span class="kpi-icon">📊</span>
+        <div>
+          <span class="kpi-label">Class average</span>
+          <span class="kpi-value">{{ stats().average | number:'1.1-1' }}%</span>
+          <small>Of {{ maxMarks() }} max</small>
+        </div>
+      </div>
+    </div>
+
+    <div class="analytics-row">
+      <div class="progress-card card flex-grow">
+        <div class="progress-head">
+          <span>Entry progress</span>
+          <strong>{{ stats().completion }}%</strong>
+          <span class="muted">({{ stats().withMarks }} / {{ stats().total }} with marks)</span>
+        </div>
+        <div class="progress-track">
+          <div class="progress-fill" [style.width.%]="stats().completion"></div>
+        </div>
+      </div>
+      @if (gradeDistribution().length) {
+        <div class="grade-dist card">
+          <span class="dist-title">Grade spread</span>
+          <div class="dist-bars">
+            @for (g of gradeDistribution(); track g.grade) {
+              <div class="dist-item" [class]="gradeTone(g.grade)">
+                <span class="dist-grade">{{ g.grade }}</span>
+                <div class="dist-bar-wrap">
+                  <div class="dist-bar" [style.width.%]="(g.count / stats().total) * 100"></div>
+                </div>
+                <span class="dist-count">{{ g.count }}</span>
+              </div>
+            }
+          </div>
+        </div>
+      }
+    </div>
+  }
+
+  @if (!hasFetched()) {
+    <div class="empty-state card empty-modern">
+      <span class="empty-icon">📋</span>
+      <h3>Ready to load students</h3>
+      <p>Complete steps 1–4 above, then click <strong>Fetch</strong> to load the class list.</p>
+      @if (isAdminPortal()) {
+        <a routerLink="/admin/enrollment" class="btn-outline empty-cta">Manage enrollment</a>
+      }
+    </div>
+  } @else if (loading()) {
+    <div class="empty-state card empty-modern">
+      <span class="btn-spinner empty-spinner"></span>
+      <p>Fetching students…</p>
+    </div>
+  } @else if (!markRows().length) {
+    <div class="empty-state card empty-modern">
+      <span class="empty-icon">🎓</span>
+      <h3>No students in this class</h3>
+      <p>Assign students via Class Enrollment, then fetch again.</p>
+      @if (isAdminPortal()) {
+        <a routerLink="/admin/enrollment" class="btn-outline empty-cta">Class Enrollment</a>
+      }
+    </div>
+  } @else {
+    <div class="table-panel card">
+      <div class="table-toolbar">
+        <div class="search-wrap">
+          <span class="search-icon">🔍</span>
+          <input
+            type="search"
+            class="search-input"
+            placeholder="Search ID, name, gender, grade…"
+            [ngModel]="searchQuery()"
+            (ngModelChange)="searchQuery.set($event)"
+            name="studentSearch"
+          />
+          @if (searchQuery()) {
+            <button type="button" class="search-clear" (click)="searchQuery.set('')" aria-label="Clear">×</button>
+          }
+        </div>
+        <div class="filter-chips">
+          @for (chip of filterChips(); track chip.id) {
+            <button
+              type="button"
+              class="filter-chip"
+              [class.active]="entryFilter() === chip.id"
+              (click)="setEntryFilter(chip.id)"
+              [disabled]="chip.id === 'error' && chip.count === 0"
+            >
+              {{ chip.label }}
+              <span class="chip-count">{{ chip.count }}</span>
+            </button>
+          }
+        </div>
+      </div>
+
+      <div class="table-toolbar secondary">
+        <div class="view-toggle">
+          <button type="button" [class.active]="viewMode() === 'table'" (click)="setViewMode('table')">Table</button>
+          <button type="button" [class.active]="viewMode() === 'list'" (click)="setViewMode('list')">List</button>
+        </div>
+        <label class="sort-field">
+          <span>Sort</span>
+          <select [ngModel]="sortBy()" (ngModelChange)="sortBy.set($event)" name="sortBy">
+            <option value="lastName">Last name</option>
+            <option value="firstName">First name</option>
+            <option value="studentId">Student ID</option>
+            <option value="marksDesc">Marks (high → low)</option>
+            <option value="marksAsc">Marks (low → high)</option>
+          </select>
+        </label>
+        <div class="toolbar-meta">
+          <span class="badge">Max {{ maxMarks() }}</span>
+          <span class="badge muted">{{ displayRows().length }} shown</span>
+          <button type="button" class="btn-ghost btn-sm" (click)="exportCsv()">↓ Export CSV</button>
+          <button type="button" class="btn-ghost btn-sm" (click)="fetchStudents()">↻ Refresh</button>
+        </div>
+      </div>
+
+      @if (viewMode() === 'table') {
+        <div class="table-wrap">
+          <table class="marks-table">
+            <thead>
+              <tr>
+                <th>Student ID</th>
+                <th>Last Name</th>
+                <th>First Name</th>
+                <th>Gender</th>
+                <th>Marks (0–{{ maxMarks() }})</th>
+                <th>Grade</th>
+                <th>Remarks</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of displayRows(); track row.studentId) {
+                <tr [class.row-error]="row.saveStatus === 'error'" [class.row-saved]="row.saveStatus === 'saved'">
+                  <td class="mono">{{ row.studentNumber }}</td>
+                  <td>{{ row.lastName }}</td>
+                  <td>{{ row.firstName }}</td>
+                  <td><span class="gender-pill">{{ row.gender }}</span></td>
+                  <td class="marks-cell">
+                    <input
+                      type="number"
+                      [(ngModel)]="row.marks"
+                      [name]="'m' + row.studentId"
+                      [min]="0"
+                      [max]="maxMarks()"
+                      step="0.5"
+                      (ngModelChange)="onMarksInput(row)"
+                      placeholder="—"
+                    />
+                  </td>
+                  <td class="grade-cell">
+                    @if (row.grade) {
+                      <span class="grade-badge" [class]="gradeTone(row.grade)">{{ row.grade }}</span>
+                    } @else { — }
+                  </td>
+                  <td>
+                    <input
+                      class="remarks-input"
+                      [(ngModel)]="row.remarks"
+                      [name]="'r' + row.studentId"
+                      placeholder="Remarks"
+                      (ngModelChange)="onRemarksInput(row)"
+                    />
+                  </td>
+                  <td class="status-cell">
+                    @switch (row.saveStatus) {
+                      @case ('saving') { <span class="status saving"><span class="status-dot"></span>Saving</span> }
+                      @case ('saved') { <span class="status saved"><span class="status-dot"></span>Saved</span> }
+                      @case ('error') { <span class="status error"><span class="status-dot"></span>Error</span> }
+                      @default { <span class="status idle">—</span> }
+                    }
+                  </td>
+                </tr>
+              } @empty {
+                <tr><td colspan="8" class="no-match">No students match the current filters.</td></tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      } @else {
+        <ul class="marks-listview">
+          @for (row of displayRows(); track row.studentId) {
+            <li class="marks-list-item" [class.row-error]="row.saveStatus === 'error'" [class.row-saved]="row.saveStatus === 'saved'">
+              <div class="list-main">
+                <span class="list-avatar">{{ row.firstName.charAt(0) }}{{ row.lastName.charAt(0) }}</span>
+                <div class="list-identity">
+                  <code class="mono">{{ row.studentNumber }}</code>
+                  <strong>{{ row.lastName }}, {{ row.firstName }}</strong>
+                  <span class="gender-pill">{{ row.gender }}</span>
+                </div>
+              </div>
+              <div class="list-marks">
+                <label class="list-label">Marks</label>
+                <input
+                  type="number"
+                  [(ngModel)]="row.marks"
+                  [name]="'lm' + row.studentId"
+                  [min]="0"
+                  [max]="maxMarks()"
+                  step="0.5"
+                  (ngModelChange)="onMarksInput(row)"
+                  placeholder="0–{{ maxMarks() }}"
+                />
+                @if (row.grade) {
+                  <span class="grade-badge" [class]="gradeTone(row.grade)">{{ row.grade }}</span>
+                }
+              </div>
+              <div class="list-remarks">
+                <label class="list-label">Remarks</label>
+                <input
+                  class="remarks-input"
+                  [(ngModel)]="row.remarks"
+                  [name]="'lr' + row.studentId"
+                  placeholder="Teacher remarks"
+                  (ngModelChange)="onRemarksInput(row)"
+                />
+              </div>
+              <div class="list-status">
+                @switch (row.saveStatus) {
+                  @case ('saving') { <span class="status saving"><span class="status-dot"></span>Saving</span> }
+                  @case ('saved') { <span class="status saved"><span class="status-dot"></span>Saved</span> }
+                  @case ('error') { <span class="status error"><span class="status-dot"></span>Error</span> }
+                  @default { <span class="status idle">Ready</span> }
+                }
+              </div>
+            </li>
+          } @empty {
+            <li class="no-match-list">No students match the current filters.</li>
+          }
+        </ul>
+      }
+    </div>
+    <p class="footer-note">
+      Marks and remarks sync to report cards for <strong>{{ sessionLabels().term }}</strong>.
+      @if (isAdminPortal()) {
+        Letter grades use boundaries from <a routerLink="/admin/settings">Settings → Exams & Grades</a>.
+      }
+    </p>
+  }
+</app-portal-layout>

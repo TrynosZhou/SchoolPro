@@ -1,0 +1,302 @@
+<app-portal-layout portalTitle="Admin Portal" pageTitle="Staff Management" [navSections]="adminNav">
+
+  @if (toast(); as t) {
+    <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>
+  }
+
+  <header class="hero">
+    <div class="hero-text">
+      <p class="eyebrow">Human Resources</p>
+      <h1 class="hero-title">Staff Management</h1>
+      <p class="hero-sub">Manage teachers, administrators, and daily staff attendance</p>
+    </div>
+    <div class="hero-stats">
+      <div class="stat"><span class="val">{{ stats().total }}</span><span class="lbl">Total</span></div>
+      <div class="stat"><span class="val">{{ stats().teachers }}</span><span class="lbl">Teachers</span></div>
+      <div class="stat"><span class="val">{{ stats().admins }}</span><span class="lbl">Admins</span></div>
+      <div class="stat accent"><span class="val">{{ stats().principals }}</span><span class="lbl">Principals</span></div>
+    </div>
+  </header>
+
+  <nav class="tab-rail">
+    <button type="button" [class.active]="activeTab() === 'directory'" (click)="setTab('directory')">
+      <span class="ico">👥</span> Staff Directory
+    </button>
+    <button type="button" [class.active]="activeTab() === 'add'" (click)="setTab('add')">
+      <span class="ico">➕</span> Add Staff
+    </button>
+    <button type="button" [class.active]="activeTab() === 'attendance'" (click)="setTab('attendance')">
+      <span class="ico">📋</span> Staff Attendance
+    </button>
+  </nav>
+
+  <!-- DIRECTORY -->
+  @if (activeTab() === 'directory') {
+    <div class="toolbar">
+      <input type="search" class="search grow" placeholder="Search name, email, employee ID…"
+        [ngModel]="search()" (ngModelChange)="search.set($event)" name="q" />
+      <select [ngModel]="roleFilter()" (ngModelChange)="roleFilter.set($event); loadStaff()" name="roleF">
+        <option value="">All roles</option>
+        <option value="teacher">Teachers</option>
+        <option value="admin">Administrators</option>
+        <option value="principal">Principals</option>
+      </select>
+      <select [ngModel]="statusFilter()" (ngModelChange)="statusFilter.set($event); loadStaff()" name="statusF">
+        <option value="active">Active only</option>
+        <option value="all">All staff</option>
+        <option value="inactive">Inactive only</option>
+      </select>
+    </div>
+
+    @if (loading()) {
+      <div class="loading">Loading staff…</div>
+    } @else if (filteredStaff().length) {
+      <div class="staff-listview">
+        <div class="listview-header" aria-hidden="true">
+          <span class="col-avatar"></span>
+          <span class="col-id">Employee ID</span>
+          <span class="col-name">Name</span>
+          <span class="col-role">Role</span>
+          <span class="col-dept">Department</span>
+          <span class="col-contact">Contact</span>
+          <span class="col-status">Status</span>
+          <span class="col-actions">Actions</span>
+        </div>
+        <ul class="listview-body">
+          @for (s of filteredStaff(); track s.id) {
+            <li class="staff-list-item" [class.inactive]="!s.isActive">
+              <div class="col-avatar">
+                <span class="avatar" [attr.data-role]="s.user.role">
+                  {{ s.user.firstName.charAt(0) }}{{ s.user.lastName.charAt(0) }}
+                </span>
+              </div>
+              <div class="col-id">
+                <code class="emp-id">{{ s.employeeNumber }}</code>
+              </div>
+              <div class="col-name">
+                <strong class="list-name">{{ fullName(s) }}</strong>
+                @if (s.qualification) {
+                  <small class="list-sub">{{ s.qualification }}</small>
+                }
+              </div>
+              <div class="col-role">
+                <span class="role-badge" [attr.data-role]="s.user.role">{{ roleLabel(s.user.role) }}</span>
+              </div>
+              <div class="col-dept">
+                <span>{{ s.department || '—' }}</span>
+                @if (s.hireDate) {
+                  <small class="list-sub">Since {{ s.hireDate }}</small>
+                }
+              </div>
+              <div class="col-contact">
+                <span class="contact-line">{{ s.user.email }}</span>
+                <small class="list-sub">{{ s.user.phone || 'No phone' }}</small>
+              </div>
+              <div class="col-status">
+                @if (s.isActive) {
+                  <span class="status-pill active">Active</span>
+                } @else {
+                  <span class="status-pill inactive">Inactive</span>
+                }
+              </div>
+              <div class="col-actions">
+                <button type="button" class="icon-btn edit" (click)="startEdit(s)" title="Edit" aria-label="Edit staff">
+                  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                    <path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1.003 1.003 0 0 0 0-1.42l-2.34-2.34a1.003 1.003 0 0 0-1.42 0l-1.83 1.83 3.75 3.75 1.84-1.82z"/>
+                  </svg>
+                </button>
+                <button type="button" class="icon-btn toggle" (click)="toggleActive(s)"
+                  [title]="s.isActive ? 'Deactivate' : 'Reactivate'"
+                  [attr.aria-label]="s.isActive ? 'Deactivate staff' : 'Reactivate staff'">
+                  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                    @if (s.isActive) {
+                      <path fill="currentColor" d="M16 9v10H8V9H6v12h12V9h-2zm-3-4V3H9v2H4v2h16V5h-5z"/>
+                    } @else {
+                      <path fill="currentColor" d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+                    }
+                  </svg>
+                </button>
+              </div>
+            </li>
+          }
+        </ul>
+        <p class="listview-footer">{{ filteredStaff().length }} staff record(s) shown</p>
+      </div>
+    } @else {
+      <div class="empty">
+        <span class="empty-icon">👩‍🏫</span>
+        <h3>No staff found</h3>
+        <p>Add your first staff member to get started.</p>
+        <button type="button" class="btn-primary" (click)="setTab('add')">Add Staff</button>
+      </div>
+    }
+  }
+
+  <!-- ADD STAFF -->
+  @if (activeTab() === 'add') {
+    <section class="panel">
+      <h2>Add New Staff Member</h2>
+      <p class="subtitle">Creates a portal login. Default password is <code>Teacher123!</code> if left blank.</p>
+
+      <div class="emp-preview">
+        <label>Employee ID (auto-generated)</label>
+        <div class="emp-badge">{{ nextEmployeeId() || 'EMP------' }}</div>
+      </div>
+
+      <form class="add-form" (ngSubmit)="addStaff()">
+        <div class="form-grid">
+          <div class="field">
+            <label>First Name *</label>
+            <input [(ngModel)]="newStaff.firstName" name="nfn" required />
+          </div>
+          <div class="field">
+            <label>Last Name *</label>
+            <input [(ngModel)]="newStaff.lastName" name="nln" required />
+          </div>
+          <div class="field">
+            <label>Email *</label>
+            <input type="email" [(ngModel)]="newStaff.email" name="nem" required />
+          </div>
+          <div class="field">
+            <label>Phone</label>
+            <input [(ngModel)]="newStaff.phone" name="nph" />
+          </div>
+          <div class="field">
+            <label>Role *</label>
+            <select [(ngModel)]="newStaff.role" name="nrole">
+              <option value="teacher">Teacher</option>
+              <option value="admin">Administrator</option>
+              <option value="principal">Principal</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Department</label>
+            <input [(ngModel)]="newStaff.department" name="ndept" placeholder="e.g. Sciences" />
+          </div>
+          <div class="field">
+            <label>Qualification</label>
+            <input [(ngModel)]="newStaff.qualification" name="nqual" placeholder="e.g. B.Ed" />
+          </div>
+          <div class="field">
+            <label>Hire Date</label>
+            <input type="date" [(ngModel)]="newStaff.hireDate" name="nhire" />
+          </div>
+          <div class="field">
+            <label>Initial Password</label>
+            <input type="password" [(ngModel)]="newStaff.password" name="npw" placeholder="Leave blank for default" />
+          </div>
+        </div>
+        <button type="submit" class="btn-primary btn-lg" [disabled]="submitting()">
+          {{ submitting() ? 'Adding…' : 'Add Staff Member' }}
+        </button>
+      </form>
+    </section>
+  }
+
+  <!-- ATTENDANCE -->
+  @if (activeTab() === 'attendance') {
+    <section class="panel">
+      <div class="attendance-head">
+        <div>
+          <h2>Staff Attendance</h2>
+          <p class="subtitle">Mark daily attendance for all active staff</p>
+        </div>
+        <div class="date-row">
+          <label>Date</label>
+          <input type="date" [(ngModel)]="attendanceDate" (ngModelChange)="loadAttendanceForDate()" name="attDate" />
+          <button type="button" class="btn-primary" [disabled]="submitting()" (click)="saveAttendance()">
+            {{ submitting() ? 'Saving…' : 'Save Attendance' }}
+          </button>
+        </div>
+      </div>
+
+      <div class="attendance-grid">
+        @for (s of activeStaff(); track s.id) {
+          <div class="att-row">
+            <div class="att-info">
+              <code>{{ s.employeeNumber }}</code>
+              <strong>{{ fullName(s) }}</strong>
+              <small>{{ roleLabel(s.user.role) }}</small>
+            </div>
+            <div class="att-btns">
+              @for (st of ['present', 'late', 'absent', 'excused']; track st) {
+                <button type="button" class="att-chip" [attr.data-s]="st"
+                  [class.active]="attendanceMarks()[s.id] === st"
+                  (click)="setAttendance(s.id, $any(st))">
+                  {{ st }}
+                </button>
+              }
+            </div>
+          </div>
+        } @empty {
+          <p class="empty-inline">No active staff to mark attendance for.</p>
+        }
+      </div>
+    </section>
+  }
+
+  @if (editingStaff(); as staff) {
+    <div class="modal-backdrop" (click)="cancelEdit()">
+      <div class="modal" role="dialog" aria-labelledby="edit-staff-title" (click)="$event.stopPropagation()">
+        <header class="modal-head">
+          <div>
+            <h2 id="edit-staff-title">Edit Staff</h2>
+            <p class="modal-sub"><code class="emp-id">{{ staff.employeeNumber }}</code></p>
+          </div>
+          <button type="button" class="modal-close" (click)="cancelEdit()" aria-label="Close">×</button>
+        </header>
+        <form class="edit-form modal-form" (ngSubmit)="saveEdit()">
+          <div class="form-grid">
+            <div class="field">
+              <label>First Name *</label>
+              <input [(ngModel)]="editForm.firstName" name="efn" required />
+            </div>
+            <div class="field">
+              <label>Last Name *</label>
+              <input [(ngModel)]="editForm.lastName" name="eln" required />
+            </div>
+            <div class="field">
+              <label>Email</label>
+              <input [(ngModel)]="editForm.email" name="eem" type="email" />
+            </div>
+            <div class="field">
+              <label>Phone</label>
+              <input [(ngModel)]="editForm.phone" name="eph" />
+            </div>
+            <div class="field">
+              <label>Role</label>
+              <select [(ngModel)]="editForm.role" name="erole">
+                <option value="teacher">Teacher</option>
+                <option value="admin">Administrator</option>
+                <option value="principal">Principal</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Department</label>
+              <input [(ngModel)]="editForm.department" name="edept" />
+            </div>
+            <div class="field">
+              <label>Qualification</label>
+              <input [(ngModel)]="editForm.qualification" name="equal" />
+            </div>
+            <div class="field">
+              <label>Hire Date</label>
+              <input type="date" [(ngModel)]="editForm.hireDate" name="ehire" />
+            </div>
+            <div class="field span-2">
+              <label>New Password (optional)</label>
+              <input [(ngModel)]="editForm.password" name="epw" type="password" placeholder="Leave blank to keep current" />
+            </div>
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="btn-ghost" (click)="cancelEdit()">Cancel</button>
+            <button type="submit" class="btn-primary" [disabled]="submitting()">
+              {{ submitting() ? 'Saving…' : 'Save Changes' }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  }
+
+</app-portal-layout>

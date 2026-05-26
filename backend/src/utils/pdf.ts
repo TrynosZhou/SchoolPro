@@ -1,0 +1,835 @@
+import PDFDocument from 'pdfkit';
+import fs from 'fs';
+import path from 'path';
+import { formatSubjectAbbrev } from './subject-abbrev';
+
+const receiptsDir = path.join(process.cwd(), 'uploads', 'receipts');
+const logosDir = path.join(process.cwd(), 'uploads', 'logos');
+
+export function ensureUploadDirs() {
+  fs.mkdirSync(receiptsDir, { recursive: true });
+  fs.mkdirSync(logosDir, { recursive: true });
+}
+
+function resolveUploadPath(publicUrl?: string): string | null {
+  if (!publicUrl) return null;
+  const relative = publicUrl.replace(/^\/+/, '');
+  const full = path.join(process.cwd(), relative);
+  return fs.existsSync(full) ? full : null;
+}
+
+function formatSubjectLabel(r: {
+  subject: string;
+  subjectCode?: string;
+  subjectName?: string;
+}): string {
+  const name = (r.subjectName || r.subject.split(' — ')[0] || r.subject).trim();
+  const code = r.subjectCode?.trim();
+  return code ? `${name} (${code})` : name;
+}
+
+export async function generateReceiptPdf(data: {
+  receiptNumber: string;
+  studentName: string;
+  admissionNumber: string;
+  className: string;
+  amount: number;
+  method: string;
+  label: string;
+  paidAt: Date;
+  schoolName?: string;
+}): Promise<string> {
+  ensureUploadDirs();
+  const filename = `${data.receiptNumber}.pdf`;
+  const filepath = path.join(receiptsDir, filename);
+
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({ margin: 50 });
+    const stream = fs.createWriteStream(filepath);
+    doc.pipe(stream);
+
+    doc.fontSize(18).text(data.schoolName || 'School Pro Academy', { align: 'center' });
+    doc.moveDown();
+    doc.fontSize(14).text('OFFICIAL PAYMENT RECEIPT', { align: 'center' });
+    doc.moveDown();
+    doc.fontSize(10);
+    doc.text(`Receipt No: ${data.receiptNumber}`);
+    doc.text(`Date: ${data.paidAt.toLocaleString()}`);
+    doc.moveDown();
+    doc.text(`Student: ${data.studentName}`);
+    doc.text(`Student ID: ${data.admissionNumber}`);
+    doc.text(`Class: ${data.className}`);
+    doc.moveDown();
+    doc.text(`Payment For: ${data.label}`);
+    doc.text(`Method: ${data.method}`);
+    doc.fontSize(14).text(`Amount Paid: $${data.amount.toFixed(2)}`, { underline: true });
+    doc.moveDown(2);
+    doc.fontSize(9).text('This is a computer-generated receipt.', { align: 'center' });
+
+    doc.end();
+    stream.on('finish', () => resolve(filepath));
+    stream.on('error', reject);
+  });
+}
+
+const RC = {
+  primary: '#4f46e5',
+  primaryDark: '#312e81',
+  accent: '#818cf8',
+  ink: '#0f172a',
+  muted: '#64748b',
+  border: '#e2e8f0',
+  rowAlt: '#f8fafc',
+  white: '#ffffff',
+  gold: '#f59e0b',
+  success: '#059669',
+};
+
+function positionSuffix(n: number): string {
+  if (n === 1) return '1st';
+  if (n === 2) return '2nd';
+  if (n === 3) return '3rd';
+  return `${n}th`;
+}
+
+export async function generateReportCardPdf(data: {
+  schoolName?: string;
+  tagline?: string;
+  logoUrl?: string;
+  studentName: string;
+  admissionNumber: string;
+  className: string;
+  formName: string;
+  termName: string;
+  examTypeName?: string;
+  subjectResults: {
+    subject: string;
+    subjectName?: string;
+    subjectCode?: string;
+    marks: number;
+    grade: string;
+    remarks?: string;
+  }[];
+  averageMark?: number;
+  overallGrade?: string;
+  classPosition?: number;
+  formPosition?: number;
+  classTeacherRemarks?: string;
+  principalRemarks?: string;
+  generatedAt?: Date;
+}): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const margin = 36;
+    const pageW = 595.28;
+    const contentW = pageW - margin * 2;
+    const doc = new PDFDocument({ margin, size: 'A4' });
+    const chunks: Buffer[] = [];
+    doc.on('data', (c) => chunks.push(c));
+    doc.on('end', () => resolve(Buffer.concat(chunks)));
+    doc.on('error', reject);
+
+    const school = data.schoolName || 'School Pro Academy';
+    const generated = data.generatedAt || new Date();
+    const pageBottom = () => doc.page.height - margin - 28;
+    const logoPath = resolveUploadPath(data.logoUrl);
+
+    // —— Header band ——
+    const headerH = 96;
+    doc.save();
+    doc.rect(0, 0, pageW, headerH).fill(RC.primary);
+    doc.rect(0, headerH - 4, pageW, 4).fill(RC.accent);
+
+    const textX = logoPath ? margin + 78 : margin;
+    const textW = logoPath ? contentW - 78 : contentW;
+
+    if (logoPath) {
+      try {
+        doc.image(logoPath, margin + 14, 14, { fit: [52, 52], align: 'center', valign: 'center' });
+      } catch {
+        /* skip invalid image */
+      }
+    }
+
+    doc.fillColor(RC.white).font('Helvetica-Bold').fontSize(logoPath ? 18 : 20);
+    doc.text(school, textX, 20, { width: textW, align: logoPath ? 'left' : 'center' });
+    if (data.tagline) {
+      doc.font('Helvetica').fontSize(9).fillColor('#e0e7ff');
+      doc.text(data.tagline, textX, 42, { width: textW, align: logoPath ? 'left' : 'center' });
+    }
+    doc.font('Helvetica-Bold').fontSize(11).fillColor('#c7d2fe');
+    doc.text('STUDENT REPORT CARD', textX, data.tagline ? 58 : 48, { width: textW, align: logoPath ? 'left' : 'center' });
+    doc.restore();
+
+    let y = headerH + 18;
+
+    // —— Meta chips row ——
+    const chips = [
+      data.termName ? `Term: ${data.termName}` : '',
+      data.examTypeName ? `Exam: ${data.examTypeName}` : '',
+      data.formName ? `Form: ${data.formName}` : '',
+      data.className ? `Class: ${data.className}` : '',
+    ].filter(Boolean);
+
+    doc.font('Helvetica').fontSize(8).fillColor(RC.muted);
+    doc.text(chips.join('   ·   '), margin, y, { width: contentW, align: 'center' });
+    y += 22;
+
+    // —— Student identity card ——
+    const cardH = 72;
+    doc.roundedRect(margin, y, contentW, cardH, 8).fillAndStroke(RC.rowAlt, RC.border);
+    doc.fillColor(RC.ink).font('Helvetica-Bold').fontSize(14);
+    doc.text(data.studentName, margin + 16, y + 14);
+    doc.font('Helvetica').fontSize(9).fillColor(RC.muted);
+    doc.text(`Student ID: ${data.admissionNumber}`, margin + 16, y + 36);
+    doc.text(`Class: ${data.className || '—'}`, margin + 16, y + 50);
+
+    // Position badge (right)
+    if (data.classPosition) {
+      const badgeW = 72;
+      const badgeX = margin + contentW - badgeW - 14;
+      const isTop = data.classPosition <= 3;
+      doc.roundedRect(badgeX, y + 12, badgeW, 48, 6)
+        .fillAndStroke(isTop ? '#fef3c7' : '#e0e7ff', isTop ? RC.gold : RC.accent);
+      doc.fillColor(isTop ? '#92400e' : RC.primaryDark).font('Helvetica').fontSize(7);
+      doc.text('CLASS POSITION', badgeX, y + 20, { width: badgeW, align: 'center' });
+      doc.font('Helvetica-Bold').fontSize(18);
+      doc.text(positionSuffix(data.classPosition), badgeX, y + 32, { width: badgeW, align: 'center' });
+    }
+
+    y += cardH + 14;
+
+    // —— Summary stat boxes ——
+    const boxW = (contentW - 16) / 3;
+    const summaries = [
+      { label: 'Average', value: data.averageMark != null ? `${Number(data.averageMark).toFixed(1)}%` : '—' },
+      { label: 'Overall grade', value: data.overallGrade || '—' },
+      {
+        label: 'Form position',
+        value: data.formPosition ? positionSuffix(data.formPosition) : '—',
+      },
+    ];
+    summaries.forEach((s, i) => {
+      const bx = margin + i * (boxW + 8);
+      doc.roundedRect(bx, y, boxW, 44, 6).fillAndStroke(RC.white, RC.border);
+      doc.fillColor(RC.muted).font('Helvetica').fontSize(7);
+      doc.text(s.label.toUpperCase(), bx + 10, y + 10, { width: boxW - 20 });
+      doc.fillColor(RC.primaryDark).font('Helvetica-Bold').fontSize(13);
+      doc.text(s.value, bx + 10, y + 24, { width: boxW - 20 });
+    });
+    y += 56;
+
+    // —— Results table ——
+    doc.fillColor(RC.ink).font('Helvetica-Bold').fontSize(10);
+    doc.text('Academic performance', margin, y);
+    y += 16;
+
+    const col = {
+      subject: margin + 8,
+      marks: margin + 248,
+      grade: margin + 292,
+      remarks: margin + 332,
+    };
+    const subjectW = col.marks - col.subject - 10;
+    const remarksW = contentW - (col.remarks - margin) - 8;
+    const baseRowH = 24;
+
+    const drawTableHeader = (headerY: number, headerRowH: number) => {
+      doc.roundedRect(margin, headerY, contentW, headerRowH, 4).fill(RC.primary);
+      doc.fillColor(RC.white).font('Helvetica-Bold').fontSize(8);
+      doc.text('SUBJECT', col.subject, headerY + 8);
+      doc.text('MARKS', col.marks, headerY + 8, { width: 36, align: 'right' });
+      doc.text('GRADE', col.grade, headerY + 8, { width: 32, align: 'center' });
+      doc.text('REMARKS', col.remarks, headerY + 8, { width: remarksW });
+    };
+
+    const drawTableHeaderRow = () => {
+      drawTableHeader(y, baseRowH);
+      y += baseRowH + 2;
+    };
+
+    drawTableHeaderRow();
+
+    data.subjectResults.forEach((r, idx) => {
+      const subjectLabel = formatSubjectLabel(r);
+      const remarksText = (r.remarks || '—').trim() || '—';
+      doc.font('Helvetica').fontSize(9);
+      const remarksBlockH = doc.heightOfString(remarksText, { width: remarksW });
+      const rowH = Math.max(baseRowH, remarksBlockH + 14);
+
+      if (y + rowH > pageBottom()) {
+        doc.addPage();
+        y = margin;
+        drawTableHeaderRow();
+      }
+      const bg = idx % 2 === 0 ? RC.white : RC.rowAlt;
+      doc.rect(margin, y, contentW, rowH).fill(bg);
+      doc.fillColor(RC.ink).font('Helvetica').fontSize(9);
+      doc.text(subjectLabel, col.subject, y + 7, { width: subjectW });
+      doc.text(String(r.marks), col.marks, y + 7, { width: 36, align: 'right' });
+      doc.font('Helvetica-Bold').fillColor(RC.primary);
+      doc.text(r.grade || '—', col.grade, y + 7, { width: 32, align: 'center' });
+      doc.font('Helvetica').fillColor(RC.muted);
+      doc.text(remarksText, col.remarks, y + 7, { width: remarksW, lineGap: 2 });
+      y += rowH;
+    });
+
+    y += 12;
+
+    // —— Comments ——
+    if (data.classTeacherRemarks || data.principalRemarks) {
+      if (y + 80 > pageBottom()) {
+        doc.addPage();
+        y = margin;
+      }
+      doc.fillColor(RC.ink).font('Helvetica-Bold').fontSize(10);
+      doc.text('Comments', margin, y);
+      y += 14;
+
+      const drawComment = (title: string, body: string) => {
+        doc.font('Helvetica').fontSize(9);
+        const bodyH = doc.heightOfString(body, { width: contentW - 24, lineGap: 2 });
+        const h = Math.max(44, bodyH + 28);
+        doc.roundedRect(margin, y, contentW, h, 6).stroke(RC.border);
+        doc.fillColor(RC.muted).font('Helvetica-Bold').fontSize(7);
+        doc.text(title.toUpperCase(), margin + 12, y + 8);
+        doc.fillColor(RC.ink).font('Helvetica').fontSize(9);
+        doc.text(body, margin + 12, y + 20, { width: contentW - 24, lineGap: 2 });
+        y += h + 8;
+      };
+
+      if (data.classTeacherRemarks) drawComment('Class teacher', data.classTeacherRemarks);
+      if (data.principalRemarks) drawComment('Principal', data.principalRemarks);
+    }
+
+    // —— Footer ——
+    const footerY = doc.page.height - margin - 14;
+    doc.font('Helvetica').fontSize(7).fillColor(RC.muted);
+    doc.text(
+      `Generated by School Pro · ${generated.toLocaleDateString()} ${generated.toLocaleTimeString()}`,
+      margin,
+      footerY,
+      { width: contentW, align: 'center' },
+    );
+
+    doc.end();
+  });
+}
+
+export async function generateClassListPdf(data: {
+  schoolName: string;
+  classLabel: string;
+  generatedAt: Date;
+  students: { admissionNumber: string; lastName: string; firstName: string; gender: string }[];
+}): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({ margin: 40, size: 'A4' });
+    const chunks: Buffer[] = [];
+    doc.on('data', (c) => chunks.push(c));
+    doc.on('end', () => resolve(Buffer.concat(chunks)));
+    doc.on('error', reject);
+
+    const pageBottom = () => doc.page.height - 50;
+
+    doc.fontSize(16).text(data.schoolName, { align: 'center' });
+    doc.fontSize(13).text('CLASS LIST REPORT', { align: 'center' });
+    doc.moveDown(0.5);
+    doc.fontSize(10);
+    doc.text(`Class: ${data.classLabel}`, { align: 'center' });
+    doc.text(`Generated: ${data.generatedAt.toLocaleString()}`, { align: 'center' });
+    doc.text(`Total students: ${data.students.length}`, { align: 'center' });
+    doc.moveDown();
+
+    const colX = { num: 40, id: 70, last: 165, first: 295, gender: 430 };
+    const drawHeader = () => {
+      const y = doc.y;
+      doc.fontSize(9).font('Helvetica-Bold');
+      doc.text('#', colX.num, y);
+      doc.text('Student ID', colX.id, y);
+      doc.text('Last Name', colX.last, y);
+      doc.text('First Name', colX.first, y);
+      doc.text('Gender', colX.gender, y);
+      doc.moveDown(0.6);
+      doc.font('Helvetica');
+    };
+
+    drawHeader();
+
+    data.students.forEach((s, index) => {
+      if (doc.y > pageBottom()) {
+        doc.addPage();
+        drawHeader();
+      }
+      const y = doc.y;
+      doc.fontSize(9);
+      doc.text(String(index + 1), colX.num, y);
+      doc.text(s.admissionNumber, colX.id, y);
+      doc.text(s.lastName, colX.last, y, { width: 120 });
+      doc.text(s.firstName, colX.first, y, { width: 120 });
+      doc.text(s.gender || '—', colX.gender, y);
+      doc.moveDown(0.55);
+    });
+
+    doc.end();
+  });
+}
+
+export interface MarkSheetPdfData {
+  schoolName: string;
+  tagline?: string;
+  logoUrl?: string;
+  examTypeName: string;
+  termName: string;
+  className: string;
+  maxMarks: number;
+  generatedAt: Date;
+  subjects: { code: string; name: string }[];
+  students: {
+    position: number | null;
+    admissionNumber: string;
+    lastName: string;
+    firstName: string;
+    gender: string;
+    subjectCount: number;
+    subjectsPassed: number;
+    averagePercent: number | null;
+    gradeCounts: { A: number; B: number; C: number; D: number; E: number; U: number };
+    cells: (number | null)[];
+  }[];
+}
+
+const MS = {
+  blue: '#2563eb',
+  blueDark: '#1e40af',
+  header: '#1e3a8a',
+  badge: '#3b82f6',
+  meta: '#2563eb',
+  border: '#bfdbfe',
+  pass: '#16a34a',
+  male: '#2563eb',
+  female: '#db2777',
+  pillGreenBg: '#dcfce7',
+  pillGreenText: '#166534',
+  muted: '#94a3b8',
+  white: '#ffffff',
+  ink: '#0f172a',
+};
+
+const MS_FONT = 8;
+const MS_HDR = 7.5;
+const MS_PAD = 3;
+const MS_PASS_MARK = 49;
+const GRADE_COLS = ['A', 'B', 'C', 'D', 'E', 'U'] as const;
+
+type PdfKitDoc = InstanceType<typeof PDFDocument>;
+
+function msTextWidth(doc: PdfKitDoc, text: string, size: number, bold = false): number {
+  doc.font(bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(size);
+  return doc.widthOfString(text || '—');
+}
+
+function msFitWidths(widths: number[], target: number, mins: number[]): number[] {
+  let total = widths.reduce((a, b) => a + b, 0);
+  if (total > target) {
+    const scale = target / total;
+    widths = widths.map((w, i) => Math.max(mins[i] ?? 14, Math.floor(w * scale)));
+    total = widths.reduce((a, b) => a + b, 0);
+    if (total > target) {
+      const fix = target / total;
+      widths = widths.map((w, i) => Math.max(mins[i] ?? 12, Math.floor(w * fix)));
+    }
+  } else if (total < target) {
+    const scale = target / total;
+    widths = widths.map((w, i) => Math.max(mins[i] ?? 14, Math.floor(w * scale)));
+    let rem = target - widths.reduce((a, b) => a + b, 0);
+    let i = 0;
+    while (rem > 0) {
+      widths[i % widths.length]++;
+      rem--;
+      i++;
+    }
+  }
+  return widths;
+}
+
+function msColX(startX: number, widths: number[], index: number): number {
+  let x = startX;
+  for (let i = 0; i < index; i++) x += widths[i];
+  return x;
+}
+
+function msSpanWidth(widths: number[], from: number, count: number): number {
+  let w = 0;
+  for (let i = from; i < from + count; i++) w += widths[i];
+  return w;
+}
+
+function msHeaderText(
+  doc: PdfKitDoc,
+  text: string,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  align: 'left' | 'center' | 'right' = 'center',
+) {
+  doc.fillColor(MS.white).font('Helvetica-Bold').fontSize(MS_HDR);
+  const pad = 2;
+  doc.text(text, x + pad, y + (h - MS_HDR) / 2 - 1, {
+    width: Math.max(0, w - pad * 2),
+    align,
+    lineBreak: false,
+  });
+}
+
+function msDrawPill(
+  doc: PdfKitDoc,
+  cx: number,
+  cy: number,
+  text: string,
+  bg: string,
+  fg: string,
+  fontSize = 7.5,
+) {
+  doc.font('Helvetica-Bold').fontSize(fontSize);
+  const tw = doc.widthOfString(text);
+  const pw = tw + 10;
+  const ph = fontSize + 5;
+  const px = cx - pw / 2;
+  const py = cy - ph / 2;
+  doc.roundedRect(px, py, pw, ph, ph / 2).fill(bg);
+  doc.fillColor(fg).text(text, px, py + 2, { width: pw, align: 'center', lineBreak: false });
+}
+
+export async function generateMarkSheetPdf(data: MarkSheetPdfData): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const margin = 18;
+    const doc = new PDFDocument({ margin, size: 'A4', layout: 'landscape' });
+    const chunks: Buffer[] = [];
+    doc.on('data', (c) => chunks.push(c));
+    doc.on('end', () => resolve(Buffer.concat(chunks)));
+    doc.on('error', reject);
+
+    const pageW = doc.page.width;
+    const pageH = doc.page.height;
+    const contentW = pageW - margin * 2;
+    const logoPath = resolveUploadPath(data.logoUrl);
+    const school = data.schoolName || 'School Pro Academy';
+    const subjectCount = data.subjects.length;
+    const fixedCols = 5;
+    const summaryCols = 2;
+    const gradeCount = GRADE_COLS.length;
+    const totalCols = fixedCols + subjectCount + summaryCols + 1 + gradeCount;
+
+    const colLabels = [
+      'POS',
+      'STUDENT ID',
+      'LAST NAME',
+      'FIRST NAME',
+      'GENDER',
+      ...data.subjects.map((s) => formatSubjectAbbrev(s.code, s.name)),
+      'COUNT',
+      'SUBJ PASSED',
+      'AVERAGE %',
+      ...GRADE_COLS,
+    ];
+
+    const mins: number[] = [
+      22, 52, 58, 58, 38,
+      ...Array(subjectCount).fill(26),
+      30, 44, 52,
+      ...Array(gradeCount).fill(22),
+    ];
+
+    const widths: number[] = colLabels.map((label, i) => {
+      let w = msTextWidth(doc, label, MS_HDR, true) + MS_PAD * 2 + 4;
+      if (i === 1) w = Math.max(w, 52);
+      if (i === 2 || i === 3) w = Math.max(w, 58);
+      for (const row of data.students) {
+        let sample = '';
+        if (i === 0) sample = row.position != null ? String(row.position) : '—';
+        else if (i === 1) sample = row.admissionNumber;
+        else if (i === 2) sample = row.lastName;
+        else if (i === 3) sample = row.firstName;
+        else if (i === 4) sample = row.gender || '—';
+        else if (i < fixedCols + subjectCount) {
+          const m = row.cells[i - fixedCols];
+          sample = m != null ? String(m) : '—';
+        } else if (i === fixedCols + subjectCount) sample = String(row.subjectCount);
+        else if (i === fixedCols + subjectCount + 1) sample = String(row.subjectsPassed);
+        else if (i === fixedCols + subjectCount + 2) {
+          sample = row.averagePercent != null ? row.averagePercent.toFixed(2) : '—';
+        } else {
+          const g = GRADE_COLS[i - fixedCols - subjectCount - summaryCols - 1];
+          sample = String(row.gradeCounts[g]);
+        }
+        w = Math.max(w, msTextWidth(doc, sample, MS_FONT) + MS_PAD * 2 + 6);
+      }
+      return Math.ceil(Math.max(mins[i] ?? 20, w));
+    });
+
+    const colW = msFitWidths(widths, contentW, mins);
+    const tableW = colW.reduce((a, b) => a + b, 0);
+    const groupH = 16;
+    const headerH = 20;
+    const rowH = 22;
+    const tableBottom = () => pageH - margin - 22;
+
+    const drawBanner = () => {
+      const bannerH = 76;
+      doc.save();
+      doc.rect(0, 0, pageW, bannerH).fill(MS.blue);
+
+      if (logoPath) {
+        try {
+          doc.save();
+          doc.circle(margin + 28, 38, 26).fill(MS.white);
+          doc.restore();
+          doc.image(logoPath, margin + 8, 18, { fit: [40, 40] });
+        } catch {
+          /* skip */
+        }
+      }
+
+      const tx = logoPath ? margin + 62 : margin;
+      const badgeW = msTextWidth(doc, `${data.examTypeName} • ${data.termName}`, 9, true) + 28;
+      const titleW = contentW - badgeW - (logoPath ? 50 : 0);
+
+      doc.fillColor(MS.white).font('Helvetica-Bold').fontSize(17);
+      doc.text(school, tx, 16, { width: titleW, lineBreak: false });
+      if (data.tagline) {
+        doc.font('Helvetica').fontSize(9).fillColor('#dbeafe');
+        doc.text(data.tagline, tx, 36, { width: titleW, lineBreak: false });
+      }
+      doc.font('Helvetica-Bold').fontSize(11).fillColor('#bfdbfe');
+      doc.text('CLASS MARK SHEET', tx, data.tagline ? 50 : 38, { width: titleW, lineBreak: false });
+
+      const badgeText = `${data.examTypeName} • ${data.termName}`;
+      const bx = pageW - margin - badgeW;
+      const by = 24;
+      doc.roundedRect(bx, by, badgeW, 26, 13).fill(MS.badge);
+      doc.fillColor(MS.white).font('Helvetica-Bold').fontSize(9);
+      doc.text(badgeText, bx + 10, by + 8, { width: badgeW - 20, align: 'center', lineBreak: false });
+
+      doc.restore();
+      return bannerH;
+    };
+
+    const drawMeta = (y: number) => {
+      const gen = data.generatedAt.toLocaleString();
+      const line =
+        `Exam: ${data.examTypeName}    Term: ${data.termName}    Class: ${data.className}    ` +
+        `Max Marks: ${data.maxMarks}    Students: ${data.students.length}    Generated: ${gen}`;
+      doc.fillColor(MS.meta).font('Helvetica').fontSize(8.5);
+      doc.text(line, margin, y + 4, { width: contentW, lineBreak: false });
+      return y + 18;
+    };
+
+    const drawGroupHeader = (y: number) => {
+      doc.save();
+      doc.rect(margin, y, tableW, groupH).fill(MS.header);
+      const subStart = fixedCols;
+      const sumStart = fixedCols + subjectCount;
+      const avgIdx = sumStart + summaryCols;
+      const gradeStart = avgIdx + 1;
+
+      msHeaderText(doc, '', margin, y, msSpanWidth(colW, 0, fixedCols), groupH);
+      msHeaderText(
+        doc,
+        'SUBJECT SCORES',
+        msColX(margin, colW, subStart),
+        y,
+        msSpanWidth(colW, subStart, subjectCount),
+        groupH,
+      );
+      msHeaderText(
+        doc,
+        'SUMMARY',
+        msColX(margin, colW, sumStart),
+        y,
+        msSpanWidth(colW, sumStart, summaryCols),
+        groupH,
+      );
+      if (gradeCount > 0) {
+        msHeaderText(
+          doc,
+          'GRADES',
+          msColX(margin, colW, gradeStart),
+          y,
+          msSpanWidth(colW, gradeStart, gradeCount),
+          groupH,
+        );
+      }
+      doc.restore();
+      return y + groupH;
+    };
+
+    const drawColumnHeader = (y: number) => {
+      doc.save();
+      doc.rect(margin, y, tableW, headerH).fill(MS.header);
+      let cx = margin;
+      for (let i = 0; i < totalCols; i++) {
+        msHeaderText(doc, colLabels[i], cx, y, colW[i], headerH, i <= 4 ? (i === 0 ? 'center' : 'left') : 'center');
+        cx += colW[i];
+      }
+      doc.restore();
+      return y + headerH;
+    };
+
+    const drawRowBorder = (y: number) => {
+      doc.save();
+      doc.strokeColor(MS.border).lineWidth(0.8);
+      doc.moveTo(margin, y + rowH).lineTo(margin + tableW, y + rowH).stroke();
+      doc.restore();
+    };
+
+    const drawStudentRow = (row: MarkSheetPdfData['students'][0], y: number) => {
+      const cy = y + rowH / 2;
+      let cx = margin;
+
+      // Position circle
+      const posW = colW[0];
+      if (row.position != null) {
+        const r = 8;
+        doc.circle(margin + posW / 2, cy, r).fill(MS.blue);
+        doc.fillColor(MS.white).font('Helvetica-Bold').fontSize(8);
+        doc.text(String(row.position), margin + posW / 2 - r, cy - 4, { width: r * 2, align: 'center' });
+      } else {
+        doc.fillColor(MS.muted).font('Helvetica').fontSize(MS_FONT);
+        doc.text('—', margin, cy - 4, { width: posW, align: 'center' });
+      }
+      cx += posW;
+
+      // Student ID
+      doc.fillColor(MS.blue).font('Helvetica').fontSize(MS_FONT);
+      doc.text(row.admissionNumber, cx + MS_PAD, cy - 4, {
+        width: colW[1] - MS_PAD * 2,
+        lineBreak: false,
+        ellipsis: true,
+      });
+      cx += colW[1];
+
+      // Names
+      doc.fillColor(MS.ink).font('Helvetica-Bold').fontSize(MS_FONT);
+      doc.text(row.lastName, cx + MS_PAD, cy - 4, { width: colW[2] - MS_PAD * 2, lineBreak: false, ellipsis: true });
+      cx += colW[2];
+      doc.text(row.firstName, cx + MS_PAD, cy - 4, { width: colW[3] - MS_PAD * 2, lineBreak: false, ellipsis: true });
+      cx += colW[3];
+
+      // Gender
+      const g = (row.gender || '').toLowerCase();
+      const gColor = g.startsWith('f') ? MS.female : g.startsWith('m') ? MS.male : MS.muted;
+      doc.fillColor(gColor).font('Helvetica').fontSize(MS_FONT);
+      doc.text(row.gender || '—', cx + MS_PAD, cy - 4, { width: colW[4] - MS_PAD * 2, align: 'center' });
+      cx += colW[4];
+
+      // Subject marks
+      for (let i = 0; i < subjectCount; i++) {
+        const mark = row.cells[i];
+        const cw = colW[fixedCols + i];
+        if (mark != null) {
+          const passed = mark > MS_PASS_MARK;
+          doc.fillColor(passed ? MS.pass : MS.ink).font(passed ? 'Helvetica-Bold' : 'Helvetica').fontSize(MS_FONT);
+          doc.text(String(mark), cx, cy - 4, { width: cw, align: 'center' });
+        } else {
+          doc.fillColor(MS.muted).font('Helvetica').fontSize(MS_FONT);
+          doc.text('—', cx, cy - 4, { width: cw, align: 'center' });
+        }
+        cx += cw;
+      }
+
+      // Count & subjects passed
+      doc.fillColor(MS.ink).font('Helvetica-Bold').fontSize(MS_FONT);
+      doc.text(String(row.subjectCount), cx, cy - 4, { width: colW[fixedCols + subjectCount], align: 'center' });
+      cx += colW[fixedCols + subjectCount];
+      doc.text(String(row.subjectsPassed), cx, cy - 4, {
+        width: colW[fixedCols + subjectCount + 1],
+        align: 'center',
+      });
+      cx += colW[fixedCols + subjectCount + 1];
+
+      // Average pill
+      const avgW = colW[fixedCols + subjectCount + 2];
+      if (row.averagePercent != null) {
+        msDrawPill(doc, cx + avgW / 2, cy, row.averagePercent.toFixed(2), MS.blue, MS.white);
+      } else {
+        doc.fillColor(MS.muted).font('Helvetica').fontSize(MS_FONT);
+        doc.text('—', cx, cy - 4, { width: avgW, align: 'center' });
+      }
+      cx += avgW;
+
+      // Grade counts
+      for (let gi = 0; gi < gradeCount; gi++) {
+        const gLetter = GRADE_COLS[gi];
+        const count = row.gradeCounts[gLetter];
+        const gw = colW[fixedCols + subjectCount + summaryCols + 1 + gi];
+        if (count > 0) {
+          msDrawPill(doc, cx + gw / 2, cy, String(count), MS.pillGreenBg, MS.pillGreenText, 7);
+        } else {
+          doc.fillColor(MS.muted).font('Helvetica').fontSize(MS_FONT);
+          doc.text('0', cx, cy - 4, { width: gw, align: 'center' });
+        }
+        cx += gw;
+      }
+
+      drawRowBorder(y);
+    };
+
+    const drawTableBlock = (startY: number) => {
+      let y = drawGroupHeader(startY);
+      y = drawColumnHeader(y);
+      for (const row of data.students) {
+        if (y + rowH > tableBottom()) return { y, needsPage: true };
+        drawStudentRow(row, y);
+        y += rowH;
+      }
+      return { y, needsPage: false };
+    };
+
+    const drawFooter = () => {
+      const fy = pageH - margin - 10;
+      doc.save();
+      doc.strokeColor(MS.border).lineWidth(1);
+      doc.moveTo(margin, fy - 8).lineTo(margin + contentW, fy - 8).stroke();
+      doc.fillColor(MS.blue).font('Helvetica').fontSize(8);
+      doc.text(`Official Academic Record — ${school}`, margin, fy, { lineBreak: false });
+      doc.restore();
+    };
+
+    let y = drawBanner() + 6;
+    y = drawMeta(y);
+    y += 4;
+
+    let studentIdx = 0;
+    const allStudents = data.students;
+
+    const renderPage = (continued: boolean) => {
+      if (continued) {
+        y = drawBanner() + 6;
+        y = drawMeta(y) + 2;
+        doc.fillColor(MS.meta).font('Helvetica-Oblique').fontSize(8);
+        doc.text('(continued)', margin, y, { width: contentW, align: 'center' });
+        y += 12;
+      }
+
+      y = drawGroupHeader(y);
+      y = drawColumnHeader(y);
+
+      while (studentIdx < allStudents.length) {
+        if (y + rowH > tableBottom()) break;
+        drawStudentRow(allStudents[studentIdx], y);
+        y += rowH;
+        studentIdx++;
+      }
+    };
+
+    renderPage(false);
+    while (studentIdx < allStudents.length) {
+      doc.addPage({ size: 'A4', layout: 'landscape', margin });
+      renderPage(true);
+    }
+
+    drawFooter();
+    doc.end();
+  });
+}
+

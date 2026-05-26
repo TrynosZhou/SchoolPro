@@ -1,0 +1,338 @@
+<app-portal-layout portalTitle="Admin Portal" pageTitle="Financial Management" [navSections]="adminNav">
+
+  @if (toast(); as t) {
+    <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>
+  }
+
+  <div class="finance-header">
+    <div class="tabs">
+      <button type="button" [class.active]="activeTab() === 'overview'" (click)="setTab('overview')">Overview</button>
+      <button type="button" [class.active]="activeTab() === 'cashbook'" (click)="setTab('cashbook')">Cashbook</button>
+      <button type="button" [class.active]="activeTab() === 'debtors'" (click)="setTab('debtors')">Debtors</button>
+      <button type="button" [class.active]="activeTab() === 'statements'" (click)="setTab('statements')">Student Statements</button>
+    </div>
+    <a routerLink="/admin/billing" class="btn-primary btn-sm">+ Record Payment</a>
+  </div>
+
+  @if (loading() && activeTab() === 'overview') {
+    <div class="loading-state">Loading financial data…</div>
+  }
+
+  <!-- OVERVIEW -->
+  @if (activeTab() === 'overview') {
+    <div class="kpi-grid">
+      <div class="kpi-card kpi-cash">
+        <div class="kpi-icon">💵</div>
+        <div class="kpi-body">
+          <span class="kpi-label">Cash Balance</span>
+          <span class="kpi-value">{{ '$' + (balanceSheet()?.cashBalance | number:'1.2-2') }}</span>
+        </div>
+      </div>
+      <div class="kpi-card kpi-debt">
+        <div class="kpi-icon">📉</div>
+        <div class="kpi-body">
+          <span class="kpi-label">Outstanding Debtors</span>
+          <span class="kpi-value">{{ '$' + (balanceSheet()?.totalDebtors | number:'1.2-2') }}</span>
+        </div>
+      </div>
+      <div class="kpi-card kpi-collect">
+        <div class="kpi-icon">📈</div>
+        <div class="kpi-body">
+          <span class="kpi-label">Collections (This Month)</span>
+          <span class="kpi-value">{{ '$' + (balanceSheet()?.monthlyCollections | number:'1.2-2') }}</span>
+        </div>
+      </div>
+      <div class="kpi-card kpi-count">
+        <div class="kpi-icon">👥</div>
+        <div class="kpi-body">
+          <span class="kpi-label">Students Owing Fees</span>
+          <span class="kpi-value">{{ debtors().length }}</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid-2-wide">
+      <section class="panel">
+        <div class="panel-head">
+          <h3>Debtors Aging</h3>
+          <span class="panel-meta">By invoice due date</span>
+        </div>
+        <div class="aging-chart">
+          @for (row of aging(); track row.bucket) {
+            <div class="aging-row">
+              <span class="aging-label">{{ row.bucket }}</span>
+              <div class="aging-bar-wrap">
+                <div class="aging-bar" [style.width.%]="(row.amount / agingMax()) * 100"></div>
+              </div>
+              <span class="aging-amt">{{ '$' + (row.amount | number:'1.0-0') }}</span>
+              <span class="aging-cnt">{{ row.count }} inv.</span>
+            </div>
+          } @empty {
+            <p class="empty">No outstanding invoices in aging buckets.</p>
+          }
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h3>Debt by Class</h3>
+        </div>
+        <div class="class-debt-list">
+          @for (c of classDebt(); track c.id) {
+            <div class="class-debt-item">
+              <div>
+                <strong>{{ c.name }}</strong>
+                <small>{{ c.formName }}</small>
+              </div>
+              <div class="class-debt-right">
+                <span class="owed">{{ '$' + (c.owed | number:'1.2-2') }}</span>
+                <small>{{ c.studentsOwing }} owing</small>
+              </div>
+            </div>
+          } @empty {
+            <p class="empty">No class balances.</p>
+          }
+        </div>
+      </section>
+    </div>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h3>Recent Payments</h3>
+        <button type="button" class="btn-ghost" (click)="setTab('cashbook')">View cashbook →</button>
+      </div>
+      <div class="table-wrap">
+        <table class="modern-table">
+          <thead>
+            <tr>
+              <th>Date</th><th>Student</th><th>Class</th><th>Label</th><th>Method</th><th class="num">Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (p of recentPayments(); track p.id) {
+              <tr>
+                <td>{{ p.paidAt | date:'mediumDate' }}</td>
+                <td>{{ p.firstName }} {{ p.lastName }}</td>
+                <td><span class="pill">{{ p.className || '—' }}</span></td>
+                <td>{{ p.label }}</td>
+                <td><span class="method-badge">{{ formatMethod(p.method) }}</span></td>
+                <td class="num text-green">{{ '$' + (p.amount | number:'1.2-2') }}</td>
+              </tr>
+            } @empty {
+              <tr><td colspan="6" class="empty">No payments recorded yet.</td></tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+  }
+
+  <!-- CASHBOOK -->
+  @if (activeTab() === 'cashbook') {
+    <div class="toolbar-card">
+      <div class="filters">
+        <label>From <input type="date" [(ngModel)]="cashbookFrom" name="from" /></label>
+        <label>To <input type="date" [(ngModel)]="cashbookTo" name="to" /></label>
+        <button type="button" class="btn-outline" (click)="applyCashbookDates()">Apply</button>
+        <button type="button" class="btn-ghost" (click)="clearCashbookDates()">Clear</button>
+        <input type="search" class="search" placeholder="Search entries…" [ngModel]="cashbookFilter()" (ngModelChange)="cashbookFilter.set($event)" name="cbSearch" />
+      </div>
+      <button type="button" class="btn-primary" (click)="showAddEntry.set(!showAddEntry())">
+        {{ showAddEntry() ? 'Cancel' : '+ Add Entry' }}
+      </button>
+    </div>
+
+    @if (showAddEntry()) {
+      <form class="entry-form panel" (ngSubmit)="submitCashbookEntry()">
+        <h3>New Cashbook Entry</h3>
+        <div class="form-row">
+          <label>Date <input type="date" [(ngModel)]="newEntry.entryDate" name="ed" required /></label>
+          <label>Type
+            <select [(ngModel)]="newEntry.type" name="etype">
+              <option value="receipt">Money In (Receipt)</option>
+              <option value="payment">Money Out (Payment)</option>
+            </select>
+          </label>
+          <label>Method
+            <select [(ngModel)]="newEntry.paymentMethod" name="emethod">
+              <option value="cash">Cash</option>
+              <option value="bank">Bank</option>
+              <option value="ecocash">EcoCash</option>
+              <option value="onemoney">OneMoney</option>
+            </select>
+          </label>
+        </div>
+        <label>Description <input [(ngModel)]="newEntry.description" name="edesc" placeholder="e.g. Petty cash withdrawal" required /></label>
+        <div class="form-row">
+          @if (newEntry.type === 'receipt') {
+            <label>Amount In <input type="number" [(ngModel)]="newEntry.moneyIn" name="emin" min="0" step="0.01" /></label>
+          } @else {
+            <label>Amount Out <input type="number" [(ngModel)]="newEntry.moneyOut" name="emout" min="0" step="0.01" /></label>
+          }
+          <label>Reference <input [(ngModel)]="newEntry.reference" name="eref" placeholder="Optional ref #" /></label>
+        </div>
+        <button type="submit" class="btn-primary">Save Entry</button>
+      </form>
+    }
+
+    <section class="panel">
+      <div class="table-wrap">
+        <table class="modern-table">
+          <thead>
+            <tr>
+              <th>Date</th><th>Description</th><th>Reference</th><th>Method</th>
+              <th class="num">In</th><th class="num">Out</th><th class="num">Balance</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (e of filteredCashbook(); track e.id) {
+              <tr>
+                <td>{{ e.entryDate }}</td>
+                <td>{{ e.description }}</td>
+                <td>{{ e.reference || '—' }}</td>
+                <td>{{ e.paymentMethod ? formatMethod(e.paymentMethod) : '—' }}</td>
+                <td class="num text-green">{{ e.moneyIn ? ('$' + (e.moneyIn | number:'1.2-2')) : '—' }}</td>
+                <td class="num text-red">{{ e.moneyOut ? ('$' + (e.moneyOut | number:'1.2-2')) : '—' }}</td>
+                <td class="num"><strong>{{ '$' + (e.balance | number:'1.2-2') }}</strong></td>
+              </tr>
+            } @empty {
+              <tr><td colspan="7" class="empty">No cashbook entries for this period.</td></tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+  }
+
+  <!-- DEBTORS -->
+  @if (activeTab() === 'debtors') {
+    <div class="toolbar-card">
+      <input type="search" class="search grow" placeholder="Search by name, class, Student ID…"
+        [ngModel]="debtorSearch()" (ngModelChange)="debtorSearch.set($event)" name="dSearch" />
+      <div class="toolbar-actions">
+        <span class="total-badge">Total owed: <strong>{{ '$' + (totalDebtorsOwed() | number:'1.2-2') }}</strong></span>
+        <button type="button" class="btn-outline" (click)="sendReminders()">WhatsApp Reminders</button>
+      </div>
+    </div>
+
+    <section class="panel">
+      <div class="table-wrap">
+        <table class="modern-table">
+          <thead>
+            <tr>
+              <th>Student</th><th>Student ID</th><th>Class</th><th class="num">Amount Owed</th><th></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (d of filteredDebtors(); track d.id) {
+              <tr>
+                <td><strong>{{ d.firstName }} {{ d.lastName }}</strong></td>
+                <td>{{ d.admissionNumber || '—' }}</td>
+                <td><span class="pill">{{ d.className || '—' }}</span></td>
+                <td class="num text-red">{{ '$' + (d.owed | number:'1.2-2') }}</td>
+                <td>
+                  <button type="button" class="btn-ghost btn-sm" (click)="viewDebtorStatement(d.id)">Statement</button>
+                </td>
+              </tr>
+            } @empty {
+              <tr><td colspan="5" class="empty">No outstanding balances — all fees collected!</td></tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+  }
+
+  <!-- STATEMENTS -->
+  @if (activeTab() === 'statements') {
+    <div class="toolbar-card">
+      <label class="student-select">
+        Student
+        <select [(ngModel)]="selectedStudentId" (ngModelChange)="loadStatement()" name="stmtStudent">
+          @for (s of students(); track s.id) {
+            <option [value]="s.id">{{ s.firstName }} {{ s.lastName }} — {{ s.admissionNumber }}</option>
+          }
+        </select>
+      </label>
+    </div>
+
+    @if (statementLoading()) {
+      <div class="loading-state">Loading statement…</div>
+    } @else if (statement()) {
+      <div class="stmt-kpis">
+        <div class="stmt-kpi">
+          <span>Total Invoiced</span>
+          <strong>{{ '$' + (statement()!.summary.totalInvoiced | number:'1.2-2') }}</strong>
+        </div>
+        <div class="stmt-kpi paid">
+          <span>Total Paid</span>
+          <strong>{{ '$' + (statement()!.summary.totalPaid | number:'1.2-2') }}</strong>
+        </div>
+        <div class="stmt-kpi balance" [class.overdue]="statement()!.summary.balance > 0">
+          <span>Balance Due</span>
+          <strong>{{ '$' + (statement()!.summary.balance | number:'1.2-2') }}</strong>
+        </div>
+      </div>
+
+      <div class="grid-2-wide">
+        <section class="panel">
+          <h3>Invoices</h3>
+          <table class="modern-table compact">
+            <thead><tr><th>#</th><th>Description</th><th class="num">Total</th><th class="num">Paid</th><th>Status</th></tr></thead>
+            <tbody>
+              @for (inv of statement()!.invoices; track inv.id) {
+                <tr>
+                  <td>{{ inv.invoiceNumber }}</td>
+                  <td>{{ inv.description }}</td>
+                  <td class="num">{{ '$' + inv.totalAmount }}</td>
+                  <td class="num">{{ '$' + inv.amountPaid }}</td>
+                  <td><span class="status-pill" [attr.data-status]="inv.status">{{ inv.status }}</span></td>
+                </tr>
+              } @empty {
+                <tr><td colspan="5" class="empty">No invoices</td></tr>
+              }
+            </tbody>
+          </table>
+        </section>
+
+        <section class="panel">
+          <h3>Payments</h3>
+          <table class="modern-table compact">
+            <thead><tr><th>Ref</th><th>Label</th><th>Method</th><th class="num">Amount</th></tr></thead>
+            <tbody>
+              @for (p of statement()!.payments; track p.id) {
+                <tr>
+                  <td>{{ p.paymentReference }}</td>
+                  <td>{{ p.label }}</td>
+                  <td>{{ formatMethod(p.method) }}</td>
+                  <td class="num text-green">{{ '$' + p.amount }}</td>
+                </tr>
+              } @empty {
+                <tr><td colspan="4" class="empty">No payments</td></tr>
+              }
+            </tbody>
+          </table>
+        </section>
+      </div>
+
+      <section class="panel">
+        <h3>Ledger (Running Balance)</h3>
+        <table class="modern-table">
+          <thead><tr><th>Date</th><th>Description</th><th class="num">Debit</th><th class="num">Credit</th><th class="num">Balance</th></tr></thead>
+          <tbody>
+            @for (l of statement()!.ledger; track l.entryDate + l.description) {
+              <tr>
+                <td>{{ l.entryDate }}</td>
+                <td>{{ l.description }}</td>
+                <td class="num">{{ l.debit ? ('$' + l.debit) : '—' }}</td>
+                <td class="num text-green">{{ l.credit ? ('$' + l.credit) : '—' }}</td>
+                <td class="num"><strong>{{ '$' + l.balance }}</strong></td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </section>
+    }
+  }
+
+</app-portal-layout>

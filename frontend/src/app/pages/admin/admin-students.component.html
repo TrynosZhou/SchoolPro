@@ -1,0 +1,203 @@
+<app-portal-layout portalTitle="Admin Portal" pageTitle="Register Students" [navSections]="adminNav">
+
+  @if (toast(); as t) {
+    <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>
+  }
+
+  <header class="page-intro">
+    <p>Register new students here first. Assign them to classes later on the <a routerLink="/admin/enrollment">Class Enrollment</a> page.</p>
+    @if (pendingEnrollmentCount()) {
+      <a routerLink="/admin/enrollment" class="pending-banner">
+        {{ pendingEnrollmentCount() }} student(s) awaiting class enrollment →
+      </a>
+    }
+  </header>
+
+  <div class="toolbar">
+    <input type="search" [(ngModel)]="search" placeholder="Search by name or Student ID…" (input)="load()" name="search" />
+    <button type="button" class="btn-primary" (click)="toggleForm()">
+      {{ showForm ? 'Cancel' : '+ Register Student' }}
+    </button>
+  </div>
+
+  @if (showForm) {
+    <form class="reg-card" (ngSubmit)="saveStudent()">
+      <h2>New Student Registration</h2>
+      <p class="reg-note">Class assignment is done separately after registration.</p>
+
+      <div class="student-id-preview">
+        <label>Student ID (auto-generated)</label>
+        <div class="id-badge">{{ nextStudentId() || 'SP------' }}</div>
+      </div>
+
+      <ng-container *ngTemplateOutlet="studentFields"></ng-container>
+
+      <button type="submit" class="btn-primary btn-lg" [disabled]="saving()">
+        {{ saving() ? 'Registering…' : 'Register Student' }}
+      </button>
+    </form>
+  }
+
+  @if (lastCreatedId()) {
+    <div class="success-banner">
+      <strong>{{ lastCreatedId() }}</strong> registered successfully.
+      <a routerLink="/admin/enrollment">Enroll in a class →</a>
+    </div>
+  }
+
+  <div class="table-card">
+    <div class="table-head">
+      <h3>All Registered Students ({{ registeredCount() }})</h3>
+    </div>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Student ID</th>
+          <th>Name</th>
+          <th>Gender</th>
+          <th>Status</th>
+          <th>Class</th>
+          <th>Guardian</th>
+          <th>Phone</th>
+          <th class="col-actions">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (s of students(); track s.id) {
+          <tr>
+            <td><code class="sid">{{ s.admissionNumber }}</code></td>
+            <td><strong>{{ s.firstName }} {{ s.lastName }}</strong></td>
+            <td>
+              @if (s.gender) {
+                <span class="gender-tag">{{ s.gender }}</span>
+              } @else {
+                <span class="gender-missing">—</span>
+              }
+            </td>
+            <td>
+              @if (enrollmentStatus(s) === 'enrolled') {
+                <span class="status enrolled">Enrolled</span>
+              } @else {
+                <span class="status pending">Awaiting class</span>
+              }
+            </td>
+            <td>{{ s.schoolClass?.name || '—' }}</td>
+            <td>{{ s.guardians?.[0]?.fullName || '—' }}</td>
+            <td>{{ s.guardians?.[0]?.phone || '—' }}</td>
+            <td class="col-actions">
+              <div class="action-btns">
+                <button type="button" class="icon-btn edit" (click)="openEdit(s)" title="Edit student" aria-label="Edit student">
+                  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                    <path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1.003 1.003 0 0 0 0-1.42l-2.34-2.34a1.003 1.003 0 0 0-1.42 0l-1.83 1.83 3.75 3.75 1.84-1.82z"/>
+                  </svg>
+                </button>
+                <button type="button" class="icon-btn delete" (click)="confirmDelete(s)" title="Delete student" aria-label="Delete student">
+                  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                    <path fill="currentColor" d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+                  </svg>
+                </button>
+              </div>
+            </td>
+          </tr>
+        } @empty {
+          <tr><td colspan="8" class="empty">No students registered yet.</td></tr>
+        }
+      </tbody>
+    </table>
+  </div>
+
+</app-portal-layout>
+
+<!-- Edit modal -->
+@if (editingStudent(); as student) {
+  <div class="modal-backdrop" (click)="closeEdit()">
+    <div class="modal" role="dialog" aria-labelledby="edit-title" (click)="$event.stopPropagation()">
+      <header class="modal-head">
+        <div>
+          <h2 id="edit-title">Edit Student</h2>
+          <p class="modal-sub"><code class="sid">{{ student.admissionNumber }}</code></p>
+        </div>
+        <button type="button" class="modal-close" (click)="closeEdit()" aria-label="Close">×</button>
+      </header>
+      <form class="modal-body" (ngSubmit)="updateStudent()">
+        <ng-container *ngTemplateOutlet="studentFields"></ng-container>
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" (click)="closeEdit()">Cancel</button>
+          <button type="submit" class="btn-primary" [disabled]="saving()">
+            {{ saving() ? 'Saving…' : 'Save Changes' }}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+}
+
+<!-- Delete confirm -->
+@if (deleteTarget(); as target) {
+  <div class="modal-backdrop" (click)="cancelDelete()">
+    <div class="modal modal-sm" role="alertdialog" (click)="$event.stopPropagation()">
+      <h2>Delete student?</h2>
+      <p>
+        Remove <strong>{{ target.firstName }} {{ target.lastName }}</strong>
+        (<code>{{ target.admissionNumber }}</code>)? This deactivates the record in the system.
+      </p>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" (click)="cancelDelete()">Cancel</button>
+        <button type="button" class="btn-danger" [disabled]="saving()" (click)="deleteStudent()">
+          {{ saving() ? 'Deleting…' : 'Delete' }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<ng-template #studentFields>
+  <div class="form-grid">
+    <div class="field">
+      <label>First Name *</label>
+      <input [(ngModel)]="form.firstName" name="fn" required />
+    </div>
+    <div class="field">
+      <label>Last Name *</label>
+      <input [(ngModel)]="form.lastName" name="ln" required />
+    </div>
+    <div class="field">
+      <label>Date of Birth</label>
+      <input type="date" [(ngModel)]="form.dateOfBirth" name="dob" />
+    </div>
+    <div class="field">
+      <label>Gender *</label>
+      <select [(ngModel)]="form.gender" name="gender" required>
+        <option value="">— Select gender —</option>
+        <option value="Male">Male</option>
+        <option value="Female">Female</option>
+      </select>
+    </div>
+    <div class="field span-2">
+      <label>Address</label>
+      <input [(ngModel)]="form.address" name="addr" />
+    </div>
+    <div class="field span-2">
+      <label>Previous School</label>
+      <input [(ngModel)]="form.previousSchool" name="prev" />
+    </div>
+  </div>
+
+  <fieldset class="guardian-box">
+    <legend>Guardian / Parent</legend>
+    <div class="form-grid">
+      <div class="field">
+        <label>Full Name</label>
+        <input [(ngModel)]="guardian.fullName" name="gname" />
+      </div>
+      <div class="field">
+        <label>Phone</label>
+        <input [(ngModel)]="guardian.phone" name="gphone" />
+      </div>
+      <div class="field">
+        <label>Relationship</label>
+        <input [(ngModel)]="guardian.relationship" name="grel" />
+      </div>
+    </div>
+  </fieldset>
+</ng-template>
