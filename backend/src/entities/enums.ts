@@ -32,6 +32,11 @@ export enum InvoiceStatus {
   CANCELLED = 'cancelled',
 }
 
+export enum StudentType {
+  DAY_SCHOLAR = 'day_scholar',
+  BOARDER = 'boarder',
+}
+
 export enum FeeType {
   TUITION = 'tuition',
   BUS_LEVY = 'bus_levy',

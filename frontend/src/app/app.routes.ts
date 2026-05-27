@@ -21,6 +21,22 @@ import { ParentReportCardComponent } from './pages/parent/parent-report-card.com
 import { AttendanceMarkRegisterComponent } from './pages/attendance/attendance-mark-register.component';
 import { AttendanceReportComponent } from './pages/attendance/attendance-report.component';
 import { AdminMarkSheetComponent } from './pages/admin/admin-mark-sheet.component';
+import { AdminResultsAnalysisComponent } from './pages/admin/admin-results-analysis.component';
+import { AdminRankingComponent } from './pages/admin/admin-ranking.component';
+import { AdminManageFeesComponent } from './pages/admin/admin-manage-fees.component';
+import { AdminStudentBalanceComponent } from './pages/admin/admin-student-balance.component';
+import { AdminAcademicSettingsComponent } from './pages/admin/admin-academic-settings.component';
+import { AdminClassPromotionComponent } from './pages/admin/admin-class-promotion.component';
+import { AdminStudentLedgerComponent } from './pages/admin/admin-student-ledger.component';
+import { AdminOutstandingInvoicesComponent } from './pages/admin/admin-outstanding-invoices.component';
+import { AdminStudentReconciliationComponent } from './pages/admin/admin-student-reconciliation.component';
+import { AdminDebtorAgingComponent } from './pages/admin/admin-debtor-aging.component';
+import { AdminFeeCollectionRevenueComponent } from './pages/admin/admin-fee-collection-revenue.component';
+import { AdminTimetableConfigurePeriodsComponent } from './pages/admin/admin-timetable-configure-periods.component';
+import { AdminTimetableGenerateComponent } from './pages/admin/admin-timetable-generate.component';
+import { AdminTimetableViewComponent } from './pages/admin/admin-timetable-view.component';
+import { AdminSendMessageComponent } from './pages/admin/admin-send-message.component';
+import { AdminInboxComponent } from './pages/admin/admin-inbox.component';
 
 export const routes: Routes = [
   { path: '', redirectTo: 'login', pathMatch: 'full' },
@@ -54,8 +70,22 @@ export const routes: Routes = [
       { path: 'students', component: AdminStudentsComponent },
       { path: 'enrollment', component: AdminEnrollmentComponent },
       { path: 'class-list', component: ClassListComponent },
+      { path: 'class-promotion', component: AdminClassPromotionComponent },
       { path: 'billing', component: AdminBillingComponent },
+      { path: 'manage-fees', component: AdminManageFeesComponent },
+      { path: 'student-balance', component: AdminStudentBalanceComponent },
       { path: 'finance', component: AdminFinanceComponent },
+      { path: 'fin-reports/student-ledger', component: AdminStudentLedgerComponent },
+      { path: 'fin-reports/outstanding-invoices', component: AdminOutstandingInvoicesComponent },
+      { path: 'fin-reports/student-reconciliation', component: AdminStudentReconciliationComponent },
+      { path: 'fin-reports/debtor-aging', component: AdminDebtorAgingComponent },
+      { path: 'fin-reports/fee-collection-revenue', component: AdminFeeCollectionRevenueComponent },
+      { path: 'communication/send', component: AdminSendMessageComponent },
+      { path: 'communication/inbox', component: AdminInboxComponent },
+      { path: 'timetable', redirectTo: 'timetable/configure-periods', pathMatch: 'full' },
+      { path: 'timetable/configure-periods', component: AdminTimetableConfigurePeriodsComponent },
+      { path: 'timetable/generate', component: AdminTimetableGenerateComponent },
+      { path: 'timetable/view', component: AdminTimetableViewComponent },
       { path: 'staff', component: AdminStaffComponent },
       { path: 'exams', component: ExamMarksEntryComponent },
       { path: 'attendance', redirectTo: 'attendance/mark-register', pathMatch: 'full' },
@@ -63,9 +93,12 @@ export const routes: Routes = [
       { path: 'attendance/report', component: AttendanceReportComponent },
       { path: 'report-cards', component: AdminReportCardsComponent },
       { path: 'mark-sheet', component: AdminMarkSheetComponent },
+      { path: 'results-analysis', component: AdminResultsAnalysisComponent },
+      { path: 'ranking', component: AdminRankingComponent },
       { path: 'classes', component: AdminDashboardComponent },
       { path: 'staff-attendance', redirectTo: 'staff', pathMatch: 'full' },
       { path: 'settings', component: AdminSettingsComponent },
+      { path: 'academic-settings', component: AdminAcademicSettingsComponent },
     ],
   },
   {

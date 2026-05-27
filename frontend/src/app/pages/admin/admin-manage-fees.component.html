@@ -1,0 +1,130 @@
+<app-portal-layout portalTitle="Admin Portal" pageTitle="Manage Fees" [navSections]="adminNav">
+
+  @if (toast(); as t) {
+    <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>
+  }
+
+  <header class="page-hero">
+    <div>
+      <p class="eyebrow">Finance</p>
+      <h1>Manage Fees</h1>
+      <p class="sub">
+        Configure fee amounts for billing. New student registrations auto-invoice
+        <strong>Desk Fee</strong>, <strong>Registration Fee</strong>, and
+        <strong>Ordinary Level Tuition</strong> (Forms 1–4) or <strong>Advanced Level Tuition</strong> (Forms 5–6).
+      </p>
+    </div>
+    <a routerLink="/admin/billing" class="hero-link">Billing &amp; Payments →</a>
+  </header>
+
+  <div class="stats-row">
+    <div class="stat"><span class="val">{{ fees().length }}</span><span class="lbl">Total fees</span></div>
+    <div class="stat"><span class="val">{{ activeCount() }}</span><span class="lbl">Active</span></div>
+  </div>
+
+  <section class="card add-card">
+    <h2>Add new fee</h2>
+    <form class="add-form" (ngSubmit)="addFee()">
+      <div class="field">
+        <label>Fee name *</label>
+        <input [(ngModel)]="newFee.name" name="newName" placeholder="e.g. Tuition Fees" required />
+      </div>
+      <div class="field">
+        <label>Code</label>
+        <input [(ngModel)]="newFee.code" name="newCode" placeholder="Auto from name if empty" />
+        <small>Lowercase key used on invoices (e.g. tuition)</small>
+      </div>
+      <div class="field">
+        <label>Default amount</label>
+        <input type="number" [(ngModel)]="newFee.defaultAmount" name="newAmt" min="0" step="0.01" />
+      </div>
+      <div class="field">
+        <label>Icon</label>
+        <input [(ngModel)]="newFee.icon" name="newIcon" maxlength="4" class="icon-input" />
+      </div>
+      <div class="field grow">
+        <label>Description</label>
+        <input [(ngModel)]="newFee.description" name="newDesc" placeholder="Optional" />
+      </div>
+      <div class="field narrow">
+        <label>Sort order</label>
+        <input type="number" [(ngModel)]="newFee.sortOrder" name="newSort" min="0" />
+      </div>
+      <div class="btn-wrap">
+        <button type="submit" class="btn-primary" [disabled]="submitting()">
+          {{ submitting() ? 'Saving…' : 'Add fee' }}
+        </button>
+      </div>
+    </form>
+  </section>
+
+  <section class="card">
+    <h2>Fee catalogue</h2>
+    @if (loading()) {
+      <p class="muted">Loading fees…</p>
+    } @else {
+      <div class="table-wrap">
+        <table class="fees-table">
+          <thead>
+            <tr>
+              <th></th>
+              <th>Name</th>
+              <th>Code</th>
+              <th class="num">Default</th>
+              <th>Status</th>
+              <th class="num">Order</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (fee of fees(); track fee.id) {
+              @if (editingId() === fee.id) {
+                <tr class="edit-row">
+                  <td><input [(ngModel)]="editFee.icon" name="editIcon" class="icon-input" maxlength="4" /></td>
+                  <td><input [(ngModel)]="editFee.name" name="editName" /></td>
+                  <td><input [(ngModel)]="editFee.code" name="editCode" /></td>
+                  <td class="num"><input type="number" [(ngModel)]="editFee.defaultAmount" name="editAmt" min="0" step="0.01" /></td>
+                  <td>
+                    <label class="toggle">
+                      <input type="checkbox" [(ngModel)]="editFee.isActive" name="editActive" />
+                      Active
+                    </label>
+                  </td>
+                  <td class="num"><input type="number" [(ngModel)]="editFee.sortOrder" name="editSort" min="0" /></td>
+                  <td class="actions">
+                    <button type="button" class="btn-primary btn-sm" (click)="saveEdit()" [disabled]="submitting()">Save</button>
+                    <button type="button" class="btn-ghost btn-sm" (click)="cancelEdit()">Cancel</button>
+                  </td>
+                </tr>
+              } @else {
+                <tr [class.inactive]="!fee.isActive">
+                  <td class="icon-cell">{{ fee.icon || '📋' }}</td>
+                  <td>
+                    <strong>{{ fee.name }}</strong>
+                    @if (fee.description) {
+                      <small>{{ fee.description }}</small>
+                    }
+                  </td>
+                  <td><code>{{ fee.code }}</code></td>
+                  <td class="num">{{ '$' + (fee.defaultAmount | number:'1.2-2') }}</td>
+                  <td>
+                    <button type="button" class="status-pill" [class.off]="!fee.isActive" (click)="toggleActive(fee)">
+                      {{ fee.isActive ? 'Active' : 'Inactive' }}
+                    </button>
+                  </td>
+                  <td class="num">{{ fee.sortOrder }}</td>
+                  <td class="actions">
+                    <button type="button" class="btn-outline btn-sm" (click)="startEdit(fee)">Edit</button>
+                    <button type="button" class="btn-danger btn-sm" (click)="deleteFee(fee)">Delete</button>
+                  </td>
+                </tr>
+              }
+            } @empty {
+              <tr><td colspan="7" class="empty">No fees configured yet.</td></tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </section>
+</app-portal-layout>

@@ -1,9 +1,10 @@
 // @ts-nocheck
 import { Router, Response } from 'express';
 import { AppDataSource } from '../config/data-source';
+import { In } from 'typeorm';
 import {
   SchoolYear, Term, Form, SchoolClass, Subject, ClassSubject, Staff, User, TuckshopItem, UniformSale, TuckshopSale,
-  SchoolSettings, ExamType,
+  SchoolSettings, ExamType, ClassPromotionRule, Student,
 } from '../entities';
 import { UserRole } from '../entities/enums';
 import { authenticate, authorize } from '../middleware/auth';
@@ -192,6 +193,41 @@ router.post('/forms', authorize(UserRole.ADMIN), async (req, res: Response) => {
   res.status(201).json(form);
 });
 
+router.patch('/forms/:id', authorize(UserRole.ADMIN), async (req, res: Response) => {
+  const repo = AppDataSource.getRepository(Form);
+  const form = await repo.findOne({ where: { id: req.params.id } });
+  if (!form) return res.status(404).json({ message: 'Form not found' });
+  if (req.body.name !== undefined) form.name = String(req.body.name).trim();
+  if (req.body.level !== undefined) form.level = Number(req.body.level);
+  await repo.save(form);
+  res.json(form);
+});
+
+router.delete('/forms/:id', authorize(UserRole.ADMIN), async (req, res: Response) => {
+  const repo = AppDataSource.getRepository(Form);
+  const form = await repo.findOne({
+    where: { id: req.params.id },
+    relations: relations('classes'),
+  });
+  if (!form) return res.status(404).json({ message: 'Form not found' });
+  if (form.classes?.length) {
+    return res.status(400).json({
+      message: `Cannot delete form "${form.name}" — it has ${form.classes.length} class(es). Remove those classes first.`,
+    });
+  }
+  const studentCount = await AppDataSource.query(
+    `SELECT COUNT(*) AS cnt FROM students WHERE "formId" = $1`,
+    [form.id],
+  );
+  if (Number(studentCount[0]?.cnt) > 0) {
+    return res.status(400).json({
+      message: `Cannot delete form "${form.name}" — ${studentCount[0].cnt} student(s) are assigned to it.`,
+    });
+  }
+  await repo.delete({ id: form.id });
+  res.json({ message: 'Form deleted' });
+});
+
 router.get('/classes', async (_req, res: Response) => {
   res.json(await AppDataSource.getRepository(SchoolClass).find({
     relations: relations('form', 'students'),
@@ -254,6 +290,221 @@ router.patch('/classes/:id', authorize(UserRole.ADMIN), async (req, res: Respons
   if (!cls) return res.status(404).json({ message: 'Class not found' });
   Object.assign(cls, req.body);
   res.json(await repo.save(cls));
+});
+
+router.get('/promotion-rules', authorize(UserRole.ADMIN), async (_req, res: Response) => {
+  const rules = await AppDataSource.getRepository(ClassPromotionRule).find({
+    select: {
+      id: true,
+      fromClassId: true,
+      toClassId: true,
+      completionLabel: true,
+      isActive: true,
+      createdAt: true,
+    },
+    order: { createdAt: 'ASC' },
+  });
+  res.json(rules);
+});
+
+router.put('/promotion-rules', authorize(UserRole.ADMIN), async (req, res: Response) => {
+  const payload = req.body?.rules;
+  if (!Array.isArray(payload)) {
+    return res.status(400).json({ message: 'rules array is required' });
+  }
+
+  // A valid rule has a fromClassId plus either a toClassId or a completionLabel.
+  const validRules = payload.filter(
+    (r) => r?.fromClassId && (r?.toClassId || r?.completionLabel),
+  );
+
+  const fromIds = validRules.map((r) => String(r.fromClassId));
+  if (fromIds.length !== new Set(fromIds).size) {
+    return res.status(400).json({ message: 'Each class can only have one promotion target' });
+  }
+
+  for (const r of validRules) {
+    if (r.toClassId && r.fromClassId === r.toClassId) {
+      return res.status(400).json({ message: 'A class cannot be promoted to itself' });
+    }
+  }
+
+  // Validate only the class-to-class rules (completion rules have no toClassId).
+  const classRules = validRules.filter((r) => r.toClassId);
+  const classIds = new Set<string>();
+  for (const r of classRules) {
+    classIds.add(String(r.fromClassId));
+    classIds.add(String(r.toClassId));
+  }
+  // Also validate fromClassIds for completion rules.
+  for (const r of validRules.filter((r) => r.completionLabel)) {
+    classIds.add(String(r.fromClassId));
+  }
+
+  if (classIds.size) {
+    const found = await AppDataSource.getRepository(SchoolClass).find({
+      where: { id: In([...classIds]) },
+      select: { id: true },
+    });
+    if (found.length !== classIds.size) {
+      return res.status(400).json({ message: 'One or more classes were not found' });
+    }
+  }
+
+  const ruleRepo = AppDataSource.getRepository(ClassPromotionRule);
+  await ruleRepo.clear();
+  if (validRules.length) {
+    await ruleRepo.save(
+      validRules.map((r) =>
+        ruleRepo.create({
+          fromClassId: String(r.fromClassId),
+          toClassId: r.toClassId ? String(r.toClassId) : undefined,
+          completionLabel: r.completionLabel ? String(r.completionLabel) : undefined,
+          isActive: r.isActive !== false,
+        }),
+      ),
+    );
+  }
+
+  const rules = await ruleRepo.find({
+    select: {
+      id: true,
+      fromClassId: true,
+      toClassId: true,
+      completionLabel: true,
+      isActive: true,
+      createdAt: true,
+    },
+    order: { createdAt: 'ASC' },
+  });
+  res.json(rules);
+});
+
+/** Calendar year label for a school year (Jan–Dec), e.g. "2025" or "2025/2026" → 2025 */
+function schoolYearCalendarYear(sy: SchoolYear): number {
+  const matches = String(sy.name).match(/20\d{2}/g);
+  if (matches?.length) return parseInt(matches[0], 10);
+  return new Date(sy.startDate).getFullYear();
+}
+
+function findTargetSchoolYear(completing: SchoolYear, allYears: SchoolYear[]): SchoolYear | null {
+  const nextCal = schoolYearCalendarYear(completing) + 1;
+  const matches = allYears
+    .filter((y) => schoolYearCalendarYear(y) === nextCal)
+    .sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
+  return matches[0] ?? null;
+}
+
+router.post('/class-promotion/promote', authorize(UserRole.ADMIN), async (req, res: Response) => {
+  const { classId, completingSchoolYearId, targetSchoolYearId } = req.body || {};
+  if (!completingSchoolYearId || !classId) {
+    return res.status(400).json({ message: 'completingSchoolYearId and classId are required' });
+  }
+
+  const yearRepo = AppDataSource.getRepository(SchoolYear);
+  const allYears = await yearRepo.find({ order: { startDate: 'ASC' } });
+  const completingYear = allYears.find((y) => y.id === String(completingSchoolYearId));
+  if (!completingYear) return res.status(404).json({ message: 'Completing school year not found' });
+
+  let targetYear: SchoolYear | null = null;
+  if (targetSchoolYearId) {
+    targetYear = allYears.find((y) => y.id === String(targetSchoolYearId)) ?? null;
+    if (!targetYear) return res.status(404).json({ message: 'Target school year not found' });
+    if (schoolYearCalendarYear(targetYear) !== schoolYearCalendarYear(completingYear) + 1) {
+      return res.status(400).json({
+        message: `Target school year must be the year after ${completingYear.name} (e.g. ${schoolYearCalendarYear(completingYear)} → ${schoolYearCalendarYear(completingYear) + 1}).`,
+      });
+    }
+  } else {
+    targetYear = findTargetSchoolYear(completingYear, allYears);
+    if (!targetYear) {
+      return res.status(400).json({
+        message: `No school year found for ${schoolYearCalendarYear(completingYear) + 1}. Add it under Academic Settings → School Calendar.`,
+      });
+    }
+  }
+
+  const fromClass = await AppDataSource.getRepository(SchoolClass).findOne({
+    where: { id: String(classId) },
+    relations: relations('form'),
+  });
+  if (!fromClass) return res.status(404).json({ message: 'Class not found' });
+
+  const rule = await AppDataSource.getRepository(ClassPromotionRule).findOne({
+    where: { fromClassId: fromClass.id, isActive: true },
+  });
+  if (!rule) {
+    return res.status(400).json({
+      message: `No active promotion rule for ${fromClass.form?.name || 'Form'} ${fromClass.name}. Configure it in Academic Settings → Promotion Rules.`,
+    });
+  }
+
+  let toClass: SchoolClass | null = null;
+  if (rule.toClassId) {
+    toClass = await AppDataSource.getRepository(SchoolClass).findOne({
+      where: { id: rule.toClassId },
+      relations: relations('form'),
+    });
+    if (!toClass) return res.status(400).json({ message: 'Promotion target class not found' });
+  }
+
+  const studentRepo = AppDataSource.getRepository(Student);
+  const students = await studentRepo.find({
+    where: { classId: fromClass.id, isActive: true },
+    select: { id: true, admissionNumber: true },
+  });
+  if (!students.length) {
+    return res.json({
+      promoted: 0,
+      fromClassId: fromClass.id,
+      toClassId: toClass?.id,
+      completionLabel: rule.completionLabel,
+      message: 'No active students found in this class.',
+    });
+  }
+
+  const enrollmentDate = targetYear.startDate || today();
+
+  if (toClass) {
+    await studentRepo
+      .createQueryBuilder()
+      .update(Student)
+      .set({
+        classId: toClass.id,
+        formId: toClass.formId,
+        enrollmentDate,
+      })
+      .where('classId = :classId', { classId: fromClass.id })
+      .andWhere('isActive = true')
+      .execute();
+  } else {
+    // Completion: remove from class; keep student active.
+    await studentRepo
+      .createQueryBuilder()
+      .update(Student)
+      .set({
+        classId: null,
+        enrollmentDate: null,
+      })
+      .where('classId = :classId', { classId: fromClass.id })
+      .andWhere('isActive = true')
+      .execute();
+  }
+
+  const fromLabel = `${fromClass.form?.name || 'Form'} ${fromClass.name}`;
+  const toLabel = toClass ? `${toClass.form?.name || 'Form'} ${toClass.name}` : null;
+
+  return res.json({
+    promoted: students.length,
+    completingSchoolYearId: completingYear.id,
+    targetSchoolYearId: targetYear.id,
+    fromClassId: fromClass.id,
+    toClassId: toClass?.id,
+    completionLabel: rule.completionLabel,
+    message: toClass
+      ? `Promoted ${students.length} student(s) from ${fromLabel} (${completingYear.name}) to ${toLabel} for ${targetYear.name}.`
+      : `Marked ${students.length} student(s) in ${fromLabel} (${completingYear.name}) as completed (${rule.completionLabel || 'Completed'}) for ${targetYear.name}.`,
+  });
 });
 
 router.get('/exam-types', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (_req, res: Response) => {

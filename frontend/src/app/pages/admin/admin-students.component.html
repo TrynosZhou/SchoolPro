@@ -5,7 +5,11 @@
   }
 
   <header class="page-intro">
-    <p>Register new students here first. Assign them to classes later on the <a routerLink="/admin/enrollment">Class Enrollment</a> page.</p>
+    <p>
+      Register new students with their <strong>Form</strong> (e.g. Form 1). A registration invoice is created automatically
+      (desk fee + registration fee + tuition from <a routerLink="/admin/manage-fees">Manage Fees</a>).
+      Assign classes later on <a routerLink="/admin/enrollment">Class Enrollment</a>.
+    </p>
     @if (pendingEnrollmentCount()) {
       <a routerLink="/admin/enrollment" class="pending-banner">
         {{ pendingEnrollmentCount() }} student(s) awaiting class enrollment →
@@ -23,7 +27,7 @@
   @if (showForm) {
     <form class="reg-card" (ngSubmit)="saveStudent()">
       <h2>New Student Registration</h2>
-      <p class="reg-note">Class assignment is done separately after registration.</p>
+      <p class="reg-note">Select the student's form. Tuition uses Ordinary Level (Forms 1–4) or Advanced Level (Forms 5–6) fees from Manage Fees.</p>
 
       <div class="student-id-preview">
         <label>Student ID (auto-generated)</label>
@@ -41,6 +45,10 @@
   @if (lastCreatedId()) {
     <div class="success-banner">
       <strong>{{ lastCreatedId() }}</strong> registered successfully.
+      @if (lastInvoiceInfo()) {
+        <span class="invoice-note">{{ lastInvoiceInfo() }}</span>
+      }
+      <a routerLink="/admin/billing">View billing →</a>
       <a routerLink="/admin/enrollment">Enroll in a class →</a>
     </div>
   }
@@ -55,6 +63,8 @@
           <th>Student ID</th>
           <th>Name</th>
           <th>Gender</th>
+          <th>Type</th>
+          <th>Form</th>
           <th>Status</th>
           <th>Class</th>
           <th>Guardian</th>
@@ -74,6 +84,12 @@
                 <span class="gender-missing">—</span>
               }
             </td>
+            <td>
+              <span class="type-tag" [class.boarder]="s.studentType === 'boarder'">
+                {{ studentTypeLabel(s.studentType) }}
+              </span>
+            </td>
+            <td>{{ formLabel(s) }}</td>
             <td>
               @if (enrollmentStatus(s) === 'enrolled') {
                 <span class="status enrolled">Enrolled</span>
@@ -100,7 +116,7 @@
             </td>
           </tr>
         } @empty {
-          <tr><td colspan="8" class="empty">No students registered yet.</td></tr>
+          <tr><td colspan="10" class="empty">No students registered yet.</td></tr>
         }
       </tbody>
     </table>
@@ -171,6 +187,22 @@
         <option value="">— Select gender —</option>
         <option value="Male">Male</option>
         <option value="Female">Female</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Student Type *</label>
+      <select [(ngModel)]="form.studentType" name="studentType" required>
+        <option value="day_scholar">Day Scholar</option>
+        <option value="boarder">Boarder</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Form *</label>
+      <select [(ngModel)]="form.formId" name="formId" required>
+        <option value="">— Select form —</option>
+        @for (f of forms(); track f.id) {
+          <option [value]="f.id">{{ f.name }}</option>
+        }
       </select>
     </div>
     <div class="field span-2">

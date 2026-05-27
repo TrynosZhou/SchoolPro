@@ -54,7 +54,7 @@ __decorate([
     __metadata("design:type", String)
 ], Payment.prototype, "method", void 0);
 __decorate([
-    (0, typeorm_1.Column)({ type: 'enum', enum: enums_1.FeeType }),
+    (0, typeorm_1.Column)({ type: 'varchar', length: 64, default: 'other' }),
     __metadata("design:type", String)
 ], Payment.prototype, "feeType", void 0);
 __decorate([

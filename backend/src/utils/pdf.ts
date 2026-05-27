@@ -4,11 +4,100 @@ import path from 'path';
 import { formatSubjectAbbrev } from './subject-abbrev';
 
 const receiptsDir = path.join(process.cwd(), 'uploads', 'receipts');
+const invoicesDir = path.join(process.cwd(), 'uploads', 'invoices');
 const logosDir = path.join(process.cwd(), 'uploads', 'logos');
 
 export function ensureUploadDirs() {
   fs.mkdirSync(receiptsDir, { recursive: true });
+  fs.mkdirSync(invoicesDir, { recursive: true });
   fs.mkdirSync(logosDir, { recursive: true });
+}
+
+export interface SchoolBranding {
+  schoolName?: string;
+  tagline?: string;
+  logoUrl?: string;
+  address?: string;
+  phone?: string;
+  email?: string;
+  currency?: string;
+}
+
+const BILL = {
+  primary: '#4f46e5',
+  accent: '#818cf8',
+  ink: '#0f172a',
+  muted: '#64748b',
+  border: '#e2e8f0',
+  rowAlt: '#f8fafc',
+  white: '#ffffff',
+};
+
+function formatMoney(amount: number, currency = 'USD'): string {
+  if (currency === 'USD') return `$${amount.toFixed(2)}`;
+  return `${currency} ${amount.toFixed(2)}`;
+}
+
+function drawBillingDocHeader(
+  doc: InstanceType<typeof PDFDocument>,
+  branding: SchoolBranding,
+  pageW: number,
+  margin: number,
+  docTitle: string,
+): number {
+  const school = branding.schoolName || 'School Pro Academy';
+  const logoPath = resolveUploadPath(branding.logoUrl);
+  const headerH = logoPath ? 88 : 72;
+
+  doc.save();
+  doc.rect(0, 0, pageW, headerH).fill(BILL.primary);
+  doc.rect(0, headerH - 3, pageW, 3).fill(BILL.accent);
+
+  const textX = logoPath ? margin + 70 : margin;
+  const textW = pageW - margin - textX - margin;
+
+  if (logoPath) {
+    try {
+      doc.save();
+      doc.circle(margin + 34, headerH / 2, 28).fill(BILL.white);
+      doc.restore();
+      doc.image(logoPath, margin + 10, headerH / 2 - 24, { fit: [48, 48] });
+    } catch {
+      /* skip invalid image */
+    }
+  }
+
+  doc.fillColor(BILL.white).font('Helvetica-Bold').fontSize(16);
+  doc.text(school, textX, logoPath ? 18 : 16, { width: textW, lineBreak: false });
+
+  let ty = logoPath ? 36 : 34;
+  if (branding.tagline) {
+    doc.font('Helvetica').fontSize(9).fillColor('#dbeafe');
+    doc.text(branding.tagline, textX, ty, { width: textW, lineBreak: false });
+    ty += 12;
+  }
+
+  doc.font('Helvetica-Bold').fontSize(11).fillColor('#bfdbfe');
+  doc.text(docTitle, textX, ty, { width: textW, lineBreak: false });
+  doc.restore();
+
+  return headerH + 14;
+}
+
+function drawBillingContactFooter(
+  doc: InstanceType<typeof PDFDocument>,
+  branding: SchoolBranding,
+  margin: number,
+  contentW: number,
+  y: number,
+) {
+  const parts: string[] = [];
+  if (branding.address) parts.push(branding.address);
+  if (branding.phone) parts.push(`Tel: ${branding.phone}`);
+  if (branding.email) parts.push(branding.email);
+  if (!parts.length) return;
+  doc.fillColor(BILL.muted).font('Helvetica').fontSize(8);
+  doc.text(parts.join('  ·  '), margin, y, { width: contentW, align: 'center', lineBreak: false });
 }
 
 function resolveUploadPath(publicUrl?: string): string | null {
@@ -28,43 +117,202 @@ function formatSubjectLabel(r: {
   return code ? `${name} (${code})` : name;
 }
 
-export async function generateReceiptPdf(data: {
-  receiptNumber: string;
-  studentName: string;
-  admissionNumber: string;
-  className: string;
-  amount: number;
-  method: string;
-  label: string;
-  paidAt: Date;
-  schoolName?: string;
-}): Promise<string> {
+export async function generateReceiptPdf(
+  data: {
+    receiptNumber: string;
+    studentName: string;
+    admissionNumber: string;
+    className: string;
+    amount: number;
+    method: string;
+    label: string;
+    paidAt: Date;
+  } & SchoolBranding,
+): Promise<string> {
   ensureUploadDirs();
   const filename = `${data.receiptNumber}.pdf`;
   const filepath = path.join(receiptsDir, filename);
+  const currency = data.currency || 'USD';
 
   return new Promise((resolve, reject) => {
-    const doc = new PDFDocument({ margin: 50 });
+    const margin = 50;
+    const doc = new PDFDocument({ margin, size: 'A4' });
     const stream = fs.createWriteStream(filepath);
     doc.pipe(stream);
 
-    doc.fontSize(18).text(data.schoolName || 'School Pro Academy', { align: 'center' });
-    doc.moveDown();
-    doc.fontSize(14).text('OFFICIAL PAYMENT RECEIPT', { align: 'center' });
-    doc.moveDown();
-    doc.fontSize(10);
-    doc.text(`Receipt No: ${data.receiptNumber}`);
-    doc.text(`Date: ${data.paidAt.toLocaleString()}`);
-    doc.moveDown();
-    doc.text(`Student: ${data.studentName}`);
-    doc.text(`Student ID: ${data.admissionNumber}`);
-    doc.text(`Class: ${data.className}`);
-    doc.moveDown();
-    doc.text(`Payment For: ${data.label}`);
-    doc.text(`Method: ${data.method}`);
-    doc.fontSize(14).text(`Amount Paid: $${data.amount.toFixed(2)}`, { underline: true });
-    doc.moveDown(2);
-    doc.fontSize(9).text('This is a computer-generated receipt.', { align: 'center' });
+    const pageW = doc.page.width;
+    const contentW = pageW - margin * 2;
+    let y = drawBillingDocHeader(doc, data, pageW, margin, 'OFFICIAL PAYMENT RECEIPT');
+
+    doc.fillColor(BILL.ink).font('Helvetica').fontSize(10);
+    doc.text(`Receipt No: ${data.receiptNumber}`, margin, y);
+    doc.text(`Date: ${data.paidAt.toLocaleString()}`, margin, y + 14);
+    y += 36;
+
+    doc.font('Helvetica-Bold').fontSize(11).text('Student Details', margin, y);
+    y += 18;
+    doc.font('Helvetica').fontSize(10);
+    doc.text(`Name: ${data.studentName}`, margin, y);
+    doc.text(`Student ID: ${data.admissionNumber}`, margin, y + 14);
+    doc.text(`Class: ${data.className}`, margin, y + 28);
+    y += 52;
+
+    doc.save();
+    doc.roundedRect(margin, y, contentW, 72, 6).fill(BILL.rowAlt);
+    doc.strokeColor(BILL.border).lineWidth(0.5);
+    doc.roundedRect(margin, y, contentW, 72, 6).stroke();
+    doc.restore();
+
+    const boxY = y + 14;
+    doc.fillColor(BILL.muted).font('Helvetica').fontSize(9);
+    doc.text('Payment For', margin + 16, boxY);
+    doc.text('Method', margin + contentW / 2, boxY);
+    doc.fillColor(BILL.ink).font('Helvetica-Bold').fontSize(10);
+    doc.text(data.label, margin + 16, boxY + 14, { width: contentW / 2 - 24, lineBreak: false });
+    doc.text(String(data.method).toUpperCase(), margin + contentW / 2, boxY + 14);
+    y += 88;
+
+    doc.fillColor(BILL.primary).font('Helvetica-Bold').fontSize(16);
+    doc.text(`Amount Paid: ${formatMoney(data.amount, currency)}`, margin, y, {
+      width: contentW,
+      align: 'center',
+    });
+    y += 36;
+
+    drawBillingContactFooter(doc, data, margin, contentW, y);
+    y += 20;
+
+    doc.fillColor(BILL.muted).font('Helvetica').fontSize(8);
+    doc.text('This is a computer-generated receipt.', margin, y, { width: contentW, align: 'center' });
+
+    doc.end();
+    stream.on('finish', () => resolve(filepath));
+    stream.on('error', reject);
+  });
+}
+
+export async function generateInvoicePdf(
+  data: {
+    invoiceNumber: string;
+    studentName: string;
+    admissionNumber: string;
+    className: string;
+    description: string;
+    feeType: string;
+    issuedDate: string;
+    dueDate: string;
+    status: string;
+    totalAmount: number;
+    amountPaid: number;
+    termName?: string;
+    lines: { description: string; quantity: number; unitPrice: number; amount: number }[];
+  } & SchoolBranding,
+): Promise<string> {
+  ensureUploadDirs();
+  const filename = `${data.invoiceNumber}.pdf`;
+  const filepath = path.join(invoicesDir, filename);
+  const currency = data.currency || 'USD';
+  const balance = Math.max(0, data.totalAmount - data.amountPaid);
+
+  return new Promise((resolve, reject) => {
+    const margin = 50;
+    const doc = new PDFDocument({ margin, size: 'A4' });
+    const stream = fs.createWriteStream(filepath);
+    doc.pipe(stream);
+
+    const pageW = doc.page.width;
+    const contentW = pageW - margin * 2;
+    let y = drawBillingDocHeader(doc, data, pageW, margin, 'STUDENT FEE INVOICE');
+
+    doc.fillColor(BILL.ink).font('Helvetica').fontSize(10);
+    doc.text(`Invoice No: ${data.invoiceNumber}`, margin, y);
+    doc.text(`Issued: ${data.issuedDate}`, margin + contentW / 2, y);
+    doc.text(`Due: ${data.dueDate}`, margin + contentW / 2, y + 14);
+    doc.text(`Status: ${String(data.status).toUpperCase()}`, margin, y + 14);
+    if (data.termName) {
+      doc.text(`Term: ${data.termName}`, margin, y + 28);
+      y += 14;
+    }
+    y += 44;
+
+    doc.font('Helvetica-Bold').fontSize(11).text('Bill To', margin, y);
+    y += 18;
+    doc.font('Helvetica').fontSize(10);
+    doc.text(data.studentName, margin, y);
+    doc.text(`Student ID: ${data.admissionNumber}`, margin, y + 14);
+    doc.text(`Class: ${data.className}`, margin, y + 28);
+    doc.text(`Fee type: ${data.feeType}`, margin, y + 42);
+    y += 64;
+
+    const colDesc = contentW * 0.5;
+    const colQty = 48;
+    const colUnit = 72;
+    const colAmt = contentW - colDesc - colQty - colUnit;
+    const rowH = 20;
+    const headerH = 22;
+
+    doc.save();
+    doc.rect(margin, y, contentW, headerH).fill(BILL.primary);
+    doc.fillColor(BILL.white).font('Helvetica-Bold').fontSize(9);
+    doc.text('Description', margin + 8, y + 6, { width: colDesc - 8 });
+    doc.text('Qty', margin + colDesc, y + 6, { width: colQty, align: 'center' });
+    doc.text('Unit', margin + colDesc + colQty, y + 6, { width: colUnit, align: 'right' });
+    doc.text('Amount', margin + colDesc + colQty + colUnit, y + 6, { width: colAmt - 8, align: 'right' });
+    doc.restore();
+    y += headerH;
+
+    const lines =
+      data.lines?.length > 0
+        ? data.lines
+        : [{ description: data.description, quantity: 1, unitPrice: data.totalAmount, amount: data.totalAmount }];
+
+    lines.forEach((line, idx) => {
+      if (idx % 2 === 1) {
+        doc.save();
+        doc.rect(margin, y, contentW, rowH).fill(BILL.rowAlt);
+        doc.restore();
+      }
+      doc.strokeColor(BILL.border).lineWidth(0.5);
+      doc.moveTo(margin, y + rowH).lineTo(margin + contentW, y + rowH).stroke();
+
+      doc.fillColor(BILL.ink).font('Helvetica').fontSize(9);
+      doc.text(line.description, margin + 8, y + 5, { width: colDesc - 12, lineBreak: false, ellipsis: true });
+      doc.text(String(line.quantity), margin + colDesc, y + 5, { width: colQty, align: 'center' });
+      doc.text(formatMoney(Number(line.unitPrice), currency), margin + colDesc + colQty, y + 5, {
+        width: colUnit,
+        align: 'right',
+      });
+      doc.text(formatMoney(Number(line.amount), currency), margin + colDesc + colQty + colUnit, y + 5, {
+        width: colAmt - 8,
+        align: 'right',
+      });
+      y += rowH;
+    });
+
+    doc.strokeColor(BILL.border).lineWidth(0.5);
+    doc.rect(margin, y - lines.length * rowH - headerH, contentW, headerH + lines.length * rowH).stroke();
+    y += 12;
+
+    const summaryX = margin + contentW - 180;
+    doc.font('Helvetica').fontSize(10).fillColor(BILL.ink);
+    doc.text('Subtotal:', summaryX, y, { width: 90, align: 'right' });
+    doc.text(formatMoney(data.totalAmount, currency), summaryX + 95, y, { width: 85, align: 'right' });
+    y += 16;
+    doc.text('Paid:', summaryX, y, { width: 90, align: 'right' });
+    doc.text(formatMoney(data.amountPaid, currency), summaryX + 95, y, { width: 85, align: 'right' });
+    y += 18;
+    doc.font('Helvetica-Bold').fontSize(11).fillColor(BILL.primary);
+    doc.text('Balance Due:', summaryX, y, { width: 90, align: 'right' });
+    doc.text(formatMoney(balance, currency), summaryX + 95, y, { width: 85, align: 'right' });
+    y += 36;
+
+    drawBillingContactFooter(doc, data, margin, contentW, y);
+    y += 20;
+    doc.fillColor(BILL.muted).font('Helvetica').fontSize(8);
+    doc.text('Please settle this invoice by the due date shown above.', margin, y, {
+      width: contentW,
+      align: 'center',
+    });
 
     doc.end();
     stream.on('finish', () => resolve(filepath));
@@ -829,6 +1077,432 @@ export async function generateMarkSheetPdf(data: MarkSheetPdfData): Promise<Buff
     }
 
     drawFooter();
+    doc.end();
+  });
+}
+
+export interface RankingsPdfData {
+  schoolName: string;
+  tagline?: string;
+  logoUrl?: string;
+  rankingType: 'class' | 'form' | 'subject';
+  rankingLabel: string;
+  examTypeName: string;
+  termName: string;
+  scopeLabel: string;
+  maxMarks: number;
+  generatedAt: Date;
+  students: {
+    position: number;
+    admissionNumber: string;
+    lastName: string;
+    firstName: string;
+    className: string;
+    formName: string;
+    averagePercent: number | null;
+    mark: number | null;
+    subjectCount: number;
+  }[];
+}
+
+function msDrawRankingsGrid(
+  doc: PdfKitDoc,
+  x: number,
+  y: number,
+  widths: number[],
+  height: number,
+  fill?: string,
+) {
+  const totalW = widths.reduce((a, b) => a + b, 0);
+  if (fill) {
+    doc.save();
+    doc.rect(x, y, totalW, height).fill(fill);
+    doc.restore();
+  }
+  doc.save();
+  doc.strokeColor(MS.border).lineWidth(0.5);
+  doc.rect(x, y, totalW, height).stroke();
+  let vx = x;
+  for (let i = 0; i < widths.length - 1; i++) {
+    vx += widths[i];
+    doc.moveTo(vx, y).lineTo(vx, y + height).stroke();
+  }
+  doc.restore();
+}
+
+function msDrawRankingsCell(
+  doc: PdfKitDoc,
+  text: string,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  opts: {
+    header?: boolean;
+    align?: 'left' | 'center' | 'right';
+    posBadge?: boolean;
+    bold?: boolean;
+  },
+) {
+  const fontSize = opts.header ? MS_HDR : MS_FONT;
+  const padH = MS_PAD;
+  const align = opts.align ?? 'left';
+  const padV = Math.max(1, (h - fontSize) / 2 - 1);
+  const textX = align === 'left' ? x + padH : x;
+  const textW = align === 'left' ? Math.max(0, w - padH * 2) : w;
+
+  if (opts.posBadge) {
+    const cy = y + h / 2;
+    doc.circle(x + w / 2, cy, 7).fill(MS.blue);
+    doc.fillColor(MS.white).font('Helvetica-Bold').fontSize(8);
+    doc.text(text, x, y + padV, { width: w, align: 'center', lineBreak: false });
+    return;
+  }
+
+  doc
+    .fillColor(opts.header ? MS.white : MS.ink)
+    .font(opts.header || opts.bold ? 'Helvetica-Bold' : 'Helvetica')
+    .fontSize(fontSize);
+  doc.text(text, textX, y + padV, {
+    width: textW,
+    align,
+    lineBreak: false,
+    ellipsis: true,
+  });
+}
+
+export async function generateRankingsPdf(data: RankingsPdfData): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const margin = 24;
+    const doc = new PDFDocument({ margin, size: 'A4', layout: 'landscape' });
+    const chunks: Buffer[] = [];
+    doc.on('data', (c) => chunks.push(c));
+    doc.on('end', () => resolve(Buffer.concat(chunks)));
+    doc.on('error', reject);
+
+    const pageW = doc.page.width;
+    const pageH = doc.page.height;
+    const contentW = pageW - margin * 2;
+    const logoPath = resolveUploadPath(data.logoUrl);
+    const school = data.schoolName || 'School Pro Academy';
+    const isSubject = data.rankingType === 'subject';
+    const showForm = data.rankingType === 'form' || isSubject;
+
+    const drawBanner = () => {
+      const bannerH = 78;
+      doc.save();
+      doc.rect(0, 0, pageW, bannerH).fill(MS.blue);
+
+      if (logoPath) {
+        try {
+          doc.save();
+          doc.circle(margin + 28, 40, 26).fill(MS.white);
+          doc.restore();
+          doc.image(logoPath, margin + 8, 20, { fit: [40, 40] });
+        } catch {
+          /* skip */
+        }
+      }
+
+      const tx = logoPath ? margin + 62 : margin;
+      const badgeText = data.rankingLabel;
+      const badgeW = msTextWidth(doc, badgeText, 9, true) + 28;
+      const textW = contentW - badgeW - (logoPath ? 50 : 0);
+
+      doc.fillColor(MS.white).font('Helvetica-Bold').fontSize(16);
+      doc.text(school, tx, 18, { width: textW, lineBreak: false });
+      if (data.tagline) {
+        doc.font('Helvetica').fontSize(9).fillColor('#dbeafe');
+        doc.text(data.tagline, tx, 36, { width: textW, lineBreak: false });
+      }
+      doc.font('Helvetica-Bold').fontSize(11).fillColor('#bfdbfe');
+      doc.text('STUDENT RANKINGS', tx, data.tagline ? 50 : 38, { width: textW, lineBreak: false });
+
+      const bx = pageW - margin - badgeW;
+      doc.roundedRect(bx, 26, badgeW, 26, 13).fill(MS.badge);
+      doc.fillColor(MS.white).font('Helvetica-Bold').fontSize(8.5);
+      doc.text(badgeText, bx + 10, 34, { width: badgeW - 20, align: 'center', lineBreak: false });
+
+      doc.restore();
+      return bannerH;
+    };
+
+    const headers = [
+      'POS',
+      'STUDENT ID',
+      'LAST NAME',
+      'FIRST NAME',
+      'CLASS',
+      ...(showForm ? ['FORM'] : []),
+      ...(isSubject ? ['MARK', '%'] : ['SUBJ', 'AVG %']),
+    ];
+
+    const buildRow = (s: RankingsPdfData['students'][0]): string[] => [
+      String(s.position),
+      s.admissionNumber,
+      s.lastName,
+      s.firstName,
+      s.className,
+      ...(showForm ? [s.formName] : []),
+      ...(isSubject
+        ? [s.mark != null ? String(s.mark) : '—', s.averagePercent != null ? s.averagePercent.toFixed(2) : '—']
+        : [
+            String(s.subjectCount),
+            s.averagePercent != null ? s.averagePercent.toFixed(2) : '—',
+          ]),
+    ];
+
+    const mins = headers.map((h, i) => (i === 0 ? 28 : i === 1 ? 58 : 52));
+    const widths = headers.map((label, i) => {
+      let w = msTextWidth(doc, label, MS_HDR, true) + MS_PAD * 2 + 4;
+      for (const row of data.students) {
+        const cell = buildRow(row)[i];
+        w = Math.max(w, msTextWidth(doc, cell, MS_FONT) + MS_PAD * 2 + 6);
+      }
+      return Math.ceil(Math.max(mins[i] ?? 40, w));
+    });
+
+    const colW = msFitWidths(widths, contentW, mins);
+    const tableW = colW.reduce((a, b) => a + b, 0);
+    const headerH = 22;
+    const rowH = 20;
+    const tableBottom = () => pageH - margin - 24;
+    const numericStart = headers.length - 2;
+    const colAligns: ('left' | 'center' | 'right')[] = headers.map((_, i) => {
+      if (i === 0) return 'center';
+      if (i === headers.length - 1) return 'right';
+      if (i >= numericStart) return 'center';
+      return 'left';
+    });
+
+    let y = drawBanner() + 10;
+
+    doc.fillColor(MS.meta).font('Helvetica').fontSize(8.5);
+    const meta =
+      `Exam: ${data.examTypeName}    Term: ${data.termName}    ${data.scopeLabel}    ` +
+      `Max Marks: ${data.maxMarks}    Students: ${data.students.length}    ` +
+      `Generated: ${data.generatedAt.toLocaleString()}`;
+    doc.text(meta, margin, y, { width: contentW, lineBreak: false });
+    y += 16;
+
+    const drawTableHeader = () => {
+      msDrawRankingsGrid(doc, margin, y, colW, headerH, MS.header);
+      for (let i = 0; i < headers.length; i++) {
+        const cx = msColX(margin, colW, i);
+        msDrawRankingsCell(doc, headers[i], cx, y, colW[i], headerH, {
+          header: true,
+          align: colAligns[i],
+        });
+      }
+      y += headerH;
+    };
+
+    const drawRow = (row: RankingsPdfData['students'][0], idx: number) => {
+      const cells = buildRow(row);
+      const fill = idx % 2 === 1 ? '#f8fafc' : MS.white;
+      msDrawRankingsGrid(doc, margin, y, colW, rowH, fill);
+
+      for (let i = 0; i < headers.length; i++) {
+        const cx = msColX(margin, colW, i);
+        const text = cells[i] ?? '—';
+        msDrawRankingsCell(doc, text, cx, y, colW[i], rowH, {
+          align: colAligns[i],
+          posBadge: i === 0,
+          bold: isSubject && i === headers.length - 2,
+        });
+      }
+      y += rowH;
+    };
+
+    drawTableHeader();
+    data.students.forEach((row, idx) => {
+      if (y + rowH > tableBottom()) {
+        doc.addPage({ size: 'A4', layout: 'landscape', margin });
+        y = margin;
+        drawTableHeader();
+      }
+      drawRow(row, idx);
+    });
+
+    const footerY = pageH - margin - 6;
+    doc.save();
+    doc.strokeColor(MS.border).lineWidth(1);
+    doc.moveTo(margin, footerY - 10).lineTo(margin + contentW, footerY - 10).stroke();
+    doc.fillColor(MS.blue).font('Helvetica').fontSize(8);
+    doc.text(`Official Academic Record — ${school}`, margin, footerY - 4, { lineBreak: false });
+    doc.restore();
+
+    doc.end();
+  });
+}
+
+export interface ReconciliationPdfRow {
+  admissionNumber: string;
+  name: string;
+  classLabel: string;
+  status: string;
+  totalBilled: number;
+  totalCollected: number;
+  closingBalance: number;
+  outstandingBalance: number;
+  variance: number;
+  discrepancies: string[];
+}
+
+export interface ReconciliationPdfData {
+  schoolName?: string;
+  tagline?: string;
+  logoUrl?: string;
+  dateFrom: string;
+  dateTo: string;
+  termName?: string;
+  generatedAt: string;
+  summary: {
+    studentCount: number;
+    reconciled: number;
+    unreconciled: number;
+    pending: number;
+    totalExpectedRevenue: number;
+    totalCollected: number;
+    totalVariance: number;
+    totalOutstanding: number;
+  };
+  rows: ReconciliationPdfRow[];
+  detailed: boolean;
+}
+
+export async function generateReconciliationPdf(data: ReconciliationPdfData): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({ size: 'A4', layout: 'landscape', margin: 36 });
+    const chunks: Buffer[] = [];
+    doc.on('data', (c) => chunks.push(c));
+    doc.on('end', () => resolve(Buffer.concat(chunks)));
+    doc.on('error', reject);
+
+    const pageW = doc.page.width;
+    const margin = 36;
+    const contentW = pageW - margin * 2;
+    const branding: SchoolBranding = {
+      schoolName: data.schoolName,
+      tagline: data.tagline,
+      logoUrl: data.logoUrl,
+    };
+
+    let y = drawBillingDocHeader(doc, branding, pageW, margin, 'Student Reconciliation Report');
+    doc.fillColor(BILL.muted).font('Helvetica').fontSize(9);
+    doc.text(
+      `Period: ${data.dateFrom} → ${data.dateTo}${data.termName ? `  ·  Term: ${data.termName}` : ''}`,
+      margin,
+      y,
+      { width: contentW },
+    );
+    y += 14;
+    doc.text(`Generated: ${new Date(data.generatedAt).toLocaleString()}  ·  Mode: ${data.detailed ? 'Detailed' : 'Summary'}`, margin, y);
+    y += 18;
+
+    const summaryItems = [
+      ['Students', String(data.summary.studentCount)],
+      ['Reconciled', String(data.summary.reconciled)],
+      ['Unreconciled', String(data.summary.unreconciled)],
+      ['Pending', String(data.summary.pending)],
+      ['Expected', formatMoney(data.summary.totalExpectedRevenue)],
+      ['Collected', formatMoney(data.summary.totalCollected)],
+      ['Variance', formatMoney(data.summary.totalVariance)],
+      ['Outstanding', formatMoney(data.summary.totalOutstanding)],
+    ];
+    const boxW = contentW / 4 - 6;
+    summaryItems.forEach(([label, val], i) => {
+      const col = i % 4;
+      const row = Math.floor(i / 4);
+      const x = margin + col * (boxW + 8);
+      const by = y + row * 36;
+      doc.save();
+      doc.roundedRect(x, by, boxW, 28, 4).fill(BILL.rowAlt);
+      doc.fillColor(BILL.muted).font('Helvetica').fontSize(7).text(label, x + 6, by + 5, { width: boxW - 12 });
+      doc.fillColor(BILL.ink).font('Helvetica-Bold').fontSize(9).text(val, x + 6, by + 15, { width: boxW - 12 });
+      doc.restore();
+    });
+    y += 78;
+
+    const cols = data.detailed
+      ? [
+          { label: 'ID', w: 58 },
+          { label: 'Student', w: 100 },
+          { label: 'Class', w: 52 },
+          { label: 'Status', w: 58 },
+          { label: 'Billed', w: 52, align: 'right' as const },
+          { label: 'Collected', w: 52, align: 'right' as const },
+          { label: 'Closing', w: 52, align: 'right' as const },
+          { label: 'Outstanding', w: 58, align: 'right' as const },
+          { label: 'Variance', w: 52, align: 'right' as const },
+        ]
+      : [
+          { label: 'ID', w: 70 },
+          { label: 'Student', w: 130 },
+          { label: 'Class', w: 70 },
+          { label: 'Status', w: 70 },
+          { label: 'Billed', w: 70, align: 'right' as const },
+          { label: 'Collected', w: 70, align: 'right' as const },
+          { label: 'Closing', w: 70, align: 'right' as const },
+          { label: 'Outstanding', w: 80, align: 'right' as const },
+        ];
+
+    const drawHeader = () => {
+      let x = margin;
+      doc.save();
+      doc.rect(margin, y, contentW, 16).fill(BILL.primary);
+      doc.fillColor(BILL.white).font('Helvetica-Bold').fontSize(8);
+      for (const c of cols) {
+        doc.text(c.label, x + 4, y + 4, { width: c.w - 8, align: c.align || 'left', lineBreak: false });
+        x += c.w;
+      }
+      doc.restore();
+      y += 18;
+    };
+
+    drawHeader();
+    for (const row of data.rows) {
+      if (y > doc.page.height - 60) {
+        doc.addPage({ size: 'A4', layout: 'landscape', margin });
+        y = margin;
+        drawHeader();
+      }
+      let x = margin;
+      const values = data.detailed
+        ? [
+            row.admissionNumber,
+            row.name,
+            row.classLabel,
+            row.status,
+            formatMoney(row.totalBilled),
+            formatMoney(row.totalCollected),
+            formatMoney(row.closingBalance),
+            formatMoney(row.outstandingBalance),
+            formatMoney(row.variance),
+          ]
+        : [
+            row.admissionNumber,
+            row.name,
+            row.classLabel,
+            row.status,
+            formatMoney(row.totalBilled),
+            formatMoney(row.totalCollected),
+            formatMoney(row.closingBalance),
+            formatMoney(row.outstandingBalance),
+          ];
+      doc.fillColor(BILL.ink).font('Helvetica').fontSize(8);
+      for (let i = 0; i < cols.length; i++) {
+        doc.text(String(values[i]), x + 4, y, { width: cols[i].w - 8, align: cols[i].align || 'left', lineBreak: false });
+        x += cols[i].w;
+      }
+      y += 14;
+      if (data.detailed && row.discrepancies.length) {
+        doc.fillColor('#b45309').font('Helvetica').fontSize(7);
+        doc.text(`Note: ${row.discrepancies.join(' · ')}`, margin + 4, y, { width: contentW - 8 });
+        y += 12;
+      }
+    }
+
     doc.end();
   });
 }

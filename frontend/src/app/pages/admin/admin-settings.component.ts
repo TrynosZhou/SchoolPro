@@ -1,12 +1,13 @@
 import { Component, inject, OnInit, signal, computed } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import { forkJoin } from 'rxjs';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
 import { ApiService } from '../../core/services/api.service';
 import { environment } from '../../../environments/environment';
 
-type Tab = 'profile' | 'calendar' | 'classes' | 'subjects' | 'exams' | 'notifications' | 'store';
+type Tab = 'profile' | 'notifications' | 'store';
 
 interface GradeBoundaryRow {
   grade: string;
@@ -114,7 +115,7 @@ interface WhatsAppStatus {
 @Component({
   selector: 'app-admin-settings',
   standalone: true,
-  imports: [PortalLayoutComponent, FormsModule],
+  imports: [PortalLayoutComponent, FormsModule, RouterLink],
   templateUrl: './admin-settings.component.html',
   styleUrl: './admin-settings.component.scss',
 })
@@ -125,10 +126,6 @@ export class AdminSettingsComponent implements OnInit {
 
   readonly tabs: { id: Tab; label: string; icon: string; desc: string }[] = [
     { id: 'profile', label: 'School Profile', icon: '🏫', desc: 'Branding & contact details' },
-    { id: 'calendar', label: 'Academic Calendar', icon: '📅', desc: 'Years, terms & sessions' },
-    { id: 'classes', label: 'Forms & Classes', icon: '🎓', desc: 'Structure & teachers' },
-    { id: 'subjects', label: 'Subjects', icon: '📖', desc: 'Catalogue & class assignments' },
-    { id: 'exams', label: 'Exams & Grades', icon: '📝', desc: 'Weights & grade boundaries' },
     { id: 'notifications', label: 'WhatsApp', icon: '📱', desc: 'Parent messaging' },
     { id: 'store', label: 'Tuckshop', icon: '🛒', desc: 'Inventory & stock' },
   ];
@@ -167,6 +164,8 @@ export class AdminSettingsComponent implements OnInit {
   newYear = { name: '', startDate: '', endDate: '', isCurrent: false };
   newTerm = { name: '', termNumber: 1, startDate: '', endDate: '', schoolYearId: '', isCurrent: false };
   newForm = { name: '', level: 1 };
+  editingFormId = signal<string | null>(null);
+  editFormData = { name: '', level: 1 };
   newClass = { name: '', formId: '', capacity: 40, classTeacherId: '' };
   newSubject = { code: '', name: '', description: '' };
   newAssignment = { classId: '', subjectId: '', teacherId: '' };
@@ -236,38 +235,13 @@ export class AdminSettingsComponent implements OnInit {
     this.loading.set(true);
     forkJoin({
       settings: this.api.get<{ school: SchoolSettings; whatsapp: WhatsAppStatus }>('/admin/settings'),
-      years: this.api.get<SchoolYear[]>('/admin/school-years'),
-      forms: this.api.get<FormRow[]>('/admin/forms'),
-      classes: this.api.get<ClassRow[]>('/admin/classes'),
-      subjects: this.api.get<SubjectRow[]>('/admin/subjects'),
-      classSubjects: this.api.get<ClassSubjectRow[]>('/admin/class-subjects'),
-      staff: this.api.get<StaffRow[]>('/admin/staff'),
-      examTypes: this.api.get<ExamTypeRow[]>('/admin/exam-types'),
       tuckshop: this.api.get<TuckshopItem[]>('/admin/tuckshop/items'),
     }).subscribe({
       next: (data) => {
         this.school.set(data.settings.school);
         this.whatsapp.set(data.settings.whatsapp);
         this.profileForm = { ...data.settings.school };
-        this.gradeBoundaries.set(
-          data.settings.school.gradeBoundaries?.length
-            ? data.settings.school.gradeBoundaries.map((b) => ({ ...b }))
-            : this.defaultGradeBoundaries()
-        );
-        this.schoolYears.set(data.years);
-        this.forms.set(data.forms);
-        this.classes.set(data.classes);
-        this.subjects.set(data.subjects);
-        this.classSubjects.set(data.classSubjects);
-        this.staff.set(data.staff);
-        this.examTypes.set(data.examTypes);
         this.tuckshopItems.set(data.tuckshop);
-        const currentYear = data.years.find((y) => y.isCurrent) || data.years[0];
-        if (currentYear) this.newTerm.schoolYearId = currentYear.id;
-        if (data.classes[0]) {
-          this.selectedClassId.set(data.classes[0].id);
-          this.newAssignment.classId = data.classes[0].id;
-        }
         this.loading.set(false);
       },
       error: () => {
@@ -415,11 +389,51 @@ export class AdminSettingsComponent implements OnInit {
     this.api.post('/admin/forms', this.newForm).subscribe({
       next: () => {
         this.newForm = { name: '', level: 1 };
-        this.api.get<FormRow[]>('/admin/forms').subscribe((f) => this.forms.set(f));
+        this.reloadForms();
         this.showToast('success', 'Form added');
       },
       error: () => this.showToast('error', 'Failed to add form'),
     });
+  }
+
+  startEditForm(f: FormRow) {
+    this.editingFormId.set(f.id);
+    this.editFormData = { name: f.name, level: f.level };
+  }
+
+  cancelEditForm() {
+    this.editingFormId.set(null);
+  }
+
+  saveEditForm() {
+    const id = this.editingFormId();
+    if (!id || !this.editFormData.name.trim()) {
+      this.showToast('error', 'Form name is required');
+      return;
+    }
+    this.api.patch(`/admin/forms/${id}`, this.editFormData).subscribe({
+      next: () => {
+        this.editingFormId.set(null);
+        this.reloadForms();
+        this.showToast('success', 'Form updated');
+      },
+      error: (e) => this.showToast('error', e.error?.message || 'Failed to update form'),
+    });
+  }
+
+  deleteForm(f: FormRow) {
+    if (!confirm(`Delete "${f.name}"? This cannot be undone.`)) return;
+    this.api.delete(`/admin/forms/${f.id}`).subscribe({
+      next: () => {
+        this.reloadForms();
+        this.showToast('success', `${f.name} deleted`);
+      },
+      error: (e) => this.showToast('error', e.error?.message || 'Cannot delete this form'),
+    });
+  }
+
+  private reloadForms() {
+    this.api.get<FormRow[]>('/admin/forms').subscribe((f) => this.forms.set(f));
   }
 
   addClass() {

@@ -1,0 +1,127 @@
+<app-portal-layout portalTitle="Admin Portal" pageTitle="Administration" [navSections]="adminNav">
+  <div class="admin-dashboard">
+    <section class="hero">
+      <div class="hero-glow" aria-hidden="true"></div>
+      <div class="hero-content">
+        <p class="eyebrow">Welcome back</p>
+        <h2>{{ greetingName() }}</h2>
+        <p class="hero-sub">Your school operations hub — academics, finance, attendance, and reports in one place.</p>
+        <div class="hero-meta">
+          <span class="meta-chip">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            {{ todayLabel }}
+          </span>
+          <span class="status-pill" [class.warn]="financeHealth() !== 'Healthy'" [class.risk]="financeHealth() === 'High Risk'">
+            {{ financeHealth() }}
+          </span>
+        </div>
+      </div>
+      <div class="hero-visual" aria-hidden="true">
+        <div class="orbit orbit-1"></div>
+        <div class="orbit orbit-2"></div>
+        <span class="hero-badge">SP</span>
+      </div>
+    </section>
+
+    <section class="stats-grid">
+      @for (stat of statCards(); track stat.key) {
+        <article class="stat-card" [class]="stat.tone">
+          <div class="stat-icon" aria-hidden="true">{{ stat.icon }}</div>
+          <div class="stat-body">
+            <p class="stat-title">{{ stat.title }}</p>
+            @if (loading()) {
+              <span class="stat-skeleton"></span>
+            } @else {
+              <strong>{{ stat.value }}</strong>
+            }
+            <span class="stat-caption">{{ stat.caption }}</span>
+          </div>
+        </article>
+      }
+    </section>
+
+    <section class="dashboard-grid">
+      <article class="panel">
+        <div class="panel-head">
+          <div>
+            <h3>Attendance Today</h3>
+            <p class="panel-sub">Live register submissions</p>
+          </div>
+          <span class="chip">{{ attendanceTotal() }} records</span>
+        </div>
+        <div class="attendance-list">
+          @for (item of attendanceRows(); track item.status) {
+            <div class="attendance-row" [class]="attendanceTone(item.status)">
+              <div class="attendance-label">
+                <span class="dot"></span>
+                <span>{{ item.status }}</span>
+              </div>
+              <strong>{{ item.count }}</strong>
+            </div>
+          } @empty {
+            <div class="empty-state">
+              <span class="empty-icon">📋</span>
+              <p>No attendance submissions yet today.</p>
+            </div>
+          }
+        </div>
+      </article>
+
+      <article class="panel">
+        <div class="panel-head">
+          <div>
+            <h3>Operational Alerts</h3>
+            <p class="panel-sub">Items needing attention</p>
+          </div>
+          <span class="chip" [class.warn]="(overview()?.lowStockItems ?? 0) > 0">
+            {{ overview()?.lowStockItems ?? 0 }} low stock
+          </span>
+        </div>
+        <div class="alert-grid">
+          <div class="alert-box" [class.active]="(overview()?.lowStockItems ?? 0) > 0">
+            <span class="alert-icon">📦</span>
+            <div>
+              <span>Inventory risk</span>
+              <strong>{{ overview()?.lowStockItems ?? 0 }} items near reorder</strong>
+            </div>
+          </div>
+          <div class="alert-box" [class.active]="debtRatio() >= 40">
+            <span class="alert-icon">💸</span>
+            <div>
+              <span>Debt pressure</span>
+              <strong>{{ debtRatio() | number:'1.0-1' }}% of monthly collections</strong>
+            </div>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <section class="panel quick-actions">
+      <div class="panel-head">
+        <div>
+          <h3>Quick Actions</h3>
+          <p class="panel-sub">Jump to common admin tasks</p>
+        </div>
+        <span class="chip accent">Shortcuts</span>
+      </div>
+      <div class="action-columns">
+        @for (group of actionGroups; track group.title) {
+          <div class="action-group">
+            <h4>{{ group.title }}</h4>
+            <div class="action-grid">
+              @for (link of group.links; track link.path) {
+                <a [routerLink]="link.path" class="action-btn">
+                  <span class="action-icon">{{ link.icon }}</span>
+                  <span class="action-label">{{ link.label }}</span>
+                  <svg class="action-arrow" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </a>
+              }
+            </div>
+          </div>
+        }
+      </div>
+    </section>
+  </div>
+</app-portal-layout>

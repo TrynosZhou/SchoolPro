@@ -1,0 +1,292 @@
+<app-portal-layout portalTitle="Admin Portal" pageTitle="Student Reconcilliation" [navSections]="adminNav">
+  <div class="recon-page">
+    @if (toast(); as t) {
+      <div class="toast no-print" [class.error]="t.type === 'error'">{{ t.msg }}</div>
+    }
+
+    <section class="card intro no-print">
+      <h3>Student Reconciliation Report</h3>
+      <p class="sub">
+        Data matching and verification — compare student account balances between the student information module
+        and the general ledger. Flags discrepancies between amounts billed, collected, and recorded.
+      </p>
+    </section>
+
+    <section class="card filters no-print">
+      <div class="filter-grid">
+        <div class="field">
+          <label>Term / Semester</label>
+          <select [(ngModel)]="selectedTermId" name="reconTerm" (ngModelChange)="onTermChange()">
+            <option value="">— Custom dates —</option>
+            @for (t of terms(); track t.id) {
+              <option [value]="t.id">{{ t.name }}</option>
+            }
+          </select>
+        </div>
+        <div class="field">
+          <label>Date from</label>
+          <input type="date" [(ngModel)]="dateFrom" name="reconFrom" />
+        </div>
+        <div class="field">
+          <label>Date to</label>
+          <input type="date" [(ngModel)]="dateTo" name="reconTo" />
+        </div>
+        <div class="field">
+          <label>Grade / Form</label>
+          <select [(ngModel)]="selectedFormId" name="reconForm" (ngModelChange)="selectedClassId = ''">
+            <option value="">All forms</option>
+            @for (f of forms(); track f.id) {
+              <option [value]="f.id">{{ f.name }}</option>
+            }
+          </select>
+        </div>
+        <div class="field">
+          <label>Class</label>
+          <select [(ngModel)]="selectedClassId" name="reconClass">
+            <option value="">All classes</option>
+            @for (c of filteredClasses(); track c.id) {
+              <option [value]="c.id">{{ c.form?.name || '' }} {{ c.name }}</option>
+            }
+          </select>
+        </div>
+        <div class="field">
+          <label>Transaction type</label>
+          <select [(ngModel)]="selectedFeeType" name="reconFee">
+            @for (ft of feeTypes; track ft.value) {
+              <option [value]="ft.value">{{ ft.label }}</option>
+            }
+          </select>
+        </div>
+        <div class="field span-2">
+          <label>Student (ID / first / last name)</label>
+          <input
+            type="text"
+            [(ngModel)]="query"
+            name="reconQuery"
+            placeholder="Optional — leave blank for all students in filters"
+            (input)="selectedStudentId = ''"
+            (keyup.enter)="getReport()"
+          />
+        </div>
+        <div class="field">
+          <label>Report view</label>
+          <select [(ngModel)]="viewMode" name="reconView">
+            <option value="summary">Summary</option>
+            <option value="detailed">Detailed</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="toolbar">
+        <button type="button" class="btn-primary" (click)="getReport()" [disabled]="loading()">
+          {{ loading() ? 'Loading…' : 'Get Report' }}
+        </button>
+        @if (report()) {
+          <button type="button" class="btn-outline" (click)="printReport('summary')" [disabled]="exporting()">Print Summary</button>
+          <button type="button" class="btn-outline" (click)="printReport('detailed')" [disabled]="exporting()">Print Detailed</button>
+          <button type="button" class="btn-outline" (click)="exportFile('pdf', 'summary')" [disabled]="exporting()">PDF Summary</button>
+          <button type="button" class="btn-outline" (click)="exportFile('pdf', 'detailed')" [disabled]="exporting()">PDF Detailed</button>
+          <button type="button" class="btn-outline" (click)="exportFile('xlsx', 'summary')" [disabled]="exporting()">Excel Summary</button>
+          <button type="button" class="btn-outline" (click)="exportFile('xlsx', 'detailed')" [disabled]="exporting()">Excel Detailed</button>
+        }
+      </div>
+    </section>
+
+    @if (matches().length) {
+      <section class="card no-print">
+        <h3>Select student</h3>
+        <div class="match-list">
+          @for (m of matches(); track m.id) {
+            <button type="button" class="match-btn" (click)="pickStudent(m)">
+              <strong>{{ m.firstName }} {{ m.lastName }}</strong>
+              <span>{{ m.admissionNumber }} · {{ m.formName || '—' }} {{ m.className || '' }}</span>
+            </button>
+          }
+        </div>
+      </section>
+    }
+
+    @if (report(); as r) {
+      <section class="card print-header">
+        <h3>Reconciliation Summary</h3>
+        <p class="period">
+          Period: <strong>{{ r.filters.dateFrom }}</strong> → <strong>{{ r.filters.dateTo }}</strong>
+          @if (r.filters.termName) { · Term: <strong>{{ r.filters.termName }}</strong> }
+        </p>
+        <div class="summary-grid">
+          <article class="summary-box">
+            <span class="lbl">Students</span>
+            <strong>{{ r.summary.studentCount }}</strong>
+          </article>
+          <article class="summary-box ok">
+            <span class="lbl">Reconciled</span>
+            <strong>{{ r.summary.reconciled }}</strong>
+          </article>
+          <article class="summary-box warn">
+            <span class="lbl">Pending</span>
+            <strong>{{ r.summary.pending }}</strong>
+          </article>
+          <article class="summary-box bad">
+            <span class="lbl">Unreconciled</span>
+            <strong>{{ r.summary.unreconciled }}</strong>
+          </article>
+          <article class="summary-box">
+            <span class="lbl">Expected revenue</span>
+            <strong>{{ r.summary.totalExpectedRevenue | number:'1.2-2' }}</strong>
+          </article>
+          <article class="summary-box">
+            <span class="lbl">Total collected</span>
+            <strong>{{ r.summary.totalCollected | number:'1.2-2' }}</strong>
+          </article>
+          <article class="summary-box bad">
+            <span class="lbl">Total variance</span>
+            <strong>{{ r.summary.totalVariance | number:'1.2-2' }}</strong>
+          </article>
+          <article class="summary-box warn">
+            <span class="lbl">Outstanding</span>
+            <strong>{{ r.summary.totalOutstanding | number:'1.2-2' }}</strong>
+          </article>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="table-head">
+          <h3>Student Accounts</h3>
+          <span class="hint no-print">Click a row in detailed view to expand transactions</span>
+        </div>
+        <div class="table-wrap">
+          <table class="recon-table">
+            <thead>
+              <tr>
+                <th>Student</th>
+                <th>Class</th>
+                <th>Status</th>
+                <th class="num">Opening</th>
+                <th class="num">Billed</th>
+                <th class="num">Collected</th>
+                <th class="num">Closing</th>
+                <th class="num">Outstanding</th>
+                <th class="num">Variance</th>
+                @if (viewMode === 'detailed') {
+                  <th class="no-print"></th>
+                }
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of r.students; track row.student.id) {
+                <tr
+                  [class.row-unreconciled]="row.status === 'unreconciled'"
+                  [class.row-pending]="row.status === 'pending'"
+                  [class.clickable]="viewMode === 'detailed'"
+                  (click)="viewMode === 'detailed' ? toggleExpand(row.student.id) : null"
+                >
+                  <td>
+                    <strong>{{ row.student.firstName }} {{ row.student.lastName }}</strong>
+                    <div class="sub-id">{{ row.student.admissionNumber }}</div>
+                  </td>
+                  <td>{{ classLabel(row) }}</td>
+                  <td><span class="status-pill" [class]="statusClass(row.status)">{{ row.status }}</span></td>
+                  <td class="num">{{ row.studentModule.openingBalance | number:'1.2-2' }}</td>
+                  <td class="num">{{ row.studentModule.totalBilled | number:'1.2-2' }}</td>
+                  <td class="num">{{ row.studentModule.totalCollected | number:'1.2-2' }}</td>
+                  <td class="num">{{ row.studentModule.closingBalance | number:'1.2-2' }}</td>
+                  <td class="num">{{ row.studentModule.outstandingBalance | number:'1.2-2' }}</td>
+                  <td class="num" [class.has-variance]="row.variance.closingBalanceVariance !== 0">
+                    {{ row.variance.closingBalanceVariance | number:'1.2-2' }}
+                  </td>
+                  @if (viewMode === 'detailed') {
+                    <td class="no-print expand-cell">{{ expandedStudentId() === row.student.id ? '▼' : '▶' }}</td>
+                  }
+                </tr>
+
+                @if (viewMode === 'detailed' && expandedStudentId() === row.student.id) {
+                  <tr class="detail-row">
+                    <td [attr.colspan]="viewMode === 'detailed' ? 10 : 9">
+                      <div class="detail-panel">
+                        <div class="detail-cols">
+                          <div>
+                            <h4>Student module</h4>
+                            <ul>
+                              <li>Opening: {{ row.studentModule.openingBalance | number:'1.2-2' }}</li>
+                              <li>Adjustments: {{ row.studentModule.adjustments | number:'1.2-2' }}</li>
+                              <li>Unapplied payments: {{ row.studentModule.unappliedPayments | number:'1.2-2' }}</li>
+                            </ul>
+                          </div>
+                          <div>
+                            <h4>General ledger</h4>
+                            <ul>
+                              <li>Opening: {{ row.ledgerModule.openingBalance | number:'1.2-2' }}</li>
+                              <li>Debits: {{ row.ledgerModule.totalDebits | number:'1.2-2' }}</li>
+                              <li>Credits: {{ row.ledgerModule.totalCredits | number:'1.2-2' }}</li>
+                              <li>Closing: {{ row.ledgerModule.closingBalance | number:'1.2-2' }}</li>
+                            </ul>
+                          </div>
+                          <div>
+                            <h4>Financial aid / scholarship</h4>
+                            <ul>
+                              <li>Disbursed: {{ row.financialAid.disbursed | number:'1.2-2' }}</li>
+                              <li>Applied: {{ row.financialAid.applied | number:'1.2-2' }}</li>
+                            </ul>
+                          </div>
+                        </div>
+
+                        @if (row.discrepancies.length) {
+                          <div class="discrepancy-box">
+                            <strong>Discrepancies</strong>
+                            <ul>
+                              @for (d of row.discrepancies; track d) {
+                                <li>{{ d }}</li>
+                              }
+                            </ul>
+                          </div>
+                        }
+
+                        @if (row.transactions.length) {
+                          <h4>Transactions</h4>
+                          <table class="txn-table">
+                            <thead>
+                              <tr>
+                                <th>Date</th>
+                                <th>Type</th>
+                                <th>Fee type</th>
+                                <th>Reference</th>
+                                <th>Description</th>
+                                <th class="num">Amount</th>
+                                <th>Student</th>
+                                <th>Ledger</th>
+                                <th>Matched</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              @for (t of row.transactions; track t.id + t.date) {
+                                <tr [class.unmatched]="!t.matched">
+                                  <td>{{ t.date }}</td>
+                                  <td>{{ t.type }}</td>
+                                  <td>{{ t.feeType }}</td>
+                                  <td>{{ t.reference }}</td>
+                                  <td>{{ t.description }}</td>
+                                  <td class="num">{{ t.amount | number:'1.2-2' }}</td>
+                                  <td>{{ t.inStudentModule ? 'Yes' : 'No' }}</td>
+                                  <td>{{ t.inLedger ? 'Yes' : 'No' }}</td>
+                                  <td>{{ t.matched ? 'Yes' : 'No' }}</td>
+                                </tr>
+                              }
+                            </tbody>
+                          </table>
+                        }
+                      </div>
+                    </td>
+                  </tr>
+                }
+              } @empty {
+                <tr>
+                  <td colspan="10" class="empty">No students in this report.</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </section>
+    }
+  </div>
+</app-portal-layout>

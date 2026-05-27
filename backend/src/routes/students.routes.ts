@@ -1,14 +1,15 @@
 // @ts-nocheck
 import { Router, Response } from 'express';
 import { AppDataSource } from '../config/data-source';
-import { Student, Guardian, User, SchoolSettings } from '../entities';
-import { UserRole } from '../entities/enums';
+import { Student, Guardian, User, SchoolSettings, Form, Invoice } from '../entities';
+import { UserRole, StudentType } from '../entities/enums';
 import { authenticate, authorize, AuthRequest } from '../middleware/auth';
 import bcrypt from 'bcryptjs';
 import { relations, param } from '../utils/typeorm-helpers';
 import { generateStudentId, today } from '../utils/helpers';
 import { generateClassListPdf } from '../utils/pdf';
 import { assertTeacherClassAccess } from '../utils/teacher-class-access';
+import { createRegistrationInvoiceForStudent } from '../services/registration-invoice.service';
 
 const router = Router();
 router.use(authenticate);
@@ -24,6 +25,7 @@ router.get('/', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL,
   const qb = repo.createQueryBuilder('s')
     .leftJoinAndSelect('s.schoolClass', 'c')
     .leftJoinAndSelect('c.form', 'f')
+    .leftJoinAndSelect('s.form', 'studentForm')
     .leftJoinAndSelect('s.guardians', 'g')
     .where('s.isActive = true');
 
@@ -108,7 +110,7 @@ router.get('/:id', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIP
   const repo = AppDataSource.getRepository(Student);
   const student = await repo.findOne({
     where: { id: param(req.params.id) },
-    relations: relations('schoolClass', 'schoolClass.form', 'guardians', 'guardians.parent', 'user'),
+    relations: relations('schoolClass', 'schoolClass.form', 'form', 'guardians', 'guardians.parent', 'user'),
   });
   if (!student) return res.status(404).json({ message: 'Student not found' });
 
@@ -127,15 +129,32 @@ router.get('/:id', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIP
 router.post('/', authorize(UserRole.ADMIN), async (req, res: Response) => {
   const repo = AppDataSource.getRepository(Student);
   const guardianRepo = AppDataSource.getRepository(Guardian);
+  const formRepo = AppDataSource.getRepository(Form);
   const {
     guardians,
     createPortalAccount,
     parentEmail,
+    formId,
     admissionNumber: _ignored,
     classId: _ignoredClass,
     enrollmentDate: _ignoredEnroll,
     ...data
   } = req.body;
+
+  if (!formId) {
+    return res.status(400).json({ message: 'Form is required when registering a student' });
+  }
+
+  const studentType = data.studentType || StudentType.DAY_SCHOLAR;
+  if (![StudentType.DAY_SCHOLAR, StudentType.BOARDER].includes(studentType)) {
+    return res.status(400).json({ message: 'Student type must be Day Scholar or Boarder' });
+  }
+  data.studentType = studentType;
+
+  const form = await formRepo.findOne({ where: { id: formId } });
+  if (!form) {
+    return res.status(400).json({ message: 'Selected form was not found' });
+  }
 
   let student;
   for (let attempt = 0; attempt < 5; attempt++) {
@@ -144,6 +163,7 @@ router.post('/', authorize(UserRole.ADMIN), async (req, res: Response) => {
       const created = repo.create({
         ...data,
         admissionNumber: studentId,
+        formId,
         classId: null,
         enrollmentDate: null,
       });
@@ -175,8 +195,30 @@ router.post('/', authorize(UserRole.ADMIN), async (req, res: Response) => {
     await repo.save(student);
   }
 
-  const full = await repo.findOne({ where: { id: student.id }, relations: relations('guardians', 'schoolClass') });
-  res.status(201).json(full);
+  let registrationInvoice = null;
+  try {
+    registrationInvoice = await createRegistrationInvoiceForStudent(student, form);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Registration invoice could not be created';
+    return res.status(500).json({
+      message: `Student was saved but registration invoice creation failed: ${message}`,
+      studentId: student.id,
+      admissionNumber: student.admissionNumber,
+    });
+  }
+
+  const full = await repo.findOne({
+    where: { id: student.id },
+    relations: relations('guardians', 'schoolClass', 'form'),
+  });
+  res.status(201).json({
+    ...full,
+    registrationInvoice: {
+      id: registrationInvoice.id,
+      invoiceNumber: registrationInvoice.invoiceNumber,
+      totalAmount: Number(registrationInvoice.totalAmount),
+    },
+  });
 });
 
 router.patch('/:id/enroll', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.TEACHER), async (req, res: Response) => {
@@ -227,6 +269,7 @@ router.put('/:id', authorize(UserRole.ADMIN), async (req, res: Response) => {
     guardians,
     admissionNumber: _admission,
     classId: _classId,
+    formId: _formId,
     enrollmentDate: _enroll,
     id: _id,
     createdAt: _created,
@@ -240,8 +283,22 @@ router.put('/:id', authorize(UserRole.ADMIN), async (req, res: Response) => {
   if (updates.lastName !== undefined) student.lastName = updates.lastName;
   if (updates.dateOfBirth !== undefined) student.dateOfBirth = updates.dateOfBirth || null;
   if (updates.gender !== undefined) student.gender = updates.gender;
+  if (req.body.studentType !== undefined) {
+    if (![StudentType.DAY_SCHOLAR, StudentType.BOARDER].includes(req.body.studentType)) {
+      return res.status(400).json({ message: 'Student type must be Day Scholar or Boarder' });
+    }
+    student.studentType = req.body.studentType;
+  }
   if (updates.address !== undefined) student.address = updates.address || null;
   if (updates.previousSchool !== undefined) student.previousSchool = updates.previousSchool || null;
+  if (req.body.formId !== undefined) {
+    if (!req.body.formId) {
+      return res.status(400).json({ message: 'Form cannot be empty' });
+    }
+    const form = await AppDataSource.getRepository(Form).findOne({ where: { id: req.body.formId } });
+    if (!form) return res.status(400).json({ message: 'Selected form was not found' });
+    student.formId = req.body.formId;
+  }
 
   await repo.save(student);
 
@@ -268,9 +325,50 @@ router.put('/:id', authorize(UserRole.ADMIN), async (req, res: Response) => {
 
   const full = await repo.findOne({
     where: { id: student.id },
-    relations: relations('schoolClass', 'schoolClass.form', 'guardians'),
+    relations: relations('schoolClass', 'schoolClass.form', 'form', 'guardians'),
   });
   res.json(full);
+});
+
+router.post('/:id/registration-invoice', authorize(UserRole.ADMIN), async (req, res: Response) => {
+  const studentRepo = AppDataSource.getRepository(Student);
+  const invoiceRepo = AppDataSource.getRepository(Invoice);
+  const student = await studentRepo.findOne({
+    where: { id: param(req.params.id) },
+    relations: relations('form'),
+  });
+  if (!student) return res.status(404).json({ message: 'Student not found' });
+  if (!student.form) {
+    return res.status(400).json({ message: 'Student has no form assigned. Set form first.' });
+  }
+
+  const existing = await invoiceRepo.findOne({
+    where: {
+      studentId: student.id,
+      description: `New student registration — ${student.form.name} (${student.admissionNumber})`,
+    },
+    order: { createdAt: 'DESC' },
+  });
+  if (existing) {
+    return res.json({
+      message: 'Registration invoice already exists',
+      invoice: {
+        id: existing.id,
+        invoiceNumber: existing.invoiceNumber,
+        totalAmount: Number(existing.totalAmount),
+      },
+    });
+  }
+
+  const invoice = await createRegistrationInvoiceForStudent(student, student.form);
+  return res.status(201).json({
+    message: 'Registration invoice created',
+    invoice: {
+      id: invoice.id,
+      invoiceNumber: invoice.invoiceNumber,
+      totalAmount: Number(invoice.totalAmount),
+    },
+  });
 });
 
 router.delete('/:id', authorize(UserRole.ADMIN), async (req, res: Response) => {

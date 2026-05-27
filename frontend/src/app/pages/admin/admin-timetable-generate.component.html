@@ -1,0 +1,73 @@
+<app-portal-layout portalTitle="Admin Portal" pageTitle="Generate Timetable" [navSections]="adminNav">
+  <div class="tt-page">
+    @if (toast(); as t) {
+      <div class="toast" [class.error]="t.type === 'error'">{{ t.msg }}</div>
+    }
+
+    <section class="card">
+      <h3>Generate Timetable</h3>
+      <p class="sub">Assign subjects and teachers to class periods. Configure bell times first if needed.</p>
+      <div class="links">
+        <a routerLink="/admin/timetable/configure-periods" class="link-btn">← Configure Periods</a>
+        <a routerLink="/admin/timetable/view" class="link-btn">View Timetable →</a>
+      </div>
+    </section>
+
+    @if (!periods().length) {
+      <section class="card warn-card">
+        <p>No periods configured. <a routerLink="/admin/timetable/configure-periods">Configure periods</a> before generating.</p>
+      </section>
+    }
+
+    <section class="card">
+      <h4>Add timetable slot</h4>
+      <div class="form-grid">
+        <div class="field">
+          <label>Class *</label>
+          <select [(ngModel)]="classId" name="ttClass">
+            <option value="">Select class</option>
+            @for (c of classes(); track c.id) {
+              <option [value]="c.id">{{ c.form?.name || '' }} {{ c.name }}</option>
+            }
+          </select>
+        </div>
+        <div class="field">
+          <label>Day *</label>
+          <select [(ngModel)]="dayOfWeek" name="ttDay">
+            @for (d of days; track d.value) { <option [value]="d.value">{{ d.label }}</option> }
+          </select>
+        </div>
+        <div class="field">
+          <label>Period *</label>
+          <select [(ngModel)]="periodId" name="ttPeriod">
+            <option value="">Select period</option>
+            @for (p of periods(); track p.id) {
+              <option [value]="p.id">{{ p.name }} ({{ p.startTime }}–{{ p.endTime }})</option>
+            }
+          </select>
+        </div>
+        <div class="field">
+          <label>Subject *</label>
+          <select [(ngModel)]="subjectId" name="ttSubject">
+            <option value="">Select subject</option>
+            @for (s of subjects(); track s.id) { <option [value]="s.id">{{ s.name }}</option> }
+          </select>
+        </div>
+        <div class="field">
+          <label>Teacher</label>
+          <select [(ngModel)]="teacherId" name="ttTeacher">
+            <option value="">Optional</option>
+            @for (t of staff(); track t.id) { <option [value]="t.id">{{ staffName(t) }}</option> }
+          </select>
+        </div>
+        <div class="field">
+          <label>Room</label>
+          <input type="text" [(ngModel)]="room" name="ttRoom" placeholder="e.g. Lab 1" />
+        </div>
+      </div>
+      <button type="button" class="btn-primary" (click)="addSlot()" [disabled]="saving()">
+        {{ saving() ? 'Saving…' : 'Add to timetable' }}
+      </button>
+    </section>
+  </div>
+</app-portal-layout>

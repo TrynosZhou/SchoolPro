@@ -1,0 +1,52 @@
+<app-portal-layout portalTitle="Admin Portal" pageTitle="View Timetable" [navSections]="adminNav">
+  <div class="tt-page">
+    <section class="card">
+      <h3>View Timetable</h3>
+      <p class="sub">Browse the weekly timetable for a class.</p>
+      <div class="links">
+        <a routerLink="/admin/timetable/configure-periods" class="link-btn">Configure Periods</a>
+        <a routerLink="/admin/timetable/generate" class="link-btn">Generate Timetable →</a>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="form-row">
+        <div class="field grow">
+          <label>Class</label>
+          <select [(ngModel)]="classId" name="viewClass" (ngModelChange)="loadTimetable()">
+            <option value="">Select class</option>
+            @for (c of classes(); track c.id) {
+              <option [value]="c.id">{{ c.form?.name || '' }} {{ c.name }}</option>
+            }
+          </select>
+        </div>
+        <button type="button" class="btn-primary" (click)="loadTimetable()" [disabled]="!classId || loading()">
+          {{ loading() ? 'Loading…' : 'Refresh' }}
+        </button>
+      </div>
+    </section>
+
+    @if (classId) {
+      <section class="card">
+        @for (day of [1, 2, 3, 4, 5]; track day) {
+          <div class="day-block">
+            <h4>{{ dayLabels[day] }}</h4>
+            @if (entriesForDay(day).length) {
+              <div class="slot-list">
+                @for (e of entriesForDay(day); track e.id) {
+                  <article class="slot">
+                    <span class="time">{{ e.startTime }} – {{ e.endTime }}</span>
+                    <strong>{{ e.subject?.name || 'Subject' }}</strong>
+                    <span class="meta">{{ teacherName(e) }}@if (e.room) { · {{ e.room }} }</span>
+                  </article>
+                }
+              </div>
+            } @else {
+              <p class="empty">No lessons scheduled.</p>
+            }
+          </div>
+        }
+      </section>
+    }
+  </div>
+</app-portal-layout>

@@ -1,0 +1,62 @@
+<app-portal-layout portalTitle="Admin Portal" pageTitle="Student Balance" [navSections]="adminNav">
+  <section class="card search-card">
+    <h3>Find Student Invoice Balance</h3>
+    <p class="sub">Enter <strong>Student ID</strong>, <strong>First Name</strong>, or <strong>Last Name</strong>.</p>
+
+    <div class="search-bar">
+      <input
+        type="text"
+        [(ngModel)]="query"
+        name="studentBalanceQuery"
+        placeholder="e.g. STU-001 / Tawanda / Ncube"
+        (keyup.enter)="getBalance()"
+      />
+      <button type="button" class="btn-primary" (click)="getBalance()" [disabled]="loading()">
+        {{ loading() ? 'Loading...' : 'Get Balance' }}
+      </button>
+    </div>
+  </section>
+
+  @if (toast(); as t) {
+    <div class="toast" [class.error]="t.type === 'error'">{{ t.msg }}</div>
+  }
+
+  <section class="card table-card">
+    <div class="table-head">
+      <h3>Results</h3>
+      <span class="count">{{ rows().length }}</span>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Student ID</th>
+            <th>Name</th>
+            <th>Class</th>
+            <th>Total Invoiced</th>
+            <th>Total Paid</th>
+            <th>Balance</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (r of rows(); track r.id) {
+            <tr>
+              <td>{{ r.admissionNumber || r.id }}</td>
+              <td>{{ r.firstName }} {{ r.lastName }}</td>
+              <td>{{ r.className || '—' }}</td>
+              <td>{{ r.totalInvoiced | number:'1.2-2' }}</td>
+              <td>{{ r.totalPaid | number:'1.2-2' }}</td>
+              <td><strong [class.zero]="r.balance <= 0">{{ r.balance | number:'1.2-2' }}</strong></td>
+            </tr>
+          } @empty {
+            <tr>
+              <td colspan="6" class="empty">No data yet. Search for a student to view balance.</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  </section>
+</app-portal-layout>
+

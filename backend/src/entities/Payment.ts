@@ -9,7 +9,7 @@ import {
 } from 'typeorm';
 import { Student } from './Student';
 import { Invoice } from './Invoice';
-import { PaymentMethod, FeeType } from './enums';
+import { PaymentMethod } from './enums';
 import { Receipt } from './Receipt';
 import { User } from './User';
 
@@ -41,8 +41,8 @@ export class Payment {
   @Column({ type: 'enum', enum: PaymentMethod })
   method!: PaymentMethod;
 
-  @Column({ type: 'enum', enum: FeeType })
-  feeType!: FeeType;
+  @Column({ type: 'varchar', length: 64, default: 'other' })
+  feeType!: string;
 
   @Column()
   label!: string;

@@ -56,15 +56,61 @@
     </nav>
     <div class="user-panel">
       <span class="user-name">{{ auth.user()?.firstName }} {{ auth.user()?.lastName }}</span>
-      <button type="button" class="btn-outline btn-logout" (click)="auth.logout()">Logout</button>
+      <button type="button" class="btn-outline btn-logout" (click)="requestLogout()">
+        <span>Sign out</span>
+        <svg class="sign-out-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M16 17l5-5-5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M21 12H9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
     </div>
   </aside>
   <main class="content">
     <header class="topbar">
       <h1>{{ pageTitle }}</h1>
+      <div class="topbar-user">
+        <span class="topbar-user-name">{{ fullName }}</span>
+        <div class="user-menu">
+          <button
+            type="button"
+            class="user-icon-btn"
+            (click)="toggleUserMenu()"
+            aria-label="User menu"
+            [attr.aria-expanded]="userMenuOpen()"
+          >
+            <span class="user-icon" aria-hidden="true">👤</span>
+          </button>
+          @if (userMenuOpen()) {
+            <div class="user-menu-dropdown">
+              <button type="button" class="user-menu-item" (click)="requestLogout()">
+                <span>Sign out</span>
+                <svg class="sign-out-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M16 17l5-5-5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M21 12H9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </button>
+            </div>
+          }
+        </div>
+      </div>
     </header>
     <div class="page-body">
       <ng-content />
     </div>
   </main>
 </div>
+
+@if (logoutConfirmOpen()) {
+  <div class="logout-modal-backdrop" (click)="cancelLogout()">
+    <section class="logout-modal" (click)="$event.stopPropagation()">
+      <h3>Sign out of School Pro?</h3>
+      <p>Your current session will end and you will return to the login page.</p>
+      <div class="logout-modal-actions">
+        <button type="button" class="btn-outline" (click)="cancelLogout()">No</button>
+        <button type="button" class="btn-primary" (click)="confirmLogout()">Yes, sign out</button>
+      </div>
+    </section>
+  </div>
+}

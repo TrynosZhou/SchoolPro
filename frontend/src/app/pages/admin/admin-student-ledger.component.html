@@ -1,0 +1,111 @@
+<app-portal-layout portalTitle="Admin Portal" pageTitle="Student Ledger" [navSections]="adminNav">
+  @if (toast(); as t) {
+    <div class="toast" [class.error]="t.type === 'error'">{{ t.msg }}</div>
+  }
+
+  <section class="card search-card">
+    <h3>Student Ledger Report</h3>
+    <p class="sub">Select a <strong>term</strong> and search by <strong>Student ID</strong>, <strong>First Name</strong>, or <strong>Last Name</strong>.</p>
+
+    <div class="filters">
+      <div class="field">
+        <label>Term *</label>
+        <select [(ngModel)]="selectedTermId" name="ledgerTerm">
+          <option value="">— Select term —</option>
+          @for (t of sortedTerms(); track t.id) {
+            <option [value]="t.id">{{ t.name }}</option>
+          }
+        </select>
+      </div>
+
+      <div class="field grow">
+        <label>Student *</label>
+        <input
+          type="text"
+          [(ngModel)]="query"
+          name="ledgerQuery"
+          placeholder="e.g. SP000005 / Tawanda / Ncube"
+          (keyup.enter)="getReport()"
+          (input)="selectedStudentId = ''"
+        />
+      </div>
+
+      <div class="actions">
+        <button type="button" class="btn-primary" (click)="getReport()" [disabled]="loading()">
+          {{ loading() ? 'Loading…' : 'Get Report' }}
+        </button>
+        @if (selectedStudentId || report()) {
+          <button type="button" class="btn-ghost" (click)="clearSelection()">Clear</button>
+        }
+      </div>
+    </div>
+  </section>
+
+  @if (matches().length) {
+    <section class="card">
+      <h3>Select student</h3>
+      <div class="match-list">
+        @for (m of matches(); track m.id) {
+          <button type="button" class="match-btn" (click)="pickStudent(m)">
+            <strong>{{ m.firstName }} {{ m.lastName }}</strong>
+            <span>{{ m.admissionNumber }} · {{ m.formName || '—' }} {{ m.className || '' }}</span>
+          </button>
+        }
+      </div>
+    </section>
+  }
+
+  @if (report(); as r) {
+    <section class="card report-card">
+      <div class="report-head">
+        <div>
+          <h3>{{ r.student.firstName }} {{ r.student.lastName }}</h3>
+          <p class="meta">
+            ID: <strong>{{ r.student.admissionNumber }}</strong>
+            · Class: <strong>{{ r.student.formName || '—' }} {{ r.student.className || '' }}</strong>
+            · Term: <strong>{{ r.term.name }}</strong> ({{ r.term.startDate }} → {{ r.term.endDate }})
+          </p>
+        </div>
+        <div class="summary-chips">
+          <span class="chip">Opening: {{ r.summary.openingBalance | number:'1.2-2' }}</span>
+          <span class="chip">Debits: {{ r.summary.totalDebits | number:'1.2-2' }}</span>
+          <span class="chip">Credits: {{ r.summary.totalCredits | number:'1.2-2' }}</span>
+          <span class="chip accent">Closing: {{ r.summary.closingBalance | number:'1.2-2' }}</span>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Type</th>
+              <th>Reference</th>
+              <th>Description</th>
+              <th class="num">Debit</th>
+              <th class="num">Credit</th>
+              <th class="num">Balance</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (line of r.lines; track line.reference + line.date + line.type + $index) {
+              <tr [class.row-opening]="line.type === 'opening'">
+                <td>{{ line.date }}</td>
+                <td><span class="type-pill" [attr.data-type]="line.type">{{ typeLabel(line.type) }}</span></td>
+                <td>{{ line.reference }}</td>
+                <td>{{ line.description }}</td>
+                <td class="num">{{ line.debit ? (line.debit | number:'1.2-2') : '—' }}</td>
+                <td class="num">{{ line.credit ? (line.credit | number:'1.2-2') : '—' }}</td>
+                <td class="num"><strong>{{ line.balance | number:'1.2-2' }}</strong></td>
+              </tr>
+            } @empty {
+              <tr>
+                <td colspan="7" class="empty">No transactions for this term.</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+  }
+</app-portal-layout>

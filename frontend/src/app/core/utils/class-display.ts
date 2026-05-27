@@ -18,3 +18,8 @@ export function classDisplayName(
   if (!classId) return '';
   return classes.find((c) => c.id === classId)?.name ?? '';
 }
+
+/** Label for promotion rules — class name only (e.g. 1A, 4B). */
+export function promotionClassLabel(c: ClassOptionLike): string {
+  return c.name?.trim() || '—';
+}

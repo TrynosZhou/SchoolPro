@@ -1,0 +1,87 @@
+<app-portal-layout portalTitle="Admin Portal" pageTitle="Outstanding Invoices" [navSections]="adminNav">
+  @if (toast(); as t) {
+    <div class="toast" [class.error]="t.type === 'error'">{{ t.msg }}</div>
+  }
+
+  <section class="card intro-card">
+    <div class="intro-head">
+      <div>
+        <h3>Outstanding Invoices Report</h3>
+        <p class="sub">Students with invoice balances greater than zero, sorted by balance (highest first) and grouped by class.</p>
+      </div>
+      <button type="button" class="btn-primary" (click)="loadReport()" [disabled]="loading()">
+        {{ loading() ? 'Refreshing…' : 'Refresh Report' }}
+      </button>
+    </div>
+
+    @if (report(); as r) {
+      <div class="summary-row">
+        <span class="summary-chip">Classes: <strong>{{ r.groups.length }}</strong></span>
+        <span class="summary-chip">Students: <strong>{{ r.studentCount }}</strong></span>
+        <span class="summary-chip">Invoices: <strong>{{ r.invoiceCount }}</strong></span>
+        <span class="summary-chip accent">Grand total: <strong>{{ r.grandTotal | number:'1.2-2' }}</strong></span>
+      </div>
+    }
+  </section>
+
+  @if (loading()) {
+    <section class="card loading-card">
+      <p>Generating report…</p>
+    </section>
+  } @else {
+    @if (report(); as r) {
+      @if (!r.groups.length) {
+        <section class="card empty-card">
+          <p>No outstanding invoice balances found.</p>
+        </section>
+      } @else {
+        @for (group of r.groups; track group.classId) {
+          <section class="card group-card">
+            <div class="group-head">
+              <h3>{{ classHeading(group) }}</h3>
+              <span class="group-total">{{ group.classTotal | number:'1.2-2' }} outstanding</span>
+            </div>
+
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Student ID</th>
+                    <th>Student</th>
+                    <th>Invoice #</th>
+                    <th>Description</th>
+                    <th>Due</th>
+                    <th class="num">Invoiced</th>
+                    <th class="num">Paid</th>
+                    <th class="num">Balance</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (student of group.students; track student.id) {
+                    @for (inv of student.invoices; track inv.invoiceId; let first = $first) {
+                      <tr>
+                        @if (first) {
+                          <td [attr.rowspan]="student.invoices.length">{{ student.admissionNumber }}</td>
+                          <td [attr.rowspan]="student.invoices.length">
+                            <strong>{{ student.firstName }} {{ student.lastName }}</strong>
+                            <div class="student-total">{{ student.invoiceBalance | number:'1.2-2' }} total</div>
+                          </td>
+                        }
+                        <td>{{ inv.invoiceNumber }}</td>
+                        <td>{{ inv.description }}</td>
+                        <td>{{ inv.dueDate }}</td>
+                        <td class="num">{{ inv.totalAmount | number:'1.2-2' }}</td>
+                        <td class="num">{{ inv.amountPaid | number:'1.2-2' }}</td>
+                        <td class="num"><strong>{{ inv.balance | number:'1.2-2' }}</strong></td>
+                      </tr>
+                    }
+                  }
+                </tbody>
+              </table>
+            </div>
+          </section>
+        }
+      }
+    }
+  }
+</app-portal-layout>

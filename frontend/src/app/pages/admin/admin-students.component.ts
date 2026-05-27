@@ -7,14 +7,33 @@ import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
 import { ApiService } from '../../core/services/api.service';
 import { Student } from '../../core/models';
 
+interface FormOption {
+  id: string;
+  name: string;
+  level: number;
+}
+
+type StudentResidenceType = 'day_scholar' | 'boarder';
+
 type StudentForm = {
   firstName: string;
   lastName: string;
   dateOfBirth: string;
   gender: string;
+  studentType: StudentResidenceType;
   address: string;
   previousSchool: string;
+  formId: string;
 };
+
+interface RegisterStudentResponse extends Student {
+  registrationInvoice?: {
+    id: string;
+    invoiceNumber: string;
+    totalAmount: number;
+  };
+  registrationInvoiceError?: string;
+}
 
 @Component({
   selector: 'app-admin-students',
@@ -27,8 +46,10 @@ export class AdminStudentsComponent implements OnInit {
   private api = inject(ApiService);
 
   students = signal<Student[]>([]);
+  forms = signal<FormOption[]>([]);
   nextStudentId = signal('');
   lastCreatedId = signal('');
+  lastInvoiceInfo = signal('');
   saving = signal(false);
   search = '';
   showForm = false;
@@ -46,6 +67,10 @@ export class AdminStudentsComponent implements OnInit {
 
   ngOnInit() {
     this.load();
+    this.api.get<FormOption[]>('/admin/forms').subscribe({
+      next: (f) => this.forms.set(f.sort((a, b) => a.level - b.level)),
+      error: () => this.showToast('error', 'Could not load forms'),
+    });
   }
 
   private emptyForm(): StudentForm {
@@ -54,15 +79,27 @@ export class AdminStudentsComponent implements OnInit {
       lastName: '',
       dateOfBirth: '',
       gender: '',
+      studentType: 'day_scholar',
       address: '',
       previousSchool: '',
+      formId: '',
     };
+  }
+
+  studentTypeLabel(type?: string): string {
+    if (type === 'boarder') return 'Boarder';
+    return 'Day Scholar';
+  }
+
+  formLabel(student: Student): string {
+    return student.form?.name || student.schoolClass?.form?.name || '—';
   }
 
   toggleForm() {
     this.showForm = !this.showForm;
     this.editingStudent.set(null);
     this.lastCreatedId.set('');
+    this.lastInvoiceInfo.set('');
     if (this.showForm) {
       this.resetForm();
       this.api.get<{ studentId: string }>('/students/next-student-id').subscribe({
@@ -86,8 +123,10 @@ export class AdminStudentsComponent implements OnInit {
       lastName: student.lastName,
       dateOfBirth: student.dateOfBirth?.toString().slice(0, 10) || '',
       gender: student.gender || '',
+      studentType: student.studentType === 'boarder' ? 'boarder' : 'day_scholar',
       address: student.address || '',
       previousSchool: student.previousSchool || '',
+      formId: student.formId || student.form?.id || '',
     };
     const g = student.guardians?.[0];
     this.guardian = {
@@ -134,18 +173,35 @@ export class AdminStudentsComponent implements OnInit {
     if (!this.validateForm()) return;
     this.saving.set(true);
     const body = this.buildPayload();
-    this.api.post<Student>('/students', body).subscribe({
+    this.api.post<RegisterStudentResponse>('/students', body).subscribe({
       next: (student) => {
         this.saving.set(false);
         this.showForm = false;
         this.lastCreatedId.set(student.admissionNumber);
-        this.showToast('success', `Student ${student.admissionNumber} registered.`);
+        if (student.registrationInvoice) {
+          const amt = student.registrationInvoice.totalAmount;
+          this.lastInvoiceInfo.set(
+            `Invoice ${student.registrationInvoice.invoiceNumber} created ($${amt.toFixed(2)}).`,
+          );
+          this.showToast(
+            'success',
+            `${student.admissionNumber} registered. Registration invoice ${student.registrationInvoice.invoiceNumber} created.`,
+          );
+        } else if (student.registrationInvoiceError) {
+          this.lastInvoiceInfo.set('');
+          this.showToast(
+            'error',
+            `Student registered but invoice failed: ${student.registrationInvoiceError}`,
+          );
+        } else {
+          this.showToast('success', `Student ${student.admissionNumber} registered.`);
+        }
         this.load();
         this.resetForm();
       },
-      error: () => {
+      error: (err) => {
         this.saving.set(false);
-        this.showToast('error', 'Registration failed. Check required fields.');
+        this.showToast('error', err.error?.message || 'Registration failed. Check required fields.');
       },
     });
   }
@@ -162,9 +218,9 @@ export class AdminStudentsComponent implements OnInit {
         this.closeEdit();
         this.load();
       },
-      error: () => {
+      error: (err) => {
         this.saving.set(false);
-        this.showToast('error', 'Update failed. Try again.');
+        this.showToast('error', err.error?.message || 'Update failed. Try again.');
       },
     });
   }
@@ -172,6 +228,7 @@ export class AdminStudentsComponent implements OnInit {
   private buildPayload() {
     return {
       ...this.form,
+      formId: this.form.formId,
       gender: this.form.gender,
       dateOfBirth: this.form.dateOfBirth || undefined,
       guardians: this.guardian.fullName
@@ -191,6 +248,14 @@ export class AdminStudentsComponent implements OnInit {
       this.showToast('error', 'Gender is required for every student record.');
       return false;
     }
+    if (!this.form.studentType) {
+      this.showToast('error', 'Select Day Scholar or Boarder.');
+      return false;
+    }
+    if (!this.form.formId) {
+      this.showToast('error', 'Form is required (e.g. Form 1).');
+      return false;
+    }
     return true;
   }
 
@@ -206,6 +271,6 @@ export class AdminStudentsComponent implements OnInit {
 
   private showToast(type: 'success' | 'error', msg: string) {
     this.toast.set({ type, msg });
-    setTimeout(() => this.toast.set(null), 4000);
+    setTimeout(() => this.toast.set(null), 5000);
   }
 }

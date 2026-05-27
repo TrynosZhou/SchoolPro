@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { Router, Response } from 'express';
 import { AppDataSource } from '../config/data-source';
-import { Timetable, LearningSchedule, WeeklyAssessment, Message } from '../entities';
+import { Timetable, LearningSchedule, WeeklyAssessment, Message, User } from '../entities';
 import { UserRole } from '../entities/enums';
 import { authenticate, authorize, AuthRequest } from '../middleware/auth';
 import { relations } from '../utils/typeorm-helpers';
@@ -73,6 +73,45 @@ router.post('/weekly-assessments/bulk', authorize(UserRole.TEACHER, UserRole.ADM
   res.json(saved);
 });
 
+router.get('/messages/recipients', authorize(UserRole.TEACHER, UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (req: AuthRequest, res: Response) => {
+  const userRepo = AppDataSource.getRepository(User);
+  const users = await userRepo.find({
+    where: { isActive: true },
+    order: { lastName: 'ASC', firstName: 'ASC' },
+  });
+  res.json(
+    users
+      .filter((u) => u.id !== req.user!.userId)
+      .map((u) => ({
+        id: u.id,
+        firstName: u.firstName,
+        lastName: u.lastName,
+        email: u.email,
+        role: u.role,
+      })),
+  );
+});
+
+router.get('/messages/inbox', authorize(UserRole.TEACHER, UserRole.PARENT, UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (req: AuthRequest, res: Response) => {
+  const repo = AppDataSource.getRepository(Message);
+  const messages = await repo.find({
+    where: { recipientId: req.user!.userId },
+    relations: relations('sender', 'recipient', 'student'),
+    order: { sentAt: 'DESC' },
+  });
+  res.json(messages);
+});
+
+router.get('/messages/sent', authorize(UserRole.TEACHER, UserRole.PARENT, UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (req: AuthRequest, res: Response) => {
+  const repo = AppDataSource.getRepository(Message);
+  const messages = await repo.find({
+    where: { senderId: req.user!.userId },
+    relations: relations('sender', 'recipient', 'student'),
+    order: { sentAt: 'DESC' },
+  });
+  res.json(messages);
+});
+
 router.get('/messages', async (req: AuthRequest, res: Response) => {
   const repo = AppDataSource.getRepository(Message);
   const messages = await repo.find({
@@ -83,10 +122,56 @@ router.get('/messages', async (req: AuthRequest, res: Response) => {
   res.json(messages);
 });
 
-router.post('/messages', authorize(UserRole.TEACHER, UserRole.PARENT, UserRole.ADMIN), async (req: AuthRequest, res: Response) => {
+router.post('/messages', authorize(UserRole.TEACHER, UserRole.PARENT, UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (req: AuthRequest, res: Response) => {
+  const { recipientId, subject, body, studentId } = req.body || {};
+  if (!recipientId || !String(subject || '').trim() || !String(body || '').trim()) {
+    return res.status(400).json({ message: 'recipientId, subject, and body are required' });
+  }
+  const userRepo = AppDataSource.getRepository(User);
+  const recipient = await userRepo.findOne({ where: { id: recipientId, isActive: true } });
+  if (!recipient) return res.status(404).json({ message: 'Recipient not found' });
+
   const repo = AppDataSource.getRepository(Message);
-  const msg = await repo.save(repo.create({ ...req.body, senderId: req.user!.userId }));
-  res.status(201).json(msg);
+  const msg = await repo.save(
+    repo.create({
+      recipientId,
+      subject: String(subject).trim(),
+      body: String(body).trim(),
+      studentId: studentId || undefined,
+      senderId: req.user!.userId,
+      isRead: false,
+    }),
+  );
+  const full = await repo.findOne({
+    where: { id: msg.id },
+    relations: relations('sender', 'recipient', 'student'),
+  });
+  res.status(201).json(full);
+});
+
+router.patch('/messages/:id/read', authorize(UserRole.TEACHER, UserRole.PARENT, UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (req: AuthRequest, res: Response) => {
+  const repo = AppDataSource.getRepository(Message);
+  const msg = await repo.findOne({
+    where: { id: req.params.id, recipientId: req.user!.userId },
+    relations: relations('sender', 'recipient', 'student'),
+  });
+  if (!msg) return res.status(404).json({ message: 'Message not found' });
+  msg.isRead = true;
+  await repo.save(msg);
+  res.json(msg);
+});
+
+router.delete('/messages/:id', authorize(UserRole.TEACHER, UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (req: AuthRequest, res: Response) => {
+  const repo = AppDataSource.getRepository(Message);
+  const msg = await repo.findOne({
+    where: { id: req.params.id },
+  });
+  if (!msg) return res.status(404).json({ message: 'Message not found' });
+  if (msg.senderId !== req.user!.userId && msg.recipientId !== req.user!.userId) {
+    return res.status(403).json({ message: 'Not allowed to delete this message' });
+  }
+  await repo.remove(msg);
+  res.json({ ok: true });
 });
 
 export default router;

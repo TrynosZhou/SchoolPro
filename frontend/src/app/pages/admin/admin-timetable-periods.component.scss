@@ -1,0 +1,96 @@
+.tt-page {
+  .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 1rem 1.1rem; margin-bottom: 1rem; }
+  h3, h4 { margin: 0 0 .35rem; color: #0f172a; }
+  .sub { margin: 0 0 .65rem; color: #475569; font-size: .9rem; }
+
+  .links { display: flex; flex-wrap: wrap; gap: .5rem; }
+  .link-btn { color: #2563eb; font-size: .88rem; font-weight: 600; text-decoration: none; }
+  .link-btn:hover { text-decoration: underline; }
+
+  .form-row, .form-grid { display: flex; flex-wrap: wrap; gap: .75rem; align-items: flex-end; margin-bottom: .75rem; }
+  .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+  .field { display: flex; flex-direction: column; gap: .35rem; min-width: 140px;
+    &.grow { flex: 1; min-width: 200px; }
+    label { font-size: .8rem; font-weight: 700; color: #334155; }
+    select, input { border: 1px solid #cbd5e1; border-radius: 10px; padding: .52rem .72rem; font-size: .9rem; }
+  }
+
+  .head-row { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: .5rem; margin-bottom: .65rem; }
+  .actions { display: flex; gap: .45rem; }
+
+  .btn-primary { border: 0; border-radius: 10px; padding: .55rem .9rem; background: #2563eb; color: #fff; font-weight: 600; cursor: pointer; }
+  .btn-outline { border: 1px solid #cbd5e1; border-radius: 10px; padding: .52rem .75rem; background: #fff; color: #334155; cursor: pointer; }
+  .btn-danger { border: 0; border-radius: 8px; padding: .3rem .55rem; background: #fee2e2; color: #991b1b; font-size: .8rem; cursor: pointer; }
+
+  .toast { margin-bottom: 1rem; border-radius: 10px; padding: .6rem .8rem; background: #dcfce7; border: 1px solid #86efac; color: #166534; font-size: .88rem; }
+  .toast.error { background: #fee2e2; border-color: #fecaca; color: #991b1b; }
+  .warn-card { border-color: #fcd34d; background: #fffbeb; }
+
+  .break-status {
+    display: inline-block;
+    margin: .5rem 0 .75rem;
+    padding: .35rem .65rem;
+    border-radius: 999px;
+    font-size: .82rem;
+    background: #fffbeb;
+    border: 1px solid #fcd34d;
+    color: #92400e;
+    &.valid { background: #f0fdf4; border-color: #86efac; color: #166534; }
+    &.invalid { background: #fffbeb; border-color: #fcd34d; color: #92400e; }
+  }
+
+  .break-card { border-color: #fde68a; background: linear-gradient(180deg, #fffbeb 0%, #fff 40%); }
+  .hint, .limit-note, .validation-note { margin: .35rem 0 0; font-size: .82rem; color: #64748b; }
+  .validation-note { color: #b45309; font-weight: 600; margin-top: .65rem; }
+
+  .btn-break {
+    border: 0;
+    border-radius: 10px;
+    padding: .55rem .9rem;
+    background: #d97706;
+    color: #fff;
+    font-weight: 600;
+    cursor: pointer;
+    &:disabled { opacity: .5; cursor: not-allowed; }
+  }
+
+  .type-pill {
+    display: inline-block;
+    border-radius: 999px;
+    padding: .12rem .5rem;
+    font-size: .72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    background: #dbeafe;
+    color: #1e40af;
+    &.break { background: #ffedd5; color: #c2410c; }
+  }
+  tr.break-row { background: #fffbeb; }
+  .btn-danger:disabled { opacity: .45; cursor: not-allowed; }
+
+  .time-input {
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    padding: .35rem .5rem;
+    font-size: .86rem;
+    min-width: 7rem;
+    background: #fff;
+    &:focus { outline: 2px solid rgba(37, 99, 235, .25); border-color: #2563eb; }
+  }
+
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; border-bottom: 1px solid #e2e8f0; padding: .5rem .45rem; font-size: .86rem; }
+  th { color: #475569; font-weight: 700; font-size: .76rem; }
+  .empty { text-align: center; color: #64748b; padding: .75rem; }
+
+  .day-block { margin-bottom: 1.25rem; padding-bottom: 1rem; border-bottom: 1px dashed #e2e8f0;
+    &:last-child { border-bottom: 0; margin-bottom: 0; padding-bottom: 0; }
+  }
+  .slot-list { display: grid; gap: .45rem; }
+  .slot { border: 1px solid #e2e8f0; border-radius: 10px; padding: .55rem .7rem; background: #f8fafc;
+    .time { display: block; font-size: .78rem; color: #64748b; }
+    strong { display: block; color: #0f172a; margin: .15rem 0; }
+    .meta { font-size: .82rem; color: #475569; }
+  }
+}

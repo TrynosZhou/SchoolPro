@@ -1,0 +1,173 @@
+import { Component, computed, inject, OnInit, signal } from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { DecimalPipe } from '@angular/common';
+import { RouterLink } from '@angular/router';
+import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
+import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
+import { ApiService } from '../../core/services/api.service';
+
+export interface SchoolFeeRow {
+  id: string;
+  code: string;
+  name: string;
+  description?: string;
+  defaultAmount: number;
+  icon?: string;
+  isActive: boolean;
+  sortOrder: number;
+}
+
+@Component({
+  selector: 'app-admin-manage-fees',
+  standalone: true,
+  imports: [PortalLayoutComponent, FormsModule, DecimalPipe, RouterLink],
+  templateUrl: './admin-manage-fees.component.html',
+  styleUrl: './admin-manage-fees.component.scss',
+})
+export class AdminManageFeesComponent implements OnInit {
+  private api = inject(ApiService);
+
+  readonly adminNav = ADMIN_NAV_SECTIONS;
+  fees = signal<SchoolFeeRow[]>([]);
+  loading = signal(true);
+  submitting = signal(false);
+  toast = signal<{ type: 'success' | 'error'; msg: string } | null>(null);
+  editingId = signal<string | null>(null);
+
+  newFee = {
+    code: '',
+    name: '',
+    description: '',
+    defaultAmount: 0,
+    icon: '📋',
+    isActive: true,
+    sortOrder: 0,
+  };
+
+  editFee = {
+    code: '',
+    name: '',
+    description: '',
+    defaultAmount: 0,
+    icon: '',
+    isActive: true,
+    sortOrder: 0,
+  };
+
+  activeCount = computed(() => this.fees().filter((f) => f.isActive).length);
+
+  ngOnInit() {
+    this.loadFees();
+  }
+
+  loadFees() {
+    this.loading.set(true);
+    this.api.get<SchoolFeeRow[]>('/billing/fees').subscribe({
+      next: (list) => {
+        this.fees.set(list);
+        this.loading.set(false);
+      },
+      error: () => {
+        this.loading.set(false);
+        this.showToast('error', 'Failed to load fees');
+      },
+    });
+  }
+
+  addFee() {
+    if (!this.newFee.name.trim()) {
+      this.showToast('error', 'Enter a fee name');
+      return;
+    }
+    this.submitting.set(true);
+    this.api
+      .post<SchoolFeeRow>('/billing/fees', {
+        ...this.newFee,
+        name: this.newFee.name.trim(),
+        code: this.newFee.code.trim() || undefined,
+      })
+      .subscribe({
+        next: () => {
+          this.newFee = {
+            code: '',
+            name: '',
+            description: '',
+            defaultAmount: 0,
+            icon: '📋',
+            isActive: true,
+            sortOrder: 0,
+          };
+          this.submitting.set(false);
+          this.showToast('success', 'Fee added');
+          this.loadFees();
+        },
+        error: (err) => {
+          this.submitting.set(false);
+          this.showToast('error', err.error?.message || 'Failed to add fee');
+        },
+      });
+  }
+
+  startEdit(fee: SchoolFeeRow) {
+    this.editingId.set(fee.id);
+    this.editFee = {
+      code: fee.code,
+      name: fee.name,
+      description: fee.description || '',
+      defaultAmount: Number(fee.defaultAmount),
+      icon: fee.icon || '',
+      isActive: fee.isActive,
+      sortOrder: fee.sortOrder,
+    };
+  }
+
+  cancelEdit() {
+    this.editingId.set(null);
+  }
+
+  saveEdit() {
+    const id = this.editingId();
+    if (!id || !this.editFee.name.trim()) {
+      this.showToast('error', 'Enter a fee name');
+      return;
+    }
+    this.submitting.set(true);
+    this.api.patch<SchoolFeeRow>(`/billing/fees/${id}`, this.editFee).subscribe({
+      next: () => {
+        this.submitting.set(false);
+        this.editingId.set(null);
+        this.showToast('success', 'Fee updated');
+        this.loadFees();
+      },
+      error: (err) => {
+        this.submitting.set(false);
+        this.showToast('error', err.error?.message || 'Failed to update fee');
+      },
+    });
+  }
+
+  deleteFee(fee: SchoolFeeRow) {
+    if (!confirm(`Delete fee "${fee.name}"? This cannot be undone.`)) return;
+    this.api.delete(`/billing/fees/${fee.id}`).subscribe({
+      next: () => {
+        this.showToast('success', 'Fee deleted');
+        this.loadFees();
+      },
+      error: (err) => {
+        this.showToast('error', err.error?.message || 'Cannot delete this fee');
+      },
+    });
+  }
+
+  toggleActive(fee: SchoolFeeRow) {
+    this.api.patch(`/billing/fees/${fee.id}`, { isActive: !fee.isActive }).subscribe({
+      next: () => this.loadFees(),
+      error: () => this.showToast('error', 'Failed to update fee status'),
+    });
+  }
+
+  private showToast(type: 'success' | 'error', msg: string) {
+    this.toast.set({ type, msg });
+    setTimeout(() => this.toast.set(null), 4000);
+  }
+}

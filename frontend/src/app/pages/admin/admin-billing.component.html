@@ -62,7 +62,7 @@
         <p class="subtitle">Accept cash, bank, EcoCash, OneMoney, or InnBucks — receipt is generated instantly.</p>
 
         <div class="fee-chips">
-          @for (preset of feePresets; track preset.type) {
+          @for (preset of feePresets(); track preset.type) {
             <button type="button" class="chip" [class.active]="payment.feeType === preset.type"
               (click)="applyFeePreset(preset)">
               {{ preset.icon }} {{ preset.label }}
@@ -163,7 +163,7 @@
       <p class="subtitle">Bill a student for tuition, levies, uniform, or other fees.</p>
       <form class="pay-form max-width" (ngSubmit)="createInvoice()">
         <div class="fee-chips">
-          @for (preset of feePresets; track preset.type) {
+          @for (preset of feePresets(); track preset.type) {
             <button type="button" class="chip"
               [class.active]="newInvoice.feeType === preset.type" (click)="applyFeePreset(preset)">
               {{ preset.icon }} {{ preset.label }}
@@ -244,10 +244,12 @@
                 <td class="num text-green">{{ '$' + (inv.amountPaid | number:'1.2-2') }}</td>
                 <td>{{ inv.dueDate }}</td>
                 <td><span class="status" [attr.data-s]="inv.status">{{ inv.status }}</span></td>
-                <td>
+                <td class="row-actions">
+                  <button type="button" class="btn-outline btn-sm" (click)="downloadInvoice(inv.id, inv.invoiceNumber)">
+                    PDF
+                  </button>
                   @if (inv.status !== 'paid') {
-                    <button type="button" class="btn-ghost btn-sm"
-                      (click)="payment.studentId = inv.student?.firstName ? '' : ''; payDebtorFromInvoice(inv)">Pay</button>
+                    <button type="button" class="btn-ghost btn-sm" (click)="payDebtorFromInvoice(inv)">Pay</button>
                   }
                 </td>
               </tr>

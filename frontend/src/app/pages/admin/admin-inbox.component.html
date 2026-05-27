@@ -1,0 +1,94 @@
+<app-portal-layout portalTitle="Admin Portal" pageTitle="Inbox" [navSections]="adminNav">
+  <div class="comm-page">
+    <section class="card intro">
+      <h3>Inbox</h3>
+      <p class="sub">View received messages and your sent items.</p>
+      <div class="intro-row">
+        <a routerLink="/admin/communication/send" class="link-btn">Send Message →</a>
+        @if (unreadCount() > 0) {
+          <span class="badge-unread">{{ unreadCount() }} unread</span>
+        }
+      </div>
+    </section>
+
+    <section class="card inbox-layout">
+      <div class="inbox-list-pane">
+        <div class="tabs">
+          <button type="button" [class.active]="tab === 'inbox'" (click)="tab = 'inbox'; selected.set(null)">
+            Inbox ({{ inbox().length }})
+          </button>
+          <button type="button" [class.active]="tab === 'sent'" (click)="tab = 'sent'; selected.set(null)">
+            Sent ({{ sent().length }})
+          </button>
+        </div>
+
+        @if (tab === 'inbox') {
+          <label class="toggle">
+            <input type="checkbox" [(ngModel)]="filterUnreadOnly" name="unreadOnly" />
+            Unread only
+          </label>
+        }
+
+        @if (loading()) {
+          <p class="empty">Loading messages…</p>
+        } @else {
+          <div class="message-list">
+            @for (m of visibleMessages(); track m.id) {
+              <button
+                type="button"
+                class="message-item"
+                [class.unread]="!m.isRead && tab === 'inbox'"
+                [class.active]="selected()?.id === m.id"
+                (click)="openMessage(m)"
+              >
+                <div class="message-top">
+                  <strong>{{ m.subject }}</strong>
+                  <span class="date">{{ m.sentAt | date:'short' }}</span>
+                </div>
+                <span class="preview">
+                  @if (tab === 'inbox') {
+                    From {{ personName(m.sender) }}
+                  } @else {
+                    To {{ personName(m.recipient) }}
+                  }
+                </span>
+              </button>
+            } @empty {
+              <p class="empty">No messages in this folder.</p>
+            }
+          </div>
+        }
+      </div>
+
+      <div class="inbox-detail-pane">
+        @if (selected(); as msg) {
+          <div class="detail-head">
+            <div>
+              <h4>{{ msg.subject }}</h4>
+              <p class="meta">
+                @if (tab === 'inbox') {
+                  From <strong>{{ personName(msg.sender) }}</strong>
+                } @else {
+                  To <strong>{{ personName(msg.recipient) }}</strong>
+                }
+                · {{ msg.sentAt | date:'medium' }}
+              </p>
+              @if (msg.student) {
+                <p class="meta student-ref">
+                  Re: {{ msg.student.firstName }} {{ msg.student.lastName }} ({{ msg.student.admissionNumber }})
+                </p>
+              }
+            </div>
+            <button type="button" class="btn-outline" (click)="closeDetail()">Close</button>
+          </div>
+          <div class="detail-body">{{ msg.body }}</div>
+        } @else {
+          <div class="detail-empty">
+            <span class="empty-icon">📬</span>
+            <p>Select a message to read</p>
+          </div>
+        }
+      </div>
+    </section>
+  </div>
+</app-portal-layout>

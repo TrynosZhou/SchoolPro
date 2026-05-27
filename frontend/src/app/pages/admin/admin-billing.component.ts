@@ -33,6 +33,24 @@ interface InvoiceRow {
   student?: { id?: string; firstName: string; lastName: string; admissionNumber: string; schoolClass?: { name: string } };
 }
 
+interface SchoolFeeRow {
+  id: string;
+  code: string;
+  name: string;
+  description?: string;
+  defaultAmount: number;
+  icon?: string;
+  isActive: boolean;
+  sortOrder: number;
+}
+
+interface FeePreset {
+  type: string;
+  label: string;
+  icon: string;
+  defaultAmount: number;
+}
+
 interface PaymentRow {
   id: string;
   paymentReference: string;
@@ -150,14 +168,18 @@ export class AdminBillingComponent implements OnInit {
     lines: [{ description: 'Tuition', quantity: 1, unitPrice: 0, amount: 0 }],
   };
 
-  feePresets = [
-    { type: 'tuition', label: 'Tuition Fees', icon: '📚' },
-    { type: 'bus_levy', label: 'Bus Levy', icon: '🚌' },
-    { type: 'uniform', label: 'Uniform', icon: '👔' },
-    { type: 'sports', label: 'Sports Levy', icon: '⚽' },
-    { type: 'exam', label: 'Exam Fees', icon: '📝' },
-    { type: 'other', label: 'Other Levy', icon: '📋' },
-  ];
+  fees = signal<SchoolFeeRow[]>([]);
+
+  feePresets = computed<FeePreset[]>(() =>
+    this.fees()
+      .filter((f) => f.isActive)
+      .map((f) => ({
+        type: f.code,
+        label: f.name,
+        icon: f.icon || '📋',
+        defaultAmount: Number(f.defaultAmount) || 0,
+      })),
+  );
 
   ngOnInit() {
     this.loadData();
@@ -176,6 +198,7 @@ export class AdminBillingComponent implements OnInit {
       invoices: this.api.get<InvoiceRow[]>('/billing/invoices'),
       payments: this.api.get<PaymentRow[]>('/billing/payments', { limit: '40' }),
       years: this.api.get<{ terms: Term[] }[]>('/admin/school-years'),
+      fees: this.api.get<SchoolFeeRow[]>('/billing/fees', { active: 'true' }),
     }).subscribe({
       next: (data) => {
         this.summary.set(data.summary);
@@ -183,10 +206,17 @@ export class AdminBillingComponent implements OnInit {
         this.debtors.set(data.debtors);
         this.invoices.set(data.invoices);
         this.payments.set(data.payments);
+        this.fees.set(data.fees);
         const terms = data.years.flatMap((y) => y.terms || []);
         this.terms.set(terms);
         const current = terms.find((t) => t.isCurrent);
         if (current) this.newInvoice.termId = current.id;
+        const firstFee = data.fees[0];
+        if (firstFee) {
+          this.payment.feeType = firstFee.code;
+          this.payment.label = firstFee.name;
+          this.newInvoice.feeType = firstFee.code;
+        }
         this.loading.set(false);
       },
       error: () => {
@@ -220,9 +250,13 @@ export class AdminBillingComponent implements OnInit {
     this.payment.feeType = inv.feeType;
   }
 
-  applyFeePreset(preset: { type: string; label: string }) {
+  applyFeePreset(preset: FeePreset) {
     this.payment.feeType = preset.type;
     this.payment.label = preset.label;
+    if (preset.defaultAmount > 0) {
+      this.payment.amount = preset.defaultAmount;
+      this.newInvoice.totalAmount = preset.defaultAmount;
+    }
     this.newInvoice.feeType = preset.type;
     this.newInvoice.description = preset.label;
   }
@@ -357,9 +391,9 @@ export class AdminBillingComponent implements OnInit {
     this.setTab('payment');
   }
 
-  downloadReceipt(receiptId: string) {
+  private downloadBillingPdf(path: string, filename: string) {
     const token = this.auth.getToken();
-    fetch(`${environment.apiUrl}/billing/receipts/${receiptId}/pdf`, {
+    fetch(`${environment.apiUrl}${path}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((r) => {
@@ -370,11 +404,22 @@ export class AdminBillingComponent implements OnInit {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `receipt-${receiptId}.pdf`;
+        a.download = filename;
         a.click();
         URL.revokeObjectURL(url);
       })
-      .catch(() => this.showToast('error', 'Could not download receipt'));
+      .catch(() => this.showToast('error', 'Could not download PDF'));
+  }
+
+  downloadReceipt(receiptId: string) {
+    this.downloadBillingPdf(`/billing/receipts/${receiptId}/pdf`, `receipt-${receiptId}.pdf`);
+  }
+
+  downloadInvoice(invoiceId: string, invoiceNumber?: string) {
+    this.downloadBillingPdf(
+      `/billing/invoices/${invoiceId}/pdf`,
+      `invoice-${invoiceNumber || invoiceId}.pdf`,
+    );
   }
 
   formatMethod(m: string): string {
@@ -385,7 +430,7 @@ export class AdminBillingComponent implements OnInit {
   }
 
   formatFee(f: string): string {
-    return this.feePresets.find((p) => p.type === f)?.label || f;
+    return this.feePresets().find((p) => p.type === f)?.label || f;
   }
 
   private showToast(type: 'success' | 'error', msg: string) {

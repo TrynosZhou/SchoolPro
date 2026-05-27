@@ -24,9 +24,12 @@ export interface Student {
   lastName: string;
   dateOfBirth?: string;
   gender?: string;
+  studentType?: 'day_scholar' | 'boarder';
   classId?: string;
+  formId?: string;
   enrollmentDate?: string;
   schoolClass?: { name: string; form?: { name: string } };
+  form?: { id: string; name: string; level: number };
   guardians?: Guardian[];
   address?: string;
   previousSchool?: string;

@@ -1,0 +1,161 @@
+<app-portal-layout portalTitle="Admin Portal" pageTitle="Results Analysis" [navSections]="adminNav">
+
+  @if (toast(); as t) {
+    <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>
+  }
+
+  <header class="admin-hero">
+    <div class="admin-hero-text">
+      <p class="eyebrow">Academics · Performance</p>
+      <h1 class="admin-hero-title">Results Analysis</h1>
+      <p class="admin-hero-sub">
+        Analyse class exam results: overall pass rate (students with five or more passed subjects) and top and bottom performers.
+      </p>
+    </div>
+    <div class="admin-hero-actions">
+      <a routerLink="/admin/exams" class="hero-link">Enter exam marks →</a>
+      <a routerLink="/admin/mark-sheet" class="hero-link">Mark sheet →</a>
+    </div>
+  </header>
+
+  <section class="filters-card card">
+    <div class="filters-row">
+      <label class="field">
+        <span>Term</span>
+        <select [(ngModel)]="filters.termId" name="term" (ngModelChange)="onFilterChange()">
+          <option value="">— Select —</option>
+          @for (t of terms(); track t.id) {
+            <option [value]="t.id">{{ t.name }}</option>
+          }
+        </select>
+      </label>
+      <label class="field">
+        <span>Exam type</span>
+        <select [(ngModel)]="filters.examTypeId" name="examType" (ngModelChange)="onFilterChange()">
+          <option value="">— Select —</option>
+          @for (t of examTypes(); track t.id) {
+            <option [value]="t.id">{{ t.name }}</option>
+          }
+        </select>
+      </label>
+      <label class="field">
+        <span>Class</span>
+        <select [(ngModel)]="filters.classId" name="class" (ngModelChange)="onFilterChange()">
+          <option value="">— Select —</option>
+          @for (c of classes(); track c.id) {
+            <option [value]="c.id">{{ c.name }}</option>
+          }
+        </select>
+      </label>
+      <button
+        type="button"
+        class="btn-analyze"
+        (click)="runAnalysis()"
+        [disabled]="loading() || !filtersReady()"
+      >
+        @if (loading()) {
+          Analysing…
+        } @else {
+          Analysis
+        }
+      </button>
+    </div>
+  </section>
+
+  @if (hasAnalyzed() && analysis(); as data) {
+    <section class="card session-card">
+      <p class="session-label">{{ sessionLabel() }}</p>
+      <p class="criteria-note">
+        A subject is <strong>passed</strong> when the mark is greater than 49.
+        Class pass rate counts students with <strong>{{ data.minSubjectsForPass }} or more</strong> passed subjects.
+      </p>
+    </section>
+
+    <section class="stats-grid">
+      <article class="stat-card highlight">
+        <span class="stat-label">Class overall pass rate</span>
+        <span class="stat-value">{{ data.summary.overallPassRatePercent | number:'1.1-1' }}%</span>
+        <span class="stat-detail">
+          {{ data.summary.studentsPassedOverall }} of {{ data.summary.totalStudents }} students
+          ({{ data.minSubjectsForPass }}+ subjects passed)
+        </span>
+      </article>
+      <article class="stat-card">
+        <span class="stat-label">Students in class</span>
+        <span class="stat-value">{{ data.summary.totalStudents }}</span>
+      </article>
+      <article class="stat-card">
+        <span class="stat-label">With exam marks</span>
+        <span class="stat-value">{{ data.summary.studentsWithExamMarks }}</span>
+      </article>
+      <article class="stat-card">
+        <span class="stat-label">Met pass criteria</span>
+        <span class="stat-value">{{ data.summary.studentsPassedOverall }}</span>
+      </article>
+    </section>
+
+    <div class="performers-grid">
+      <section class="card performers-card top">
+        <h2>Top {{ topCount }} performers</h2>
+        <p class="table-hint">Ranked by average % (then subjects passed)</p>
+        @if (data.topPerformers.length) {
+          <table class="performers-table">
+            <thead>
+              <tr>
+                <th>Rank</th>
+                <th>Student ID</th>
+                <th>Name</th>
+                <th>Subj passed</th>
+                <th>Average %</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (s of data.topPerformers; track s.studentId) {
+                <tr>
+                  <td><span class="rank-badge top">{{ s.rank }}</span></td>
+                  <td><code>{{ s.admissionNumber }}</code></td>
+                  <td>{{ s.lastName }}, {{ s.firstName }}</td>
+                  <td>{{ s.subjectsPassed }} / {{ s.subjectCount }}</td>
+                  <td class="avg">{{ s.averagePercent | number:'1.2-2' }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        } @else {
+          <p class="empty">No ranked students with marks for this selection.</p>
+        }
+      </section>
+
+      <section class="card performers-card bottom">
+        <h2>Bottom {{ topCount }} performers</h2>
+        <p class="table-hint">Lowest average % among students with marks</p>
+        @if (data.bottomPerformers.length) {
+          <table class="performers-table">
+            <thead>
+              <tr>
+                <th>Rank</th>
+                <th>Student ID</th>
+                <th>Name</th>
+                <th>Subj passed</th>
+                <th>Average %</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (s of data.bottomPerformers; track s.studentId) {
+                <tr>
+                  <td><span class="rank-badge bottom">{{ s.rank }}</span></td>
+                  <td><code>{{ s.admissionNumber }}</code></td>
+                  <td>{{ s.lastName }}, {{ s.firstName }}</td>
+                  <td>{{ s.subjectsPassed }} / {{ s.subjectCount }}</td>
+                  <td class="avg low">{{ s.averagePercent | number:'1.2-2' }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        } @else {
+          <p class="empty">No ranked students with marks for this selection.</p>
+        }
+      </section>
+    </div>
+  }
+</app-portal-layout>

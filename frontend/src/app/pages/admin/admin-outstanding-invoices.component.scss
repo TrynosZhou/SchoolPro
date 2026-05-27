@@ -1,0 +1,142 @@
+.card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1rem 1.1rem;
+  margin-bottom: 1rem;
+}
+
+h3 {
+  margin: 0 0 0.25rem;
+  color: #0f172a;
+}
+
+.sub {
+  margin: 0;
+  color: #475569;
+  font-size: 0.9rem;
+}
+
+.intro-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+
+.btn-primary {
+  border: 0;
+  border-radius: 10px;
+  padding: 0.55rem 0.9rem;
+  background: #2563eb;
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-primary[disabled] {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.summary-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.summary-chip {
+  background: #f1f5f9;
+  color: #334155;
+  border-radius: 999px;
+  padding: 0.2rem 0.6rem;
+  font-size: 0.8rem;
+}
+
+.summary-chip.accent {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.toast {
+  margin-bottom: 1rem;
+  border-radius: 10px;
+  padding: 0.6rem 0.8rem;
+  background: #dcfce7;
+  border: 1px solid #86efac;
+  color: #166534;
+  font-size: 0.88rem;
+}
+
+.toast.error {
+  background: #fee2e2;
+  border-color: #fecaca;
+  color: #991b1b;
+}
+
+.loading-card,
+.empty-card {
+  color: #64748b;
+  text-align: center;
+}
+
+.group-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.7rem;
+  flex-wrap: wrap;
+}
+
+.group-total {
+  background: #fee2e2;
+  color: #991b1b;
+  border-radius: 999px;
+  padding: 0.2rem 0.6rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 900px;
+}
+
+th,
+td {
+  text-align: left;
+  border-bottom: 1px solid #e2e8f0;
+  padding: 0.55rem 0.5rem;
+  font-size: 0.88rem;
+  vertical-align: top;
+}
+
+th {
+  color: #475569;
+  font-weight: 700;
+  font-size: 0.8rem;
+}
+
+.num {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.student-total {
+  margin-top: 0.2rem;
+  font-size: 0.78rem;
+  color: #b45309;
+  font-weight: 600;
+}
+
+td strong {
+  color: #b45309;
+}

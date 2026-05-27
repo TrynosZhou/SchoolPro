@@ -1,0 +1,51 @@
+<app-portal-layout portalTitle="Admin Portal" pageTitle="Send Message" [navSections]="adminNav">
+  <div class="comm-page">
+    @if (toast(); as t) {
+      <div class="toast" [class.error]="t.type === 'error'">{{ t.msg }}</div>
+    }
+
+    <section class="card intro">
+      <h3>Send Message</h3>
+      <p class="sub">Send announcements or direct messages to parents, teachers, and staff.</p>
+      <a routerLink="/admin/communication/inbox" class="link-btn">Go to Inbox →</a>
+    </section>
+
+    <section class="card form-card">
+      <div class="field">
+        <label>Recipient *</label>
+        <select [(ngModel)]="recipientId" name="recipient">
+          <option value="">Select recipient</option>
+          @for (r of recipients(); track r.id) {
+            <option [value]="r.id">{{ recipientLabel(r) }}</option>
+          }
+        </select>
+      </div>
+
+      <div class="field">
+        <label>Related student (optional)</label>
+        <select [(ngModel)]="studentId" name="student">
+          <option value="">None</option>
+          @for (s of students(); track s.id) {
+            <option [value]="s.id">{{ studentLabel(s) }}</option>
+          }
+        </select>
+      </div>
+
+      <div class="field">
+        <label>Subject *</label>
+        <input type="text" [(ngModel)]="subject" name="subject" placeholder="Message subject" />
+      </div>
+
+      <div class="field">
+        <label>Message *</label>
+        <textarea [(ngModel)]="body" name="body" rows="8" placeholder="Write your message here…"></textarea>
+      </div>
+
+      <div class="actions">
+        <button type="button" class="btn-primary" (click)="send()" [disabled]="sending()">
+          {{ sending() ? 'Sending…' : 'Send message' }}
+        </button>
+      </div>
+    </section>
+  </div>
+</app-portal-layout>

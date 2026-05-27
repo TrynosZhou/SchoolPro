@@ -807,6 +807,81 @@
 .mini-card-title { display: block; font-weight: 600; font-size: 0.9rem; }
 .mini-card-meta { font-size: 0.75rem; color: var(--settings-muted); }
 
+/* ── Forms list (editable) ─────────────────────────────── */
+.forms-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.form-row-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.65rem 0.85rem;
+  background: #f8fafc;
+  border: 1px solid var(--settings-border);
+  border-radius: 10px;
+
+  .form-row-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+
+    strong { font-size: 0.92rem; color: var(--settings-accent); }
+  }
+
+  .form-meta {
+    font-size: 0.75rem;
+    color: var(--settings-muted);
+  }
+
+  .form-row-actions {
+    display: flex;
+    gap: 0.35rem;
+    flex-shrink: 0;
+  }
+}
+
+.form-edit-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 10px;
+
+  input {
+    padding: 0.35rem 0.6rem;
+    border: 1px solid #cbd5e1;
+    border-radius: 7px;
+    font-size: 0.88rem;
+
+    &.grow { flex: 1; }
+  }
+}
+
+.btn-danger-sm {
+  border: 1px solid #fecaca;
+  background: #fef2f2;
+  color: #b91c1c;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  padding: 0.3rem 0.65rem;
+
+  &:hover { background: #fee2e2; }
+}
+
+.empty-hint {
+  color: var(--settings-muted);
+  font-size: 0.85rem;
+  padding: 0.5rem 0;
+}
+
 .exam-cards {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));

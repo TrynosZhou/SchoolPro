@@ -469,6 +469,13 @@
 
 .btn-sm { padding: 0.4rem 0.85rem !important; font-size: 0.82rem !important; }
 
+.row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  justify-content: flex-end;
+}
+
 .text-green { color: #059669; }
 .text-red { color: #dc2626; }
 

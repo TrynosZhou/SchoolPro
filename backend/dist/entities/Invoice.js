@@ -46,7 +46,7 @@ __decorate([
     __metadata("design:type", String)
 ], Invoice.prototype, "termId", void 0);
 __decorate([
-    (0, typeorm_1.Column)({ type: 'enum', enum: enums_1.FeeType }),
+    (0, typeorm_1.Column)({ type: 'varchar', length: 64, default: 'other' }),
     __metadata("design:type", String)
 ], Invoice.prototype, "feeType", void 0);
 __decorate([
@@ -73,6 +73,10 @@ __decorate([
     (0, typeorm_1.Column)({ type: 'date', nullable: true }),
     __metadata("design:type", String)
 ], Invoice.prototype, "issuedDate", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ nullable: true }),
+    __metadata("design:type", String)
+], Invoice.prototype, "pdfPath", void 0);
 __decorate([
     (0, typeorm_1.OneToMany)(() => InvoiceLine_1.InvoiceLine, (l) => l.invoice, { cascade: true }),
     __metadata("design:type", Array)

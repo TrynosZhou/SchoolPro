@@ -9,8 +9,10 @@ import {
   CreateDateColumn,
 } from 'typeorm';
 import { FK_CASCADE, FK_SET_NULL } from './constraints';
+import { StudentType } from './enums';
 import { User } from './User';
 import { SchoolClass } from './SchoolClass';
+import { Form } from './Form';
 import { Guardian } from './Guardian';
 import { StudentAttendance } from './StudentAttendance';
 import { ExamMark } from './ExamMark';
@@ -44,6 +46,9 @@ export class Student {
   @Column({ nullable: true })
   gender?: string;
 
+  @Column({ type: 'varchar', length: 32, default: StudentType.DAY_SCHOLAR })
+  studentType!: string;
+
   @Column({ nullable: true })
   address?: string;
 
@@ -59,6 +64,13 @@ export class Student {
 
   @Column({ nullable: true })
   classId?: string;
+
+  @ManyToOne(() => Form, { nullable: true, ...FK_SET_NULL })
+  @JoinColumn({ name: 'formId' })
+  form?: Form;
+
+  @Column({ nullable: true })
+  formId?: string;
 
   @Column({ default: true })
   isActive!: boolean;

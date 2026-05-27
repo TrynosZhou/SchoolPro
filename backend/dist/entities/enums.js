@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.CashbookEntryType = exports.ExamTypeName = exports.FeeType = exports.InvoiceStatus = exports.PaymentMethod = exports.AttendanceStatus = exports.UserRole = void 0;
+exports.CashbookEntryType = exports.ExamTypeName = exports.FeeType = exports.StudentType = exports.InvoiceStatus = exports.PaymentMethod = exports.AttendanceStatus = exports.UserRole = void 0;
 var UserRole;
 (function (UserRole) {
     UserRole["DIRECTOR"] = "director";
@@ -35,6 +35,11 @@ var InvoiceStatus;
     InvoiceStatus["OVERDUE"] = "overdue";
     InvoiceStatus["CANCELLED"] = "cancelled";
 })(InvoiceStatus || (exports.InvoiceStatus = InvoiceStatus = {}));
+var StudentType;
+(function (StudentType) {
+    StudentType["DAY_SCHOLAR"] = "day_scholar";
+    StudentType["BOARDER"] = "boarder";
+})(StudentType || (exports.StudentType = StudentType = {}));
 var FeeType;
 (function (FeeType) {
     FeeType["TUITION"] = "tuition";

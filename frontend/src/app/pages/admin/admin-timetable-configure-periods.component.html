@@ -1,0 +1,138 @@
+<app-portal-layout portalTitle="Admin Portal" pageTitle="Configure Periods" [navSections]="adminNav">
+  <div class="tt-page">
+    @if (toast(); as t) {
+      <div class="toast" [class.error]="t.type === 'error'">{{ t.msg }}</div>
+    }
+
+    <section class="card">
+      <h3>Configure Periods</h3>
+      <p class="sub">
+        Define lesson slots and breaks for the school day. Each day must have
+        <strong>{{ minBreaks }} to {{ maxBreaks }} breaks</strong> between lessons.
+      </p>
+      <div class="break-status" [class.valid]="breaksValid()" [class.invalid]="!breaksValid()">
+        Breaks configured: <strong>{{ breakCount() }}</strong> / {{ minBreaks }}–{{ maxBreaks }} required
+      </div>
+      <div class="links">
+        <a routerLink="/admin/timetable/generate" class="link-btn">Generate Timetable →</a>
+        <a routerLink="/admin/timetable/view" class="link-btn">View Timetable →</a>
+      </div>
+    </section>
+
+    <section class="card">
+      <h4>Add lesson period</h4>
+      <div class="form-row">
+        <div class="field">
+          <label>Name</label>
+          <input type="text" [(ngModel)]="lessonDraft.name" name="periodName" placeholder="e.g. Period 1" />
+        </div>
+        <div class="field">
+          <label>Start</label>
+          <input type="time" [(ngModel)]="lessonDraft.startTime" name="periodStart" />
+        </div>
+        <div class="field">
+          <label>End</label>
+          <input type="time" [(ngModel)]="lessonDraft.endTime" name="periodEnd" />
+        </div>
+        <button type="button" class="btn-primary" (click)="addLesson()">Add lesson</button>
+      </div>
+    </section>
+
+    <section class="card break-card">
+      <h4>Add break between lessons</h4>
+      <p class="hint">Place breaks between lesson periods (e.g. morning tea, lunch). You can add up to {{ maxBreaks }} breaks.</p>
+      <div class="form-row">
+        <div class="field">
+          <label>Name</label>
+          <input type="text" [(ngModel)]="breakDraft.name" name="breakName" placeholder="e.g. Morning Break" />
+        </div>
+        <div class="field">
+          <label>Start</label>
+          <input type="time" [(ngModel)]="breakDraft.startTime" name="breakStart" />
+        </div>
+        <div class="field">
+          <label>End</label>
+          <input type="time" [(ngModel)]="breakDraft.endTime" name="breakEnd" />
+        </div>
+        <button type="button" class="btn-break" (click)="addBreak()" [disabled]="!canAddBreak()">
+          Add break
+        </button>
+      </div>
+      @if (!canAddBreak()) {
+        <p class="limit-note">Maximum of {{ maxBreaks }} breaks reached. Remove one to add another.</p>
+      }
+    </section>
+
+    <section class="card">
+      <div class="head-row">
+        <h4>Daily schedule ({{ lessonCount() }} lessons · {{ breakCount() }} breaks)</h4>
+        <div class="actions">
+          <button type="button" class="btn-outline" (click)="resetDefaults()">Reset defaults</button>
+          <button type="button" class="btn-primary" (click)="saveAll()">Save</button>
+        </div>
+      </div>
+      <p class="hint">Adjust start and finish times for each lesson below, then click <strong>Save</strong>.</p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Type</th><th>Name</th><th>Start</th><th>Finish</th><th></th></tr>
+          </thead>
+          <tbody>
+            @for (p of periods(); track p.id) {
+              <tr [class.break-row]="p.slotType === 'break'">
+                <td>
+                  <span class="type-pill" [class.break]="p.slotType === 'break'">{{ slotTypeLabel(p) }}</span>
+                </td>
+                <td>{{ p.name }}</td>
+                <td>
+                  @if (p.slotType === 'lesson') {
+                    <input
+                      type="time"
+                      class="time-input"
+                      [ngModel]="p.startTime"
+                      (ngModelChange)="updateLessonTime(p.id, 'startTime', $event)"
+                      [name]="'lesson-start-' + p.id"
+                    />
+                  } @else {
+                    {{ p.startTime }}
+                  }
+                </td>
+                <td>
+                  @if (p.slotType === 'lesson') {
+                    <input
+                      type="time"
+                      class="time-input"
+                      [ngModel]="p.endTime"
+                      (ngModelChange)="updateLessonTime(p.id, 'endTime', $event)"
+                      [name]="'lesson-end-' + p.id"
+                    />
+                  } @else {
+                    {{ p.endTime }}
+                  }
+                </td>
+                <td>
+                  <button
+                    type="button"
+                    class="btn-danger"
+                    (click)="removeSlot(p.id)"
+                    [disabled]="p.slotType === 'break' && !canRemoveBreak()"
+                    [title]="p.slotType === 'break' && !canRemoveBreak() ? 'Minimum ' + minBreaks + ' breaks required' : ''"
+                  >
+                    Remove
+                  </button>
+                </td>
+              </tr>
+            } @empty {
+              <tr><td colspan="5" class="empty">No periods configured.</td></tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      @if (!breaksValid()) {
+        <p class="validation-note">
+          Save is blocked until you have between {{ minBreaks }} and {{ maxBreaks }} breaks in the schedule.
+        </p>
+      }
+    </section>
+  </div>
+</app-portal-layout>

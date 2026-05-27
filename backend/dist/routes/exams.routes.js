@@ -12,6 +12,8 @@ const honours_service_1 = require("../services/honours.service");
 const report_card_service_1 = require("../services/report-card.service");
 const pdf_1 = require("../utils/pdf");
 const mark_sheet_service_1 = require("../services/mark-sheet.service");
+const results_analysis_service_1 = require("../services/results-analysis.service");
+const ranking_service_1 = require("../services/ranking.service");
 const typeorm_helpers_1 = require("../utils/typeorm-helpers");
 const router = (0, express_1.Router)();
 router.use(auth_1.authenticate);
@@ -253,6 +255,118 @@ router.get('/mark-sheet', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.
     }
     catch (err) {
         return res.status(400).json({ message: err instanceof Error ? err.message : 'Failed to build mark sheet' });
+    }
+});
+router.get('/results-analysis', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.DIRECTOR, enums_1.UserRole.TEACHER), async (req, res) => {
+    const { examTypeId, termId, classId, topN } = req.query;
+    if (!examTypeId || !termId || !classId) {
+        return res.status(400).json({ message: 'examTypeId, termId, and classId are required' });
+    }
+    try {
+        const analysis = await (0, results_analysis_service_1.buildResultsAnalysis)({
+            examTypeId: examTypeId,
+            termId: termId,
+            classId: classId,
+            topN: topN ? Number(topN) : undefined,
+        });
+        if (analysis.summary.studentsWithExamMarks === 0) {
+            return res.status(404).json({
+                message: 'No exam marks found for this class, exam type, and term. Enter marks first.',
+            });
+        }
+        res.json(analysis);
+    }
+    catch (err) {
+        return res.status(400).json({
+            message: err instanceof Error ? err.message : 'Failed to build results analysis',
+        });
+    }
+});
+router.get('/rankings', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.DIRECTOR, enums_1.UserRole.TEACHER), async (req, res) => {
+    const { examTypeId, termId, rankingType, classId, formId, subjectId } = req.query;
+    if (!examTypeId || !termId || !rankingType) {
+        return res.status(400).json({ message: 'examTypeId, termId, and rankingType are required' });
+    }
+    const type = rankingType;
+    if (!['class', 'form', 'subject'].includes(type)) {
+        return res.status(400).json({ message: 'rankingType must be class, form, or subject' });
+    }
+    try {
+        const rankings = await (0, ranking_service_1.buildRankings)({
+            examTypeId: examTypeId,
+            termId: termId,
+            rankingType: type,
+            classId: classId,
+            formId: formId,
+            subjectId: subjectId,
+        });
+        if (!rankings.students.length) {
+            return res.status(404).json({
+                message: 'No ranked students found for this selection. Enter exam marks first.',
+            });
+        }
+        res.json(rankings);
+    }
+    catch (err) {
+        return res.status(400).json({
+            message: err instanceof Error ? err.message : 'Failed to build rankings',
+        });
+    }
+});
+router.get('/rankings/pdf', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.DIRECTOR, enums_1.UserRole.TEACHER), async (req, res) => {
+    const { examTypeId, termId, rankingType, classId, formId, subjectId } = req.query;
+    if (!examTypeId || !termId || !rankingType) {
+        return res.status(400).json({ message: 'examTypeId, termId, and rankingType are required' });
+    }
+    const type = rankingType;
+    if (!['class', 'form', 'subject'].includes(type)) {
+        return res.status(400).json({ message: 'rankingType must be class, form, or subject' });
+    }
+    try {
+        const rankings = await (0, ranking_service_1.buildRankings)({
+            examTypeId: examTypeId,
+            termId: termId,
+            rankingType: type,
+            classId: classId,
+            formId: formId,
+            subjectId: subjectId,
+        });
+        if (!rankings.students.length) {
+            return res.status(404).json({
+                message: 'No ranked students found for this selection. Enter exam marks first.',
+            });
+        }
+        const scopeParts = [];
+        if (rankings.class)
+            scopeParts.push(`Class: ${rankings.class.name}`);
+        if (rankings.form)
+            scopeParts.push(`Form: ${rankings.form.name}`);
+        if (rankings.subject)
+            scopeParts.push(`Subject: ${rankings.subject.name}`);
+        const pdf = await (0, pdf_1.generateRankingsPdf)({
+            schoolName: rankings.schoolName,
+            tagline: rankings.tagline,
+            logoUrl: rankings.logoUrl,
+            rankingType: rankings.rankingType,
+            rankingLabel: rankings.rankingLabel,
+            examTypeName: rankings.examType.name,
+            termName: rankings.term.name,
+            scopeLabel: scopeParts.join(' · '),
+            maxMarks: rankings.examType.maxMarks,
+            generatedAt: new Date(),
+            students: rankings.students,
+        });
+        const safeName = rankings.rankingLabel.replace(/[^\w\-]+/g, '-').replace(/-+/g, '-');
+        const filename = `rankings-${safeName}.pdf`;
+        const inline = req.query.preview === 'true';
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `${inline ? 'inline' : 'attachment'}; filename="${filename}"`);
+        res.send(pdf);
+    }
+    catch (err) {
+        return res.status(400).json({
+            message: err instanceof Error ? err.message : 'Failed to generate rankings PDF',
+        });
     }
 });
 router.get('/mark-sheet/pdf', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.DIRECTOR, enums_1.UserRole.TEACHER), async (req, res) => {

@@ -1,0 +1,122 @@
+.page-intro {
+  margin: 0 0 1rem;
+  color: #475569;
+  a { color: #2563eb; }
+}
+
+.toast {
+  margin-bottom: 1rem;
+  border-radius: 10px;
+  padding: 0.6rem 0.8rem;
+  background: #dcfce7;
+  border: 1px solid #86efac;
+  color: #166534;
+  font-size: 0.9rem;
+}
+.toast.error {
+  background: #fee2e2;
+  border-color: #fecaca;
+  color: #991b1b;
+}
+
+.card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1rem 1.1rem;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.8rem;
+  margin: 0.75rem 0 1rem;
+
+  @media (max-width: 860px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.field--full {
+  grid-column: 1 / -1;
+}
+
+.hint {
+  font-size: 0.78rem;
+  color: #64748b;
+}
+
+.target-year {
+  margin: 0;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  background: #f8fafc;
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: #0f172a;
+
+  &.missing {
+    background: #fff7ed;
+    border-color: #fdba74;
+    color: #9a3412;
+    font-weight: 500;
+  }
+
+  &.muted {
+    color: #64748b;
+    font-weight: 500;
+  }
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+
+  label {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #334155;
+  }
+
+  select {
+    border: 1px solid #cbd5e1;
+    border-radius: 10px;
+    padding: 0.55rem 0.75rem;
+    font-size: 0.92rem;
+    background: #fff;
+  }
+}
+
+.btn-primary {
+  border: 0;
+  border-radius: 10px;
+  padding: 0.6rem 1rem;
+  background: #2563eb;
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+}
+.btn-primary[disabled] {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.loading {
+  display: grid;
+  place-items: center;
+  padding: 2rem 0;
+  color: #64748b;
+}
+.spinner {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 3px solid #e2e8f0;
+  border-top-color: #2563eb;
+  animation: spin 0.8s linear infinite;
+  margin-bottom: 0.75rem;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+

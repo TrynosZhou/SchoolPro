@@ -14,6 +14,7 @@ const typeorm_helpers_1 = require("../utils/typeorm-helpers");
 const helpers_1 = require("../utils/helpers");
 const pdf_1 = require("../utils/pdf");
 const teacher_class_access_1 = require("../utils/teacher-class-access");
+const registration_invoice_service_1 = require("../services/registration-invoice.service");
 const router = (0, express_1.Router)();
 router.use(auth_1.authenticate);
 router.get('/', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.TEACHER), async (req, res) => {
@@ -25,6 +26,7 @@ router.get('/', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.D
     const qb = repo.createQueryBuilder('s')
         .leftJoinAndSelect('s.schoolClass', 'c')
         .leftJoinAndSelect('c.form', 'f')
+        .leftJoinAndSelect('s.form', 'studentForm')
         .leftJoinAndSelect('s.guardians', 'g')
         .where('s.isActive = true');
     if (classId)
@@ -94,7 +96,7 @@ router.get('/:id', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRol
     const repo = data_source_1.AppDataSource.getRepository(entities_1.Student);
     const student = await repo.findOne({
         where: { id: (0, typeorm_helpers_1.param)(req.params.id) },
-        relations: (0, typeorm_helpers_1.relations)('schoolClass', 'schoolClass.form', 'guardians', 'guardians.parent', 'user'),
+        relations: (0, typeorm_helpers_1.relations)('schoolClass', 'schoolClass.form', 'form', 'guardians', 'guardians.parent', 'user'),
     });
     if (!student)
         return res.status(404).json({ message: 'Student not found' });
@@ -112,7 +114,20 @@ router.get('/:id', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRol
 router.post('/', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (req, res) => {
     const repo = data_source_1.AppDataSource.getRepository(entities_1.Student);
     const guardianRepo = data_source_1.AppDataSource.getRepository(entities_1.Guardian);
-    const { guardians, createPortalAccount, parentEmail, admissionNumber: _ignored, classId: _ignoredClass, enrollmentDate: _ignoredEnroll, ...data } = req.body;
+    const formRepo = data_source_1.AppDataSource.getRepository(entities_1.Form);
+    const { guardians, createPortalAccount, parentEmail, formId, admissionNumber: _ignored, classId: _ignoredClass, enrollmentDate: _ignoredEnroll, ...data } = req.body;
+    if (!formId) {
+        return res.status(400).json({ message: 'Form is required when registering a student' });
+    }
+    const studentType = data.studentType || enums_1.StudentType.DAY_SCHOLAR;
+    if (![enums_1.StudentType.DAY_SCHOLAR, enums_1.StudentType.BOARDER].includes(studentType)) {
+        return res.status(400).json({ message: 'Student type must be Day Scholar or Boarder' });
+    }
+    data.studentType = studentType;
+    const form = await formRepo.findOne({ where: { id: formId } });
+    if (!form) {
+        return res.status(400).json({ message: 'Selected form was not found' });
+    }
     let student;
     for (let attempt = 0; attempt < 5; attempt++) {
         const studentId = await (0, helpers_1.generateStudentId)();
@@ -120,6 +135,7 @@ router.post('/', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (req, res)
             const created = repo.create({
                 ...data,
                 admissionNumber: studentId,
+                formId,
                 classId: null,
                 enrollmentDate: null,
             });
@@ -150,8 +166,30 @@ router.post('/', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (req, res)
         student.userId = user.id;
         await repo.save(student);
     }
-    const full = await repo.findOne({ where: { id: student.id }, relations: (0, typeorm_helpers_1.relations)('guardians', 'schoolClass') });
-    res.status(201).json(full);
+    let registrationInvoice = null;
+    try {
+        registrationInvoice = await (0, registration_invoice_service_1.createRegistrationInvoiceForStudent)(student, form);
+    }
+    catch (err) {
+        const message = err instanceof Error ? err.message : 'Registration invoice could not be created';
+        return res.status(500).json({
+            message: `Student was saved but registration invoice creation failed: ${message}`,
+            studentId: student.id,
+            admissionNumber: student.admissionNumber,
+        });
+    }
+    const full = await repo.findOne({
+        where: { id: student.id },
+        relations: (0, typeorm_helpers_1.relations)('guardians', 'schoolClass', 'form'),
+    });
+    res.status(201).json({
+        ...full,
+        registrationInvoice: {
+            id: registrationInvoice.id,
+            invoiceNumber: registrationInvoice.invoiceNumber,
+            totalAmount: Number(registrationInvoice.totalAmount),
+        },
+    });
 });
 router.patch('/:id/enroll', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.TEACHER), async (req, res) => {
     const repo = data_source_1.AppDataSource.getRepository(entities_1.Student);
@@ -193,7 +231,7 @@ router.put('/:id', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (req, re
     });
     if (!student)
         return res.status(404).json({ message: 'Student not found' });
-    const { guardians, admissionNumber: _admission, classId: _classId, enrollmentDate: _enroll, id: _id, createdAt: _created, isActive: _active, schoolClass: _sc, userId: _userId, ...updates } = req.body;
+    const { guardians, admissionNumber: _admission, classId: _classId, formId: _formId, enrollmentDate: _enroll, id: _id, createdAt: _created, isActive: _active, schoolClass: _sc, userId: _userId, ...updates } = req.body;
     if (updates.firstName !== undefined)
         student.firstName = updates.firstName;
     if (updates.lastName !== undefined)
@@ -202,10 +240,25 @@ router.put('/:id', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (req, re
         student.dateOfBirth = updates.dateOfBirth || null;
     if (updates.gender !== undefined)
         student.gender = updates.gender;
+    if (req.body.studentType !== undefined) {
+        if (![enums_1.StudentType.DAY_SCHOLAR, enums_1.StudentType.BOARDER].includes(req.body.studentType)) {
+            return res.status(400).json({ message: 'Student type must be Day Scholar or Boarder' });
+        }
+        student.studentType = req.body.studentType;
+    }
     if (updates.address !== undefined)
         student.address = updates.address || null;
     if (updates.previousSchool !== undefined)
         student.previousSchool = updates.previousSchool || null;
+    if (req.body.formId !== undefined) {
+        if (!req.body.formId) {
+            return res.status(400).json({ message: 'Form cannot be empty' });
+        }
+        const form = await data_source_1.AppDataSource.getRepository(entities_1.Form).findOne({ where: { id: req.body.formId } });
+        if (!form)
+            return res.status(400).json({ message: 'Selected form was not found' });
+        student.formId = req.body.formId;
+    }
     await repo.save(student);
     if (guardians?.length) {
         const g = guardians[0];
@@ -231,9 +284,48 @@ router.put('/:id', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (req, re
     }
     const full = await repo.findOne({
         where: { id: student.id },
-        relations: (0, typeorm_helpers_1.relations)('schoolClass', 'schoolClass.form', 'guardians'),
+        relations: (0, typeorm_helpers_1.relations)('schoolClass', 'schoolClass.form', 'form', 'guardians'),
     });
     res.json(full);
+});
+router.post('/:id/registration-invoice', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (req, res) => {
+    const studentRepo = data_source_1.AppDataSource.getRepository(entities_1.Student);
+    const invoiceRepo = data_source_1.AppDataSource.getRepository(entities_1.Invoice);
+    const student = await studentRepo.findOne({
+        where: { id: (0, typeorm_helpers_1.param)(req.params.id) },
+        relations: (0, typeorm_helpers_1.relations)('form'),
+    });
+    if (!student)
+        return res.status(404).json({ message: 'Student not found' });
+    if (!student.form) {
+        return res.status(400).json({ message: 'Student has no form assigned. Set form first.' });
+    }
+    const existing = await invoiceRepo.findOne({
+        where: {
+            studentId: student.id,
+            description: `New student registration — ${student.form.name} (${student.admissionNumber})`,
+        },
+        order: { createdAt: 'DESC' },
+    });
+    if (existing) {
+        return res.json({
+            message: 'Registration invoice already exists',
+            invoice: {
+                id: existing.id,
+                invoiceNumber: existing.invoiceNumber,
+                totalAmount: Number(existing.totalAmount),
+            },
+        });
+    }
+    const invoice = await (0, registration_invoice_service_1.createRegistrationInvoiceForStudent)(student, student.form);
+    return res.status(201).json({
+        message: 'Registration invoice created',
+        invoice: {
+            id: invoice.id,
+            invoiceNumber: invoice.invoiceNumber,
+            totalAmount: Number(invoice.totalAmount),
+        },
+    });
 });
 router.delete('/:id', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (req, res) => {
     const repo = data_source_1.AppDataSource.getRepository(entities_1.Student);

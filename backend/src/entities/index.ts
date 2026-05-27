@@ -30,10 +30,14 @@ import { TuckshopItem } from './TuckshopItem';
 import { TuckshopSale } from './TuckshopSale';
 import { UniformSale } from './UniformSale';
 import { SchoolSettings } from './SchoolSettings';
+import { SchoolFee } from './SchoolFee';
+import { ClassPromotionRule } from './ClassPromotionRule';
 
 export const entities = [
   User,
   SchoolSettings,
+  SchoolFee,
+  ClassPromotionRule,
   SchoolYear,
   Term,
   Form,
@@ -100,5 +104,7 @@ export {
   TuckshopSale,
   UniformSale,
   SchoolSettings,
+  SchoolFee,
+  ClassPromotionRule,
 };
 

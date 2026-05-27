@@ -10,7 +10,7 @@ import {
 } from 'typeorm';
 import { Student } from './Student';
 import { Term } from './Term';
-import { InvoiceStatus, FeeType } from './enums';
+import { InvoiceStatus } from './enums';
 import { InvoiceLine } from './InvoiceLine';
 import { Payment } from './Payment';
 
@@ -36,8 +36,8 @@ export class Invoice {
   @Column({ nullable: true })
   termId?: string;
 
-  @Column({ type: 'enum', enum: FeeType })
-  feeType!: FeeType;
+  @Column({ type: 'varchar', length: 64, default: 'other' })
+  feeType!: string;
 
   @Column()
   description!: string;
@@ -56,6 +56,9 @@ export class Invoice {
 
   @Column({ type: 'date', nullable: true })
   issuedDate?: string;
+
+  @Column({ nullable: true })
+  pdfPath?: string;
 
   @OneToMany(() => InvoiceLine, (l) => l.invoice, { cascade: true })
   lines!: InvoiceLine[];

@@ -1,0 +1,71 @@
+<app-portal-layout portalTitle="Admin Portal" pageTitle="Class Promotion" [navSections]="adminNav">
+  @if (toast(); as t) {
+    <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>
+  }
+
+  <header class="page-intro">
+    <p>
+      <strong>Year-end process.</strong> Run this after the school year ends (January–December). Students in a class
+      during the completing year move to the next class for the <em>coming</em> school year (e.g. Form 1A in 2025 →
+      Form 2A in 2026), using rules in
+      <a routerLink="/admin/academic-settings">Academic Settings → Promotion Rules</a>.
+    </p>
+  </header>
+
+  @if (loading()) {
+    <div class="loading">
+      <div class="spinner"></div>
+      <p>Loading school years and classes…</p>
+    </div>
+  } @else {
+    <section class="card">
+      <h3>Promote a class (year end)</h3>
+      <div class="grid">
+        <div class="field">
+          <label>School year completing *</label>
+          <select [(ngModel)]="selectedCompletingYearId" name="completingYearId" required>
+            <option value="">— Select year —</option>
+            @for (y of sortedYears(); track y.id) {
+              <option [value]="y.id">
+                {{ y.name }} ({{ y.startDate }} → {{ y.endDate }})
+              </option>
+            }
+          </select>
+          <span class="hint">The calendar year students just finished (e.g. 2025).</span>
+        </div>
+
+        <div class="field">
+          <label>Promoting into</label>
+          @if (targetYear(); as ty) {
+            <p class="target-year">{{ ty.name }} ({{ ty.startDate }} → {{ ty.endDate }})</p>
+          } @else if (completingYear()) {
+            <p class="target-year missing">No school year found for the coming year — add it in Academic Settings.</p>
+          } @else {
+            <p class="target-year muted">Select the completing year first.</p>
+          }
+          <span class="hint">Students will be enrolled for this school year.</span>
+        </div>
+
+        <div class="field field--full">
+          <label>Class *</label>
+          <select [(ngModel)]="selectedClassId" name="classId" required>
+            <option value="">— Select class —</option>
+            @for (c of sortedClasses(); track c.id) {
+              <option [value]="c.id">{{ classLabel(c) }}</option>
+            }
+          </select>
+          <span class="hint">All active students in this class for the completing year.</span>
+        </div>
+      </div>
+
+      <button
+        type="button"
+        class="btn-primary"
+        (click)="promote()"
+        [disabled]="promoting() || !targetYear()"
+      >
+        {{ promoting() ? 'Promoting…' : 'Promote for coming year' }}
+      </button>
+    </section>
+  }
+</app-portal-layout>

@@ -12,8 +12,10 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.Student = void 0;
 const typeorm_1 = require("typeorm");
 const constraints_1 = require("./constraints");
+const enums_1 = require("./enums");
 const User_1 = require("./User");
 const SchoolClass_1 = require("./SchoolClass");
+const Form_1 = require("./Form");
 const Guardian_1 = require("./Guardian");
 const StudentAttendance_1 = require("./StudentAttendance");
 const ExamMark_1 = require("./ExamMark");
@@ -56,6 +58,10 @@ __decorate([
     __metadata("design:type", String)
 ], Student.prototype, "gender", void 0);
 __decorate([
+    (0, typeorm_1.Column)({ type: 'varchar', length: 32, default: enums_1.StudentType.DAY_SCHOLAR }),
+    __metadata("design:type", String)
+], Student.prototype, "studentType", void 0);
+__decorate([
     (0, typeorm_1.Column)({ nullable: true }),
     __metadata("design:type", String)
 ], Student.prototype, "address", void 0);
@@ -76,6 +82,15 @@ __decorate([
     (0, typeorm_1.Column)({ nullable: true }),
     __metadata("design:type", String)
 ], Student.prototype, "classId", void 0);
+__decorate([
+    (0, typeorm_1.ManyToOne)(() => Form_1.Form, { nullable: true, ...constraints_1.FK_SET_NULL }),
+    (0, typeorm_1.JoinColumn)({ name: 'formId' }),
+    __metadata("design:type", Form_1.Form)
+], Student.prototype, "form", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ nullable: true }),
+    __metadata("design:type", String)
+], Student.prototype, "formId", void 0);
 __decorate([
     (0, typeorm_1.Column)({ default: true }),
     __metadata("design:type", Boolean)

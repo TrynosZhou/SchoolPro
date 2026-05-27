@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 // @ts-nocheck
 const express_1 = require("express");
 const data_source_1 = require("../config/data-source");
+const typeorm_1 = require("typeorm");
 const entities_1 = require("../entities");
 const enums_1 = require("../entities/enums");
 const auth_1 = require("../middleware/auth");
@@ -175,6 +176,40 @@ router.post('/forms', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (req,
     const form = await data_source_1.AppDataSource.getRepository(entities_1.Form).save(data_source_1.AppDataSource.getRepository(entities_1.Form).create(req.body));
     res.status(201).json(form);
 });
+router.patch('/forms/:id', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (req, res) => {
+    const repo = data_source_1.AppDataSource.getRepository(entities_1.Form);
+    const form = await repo.findOne({ where: { id: req.params.id } });
+    if (!form)
+        return res.status(404).json({ message: 'Form not found' });
+    if (req.body.name !== undefined)
+        form.name = String(req.body.name).trim();
+    if (req.body.level !== undefined)
+        form.level = Number(req.body.level);
+    await repo.save(form);
+    res.json(form);
+});
+router.delete('/forms/:id', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (req, res) => {
+    const repo = data_source_1.AppDataSource.getRepository(entities_1.Form);
+    const form = await repo.findOne({
+        where: { id: req.params.id },
+        relations: (0, typeorm_helpers_1.relations)('classes'),
+    });
+    if (!form)
+        return res.status(404).json({ message: 'Form not found' });
+    if (form.classes?.length) {
+        return res.status(400).json({
+            message: `Cannot delete form "${form.name}" — it has ${form.classes.length} class(es). Remove those classes first.`,
+        });
+    }
+    const studentCount = await data_source_1.AppDataSource.query(`SELECT COUNT(*) AS cnt FROM students WHERE "formId" = $1`, [form.id]);
+    if (Number(studentCount[0]?.cnt) > 0) {
+        return res.status(400).json({
+            message: `Cannot delete form "${form.name}" — ${studentCount[0].cnt} student(s) are assigned to it.`,
+        });
+    }
+    await repo.delete({ id: form.id });
+    res.json({ message: 'Form deleted' });
+});
 router.get('/classes', async (_req, res) => {
     res.json(await data_source_1.AppDataSource.getRepository(entities_1.SchoolClass).find({
         relations: (0, typeorm_helpers_1.relations)('form', 'students'),
@@ -226,6 +261,79 @@ router.patch('/classes/:id', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), asyn
         return res.status(404).json({ message: 'Class not found' });
     Object.assign(cls, req.body);
     res.json(await repo.save(cls));
+});
+router.get('/promotion-rules', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (_req, res) => {
+    const rules = await data_source_1.AppDataSource.getRepository(entities_1.ClassPromotionRule).find({
+        select: {
+            id: true,
+            fromClassId: true,
+            toClassId: true,
+            completionLabel: true,
+            isActive: true,
+            createdAt: true,
+        },
+        order: { createdAt: 'ASC' },
+    });
+    res.json(rules);
+});
+router.put('/promotion-rules', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (req, res) => {
+    const payload = req.body?.rules;
+    if (!Array.isArray(payload)) {
+        return res.status(400).json({ message: 'rules array is required' });
+    }
+    // A valid rule has a fromClassId plus either a toClassId or a completionLabel.
+    const validRules = payload.filter((r) => r?.fromClassId && (r?.toClassId || r?.completionLabel));
+    const fromIds = validRules.map((r) => String(r.fromClassId));
+    if (fromIds.length !== new Set(fromIds).size) {
+        return res.status(400).json({ message: 'Each class can only have one promotion target' });
+    }
+    for (const r of validRules) {
+        if (r.toClassId && r.fromClassId === r.toClassId) {
+            return res.status(400).json({ message: 'A class cannot be promoted to itself' });
+        }
+    }
+    // Validate only the class-to-class rules (completion rules have no toClassId).
+    const classRules = validRules.filter((r) => r.toClassId);
+    const classIds = new Set();
+    for (const r of classRules) {
+        classIds.add(String(r.fromClassId));
+        classIds.add(String(r.toClassId));
+    }
+    // Also validate fromClassIds for completion rules.
+    for (const r of validRules.filter((r) => r.completionLabel)) {
+        classIds.add(String(r.fromClassId));
+    }
+    if (classIds.size) {
+        const found = await data_source_1.AppDataSource.getRepository(entities_1.SchoolClass).find({
+            where: { id: (0, typeorm_1.In)([...classIds]) },
+            select: { id: true },
+        });
+        if (found.length !== classIds.size) {
+            return res.status(400).json({ message: 'One or more classes were not found' });
+        }
+    }
+    const ruleRepo = data_source_1.AppDataSource.getRepository(entities_1.ClassPromotionRule);
+    await ruleRepo.clear();
+    if (validRules.length) {
+        await ruleRepo.save(validRules.map((r) => ruleRepo.create({
+            fromClassId: String(r.fromClassId),
+            toClassId: r.toClassId ? String(r.toClassId) : undefined,
+            completionLabel: r.completionLabel ? String(r.completionLabel) : undefined,
+            isActive: r.isActive !== false,
+        })));
+    }
+    const rules = await ruleRepo.find({
+        select: {
+            id: true,
+            fromClassId: true,
+            toClassId: true,
+            completionLabel: true,
+            isActive: true,
+            createdAt: true,
+        },
+        order: { createdAt: 'ASC' },
+    });
+    res.json(rules);
 });
 router.get('/exam-types', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), async (_req, res) => {
     res.json(await data_source_1.AppDataSource.getRepository(entities_1.ExamType).find({ order: { name: 'ASC' } }));

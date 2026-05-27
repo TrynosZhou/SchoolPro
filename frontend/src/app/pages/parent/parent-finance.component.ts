@@ -3,6 +3,7 @@ import { ActivatedRoute } from '@angular/router';
 import { DecimalPipe } from '@angular/common';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { ApiService } from '../../core/services/api.service';
+import { AuthService } from '../../core/services/auth.service';
 import { environment } from '../../../environments/environment';
 
 @Component({
@@ -20,7 +21,7 @@ import { environment } from '../../../environments/environment';
         <section class="card">
           <h3>Invoices</h3>
           <table class="data-table">
-            <thead><tr><th>Invoice</th><th>Description</th><th>Amount</th><th>Paid</th><th>Status</th></tr></thead>
+            <thead><tr><th>Invoice</th><th>Description</th><th>Amount</th><th>Paid</th><th>Status</th><th></th></tr></thead>
             <tbody>
               @for (inv of stmt.invoices; track inv.id) {
                 <tr>
@@ -29,6 +30,9 @@ import { environment } from '../../../environments/environment';
                   <td>{{ '$' + inv.totalAmount }}</td>
                   <td>{{ '$' + inv.amountPaid }}</td>
                   <td><span class="badge">{{ inv.status }}</span></td>
+                  <td>
+                    <button type="button" class="btn-outline" (click)="downloadPdf('/billing/invoices/' + inv.id + '/pdf', 'invoice-' + inv.invoiceNumber + '.pdf')">PDF</button>
+                  </td>
                 </tr>
               }
             </tbody>
@@ -39,7 +43,7 @@ import { environment } from '../../../environments/environment';
           @for (r of receipts(); track r.id) {
             <div class="receipt-row">
               <span>{{ r.receiptNumber }} — {{ '$' + (r.payment?.amount ?? 0) }}</span>
-              <a [href]="receiptUrl(r.id)" target="_blank" class="btn-outline">Download PDF</a>
+              <button type="button" class="btn-outline" (click)="downloadPdf('/billing/receipts/' + r.id + '/pdf', 'receipt-' + r.receiptNumber + '.pdf')">Download PDF</button>
             </div>
           }
         </section>
@@ -49,6 +53,7 @@ import { environment } from '../../../environments/environment';
 })
 export class ParentFinanceComponent implements OnInit {
   private api = inject(ApiService);
+  private auth = inject(AuthService);
   private route = inject(ActivatedRoute);
   statement = signal<{
     invoices: { id: string; invoiceNumber: string; description: string; totalAmount: number; amountPaid: number; status: string }[];
@@ -81,7 +86,23 @@ export class ParentFinanceComponent implements OnInit {
       .subscribe((r) => this.receipts.set(r));
   }
 
-  receiptUrl(id: string) {
-    return `${environment.apiUrl}/billing/receipts/${id}/pdf`;
+  downloadPdf(path: string, filename: string) {
+    const token = this.auth.getToken();
+    fetch(`${environment.apiUrl}${path}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+      .then((r) => {
+        if (!r.ok) throw new Error('Download failed');
+        return r.blob();
+      })
+      .then((blob) => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
+      })
+      .catch(() => undefined);
   }
 }

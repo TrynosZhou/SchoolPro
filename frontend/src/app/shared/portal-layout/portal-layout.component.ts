@@ -1,4 +1,4 @@
-import { Component, Input, OnDestroy, OnInit, inject, signal } from '@angular/core';
+import { Component, ElementRef, HostListener, Input, OnDestroy, OnInit, inject, signal } from '@angular/core';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive } from '@angular/router';
 import { filter, Subscription } from 'rxjs';
 import { AuthService } from '../../core/services/auth.service';
@@ -30,7 +30,10 @@ export class PortalLayoutComponent implements OnInit, OnDestroy {
   @Input() navSections: NavSection[] = [];
   auth = inject(AuthService);
   private router = inject(Router);
+  private elementRef = inject(ElementRef<HTMLElement>);
   private routerSub?: Subscription;
+  readonly userMenuOpen = signal(false);
+  readonly logoutConfirmOpen = signal(false);
 
   /** Section headings that are expanded in the sidebar. */
   readonly expandedSections = signal<Set<string>>(new Set());
@@ -48,6 +51,38 @@ export class PortalLayoutComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.routerSub?.unsubscribe();
+  }
+
+  get fullName(): string {
+    const u = this.auth.user();
+    return `${u?.firstName ?? ''} ${u?.lastName ?? ''}`.trim() || 'User';
+  }
+
+  toggleUserMenu(): void {
+    this.userMenuOpen.update((open) => !open);
+  }
+
+  requestLogout(): void {
+    this.logoutConfirmOpen.set(true);
+  }
+
+  cancelLogout(): void {
+    this.logoutConfirmOpen.set(false);
+  }
+
+  confirmLogout(): void {
+    this.logoutConfirmOpen.set(false);
+    this.userMenuOpen.set(false);
+    this.auth.logout();
+  }
+
+  @HostListener('document:click', ['$event'])
+  onDocumentClick(event: MouseEvent): void {
+    if (!this.userMenuOpen()) return;
+    const target = event.target as Node | null;
+    if (target && !this.elementRef.nativeElement.contains(target)) {
+      this.userMenuOpen.set(false);
+    }
   }
 
   isExpanded(heading: string): boolean {
