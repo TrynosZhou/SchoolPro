@@ -12,6 +12,8 @@ async function bootstrap() {
 
     const { seedDatabase } = await import('./seed');
     await seedDatabase();
+    const { ensureDefaultRoles } = await import('./services/role-permissions.service');
+    await ensureDefaultRoles();
 
     app.listen(env.port, () => {
       console.log(`School Pro API running on http://localhost:${env.port}`);

@@ -1,6 +1,7 @@
-import { Component, inject, OnInit, signal, computed } from '@angular/core';
+import { Component, inject, OnDestroy, OnInit, signal, computed } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { DecimalPipe, DatePipe } from '@angular/common';
+import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { RouterLink } from '@angular/router';
 import { forkJoin } from 'rxjs';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
@@ -66,8 +67,9 @@ interface StatementData {
   templateUrl: './admin-finance.component.html',
   styleUrl: './admin-finance.component.scss',
 })
-export class AdminFinanceComponent implements OnInit {
+export class AdminFinanceComponent implements OnInit, OnDestroy {
   private api = inject(ApiService);
+  private sanitizer = inject(DomSanitizer);
 
   readonly adminNav = ADMIN_NAV_SECTIONS;
 
@@ -118,6 +120,10 @@ export class AdminFinanceComponent implements OnInit {
   selectedStudentId = '';
   statement = signal<StatementData | null>(null);
   statementLoading = signal(false);
+  statementPdfLoading = signal(false);
+  statementPdfPreviewOpen = signal(false);
+  statementPdfPreviewUrl = signal<SafeResourceUrl | null>(null);
+  private statementPdfObjectUrl: string | null = null;
 
   filteredCashbook = computed(() => {
     const q = this.cashbookFilter().toLowerCase();
@@ -130,6 +136,10 @@ export class AdminFinanceComponent implements OnInit {
   ngOnInit() {
     this.loadAll();
     this.api.get<Student[]>('/students').subscribe((s) => this.students.set(s));
+  }
+
+  ngOnDestroy(): void {
+    this.closeStatementPdfPreview();
   }
 
   setTab(tab: Tab) {
@@ -240,6 +250,65 @@ export class AdminFinanceComponent implements OnInit {
     this.loadStatement();
   }
 
+  previewStatementPdf() {
+    if (!this.selectedStudentId) {
+      this.showToast('error', 'Select a student first.');
+      return;
+    }
+    this.statementPdfLoading.set(true);
+    this.api.getBlob(`/billing/statement/${this.selectedStudentId}/pdf`, { preview: 'true' }).subscribe({
+      next: (blob) => {
+        this.statementPdfLoading.set(false);
+        if (!blob.type.includes('pdf')) {
+          this.showToast('error', 'Invalid PDF response.');
+          return;
+        }
+        this.closeStatementPdfPreview();
+        this.statementPdfObjectUrl = URL.createObjectURL(blob);
+        this.statementPdfPreviewUrl.set(this.sanitizer.bypassSecurityTrustResourceUrl(this.statementPdfObjectUrl));
+        this.statementPdfPreviewOpen.set(true);
+      },
+      error: async (e) => {
+        this.statementPdfLoading.set(false);
+        this.showToast('error', await this.extractBlobErrorMessage(e, 'Could not generate statement PDF.'));
+      },
+    });
+  }
+
+  downloadStatementPdf() {
+    if (!this.selectedStudentId) {
+      this.showToast('error', 'Select a student first.');
+      return;
+    }
+    this.statementPdfLoading.set(true);
+    this.api.getBlob(`/billing/statement/${this.selectedStudentId}/pdf`).subscribe({
+      next: (blob) => {
+        this.statementPdfLoading.set(false);
+        const student = this.students().find((s) => s.id === this.selectedStudentId);
+        const name = (student?.admissionNumber || this.selectedStudentId).replace(/[^\w-]+/g, '-');
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `student-statement-${name}.pdf`;
+        a.click();
+        URL.revokeObjectURL(url);
+      },
+      error: async (e) => {
+        this.statementPdfLoading.set(false);
+        this.showToast('error', await this.extractBlobErrorMessage(e, 'Could not download statement PDF.'));
+      },
+    });
+  }
+
+  closeStatementPdfPreview() {
+    this.statementPdfPreviewOpen.set(false);
+    if (this.statementPdfObjectUrl) {
+      URL.revokeObjectURL(this.statementPdfObjectUrl);
+      this.statementPdfObjectUrl = null;
+    }
+    this.statementPdfPreviewUrl.set(null);
+  }
+
   sendReminders() {
     const ids = this.debtors().map((d) => d.id);
     if (!ids.length) {
@@ -262,5 +331,19 @@ export class AdminFinanceComponent implements OnInit {
   private showToast(type: 'success' | 'error', msg: string) {
     this.toast.set({ type, msg });
     setTimeout(() => this.toast.set(null), 4000);
+  }
+
+  private async extractBlobErrorMessage(error: unknown, fallback: string): Promise<string> {
+    const e = error as { error?: Blob | { message?: string } };
+    if (e?.error instanceof Blob) {
+      try {
+        const text = await e.error.text();
+        const parsed = JSON.parse(text) as { message?: string };
+        if (parsed?.message) return parsed.message;
+      } catch {
+        return fallback;
+      }
+    }
+    return (e?.error as { message?: string })?.message || fallback;
   }
 }

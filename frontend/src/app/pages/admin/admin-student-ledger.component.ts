@@ -70,6 +70,7 @@ export class AdminStudentLedgerComponent implements OnInit {
   readonly adminNav = ADMIN_NAV_SECTIONS;
 
   loading = signal(false);
+  pdfLoading = signal(false);
   toast = signal<{ type: 'success' | 'error'; msg: string } | null>(null);
 
   terms = signal<TermRow[]>([]);
@@ -149,10 +150,62 @@ export class AdminStudentLedgerComponent implements OnInit {
     this.report.set(null);
   }
 
+  previewPdf() {
+    this.exportPdf(true);
+  }
+
+  downloadPdf() {
+    this.exportPdf(false);
+  }
+
   typeLabel(type: LedgerLine['type']): string {
     if (type === 'invoice') return 'Invoice';
     if (type === 'payment') return 'Payment';
     return 'Opening';
+  }
+
+  private exportPdf(preview: boolean) {
+    if (!this.selectedTermId) {
+      this.showToast('error', 'Select a term.');
+      return;
+    }
+    if (!this.selectedStudentId && !this.query.trim()) {
+      this.showToast('error', 'Search and load a student ledger first.');
+      return;
+    }
+
+    this.pdfLoading.set(true);
+    const params: Record<string, string> = { termId: this.selectedTermId };
+    if (this.selectedStudentId) params['studentId'] = this.selectedStudentId;
+    else params['q'] = this.query.trim();
+    if (preview) params['preview'] = 'true';
+
+    this.api.getBlob('/billing/reports/student-ledger/export.pdf', params).subscribe({
+      next: (blob) => {
+        this.pdfLoading.set(false);
+        if (blob.type && !blob.type.includes('pdf')) {
+          this.showToast('error', 'Server did not return a PDF file');
+          return;
+        }
+        const url = URL.createObjectURL(blob);
+        if (preview) {
+          window.open(url, '_blank', 'noopener,noreferrer');
+          setTimeout(() => URL.revokeObjectURL(url), 90_000);
+          return;
+        }
+        const report = this.report();
+        const idPart = report?.student?.admissionNumber || this.selectedStudentId || 'student-ledger';
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `student-ledger-${idPart}.pdf`;
+        a.click();
+        URL.revokeObjectURL(url);
+      },
+      error: (e) => {
+        this.pdfLoading.set(false);
+        this.showToast('error', e.error?.message || 'Failed to generate student ledger PDF');
+      },
+    });
   }
 
   private showToast(type: 'success' | 'error', msg: string) {

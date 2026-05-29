@@ -1,0 +1,313 @@
+<app-portal-layout portalTitle="Admin Portal" pageTitle="Integrations" [navSections]="adminNav">
+
+  @if (toast(); as t) {
+    <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>
+  }
+
+  @if (loading()) {
+    <div class="loading-state">
+      <div class="spinner"></div>
+      <p>Loading integrations…</p>
+    </div>
+  } @else {
+    <header class="page-hero">
+      <div class="hero-text">
+        <p class="hero-eyebrow">System Admin</p>
+        <h1 class="hero-title">API Integrations</h1>
+        <p class="hero-sub">Connect School Pro to messaging, email, payments, webhooks, and external REST APIs.</p>
+        <p class="hero-sub hero-sub--link">
+          School profile &amp; security →
+          <a routerLink="/admin/settings">School Settings</a>
+        </p>
+      </div>
+      <div class="hero-stats">
+        <div class="stat-chip accent">
+          <span class="stat-val">{{ activeCount() }}</span>
+          <span class="stat-lbl">Active</span>
+        </div>
+        <div class="stat-chip">
+          <span class="stat-val">{{ providers.length }}</span>
+          <span class="stat-lbl">Providers</span>
+        </div>
+      </div>
+    </header>
+
+    <div class="integrations-shell">
+      <nav class="provider-rail" aria-label="Integration providers">
+        @for (p of providers; track p.id) {
+          <button
+            type="button"
+            class="provider-item"
+            [class.active]="activeProvider() === p.id"
+            (click)="setProvider(p.id)"
+          >
+            <span class="provider-icon">{{ p.icon }}</span>
+            <span class="provider-body">
+              <span class="provider-label">{{ p.label }}</span>
+              <span class="provider-desc">{{ p.desc }}</span>
+            </span>
+            <span class="status-pill" [class]="statusClass(p.id)">{{ statusLabel(p.id) }}</span>
+          </button>
+        }
+      </nav>
+
+      <main class="integration-content">
+        <div class="content-head">
+          <div>
+            <h2>{{ activeProviderMeta().icon }} {{ activeProviderMeta().label }}</h2>
+            <p>{{ activeProviderMeta().desc }}</p>
+          </div>
+          <label class="toggle enable-toggle">
+            <input type="checkbox" [(ngModel)]="activeEnabled" [name]="'enabled-' + activeProvider()" />
+            <span>Enable integration</span>
+          </label>
+        </div>
+
+        <!-- WhatsApp -->
+        @if (activeProvider() === 'whatsapp') {
+          <section class="panel">
+            @if (envFallback().whatsapp) {
+              <div class="info-banner">
+                <span>ℹ</span>
+                <p>WhatsApp credentials are currently loaded from <code>backend/.env</code>. Save here to manage them in the admin UI.</p>
+              </div>
+            }
+            <div class="form-grid">
+              <div class="field span-2">
+                <label>Twilio Account SID</label>
+                <input [(ngModel)]="form.whatsapp.accountSid" name="waSid" placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" />
+              </div>
+              <div class="field span-2">
+                <label>Auth Token</label>
+                <input
+                  type="password"
+                  [(ngModel)]="form.whatsapp.authToken"
+                  name="waToken"
+                  [placeholder]="form.whatsapp.hasAuthToken ? secretMask : 'Your Twilio auth token'"
+                  autocomplete="off"
+                />
+                @if (form.whatsapp.hasAuthToken) {
+                  <small>Leave blank to keep the existing token.</small>
+                }
+              </div>
+              <div class="field span-2">
+                <label>WhatsApp From Number</label>
+                <input [(ngModel)]="form.whatsapp.from" name="waFrom" placeholder="whatsapp:+14155238886" />
+              </div>
+            </div>
+            <div class="test-block">
+              <h3>Test connection</h3>
+              <div class="form-row">
+                <div class="field">
+                  <label>Phone (E.164)</label>
+                  <input [(ngModel)]="testWhatsApp.phone" name="testWaPhone" placeholder="+263771000005" />
+                </div>
+                <div class="field grow">
+                  <label>Message</label>
+                  <input [(ngModel)]="testWhatsApp.message" name="testWaMsg" placeholder="Optional test message" />
+                </div>
+              </div>
+            </div>
+          </section>
+        }
+
+        <!-- Email -->
+        @if (activeProvider() === 'email') {
+          <section class="panel">
+            <div class="form-grid">
+              <div class="field">
+                <label>SMTP Host</label>
+                <input [(ngModel)]="form.email.host" name="smtpHost" placeholder="smtp.gmail.com" />
+              </div>
+              <div class="field">
+                <label>Port</label>
+                <input type="number" [(ngModel)]="form.email.port" name="smtpPort" min="1" max="65535" />
+              </div>
+              <div class="field">
+                <label>Username</label>
+                <input [(ngModel)]="form.email.user" name="smtpUser" autocomplete="off" />
+              </div>
+              <div class="field">
+                <label>Password</label>
+                <input
+                  type="password"
+                  [(ngModel)]="form.email.password"
+                  name="smtpPass"
+                  [placeholder]="form.email.hasPassword ? secretMask : 'SMTP password'"
+                  autocomplete="off"
+                />
+              </div>
+              <div class="field">
+                <label>From Email</label>
+                <input type="email" [(ngModel)]="form.email.fromEmail" name="fromEmail" placeholder="noreply@school.ac.zw" />
+              </div>
+              <div class="field">
+                <label>From Name</label>
+                <input [(ngModel)]="form.email.fromName" name="fromName" />
+              </div>
+              <div class="field span-2">
+                <label class="toggle">
+                  <input type="checkbox" [(ngModel)]="form.email.secure" name="smtpSecure" />
+                  <span>Use TLS/SSL (port 465)</span>
+                </label>
+              </div>
+            </div>
+            <div class="test-block">
+              <h3>Validate configuration</h3>
+              <div class="field">
+                <label>Test recipient (optional)</label>
+                <input type="email" [(ngModel)]="testEmail.to" name="testEmailTo" placeholder="admin@school.ac.zw" />
+              </div>
+            </div>
+          </section>
+        }
+
+        <!-- Webhook -->
+        @if (activeProvider() === 'webhook') {
+          <section class="panel">
+            <div class="form-grid">
+              <div class="field span-2">
+                <label>Webhook URL</label>
+                <input [(ngModel)]="form.webhook.url" name="whUrl" placeholder="https://your-system.com/api/webhooks/school-pro" />
+              </div>
+              <div class="field span-2">
+                <label>Signing Secret</label>
+                <input
+                  type="password"
+                  [(ngModel)]="form.webhook.secret"
+                  name="whSecret"
+                  [placeholder]="form.webhook.hasSecret ? secretMask : 'Optional shared secret'"
+                  autocomplete="off"
+                />
+                <small>Sent as <code>X-Webhook-Secret</code> header on outbound events.</small>
+              </div>
+            </div>
+            <div class="events-block">
+              <h3>Subscribed events</h3>
+              <div class="event-chips">
+                @for (ev of webhookEvents; track ev.id) {
+                  <label class="event-chip" [class.selected]="webhookEventChecked(ev.id)">
+                    <input
+                      type="checkbox"
+                      [checked]="webhookEventChecked(ev.id)"
+                      (change)="toggleWebhookEvent(ev.id)"
+                    />
+                    {{ ev.label }}
+                  </label>
+                }
+              </div>
+            </div>
+          </section>
+        }
+
+        <!-- Payment -->
+        @if (activeProvider() === 'payment') {
+          <section class="panel">
+            <div class="form-grid">
+              <div class="field">
+                <label>Provider</label>
+                <select [(ngModel)]="form.payment.provider" name="payProvider">
+                  <option value="paynow">Paynow Zimbabwe</option>
+                  <option value="stripe">Stripe</option>
+                  <option value="paypal">PayPal</option>
+                  <option value="custom">Custom gateway</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>Merchant / Account ID</label>
+                <input [(ngModel)]="form.payment.merchantId" name="payMerchant" />
+              </div>
+              <div class="field span-2">
+                <label>API Key / Integration Key</label>
+                <input
+                  type="password"
+                  [(ngModel)]="form.payment.apiKey"
+                  name="payKey"
+                  [placeholder]="form.payment.hasApiKey ? secretMask : 'Secret key'"
+                  autocomplete="off"
+                />
+              </div>
+              <div class="field span-2">
+                <label>Return / Webhook URL</label>
+                <input [(ngModel)]="form.payment.webhookUrl" name="payWebhook" placeholder="https://your-school.com/api/payments/callback" />
+              </div>
+            </div>
+          </section>
+        }
+
+        <!-- Custom API -->
+        @if (activeProvider() === 'customApi') {
+          <section class="panel">
+            <div class="form-grid">
+              <div class="field">
+                <label>Integration name</label>
+                <input [(ngModel)]="form.customApi.name" name="apiName" placeholder="e.g. Ministry EMIS" />
+              </div>
+              <div class="field">
+                <label>Base URL</label>
+                <input [(ngModel)]="form.customApi.baseUrl" name="apiBase" placeholder="https://api.example.com/v1" />
+              </div>
+              <div class="field">
+                <label>Authentication</label>
+                <select [(ngModel)]="form.customApi.authType" name="apiAuth">
+                  <option value="none">None</option>
+                  <option value="bearer">Bearer token</option>
+                  <option value="api-key">API key header</option>
+                  <option value="basic">Basic auth</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>Timeout (ms)</label>
+                <input type="number" [(ngModel)]="form.customApi.timeoutMs" name="apiTimeout" min="3000" max="120000" step="1000" />
+              </div>
+              @if (form.customApi.authType === 'api-key') {
+                <div class="field">
+                  <label>Header name</label>
+                  <input [(ngModel)]="form.customApi.apiKeyHeader" name="apiHeader" placeholder="X-API-Key" />
+                </div>
+              }
+              @if (form.customApi.authType === 'bearer' || form.customApi.authType === 'api-key') {
+                <div class="field span-2">
+                  <label>API Key / Token</label>
+                  <input
+                    type="password"
+                    [(ngModel)]="form.customApi.apiKey"
+                    name="apiKey"
+                    [placeholder]="form.customApi.hasApiKey ? secretMask : 'Secret token'"
+                    autocomplete="off"
+                  />
+                </div>
+              }
+              @if (form.customApi.authType === 'basic') {
+                <div class="field">
+                  <label>Username</label>
+                  <input [(ngModel)]="form.customApi.username" name="apiUser" autocomplete="off" />
+                </div>
+                <div class="field">
+                  <label>Password</label>
+                  <input
+                    type="password"
+                    [(ngModel)]="form.customApi.password"
+                    name="apiPass"
+                    [placeholder]="form.customApi.hasPassword ? secretMask : 'Password'"
+                    autocomplete="off"
+                  />
+                </div>
+              }
+            </div>
+          </section>
+        }
+
+        <div class="form-actions">
+          <button type="button" class="btn-outline" (click)="testIntegration()" [disabled]="testing() || submitting()">
+            {{ testing() ? 'Testing…' : 'Test connection' }}
+          </button>
+          <button type="button" class="btn-primary" (click)="saveCurrent()" [disabled]="submitting()">
+            {{ submitting() ? 'Saving…' : 'Save ' + activeProviderMeta().label }}
+          </button>
+        </div>
+      </main>
+    </div>
+  }
+
+</app-portal-layout>

@@ -14,10 +14,11 @@
       <div class="hero-text">
         <p class="hero-eyebrow">System Administration</p>
         <h1 class="hero-title">Academic Settings</h1>
-        <p class="hero-sub">Calendar, classes, subjects, exams, and student promotion rules</p>
+        <p class="hero-sub">Calendar, classes, subjects, departments, exams, and student promotion rules</p>
       </div>
       <div class="hero-stats">
         <div class="stat-chip"><span class="stat-val">{{ pageStats().subjects }}</span><span class="stat-lbl">Subjects</span></div>
+        <div class="stat-chip"><span class="stat-val">{{ pageStats().departments }}</span><span class="stat-lbl">Departments</span></div>
         <div class="stat-chip"><span class="stat-val">{{ pageStats().classes }}</span><span class="stat-lbl">Classes</span></div>
         <div class="stat-chip"><span class="stat-val">{{ pageStats().forms }}</span><span class="stat-lbl">Forms</span></div>
         <div class="stat-chip accent"><span class="stat-val">{{ pageStats().years }}</span><span class="stat-lbl">Years</span></div>
@@ -221,7 +222,17 @@
                   <tbody>
                     @for (c of classes(); track c.id) {
                       <tr>
-                        <td><span class="class-avatar">{{ c.name }}</span></td>
+                        <td>
+                          <button
+                            type="button"
+                            class="class-name-btn"
+                            (click)="openEditClass(c)"
+                            title="Click to edit class name"
+                          >
+                            <span class="class-avatar">{{ c.name }}</span>
+                            <span class="edit-hint" aria-hidden="true">✎</span>
+                          </button>
+                        </td>
                         <td><span class="pill">{{ c.form?.name || '—' }}</span></td>
                         <td>{{ classStudentCount(c) }} / {{ c.capacity }}</td>
                         <td>
@@ -267,9 +278,25 @@
               <div class="subject-grid">
                 @for (s of subjects(); track s.id) {
                   <article class="subject-card">
-                    <div class="subject-badge" [style.background]="subjectHue(s.code)">{{ s.code }}</div>
+                    <button
+                      type="button"
+                      class="subject-code-btn"
+                      (click)="openEditSubjectCode(s)"
+                      title="Click to edit subject code"
+                    >
+                      <span class="subject-badge" [style.background]="subjectHue(s.code)">{{ s.code }}</span>
+                      <span class="edit-hint" aria-hidden="true">✎</span>
+                    </button>
                     <div class="subject-info">
-                      <strong>{{ s.name }}</strong>
+                      <button
+                        type="button"
+                        class="subject-name-btn"
+                        (click)="openEditSubjectName(s)"
+                        title="Click to edit subject name"
+                      >
+                        <strong>{{ s.name }}</strong>
+                        <span class="edit-hint" aria-hidden="true">✎</span>
+                      </button>
                       @if (s.description) { <small>{{ s.description }}</small> }
                     </div>
                   </article>
@@ -346,6 +373,90 @@
               </div>
             </section>
           </div>
+        }
+
+        @if (activeTab() === 'departments') {
+          <section class="panel catalogue-panel departments-panel">
+            <div class="panel-head">
+              <div>
+                <h3>Departments</h3>
+                <p class="panel-sub">Organise your school into departments or faculties (e.g. Sciences, Languages, Admin)</p>
+              </div>
+              <span class="count-badge">{{ departments().length }}</span>
+            </div>
+            <div class="add-bar elevated">
+              <div class="input-group code-group">
+                <label>Code</label>
+                <input [(ngModel)]="newDepartment.code" name="deptCode" placeholder="SCI" maxlength="12" />
+              </div>
+              <div class="input-group grow">
+                <label>Department name</label>
+                <input [(ngModel)]="newDepartment.name" name="deptName" placeholder="Sciences" />
+              </div>
+              <div class="input-group grow">
+                <label>Description (optional)</label>
+                <input [(ngModel)]="newDepartment.description" name="deptDesc" placeholder="Science &amp; mathematics faculty" />
+              </div>
+              <div class="input-group input-xs">
+                <label>Order</label>
+                <input type="number" [(ngModel)]="newDepartment.sortOrder" name="deptOrder" min="0" />
+              </div>
+              <label class="toggle compact-toggle">
+                <input type="checkbox" [(ngModel)]="newDepartment.isActive" name="deptActive" />
+                <span>Active</span>
+              </label>
+              <button type="button" class="btn-primary" (click)="addDepartment()">
+                <span class="btn-icon">+</span> Add Department
+              </button>
+            </div>
+            <div class="department-list">
+              @for (d of departments(); track d.id) {
+                @if (editingDepartmentId() === d.id) {
+                  <article class="department-row is-editing">
+                    <div class="dept-edit-grid">
+                      <input [(ngModel)]="editDepartmentData.code" [name]="'edc-' + d.id" placeholder="Code" maxlength="12" />
+                      <input [(ngModel)]="editDepartmentData.name" [name]="'edn-' + d.id" placeholder="Name" class="grow" />
+                      <input [(ngModel)]="editDepartmentData.description" [name]="'edd-' + d.id" placeholder="Description" class="grow" />
+                      <input type="number" [(ngModel)]="editDepartmentData.sortOrder" [name]="'edo-' + d.id" min="0" class="input-xs" title="Sort order" />
+                      <label class="toggle compact-toggle">
+                        <input type="checkbox" [(ngModel)]="editDepartmentData.isActive" [name]="'eda-' + d.id" />
+                        <span>Active</span>
+                      </label>
+                    </div>
+                    <div class="form-row-actions">
+                      <button type="button" class="btn-primary btn-sm" (click)="saveEditDepartment()">Save</button>
+                      <button type="button" class="btn-ghost btn-sm" (click)="cancelEditDepartment()">Cancel</button>
+                    </div>
+                  </article>
+                } @else {
+                  <article class="department-row" [class.inactive]="!d.isActive">
+                    <div class="subject-badge" [style.background]="subjectHue(d.code)">{{ d.code }}</div>
+                    <div class="department-info">
+                      <strong>{{ d.name }}</strong>
+                      @if (d.description) {
+                        <small>{{ d.description }}</small>
+                      }
+                      <span class="dept-meta">
+                        Order {{ d.sortOrder }}
+                        @if (!d.isActive) {
+                          <span class="badge inactive">Inactive</span>
+                        }
+                      </span>
+                    </div>
+                    <div class="form-row-actions">
+                      <button type="button" class="btn-outline btn-sm" (click)="startEditDepartment(d)">Edit</button>
+                      <button type="button" class="btn-danger-sm btn-sm" (click)="deleteDepartment(d)">Delete</button>
+                    </div>
+                  </article>
+                }
+              } @empty {
+                <div class="empty-state">
+                  <span class="empty-icon">🏛️</span>
+                  <p>No departments yet. Add your first department above.</p>
+                </div>
+              }
+            </div>
+          </section>
         }
 
         @if (activeTab() === 'exams') {
@@ -498,3 +609,98 @@
     </div>
   }
 </app-portal-layout>
+
+@if (editingSubjectId(); as subjectId) {
+  <div class="modal-backdrop" (click)="closeEditSubject()" role="presentation">
+    <div
+      class="modal class-edit-modal"
+      role="dialog"
+      aria-modal="true"
+      [attr.aria-labelledby]="editingSubjectField() === 'code' ? 'edit-subject-code-title' : 'edit-subject-name-title'"
+      (click)="$event.stopPropagation()"
+    >
+      <header class="modal-head">
+        <div>
+          @if (editingSubjectField() === 'code') {
+            <h2 id="edit-subject-code-title">Edit subject code</h2>
+          } @else {
+            <h2 id="edit-subject-name-title">Edit subject name</h2>
+          }
+          <p class="modal-sub">{{ editingSubjectHint() }}</p>
+        </div>
+        <button type="button" class="modal-close" (click)="closeEditSubject()" aria-label="Close">×</button>
+      </header>
+      <form class="modal-body" (ngSubmit)="saveEditSubject()">
+        <div class="field">
+          @if (editingSubjectField() === 'code') {
+            <label for="editSubjectValue">Subject code</label>
+            <input
+              id="editSubjectValue"
+              [(ngModel)]="editSubjectValue"
+              name="editSubjectValue"
+              placeholder="e.g. MATH"
+              maxlength="8"
+              required
+              autofocus
+            />
+          } @else {
+            <label for="editSubjectValue">Subject name</label>
+            <input
+              id="editSubjectValue"
+              [(ngModel)]="editSubjectValue"
+              name="editSubjectValue"
+              placeholder="e.g. Mathematics"
+              required
+              autofocus
+            />
+          }
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn-ghost" (click)="closeEditSubject()">Cancel</button>
+          <button type="submit" class="btn-primary" [disabled]="submitting() || !editSubjectValue.trim()">
+            {{ submitting() ? 'Saving…' : 'Save' }}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+}
+
+@if (editingClassId(); as classId) {
+  <div class="modal-backdrop" (click)="closeEditClass()" role="presentation">
+    <div
+      class="modal class-edit-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="edit-class-title"
+      (click)="$event.stopPropagation()"
+    >
+      <header class="modal-head">
+        <div>
+          <h2 id="edit-class-title">Edit class name</h2>
+          <p class="modal-sub">Form: {{ editingClassFormName() }}</p>
+        </div>
+        <button type="button" class="modal-close" (click)="closeEditClass()" aria-label="Close">×</button>
+      </header>
+      <form class="modal-body" (ngSubmit)="saveEditClass()">
+        <div class="field">
+          <label for="editClassName">Class name</label>
+          <input
+            id="editClassName"
+            [(ngModel)]="editClassName"
+            name="editClassName"
+            placeholder="e.g. 4A"
+            required
+            autofocus
+          />
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn-ghost" (click)="closeEditClass()">Cancel</button>
+          <button type="submit" class="btn-primary" [disabled]="submitting() || !editClassName.trim()">
+            {{ submitting() ? 'Saving…' : 'Save' }}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+}

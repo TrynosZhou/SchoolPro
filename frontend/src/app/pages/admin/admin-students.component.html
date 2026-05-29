@@ -26,8 +26,21 @@
 
   @if (showForm) {
     <form class="reg-card" (ngSubmit)="saveStudent()">
-      <h2>New Student Registration</h2>
-      <p class="reg-note">Select the student's form. Tuition uses Ordinary Level (Forms 1–4) or Advanced Level (Forms 5–6) fees from Manage Fees.</p>
+      <div class="reg-head">
+        <div>
+          <h2>New Student Registration</h2>
+          <p class="reg-note">Capture learner details and guardian contact in one step. Required fields are marked with <strong>*</strong>.</p>
+        </div>
+        <div class="reg-progress" aria-label="Registration completion progress">
+          <div class="progress-meta">
+            <span>Completion</span>
+            <strong>{{ registrationProgress() }}%</strong>
+          </div>
+          <div class="progress-track" role="presentation">
+            <div class="progress-fill" [style.width.%]="registrationProgress()"></div>
+          </div>
+        </div>
+      </div>
 
       <div class="student-id-preview">
         <label>Student ID (auto-generated)</label>
@@ -168,14 +181,18 @@
 }
 
 <ng-template #studentFields>
+  <div class="section-title">
+    <h3>Student Details</h3>
+    <p>{{ selectedFormHint() }}</p>
+  </div>
   <div class="form-grid">
     <div class="field">
       <label>First Name *</label>
-      <input [(ngModel)]="form.firstName" name="fn" required />
+      <input [(ngModel)]="form.firstName" name="fn" required placeholder="Enter first name" autocomplete="given-name" />
     </div>
     <div class="field">
       <label>Last Name *</label>
-      <input [(ngModel)]="form.lastName" name="ln" required />
+      <input [(ngModel)]="form.lastName" name="ln" required placeholder="Enter last name" autocomplete="family-name" />
     </div>
     <div class="field">
       <label>Date of Birth</label>
@@ -207,28 +224,28 @@
     </div>
     <div class="field span-2">
       <label>Address</label>
-      <input [(ngModel)]="form.address" name="addr" />
+      <input [(ngModel)]="form.address" name="addr" placeholder="Residential address" autocomplete="street-address" />
     </div>
     <div class="field span-2">
       <label>Previous School</label>
-      <input [(ngModel)]="form.previousSchool" name="prev" />
+      <input [(ngModel)]="form.previousSchool" name="prev" placeholder="Last school attended (optional)" />
     </div>
   </div>
 
   <fieldset class="guardian-box">
-    <legend>Guardian / Parent</legend>
+    <legend>Guardian / Parent Contact</legend>
     <div class="form-grid">
       <div class="field">
         <label>Full Name</label>
-        <input [(ngModel)]="guardian.fullName" name="gname" />
+        <input [(ngModel)]="guardian.fullName" name="gname" placeholder="Primary guardian full name" autocomplete="name" />
       </div>
       <div class="field">
         <label>Phone</label>
-        <input [(ngModel)]="guardian.phone" name="gphone" />
+        <input [(ngModel)]="guardian.phone" name="gphone" placeholder="+263..." autocomplete="tel" />
       </div>
       <div class="field">
         <label>Relationship</label>
-        <input [(ngModel)]="guardian.relationship" name="grel" />
+        <input [(ngModel)]="guardian.relationship" name="grel" placeholder="Parent, Aunt, Uncle, Guardian..." />
       </div>
     </div>
   </fieldset>

@@ -1,20 +1,21 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.sendWhatsAppReminder = sendWhatsAppReminder;
-const env_1 = require("../config/env");
+const integrations_service_1 = require("./integrations.service");
 async function sendWhatsAppReminder(phone, message) {
-    if (!env_1.env.whatsapp.enabled) {
+    const whatsapp = await (0, integrations_service_1.getEffectiveWhatsApp)();
+    if (whatsapp.useMock || !whatsapp.enabled) {
         console.log(`[WhatsApp mock] To: ${phone} | ${message}`);
         return true;
     }
     try {
-        const url = `https://api.twilio.com/2010-04-01/Accounts/${env_1.env.whatsapp.accountSid}/Messages.json`;
+        const url = `https://api.twilio.com/2010-04-01/Accounts/${whatsapp.accountSid}/Messages.json`;
         const body = new URLSearchParams({
-            From: env_1.env.whatsapp.from,
+            From: whatsapp.from,
             To: `whatsapp:${phone}`,
             Body: message,
         });
-        const auth = Buffer.from(`${env_1.env.whatsapp.accountSid}:${env_1.env.whatsapp.authToken}`).toString('base64');
+        const auth = Buffer.from(`${whatsapp.accountSid}:${whatsapp.authToken}`).toString('base64');
         const res = await fetch(url, {
             method: 'POST',
             headers: {

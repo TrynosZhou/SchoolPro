@@ -1,0 +1,201 @@
+<app-portal-layout portalTitle="Admin Portal" pageTitle="User Permissions" [navSections]="adminNav">
+  @if (toast(); as t) {
+    <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>
+  }
+
+  <div class="page-head">
+    <div>
+      <p class="eyebrow">System Admin</p>
+      <h2>User Permissions</h2>
+      <p class="sub">Create roles with granular permissions and assign them to staff portal users.</p>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <button type="button" [class.active]="activeTab() === 'roles'" (click)="setTab('roles')">Roles</button>
+    <button type="button" [class.active]="activeTab() === 'users'" (click)="setTab('users')">User assignments</button>
+  </div>
+
+  @if (loading()) {
+    <p class="loading">Loading…</p>
+  } @else if (activeTab() === 'roles') {
+    <section class="panel">
+      <div class="panel-head">
+        <div>
+          <h3>Roles</h3>
+          <p class="panel-sub">Each role defines a portal access level and permission set.</p>
+        </div>
+        <button type="button" class="btn-primary" (click)="openNewRole()">+ New role</button>
+      </div>
+
+      <div class="role-grid">
+        @for (role of roles(); track role.id) {
+          <article class="role-card" [class.system]="role.isSystem">
+            <header>
+              <h4>{{ role.name }}</h4>
+              @if (role.isSystem) { <span class="badge">System</span> }
+            </header>
+            <p class="meta">{{ portalRoleLabel(role.baseRole, role.baseRoleLabel) }} portal · {{ role.permissions.length }} permissions · {{ role.userCount ?? 0 }} users</p>
+            @if (role.description) { <p class="desc">{{ role.description }}</p> }
+            <div class="card-actions">
+              <button type="button" class="btn-ghost btn-sm" (click)="openEditRole(role)">Edit</button>
+              @if (!role.isSystem) {
+                <button type="button" class="btn-danger-ghost btn-sm" (click)="deleteRole(role)">Delete</button>
+              }
+            </div>
+          </article>
+        }
+      </div>
+    </section>
+  } @else {
+    <section class="panel">
+      <div class="panel-head">
+        <div>
+          <h3>User assignments</h3>
+          <p class="panel-sub">Assign a role to control what each user can access.</p>
+        </div>
+        <input
+          type="search"
+          class="search"
+          placeholder="Search users…"
+          [ngModel]="userSearch()"
+          (ngModelChange)="userSearch.set($event)"
+          name="userSearch"
+        />
+      </div>
+
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Email</th>
+              <th>Portal role</th>
+              <th>Assigned role</th>
+              <th>Permissions</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (u of filteredUsers(); track u.id) {
+              <tr>
+                <td><strong>{{ u.firstName }} {{ u.lastName }}</strong></td>
+                <td>{{ u.email }}</td>
+                <td><span class="pill">{{ portalRoleLabel(u.role) }}</span></td>
+                <td>{{ u.schoolRole?.name || '—' }}</td>
+                <td><span class="perm-count">{{ u.permissions.length }}</span></td>
+                <td>
+                  <button type="button" class="btn-ghost btn-sm" (click)="openAssignUser(u)">Assign role</button>
+                </td>
+              </tr>
+            } @empty {
+              <tr><td colspan="6" class="empty">No staff users found.</td></tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+  }
+</app-portal-layout>
+
+@if (editingRoleId(); as roleEditorId) {
+  <div class="modal-backdrop" (click)="closeRoleEditor()" role="presentation">
+    <div class="modal" role="dialog" aria-modal="true" (click)="$event.stopPropagation()">
+      <header class="modal-head">
+        <h3>{{ roleEditorId === 'new' ? 'Create role' : 'Edit role' }}</h3>
+        <button type="button" class="modal-close" (click)="closeRoleEditor()" aria-label="Close">×</button>
+      </header>
+      <form class="modal-body" (ngSubmit)="saveRole()">
+        <div class="field">
+          <label>Role name</label>
+          <input [(ngModel)]="roleForm.name" name="roleName" required />
+        </div>
+        <div class="field">
+          <label>Description</label>
+          <input [(ngModel)]="roleForm.description" name="roleDesc" placeholder="Optional" />
+        </div>
+        <div class="field">
+          <label>Portal access level</label>
+          <select
+            [(ngModel)]="roleForm.baseRole"
+            name="baseRole"
+            [disabled]="editingRole()?.isSystem === true"
+          >
+            @for (pr of portalRoleOptions(); track pr.value) {
+              <option [value]="pr.value">{{ pr.label }}</option>
+            }
+          </select>
+          <small>
+            @if (editingRole()?.isSystem) {
+              System roles keep a fixed portal (Parent → parent portal, Student → student portal).
+            } @else {
+              Determines which portal users with this role sign into.
+            }
+          </small>
+        </div>
+
+        <div class="perm-section">
+          <h4>Permissions</h4>
+          @for (group of permissionGroups(); track group.id) {
+            <div class="perm-group">
+              <div class="perm-group-head">
+                <strong>{{ group.label }}</strong>
+                <span class="mini-actions">
+                  <button type="button" class="link-btn" (click)="selectAllInGroup(group)">All</button>
+                  <button type="button" class="link-btn" (click)="clearGroup(group)">None</button>
+                </span>
+              </div>
+              <div class="perm-checks">
+                @for (perm of group.permissions; track perm.key) {
+                  <label class="perm-check">
+                    <input
+                      type="checkbox"
+                      [checked]="hasPermission(perm.key)"
+                      (change)="togglePermission(perm.key)"
+                    />
+                    <span>{{ perm.label }}</span>
+                  </label>
+                }
+              </div>
+            </div>
+          }
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="btn-ghost" (click)="closeRoleEditor()">Cancel</button>
+          <button type="submit" class="btn-primary" [disabled]="submitting()">
+            {{ submitting() ? 'Saving…' : 'Save role' }}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+}
+
+@if (editingUserId(); as userId) {
+  <div class="modal-backdrop" (click)="closeAssignUser()" role="presentation">
+    <div class="modal modal-sm" role="dialog" aria-modal="true" (click)="$event.stopPropagation()">
+      <header class="modal-head">
+        <h3>Assign role</h3>
+        <button type="button" class="modal-close" (click)="closeAssignUser()" aria-label="Close">×</button>
+      </header>
+      <form class="modal-body" (ngSubmit)="saveUserRole()">
+        <div class="field">
+          <label>Role</label>
+          <select [(ngModel)]="userRoleId" name="userRoleId">
+            <option value="">— Default for portal role —</option>
+            @for (role of roles(); track role.id) {
+              <option [value]="role.id">{{ role.name }} ({{ portalRoleLabel(role.baseRole, role.baseRoleLabel) }})</option>
+            }
+          </select>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn-ghost" (click)="closeAssignUser()">Cancel</button>
+          <button type="submit" class="btn-primary" [disabled]="submitting()">
+            {{ submitting() ? 'Saving…' : 'Save' }}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+}

@@ -5,11 +5,14 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   OneToOne,
+  ManyToOne,
+  JoinColumn,
 } from 'typeorm';
 import { UserRole } from './enums';
 import { Student } from './Student';
 import { Staff } from './Staff';
 import { Parent } from './Parent';
+import { SchoolRole } from './SchoolRole';
 
 @Entity('users')
 export class User {
@@ -34,8 +37,21 @@ export class User {
   @Column({ type: 'enum', enum: UserRole })
   role!: UserRole;
 
+  @Column({ nullable: true })
+  schoolRoleId?: string;
+
+  @ManyToOne(() => SchoolRole, (schoolRole) => schoolRole.users, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'schoolRoleId' })
+  schoolRole?: SchoolRole;
+
   @Column({ default: true })
   isActive!: boolean;
+
+  @Column({ type: 'int', default: 0 })
+  failedLoginAttempts!: number;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  lockedUntil?: Date | null;
 
   @Column({ nullable: true })
   avatarUrl?: string;

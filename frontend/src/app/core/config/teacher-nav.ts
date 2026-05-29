@@ -22,6 +22,9 @@ export const TEACHER_NAV_SECTIONS: NavSection[] = [
   },
   {
     heading: 'Academics',
-    items: [{ label: 'Exam Marks', path: '/teacher/exams', icon: '📝' }],
+    items: [
+      { label: 'Exam Marks', path: '/teacher/exams', icon: '📝' },
+      { label: 'Report Cards', path: '/teacher/report-cards', icon: '📄' },
+    ],
   },
 ];

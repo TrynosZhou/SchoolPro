@@ -5,8 +5,11 @@ import {
   Student, Guardian, Staff, Parent, ClassSubject, TuckshopItem,
 } from './entities';
 import { UserRole, ExamTypeName } from './entities/enums';
+import { ensureDefaultRoles } from './services/role-permissions.service';
 
 export async function seedDatabase() {
+  await ensureDefaultRoles();
+
   const userRepo = AppDataSource.getRepository(User);
   const existing = await userRepo.count();
   if (existing > 0) return;

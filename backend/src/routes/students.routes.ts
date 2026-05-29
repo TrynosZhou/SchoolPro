@@ -69,6 +69,8 @@ router.get(
 
     const pdf = await generateClassListPdf({
       schoolName,
+      tagline: settings?.tagline || undefined,
+      logoUrl: settings?.logoUrl || undefined,
       classLabel,
       generatedAt: new Date(),
       students: students.map((s) => ({
@@ -103,7 +105,89 @@ router.get('/parent/my-children', authorize(UserRole.PARENT), async (req: AuthRe
     where: { parentId: req.user!.parentId },
     relations: relations('student', 'student.schoolClass', 'student.schoolClass.form'),
   });
-  res.json(links.map((l) => l.student));
+  res.json(links.map((l) => ({
+    linkId: l.id,
+    relationship: l.relationship,
+    student: l.student,
+  })));
+});
+
+router.post('/parent/link-child', authorize(UserRole.PARENT), async (req: AuthRequest, res: Response) => {
+  const parentId = req.user!.parentId;
+  if (!parentId) return res.status(400).json({ message: 'Parent profile not found. Sign out and sign in again.' });
+
+  const { admissionNumber, relationship } = req.body;
+  if (!admissionNumber?.trim()) {
+    return res.status(400).json({ message: 'Student ID is required' });
+  }
+
+  const userRepo = AppDataSource.getRepository(User);
+  const studentRepo = AppDataSource.getRepository(Student);
+  const guardianRepo = AppDataSource.getRepository(Guardian);
+
+  const user = await userRepo.findOne({ where: { id: req.user!.userId } });
+  if (!user) return res.status(404).json({ message: 'User not found' });
+
+  const admission = String(admissionNumber).trim().toUpperCase();
+  const student = await studentRepo.findOne({
+    where: { admissionNumber: admission, isActive: true },
+    relations: relations('schoolClass', 'schoolClass.form', 'form'),
+  });
+  if (!student) {
+    return res.status(404).json({ message: 'No student found with that Student ID. Check the number on the admission letter or with the school office.' });
+  }
+
+  const alreadyLinked = await guardianRepo.findOne({ where: { studentId: student.id, parentId } });
+  if (alreadyLinked) {
+    return res.status(409).json({ message: `${student.firstName} ${student.lastName} is already linked to your account` });
+  }
+
+  let guardian = await guardianRepo.findOne({
+    where: [
+      { studentId: student.id, parentId },
+      { studentId: student.id, email: user.email.toLowerCase() },
+    ],
+  });
+
+  const rel = String(relationship || 'Parent').trim() || 'Parent';
+
+  if (guardian) {
+    guardian.parentId = parentId;
+    guardian.relationship = rel;
+    guardian.fullName = `${user.firstName} ${user.lastName}`;
+    guardian.phone = user.phone || guardian.phone;
+    guardian.email = user.email;
+  } else {
+    const existingForStudent = await guardianRepo.count({ where: { studentId: student.id } });
+    guardian = guardianRepo.create({
+      studentId: student.id,
+      parentId,
+      fullName: `${user.firstName} ${user.lastName}`,
+      relationship: rel,
+      phone: user.phone || '—',
+      email: user.email,
+      isPrimary: existingForStudent === 0,
+      isEmergencyContact: false,
+    });
+  }
+
+  const saved = await guardianRepo.save(guardian);
+
+  res.status(201).json({
+    message: `Linked to ${student.firstName} ${student.lastName}`,
+    link: {
+      linkId: saved.id,
+      relationship: saved.relationship,
+      student: {
+        id: student.id,
+        admissionNumber: student.admissionNumber,
+        firstName: student.firstName,
+        lastName: student.lastName,
+        className: student.schoolClass?.name,
+        formName: student.schoolClass?.form?.name || student.form?.name,
+      },
+    },
+  });
 });
 
 router.get('/:id', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.TEACHER, UserRole.PARENT, UserRole.STUDENT), async (req: AuthRequest, res: Response) => {

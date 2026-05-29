@@ -9,9 +9,17 @@
         <h3>Outstanding Invoices Report</h3>
         <p class="sub">Students with invoice balances greater than zero, sorted by balance (highest first) and grouped by class.</p>
       </div>
-      <button type="button" class="btn-primary" (click)="loadReport()" [disabled]="loading()">
-        {{ loading() ? 'Refreshing…' : 'Refresh Report' }}
-      </button>
+      <div class="intro-actions">
+        <button type="button" class="btn-outline" (click)="previewPdf()" [disabled]="pdfLoading()">
+          {{ pdfLoading() ? 'Generating…' : 'Preview PDF' }}
+        </button>
+        <button type="button" class="btn-primary" (click)="downloadPdf()" [disabled]="pdfLoading()">
+          {{ pdfLoading() ? 'Generating…' : 'Download PDF' }}
+        </button>
+        <button type="button" class="btn-primary" (click)="loadReport()" [disabled]="loading() || pdfLoading()">
+          {{ loading() ? 'Refreshing…' : 'Refresh Report' }}
+        </button>
+      </div>
     </div>
 
     @if (report(); as r) {

@@ -65,6 +65,7 @@ export class AdminStaffComponent implements OnInit {
   nextEmployeeId = signal('');
   attendanceDate = new Date().toISOString().split('T')[0];
   attendanceMarks = signal<Record<string, AttendanceStatus>>({});
+  showInitialPassword = signal(false);
 
   newStaff = {
     firstName: '',
@@ -167,6 +168,31 @@ export class AdminStaffComponent implements OnInit {
         this.showToast('error', e.error?.message || 'Failed to add staff');
       },
     });
+  }
+
+  addFormProgress(): number {
+    const checks = [
+      Boolean(this.newStaff.firstName?.trim()),
+      Boolean(this.newStaff.lastName?.trim()),
+      Boolean(this.newStaff.email?.trim()),
+      Boolean(this.newStaff.role),
+      Boolean(this.newStaff.hireDate),
+    ];
+    return Math.round((checks.filter(Boolean).length / checks.length) * 100);
+  }
+
+  roleHint(): string {
+    if (this.newStaff.role === 'principal') {
+      return 'Principal account selected. Use an institutional email for secure access.';
+    }
+    if (this.newStaff.role === 'admin') {
+      return 'Administrator account selected. This role can manage operations and records.';
+    }
+    return 'Teacher account selected. This role is focused on academics and class workflows.';
+  }
+
+  toggleInitialPasswordVisibility(): void {
+    this.showInitialPassword.update((v) => !v);
   }
 
   startEdit(s: StaffMember) {
@@ -293,6 +319,7 @@ export class AdminStaffComponent implements OnInit {
       hireDate: new Date().toISOString().split('T')[0],
     };
     this.nextEmployeeId.set('');
+    this.showInitialPassword.set(false);
   }
 
   private showToast(type: 'success' | 'error', msg: string) {

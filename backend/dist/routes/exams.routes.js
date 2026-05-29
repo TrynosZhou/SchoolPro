@@ -10,6 +10,7 @@ const grade_service_1 = require("../services/grade.service");
 const entities_2 = require("../entities");
 const honours_service_1 = require("../services/honours.service");
 const report_card_service_1 = require("../services/report-card.service");
+const grade_boundaries_1 = require("../types/grade-boundaries");
 const pdf_1 = require("../utils/pdf");
 const mark_sheet_service_1 = require("../services/mark-sheet.service");
 const results_analysis_service_1 = require("../services/results-analysis.service");
@@ -498,6 +499,8 @@ router.get('/report-cards/:studentId/:termId/pdf', (0, auth_1.authorize)(enums_1
         return res.status(404).json({ message: 'Report card not found' });
     const settings = await data_source_1.AppDataSource.getRepository(entities_1.SchoolSettings).findOne({ where: { id: 'default' } });
     const inline = req.query.preview === 'true';
+    const maxMarks = Number(report.examType?.maxMarks) || 100;
+    const metrics = await (0, report_card_service_1.getReportCardPdfMetrics)(report, maxMarks);
     const pdf = await (0, pdf_1.generateReportCardPdf)({
         schoolName: settings?.schoolName || 'School Pro Academy',
         tagline: settings?.tagline || undefined,
@@ -508,14 +511,22 @@ router.get('/report-cards/:studentId/:termId/pdf', (0, auth_1.authorize)(enums_1
         formName: report.student.schoolClass?.form?.name || '',
         termName: report.term.name,
         examTypeName: report.examType?.name,
-        subjectResults: report.subjectResults,
+        subjectResults: metrics.subjectResults,
         averageMark: Number(report.averageMark),
         overallGrade: report.overallGrade,
-        classPosition: report.classPosition,
-        formPosition: report.formPosition,
+        classPosition: metrics.classPosition ?? report.classPosition,
+        formPosition: metrics.formPosition ?? report.formPosition,
+        classTotal: metrics.classTotal,
+        formTotal: metrics.formTotal,
+        subjectsPassed: metrics.subjectsPassed,
+        totalSubjects: metrics.totalSubjects,
         classTeacherRemarks: report.classTeacherRemarks,
         principalRemarks: report.principalRemarks,
         generatedAt: report.generatedAt ? new Date(report.generatedAt) : new Date(),
+        gradeBoundaries: settings?.gradeBoundaries?.length
+            ? settings.gradeBoundaries
+            : grade_boundaries_1.DEFAULT_GRADE_BOUNDARIES,
+        reportCardId: report.id,
     });
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `${inline ? 'inline' : 'attachment'}; filename="report-card-${report.student.admissionNumber}.pdf"`);

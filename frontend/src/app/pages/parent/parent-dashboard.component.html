@@ -1,0 +1,146 @@
+<app-portal-layout portalTitle="Parent Portal" pageTitle="My Children" [navItems]="nav">
+
+  @if (toast(); as t) {
+    <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>
+  }
+
+  <header class="page-hero">
+    <div class="hero-text">
+      <p class="hero-eyebrow">Parent Portal</p>
+      <h1>My Children</h1>
+      <p>One parent account can be linked to multiple children. Enter each child's Student ID to add them.</p>
+    </div>
+    @if (isParent()) {
+      <button type="button" class="btn-primary" (click)="toggleLinkForm()">
+        {{ showLinkForm() ? 'Cancel' : '+ Link a child' }}
+      </button>
+    }
+  </header>
+
+  @if (isParent() && showLinkForm()) {
+    <section class="link-panel card">
+      <div class="link-panel-head">
+        <span class="link-icon">🔗</span>
+        <div>
+          <h2>Link a child to your account</h2>
+          <p>Enter your child's <strong>Student ID</strong> exactly as shown on the school admission letter. Repeat for each child you want on this account.</p>
+        </div>
+      </div>
+      <form class="link-form" (ngSubmit)="linkChild()">
+        <div class="form-grid form-grid--link">
+          <div class="field field-student-id">
+            <label for="admissionNumber">Student ID <span class="required">*</span></label>
+            <input
+              id="admissionNumber"
+              [(ngModel)]="linkForm.admissionNumber"
+              name="admissionNumber"
+              placeholder="e.g. SP000001"
+              required
+              autocapitalize="characters"
+              autocomplete="off"
+            />
+            <small class="field-hint">The unique ID assigned to your child when registered at the school.</small>
+          </div>
+          <div class="field">
+            <label for="relationship">Your relationship</label>
+            <select id="relationship" [(ngModel)]="linkForm.relationship" name="relationship">
+              <option value="Parent">Parent</option>
+              <option value="Mother">Mother</option>
+              <option value="Father">Father</option>
+              <option value="Guardian">Guardian</option>
+            </select>
+          </div>
+        </div>
+        <div class="link-actions">
+          <button type="submit" class="btn-primary" [disabled]="linking()">
+            {{ linking() ? 'Linking…' : 'Link child' }}
+          </button>
+        </div>
+      </form>
+    </section>
+  }
+
+  @if (loading()) {
+    <div class="loading-state">
+      <div class="spinner"></div>
+      <p>Loading linked students…</p>
+    </div>
+  } @else if (!children().length) {
+    <section class="empty-state card">
+      <span class="empty-icon">👨‍👩‍👧</span>
+      <h2>No children linked yet</h2>
+      @if (isParent()) {
+        <p>Link each child using their Student ID. You can add as many children as you need to this account.</p>
+        @if (!showLinkForm()) {
+          <button type="button" class="btn-primary" (click)="showLinkForm.set(true)">Link your first child</button>
+        }
+      } @else {
+        <p>Your account is not linked to any student records. Contact the school office for assistance.</p>
+      }
+    </section>
+  } @else {
+    <div class="stats-row">
+      <div class="stat-chip">
+        <span class="stat-val">{{ childCount() }}</span>
+        <span class="stat-lbl">{{ childCount() === 1 ? 'Linked child' : 'Linked children' }}</span>
+      </div>
+      @if (isParent() && !showLinkForm()) {
+        <button type="button" class="btn-outline-sm" (click)="showLinkForm.set(true)">+ Link another child</button>
+      }
+    </div>
+
+    <div class="children-grid">
+      @for (child of children(); track child.student.id) {
+        <article class="child-card card">
+          <div class="child-header">
+            <div class="child-avatar">{{ child.student.firstName.charAt(0) }}{{ child.student.lastName.charAt(0) }}</div>
+            <div class="child-title">
+              <h3>{{ child.student.firstName }} {{ child.student.lastName }}</h3>
+              <div class="child-meta">
+                @if (child.student.admissionNumber) {
+                  <span class="meta-pill id">{{ child.student.admissionNumber }}</span>
+                }
+                <span class="meta-pill class">{{ classLabel(child) }}</span>
+                @if (child.relationship) {
+                  <span class="meta-pill rel">{{ child.relationship }}</span>
+                }
+              </div>
+            </div>
+          </div>
+
+          <div class="child-stats">
+            <div class="mini-stat" [class.warn]="child.balanceOwed > 0">
+              <span class="label">Balance owed</span>
+              <span class="value">{{ '$' + (child.balanceOwed | number:'1.2-2') }}</span>
+            </div>
+            <div class="mini-stat">
+              <span class="label">Attendance</span>
+              <span class="value sm">{{ attendanceSummary(child) }}</span>
+            </div>
+          </div>
+
+          @if (child.recentAssessments.length) {
+            <div class="assessments-block">
+              <h4>Recent weekly assessments</h4>
+              <ul class="assessment-list">
+                @for (a of child.recentAssessments; track a.weekStart + a.topic) {
+                  <li>
+                    <strong>{{ a.topic }}</strong>
+                    <span>{{ a.score ?? '—' }}/{{ a.maxScore ?? '—' }} · {{ a.weekStart }}</span>
+                  </li>
+                }
+              </ul>
+            </div>
+          }
+
+          <div class="child-actions">
+            <a [routerLink]="['/parent/finance', child.student.id]" class="action-btn finance">Financial statement</a>
+            <a [routerLink]="['/parent/attendance', child.student.id]" class="action-btn">Attendance</a>
+            <a [routerLink]="['/parent/report-card', child.student.id]" class="action-btn primary">Report card</a>
+          </div>
+        </article>
+      }
+    </div>
+  }
+
+</app-portal-layout>

@@ -48,6 +48,8 @@ async function bootstrap() {
         console.log('Database connected');
         const { seedDatabase } = await Promise.resolve().then(() => __importStar(require('./seed')));
         await seedDatabase();
+        const { ensureDefaultRoles } = await Promise.resolve().then(() => __importStar(require('./services/role-permissions.service')));
+        await ensureDefaultRoles();
         app_1.default.listen(env_1.env.port, () => {
             console.log(`School Pro API running on http://localhost:${env_1.env.port}`);
         });

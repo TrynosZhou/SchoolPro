@@ -17,6 +17,8 @@
   .toolbar { display: flex; flex-wrap: wrap; gap: .45rem; align-items: center; }
   .btn-primary { border: 0; border-radius: 10px; padding: .55rem .9rem; background: #2563eb; color: #fff; font-weight: 600; cursor: pointer; }
   .btn-outline { border: 1px solid #cbd5e1; border-radius: 10px; padding: .52rem .75rem; background: #fff; color: #334155; font-size: .85rem; cursor: pointer; }
+  .btn-pdf-preview { border-color: #93c5fd; background: #eff6ff; color: #1d4ed8; font-weight: 600; }
+  .btn-pdf-download { border-color: #86efac; background: #f0fdf4; color: #166534; font-weight: 600; }
 
   .toast { margin-bottom: 1rem; border-radius: 10px; padding: .6rem .8rem; background: #dcfce7; border: 1px solid #86efac; color: #166534; font-size: .88rem; }
   .toast.error { background: #fee2e2; border-color: #fecaca; color: #991b1b; }

@@ -70,6 +70,22 @@ __decorate([
     __metadata("design:type", Number)
 ], ReportCard.prototype, "formPosition", void 0);
 __decorate([
+    (0, typeorm_1.Column)({ type: 'int', nullable: true }),
+    __metadata("design:type", Number)
+], ReportCard.prototype, "classTotal", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'int', nullable: true }),
+    __metadata("design:type", Number)
+], ReportCard.prototype, "formTotal", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'int', nullable: true }),
+    __metadata("design:type", Number)
+], ReportCard.prototype, "subjectsPassed", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'int', nullable: true }),
+    __metadata("design:type", Number)
+], ReportCard.prototype, "totalSubjects", void 0);
+__decorate([
     (0, typeorm_1.Column)({ nullable: true }),
     __metadata("design:type", String)
 ], ReportCard.prototype, "classTeacherRemarks", void 0);

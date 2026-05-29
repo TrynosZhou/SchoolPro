@@ -5,6 +5,8 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 import type { GradeBoundary } from '../types/grade-boundaries';
+import type { SecurityPolicy } from '../types/security-policy';
+import type { IntegrationsConfig } from '../types/integrations-config';
 
 @Entity('school_settings')
 export class SchoolSettings {
@@ -42,6 +44,14 @@ export class SchoolSettings {
   /** Exam mark → letter grade bands (min % per grade). */
   @Column({ type: 'jsonb', nullable: true })
   gradeBoundaries?: GradeBoundary[];
+
+  /** Password policy, login lockout, session timeout, etc. */
+  @Column({ type: 'jsonb', nullable: true })
+  securityPolicy?: SecurityPolicy;
+
+  /** Third-party API integrations (WhatsApp, email, webhooks, payments, etc.). */
+  @Column({ type: 'jsonb', nullable: true })
+  integrationsConfig?: IntegrationsConfig;
 
   @UpdateDateColumn()
   updatedAt!: Date;

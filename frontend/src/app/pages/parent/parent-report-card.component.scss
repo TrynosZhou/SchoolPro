@@ -48,18 +48,104 @@
 .results-table {
   width: 100%;
   border-collapse: collapse;
-  th, td {
+  table-layout: fixed;
+  border: 1px solid #94a3b8;
+
+  .col-subject {
+    width: 26%;
+    min-width: 9rem;
+    word-wrap: break-word;
+    overflow-wrap: anywhere;
+  }
+
+  .col-code {
+    width: 3.5rem;
+    min-width: 3.5rem;
+    text-align: center;
+    white-space: nowrap;
+  }
+
+  .col-mark,
+  .col-grade {
+    width: 3.75rem;
+    min-width: 3.75rem;
+    white-space: nowrap;
+    text-align: center;
+  }
+
+  .col-rank {
+    width: 3.5rem;
+    min-width: 3.5rem;
+    white-space: nowrap;
+    text-align: center;
+  }
+
+  .col-avg,
+  td.col-avg {
+    width: 3.75rem;
+    min-width: 3.75rem;
+    white-space: nowrap;
+    text-align: center;
+  }
+
+  th.col-avg {
+    text-align: center;
+  }
+
+  th,
+  td {
     padding: 0.65rem 1rem;
     text-align: left;
-    border-bottom: 1px solid #e2e8f0;
+    border: 1px solid #94a3b8;
   }
   th {
-    background: #f8fafc;
-    font-size: 0.75rem;
+    background: #f1f5f9;
+    font-size: 0.72rem;
+    font-weight: 700;
     text-transform: uppercase;
-    color: #475569;
+    color: #000000;
+    white-space: nowrap;
+
+    &.stacked-th {
+      line-height: 1.15;
+      vertical-align: bottom;
+
+      span {
+        display: block;
+        font-size: 0.65rem;
+        letter-spacing: 0.04em;
+      }
+    }
+
+    &.nowrap {
+      white-space: nowrap;
+    }
   }
-  .grade { font-weight: 600; color: #4338ca; }
+
+  td.mean,
+  td.pos {
+    white-space: nowrap;
+  }
+  .mark-cell {
+    font-weight: 700;
+    text-align: center;
+    color: #000000;
+  }
+
+  .grade-cell {
+    text-align: center;
+  }
+
+  .grade-pill {
+    display: inline-block;
+    min-width: 1.5rem;
+    padding: 0.15rem 0.45rem;
+    border-radius: 4px;
+    background: #eef2ff;
+    color: #4338ca;
+    font-weight: 700;
+    font-size: 0.85rem;
+  }
   .remarks { color: #334155; max-width: 20rem; }
 }
 

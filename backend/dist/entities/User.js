@@ -15,6 +15,7 @@ const enums_1 = require("./enums");
 const Student_1 = require("./Student");
 const Staff_1 = require("./Staff");
 const Parent_1 = require("./Parent");
+const SchoolRole_1 = require("./SchoolRole");
 let User = class User {
 };
 exports.User = User;
@@ -47,9 +48,26 @@ __decorate([
     __metadata("design:type", String)
 ], User.prototype, "role", void 0);
 __decorate([
+    (0, typeorm_1.Column)({ nullable: true }),
+    __metadata("design:type", String)
+], User.prototype, "schoolRoleId", void 0);
+__decorate([
+    (0, typeorm_1.ManyToOne)(() => SchoolRole_1.SchoolRole, (schoolRole) => schoolRole.users, { nullable: true, onDelete: 'SET NULL' }),
+    (0, typeorm_1.JoinColumn)({ name: 'schoolRoleId' }),
+    __metadata("design:type", SchoolRole_1.SchoolRole)
+], User.prototype, "schoolRole", void 0);
+__decorate([
     (0, typeorm_1.Column)({ default: true }),
     __metadata("design:type", Boolean)
 ], User.prototype, "isActive", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'int', default: 0 }),
+    __metadata("design:type", Number)
+], User.prototype, "failedLoginAttempts", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'timestamptz', nullable: true }),
+    __metadata("design:type", Date)
+], User.prototype, "lockedUntil", void 0);
 __decorate([
     (0, typeorm_1.Column)({ nullable: true }),
     __metadata("design:type", String)

@@ -34,6 +34,12 @@
         <button type="button" class="btn-primary" (click)="getReport()" [disabled]="loading()">
           {{ loading() ? 'Loading…' : 'Get Report' }}
         </button>
+        <button type="button" class="btn-outline" (click)="previewPdf()" [disabled]="pdfLoading() || loading()">
+          {{ pdfLoading() ? 'Generating…' : 'Preview PDF' }}
+        </button>
+        <button type="button" class="btn-outline" (click)="downloadPdf()" [disabled]="pdfLoading() || loading()">
+          {{ pdfLoading() ? 'Generating…' : 'Download PDF' }}
+        </button>
         @if (selectedStudentId || report()) {
           <button type="button" class="btn-ghost" (click)="clearSelection()">Clear</button>
         }

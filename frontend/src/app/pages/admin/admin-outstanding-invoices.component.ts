@@ -55,6 +55,7 @@ export class AdminOutstandingInvoicesComponent implements OnInit {
   readonly adminNav = ADMIN_NAV_SECTIONS;
 
   loading = signal(true);
+  pdfLoading = signal(false);
   toast = signal<{ type: 'success' | 'error'; msg: string } | null>(null);
   report = signal<OutstandingInvoicesReport | null>(null);
 
@@ -77,7 +78,46 @@ export class AdminOutstandingInvoicesComponent implements OnInit {
   }
 
   classHeading(group: OutstandingInvoicesGroup): string {
-    return group.formName ? `${group.formName} ${group.className}` : group.className;
+    const className = (group.className || '').trim();
+    if (!className) return 'Class —';
+    return /^class\s+/i.test(className) ? className : `Class ${className}`;
+  }
+
+  previewPdf() {
+    this.exportPdf(true);
+  }
+
+  downloadPdf() {
+    this.exportPdf(false);
+  }
+
+  private exportPdf(preview: boolean) {
+    this.pdfLoading.set(true);
+    const query = preview ? { preview: 'true' } : undefined;
+    this.api.getBlob('/billing/reports/outstanding-invoices/export.pdf', query).subscribe({
+      next: (blob) => {
+        this.pdfLoading.set(false);
+        if (blob.type && !blob.type.includes('pdf')) {
+          this.showToast('error', 'Server did not return a PDF file');
+          return;
+        }
+        const url = URL.createObjectURL(blob);
+        if (preview) {
+          window.open(url, '_blank', 'noopener,noreferrer');
+          setTimeout(() => URL.revokeObjectURL(url), 90_000);
+          return;
+        }
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'outstanding-invoices-report.pdf';
+        a.click();
+        URL.revokeObjectURL(url);
+      },
+      error: (e) => {
+        this.pdfLoading.set(false);
+        this.showToast('error', e.error?.message || 'Failed to generate outstanding invoices PDF');
+      },
+    });
   }
 
   private showToast(type: 'success' | 'error', msg: string) {

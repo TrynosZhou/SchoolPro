@@ -7,7 +7,20 @@ import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
 import { ApiService } from '../../core/services/api.service';
 import { environment } from '../../../environments/environment';
 
-type Tab = 'profile' | 'notifications' | 'store';
+type Tab = 'profile' | 'security' | 'notifications' | 'store';
+
+interface SecurityPolicy {
+  minPasswordLength: number;
+  requireUppercase: boolean;
+  requireLowercase: boolean;
+  requireNumber: boolean;
+  requireSpecialChar: boolean;
+  maxLoginAttempts: number;
+  lockoutDurationMinutes: number;
+  sessionTimeoutMinutes: number;
+  passwordExpiryDays: number;
+  requirePasswordChangeOnFirstLogin: boolean;
+}
 
 interface GradeBoundaryRow {
   grade: string;
@@ -126,6 +139,7 @@ export class AdminSettingsComponent implements OnInit {
 
   readonly tabs: { id: Tab; label: string; icon: string; desc: string }[] = [
     { id: 'profile', label: 'School Profile', icon: '🏫', desc: 'Branding & contact details' },
+    { id: 'security', label: 'Security', icon: '🔒', desc: 'Password policy & login protection' },
     { id: 'notifications', label: 'WhatsApp', icon: '📱', desc: 'Parent messaging' },
     { id: 'store', label: 'Tuckshop', icon: '🛒', desc: 'Inventory & stock' },
   ];
@@ -160,6 +174,21 @@ export class AdminSettingsComponent implements OnInit {
     currency: 'USD',
     feeReminderTemplate: '',
   };
+
+  securityForm: SecurityPolicy = {
+    minPasswordLength: 8,
+    requireUppercase: true,
+    requireLowercase: true,
+    requireNumber: true,
+    requireSpecialChar: false,
+    maxLoginAttempts: 5,
+    lockoutDurationMinutes: 15,
+    sessionTimeoutMinutes: 480,
+    passwordExpiryDays: 0,
+    requirePasswordChangeOnFirstLogin: false,
+  };
+
+  securityPreviewPassword = signal('SamplePass1');
 
   newYear = { name: '', startDate: '', endDate: '', isCurrent: false };
   newTerm = { name: '', termNumber: 1, startDate: '', endDate: '', schoolYearId: '', isCurrent: false };
@@ -223,6 +252,38 @@ export class AdminSettingsComponent implements OnInit {
     this.tabs.find((t) => t.id === this.activeTab()) ?? this.tabs[0]
   );
 
+  securityPolicyRules(): { label: string; met: boolean }[] {
+    const p = this.securityForm;
+    const pwd = this.securityPreviewPassword();
+    return [
+      { label: `At least ${p.minPasswordLength} characters`, met: pwd.length >= p.minPasswordLength },
+      { label: 'One uppercase letter (A–Z)', met: !p.requireUppercase || /[A-Z]/.test(pwd) },
+      { label: 'One lowercase letter (a–z)', met: !p.requireLowercase || /[a-z]/.test(pwd) },
+      { label: 'One number (0–9)', met: !p.requireNumber || /\d/.test(pwd) },
+      { label: 'One special character', met: !p.requireSpecialChar || /[^A-Za-z0-9]/.test(pwd) },
+    ];
+  }
+
+  securityStrengthScore(): number {
+    const rules = this.securityPolicyRules();
+    const met = rules.filter((r) => r.met).length;
+    return Math.round((met / rules.length) * 100);
+  }
+
+  securityStrengthLabel(): string {
+    const s = this.securityStrengthScore();
+    if (s >= 100) return 'Strong';
+    if (s >= 60) return 'Fair';
+    return 'Weak';
+  }
+
+  sessionTimeoutLabel(): string {
+    const m = this.securityForm.sessionTimeoutMinutes;
+    if (m >= 1440 && m % 1440 === 0) return `${m / 1440} day${m / 1440 === 1 ? '' : 's'}`;
+    if (m >= 60 && m % 60 === 0) return `${m / 60} hour${m / 60 === 1 ? '' : 's'}`;
+    return `${m} minutes`;
+  }
+
   ngOnInit() {
     this.loadAll();
   }
@@ -234,13 +295,14 @@ export class AdminSettingsComponent implements OnInit {
   loadAll() {
     this.loading.set(true);
     forkJoin({
-      settings: this.api.get<{ school: SchoolSettings; whatsapp: WhatsAppStatus }>('/admin/settings'),
+      settings: this.api.get<{ school: SchoolSettings; security: SecurityPolicy; whatsapp: WhatsAppStatus }>('/admin/settings'),
       tuckshop: this.api.get<TuckshopItem[]>('/admin/tuckshop/items'),
     }).subscribe({
       next: (data) => {
         this.school.set(data.settings.school);
         this.whatsapp.set(data.settings.whatsapp);
         this.profileForm = { ...data.settings.school };
+        this.securityForm = { ...data.settings.security };
         this.tuckshopItems.set(data.tuckshop);
         this.loading.set(false);
       },
@@ -313,6 +375,36 @@ export class AdminSettingsComponent implements OnInit {
       error: () => {
         this.submitting.set(false);
         this.showToast('error', 'Failed to save profile');
+      },
+    });
+  }
+
+  resetSecurityDefaults() {
+    this.securityForm = {
+      minPasswordLength: 8,
+      requireUppercase: true,
+      requireLowercase: true,
+      requireNumber: true,
+      requireSpecialChar: false,
+      maxLoginAttempts: 5,
+      lockoutDurationMinutes: 15,
+      sessionTimeoutMinutes: 480,
+      passwordExpiryDays: 0,
+      requirePasswordChangeOnFirstLogin: false,
+    };
+    this.showToast('success', 'Restored recommended defaults (save to apply).');
+  }
+
+  saveSecurityPolicy() {
+    this.submitting.set(true);
+    this.api.patch<SchoolSettings>('/admin/settings', { securityPolicy: this.securityForm }).subscribe({
+      next: () => {
+        this.submitting.set(false);
+        this.showToast('success', 'Security policy saved. New logins will use these rules.');
+      },
+      error: (e) => {
+        this.submitting.set(false);
+        this.showToast('error', e.error?.message || 'Failed to save security policy');
       },
     });
   }

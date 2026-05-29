@@ -6,6 +6,9 @@ export interface User {
   firstName: string;
   lastName: string;
   role: UserRole;
+  schoolRoleId?: string | null;
+  schoolRoleName?: string | null;
+  permissions?: string[];
   staffId?: string;
   parentId?: string;
   studentId?: string;

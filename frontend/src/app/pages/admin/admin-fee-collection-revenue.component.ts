@@ -230,6 +230,14 @@ export class AdminFeeCollectionRevenueComponent implements OnInit {
     });
   }
 
+  previewPdf() {
+    this.exportPdf(true);
+  }
+
+  downloadPdf() {
+    this.exportPdf(false);
+  }
+
   print(mode: 'summary' | 'detailed') {
     this.viewMode = mode;
     setTimeout(() => window.print(), 60);
@@ -268,6 +276,39 @@ export class AdminFeeCollectionRevenueComponent implements OnInit {
 
   barWidth(value: number, max: number): string {
     return `${Math.max(4, (value / max) * 100)}%`;
+  }
+
+  private exportPdf(preview: boolean) {
+    if (!this.report()) {
+      this.showToast('error', 'Load report first.');
+      return;
+    }
+    this.exporting.set(true);
+    const mode: 'summary' | 'detailed' = this.isSummaryOnly() ? 'summary' : (this.viewMode === 'summary' ? 'summary' : 'detailed');
+    this.api.getBlob('/billing/reports/fee-collection-revenue/export.pdf', this.params({ mode, ...(preview ? { preview: 'true' } : {}) })).subscribe({
+      next: (blob) => {
+        this.exporting.set(false);
+        if (blob.type && !blob.type.includes('pdf')) {
+          this.showToast('error', 'Server did not return a PDF file');
+          return;
+        }
+        const url = URL.createObjectURL(blob);
+        if (preview) {
+          window.open(url, '_blank', 'noopener,noreferrer');
+          setTimeout(() => URL.revokeObjectURL(url), 90_000);
+          return;
+        }
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `fee-collection-revenue-${mode}.pdf`;
+        a.click();
+        URL.revokeObjectURL(url);
+      },
+      error: (e) => {
+        this.exporting.set(false);
+        this.showToast('error', e.error?.message || 'Failed to generate PDF');
+      },
+    });
   }
 
   private showToast(type: 'success' | 'error', msg: string) {

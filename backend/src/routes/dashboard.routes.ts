@@ -52,19 +52,21 @@ router.get('/teacher', authorize(UserRole.TEACHER), async (req: AuthRequest, res
 
 router.get('/parent', authorize(UserRole.PARENT), async (req: AuthRequest, res: Response) => {
   const children = await AppDataSource.query(`
-    SELECT s.*, c.name as "className", f.name as "formName"
+    SELECT s.*, c.name as "className", f.name as "formName",
+           g.id as "linkId", g.relationship
     FROM guardians g
     JOIN students s ON s.id = g."studentId"
     LEFT JOIN classes c ON c.id = s."classId"
-    LEFT JOIN forms f ON f.id = c."formId"
-    WHERE g."parentId" = $1
+    LEFT JOIN forms f ON f.id = COALESCE(c."formId", s."formId")
+    WHERE g."parentId" = $1 AND s."isActive" = true
+    ORDER BY s."lastName", s."firstName"
   `, [req.user!.parentId]);
 
   const summaries = [];
   for (const child of children) {
     const [attendance, balance, recentAssessment] = await Promise.all([
       AppDataSource.query(`
-        SELECT status, COUNT(*) FROM student_attendance
+        SELECT status, COUNT(*)::text as count FROM student_attendance
         WHERE "studentId" = $1 AND date >= CURRENT_DATE - INTERVAL '30 days'
         GROUP BY status
       `, [child.id]),
@@ -78,8 +80,10 @@ router.get('/parent', authorize(UserRole.PARENT), async (req: AuthRequest, res: 
       `, [child.id]),
     ]);
     summaries.push({
+      linkId: child.linkId,
+      relationship: child.relationship,
       student: child,
-      attendance: attendance,
+      attendance,
       balanceOwed: Number(balance[0]?.owed || 0),
       recentAssessments: recentAssessment,
     });

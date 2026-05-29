@@ -5,6 +5,8 @@ import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { RouterLink } from '@angular/router';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
+import { TEACHER_NAV_SECTIONS } from '../../core/config/teacher-nav';
+import type { NavSection } from '../../shared/portal-layout/portal-layout.component';
 import { ApiService } from '../../core/services/api.service';
 import { classDisplayName } from '../../core/utils/class-display';
 import { environment } from '../../../environments/environment';
@@ -16,6 +18,9 @@ interface SubjectResult {
   marks: number;
   grade: string;
   remarks?: string;
+  mean?: number;
+  subjectPosition?: number;
+  subjectPositionTotal?: number;
 }
 
 export interface ReportCardRow {
@@ -28,6 +33,10 @@ export interface ReportCardRow {
   overallGrade?: string;
   classPosition?: number;
   formPosition?: number;
+  classTotal?: number;
+  formTotal?: number;
+  subjectsPassed?: number;
+  totalSubjects?: number;
   classTeacherRemarks?: string;
   principalRemarks?: string;
   student?: {
@@ -60,7 +69,8 @@ export class AdminReportCardsComponent implements OnInit, OnDestroy {
   private api = inject(ApiService);
   private sanitizer = inject(DomSanitizer);
 
-  readonly adminNav = ADMIN_NAV_SECTIONS;
+  portalTitle = signal('Admin Portal');
+  navSections = signal<NavSection[]>(ADMIN_NAV_SECTIONS);
 
   examTypes = signal<{ id: string; name: string }[]>([]);
   terms = signal<{ id: string; name: string; isCurrent?: boolean }[]>([]);
@@ -85,6 +95,7 @@ export class AdminReportCardsComponent implements OnInit, OnDestroy {
   private currentRole: UserRole | null = null;
   remarkDrafts = signal<Record<string, { classTeacherRemarks: string; principalRemarks: string }>>({});
   savingRemarks = signal<Record<string, boolean>>({});
+  remarksSavedIds = signal<Set<string>>(new Set());
 
   filtersReady(): boolean {
     return !!(this.filters.examTypeId && this.filters.termId && this.filters.classId);
@@ -139,6 +150,7 @@ export class AdminReportCardsComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.currentRole = this.getCurrentRole();
+    this.applyPortalForRole();
     this.api.get<{ id: string; name: string }[]>('/exams/types').subscribe((t) => this.examTypes.set(t));
     this.api.get<{ id: string; name: string; isCurrent?: boolean }[]>('/exams/terms').subscribe((terms) => {
       this.terms.set(terms);
@@ -151,6 +163,8 @@ export class AdminReportCardsComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    document.documentElement.style.overflow = '';
+    document.body.style.overflow = '';
     this.revokePdfUrl();
   }
 
@@ -238,6 +252,8 @@ export class AdminReportCardsComponent implements OnInit, OnDestroy {
         `${report.student?.firstName} ${report.student?.lastName} — Report Card`,
       );
       this.pdfPreviewOpen.set(true);
+      document.documentElement.style.overflow = 'hidden';
+      document.body.style.overflow = 'hidden';
     });
   }
 
@@ -284,12 +300,29 @@ export class AdminReportCardsComponent implements OnInit, OnDestroy {
   closePdfPreview(): void {
     this.pdfPreviewOpen.set(false);
     this.revokePdfUrl();
+    document.documentElement.style.overflow = '';
+    document.body.style.overflow = '';
   }
 
   positionLabel(n?: number): string {
     if (!n) return '—';
     const suffix = n === 1 ? 'st' : n === 2 ? 'nd' : n === 3 ? 'rd' : 'th';
     return `${n}${suffix}`;
+  }
+
+  positionOutOfLabel(position?: number, total?: number): string {
+    if (!position || !total) return '—';
+    return `${position} Out Of ${total}`;
+  }
+
+  subjectsPassedLabel(passed?: number, total?: number): string {
+    if (passed == null || !total) return '—';
+    return `${passed} Out Of ${total}`;
+  }
+
+  subjectPositionLabel(pos?: number, total?: number): string {
+    if (!pos || !total) return '—';
+    return `${pos}/${total}`;
   }
 
   canEditClassTeacherRemark(): boolean {
@@ -309,6 +342,7 @@ export class AdminReportCardsComponent implements OnInit, OnDestroy {
       ...drafts,
       [reportId]: { ...this.remarkDraft(reportId), classTeacherRemarks: value },
     }));
+    this.clearRemarksSaved(reportId);
   }
 
   onPrincipalRemarkInput(reportId: string, value: string): void {
@@ -316,16 +350,42 @@ export class AdminReportCardsComponent implements OnInit, OnDestroy {
       ...drafts,
       [reportId]: { ...this.remarkDraft(reportId), principalRemarks: value },
     }));
+    this.clearRemarksSaved(reportId);
   }
 
-  saveRemarks(report: ReportCardRow): void {
+  onRemarksBlur(report: ReportCardRow): void {
+    this.saveRemarks(report, { silent: true, onlyIfChanged: true });
+  }
+
+  saveRemarks(
+    report: ReportCardRow,
+    opts?: { silent?: boolean; onlyIfChanged?: boolean },
+  ): void {
     const draft = this.remarkDraft(report.id);
+    const payload: { classTeacherRemarks?: string; principalRemarks?: string } = {};
+    if (this.canEditClassTeacherRemark()) {
+      payload.classTeacherRemarks = draft.classTeacherRemarks;
+    }
+    if (this.canEditPrincipalRemark()) {
+      payload.principalRemarks = draft.principalRemarks;
+    }
+    if (!Object.keys(payload).length) return;
+
+    if (opts?.onlyIfChanged) {
+      const classUnchanged =
+        payload.classTeacherRemarks === undefined ||
+        (report.classTeacherRemarks || '') === payload.classTeacherRemarks;
+      const principalUnchanged =
+        payload.principalRemarks === undefined ||
+        (report.principalRemarks || '') === payload.principalRemarks;
+      if (classUnchanged && principalUnchanged) {
+        return;
+      }
+    }
+
     this.savingRemarks.update((state) => ({ ...state, [report.id]: true }));
     this.api
-      .patch<ReportCardRow>(`/exams/report-cards/${report.id}/remarks`, {
-        classTeacherRemarks: draft.classTeacherRemarks,
-        principalRemarks: draft.principalRemarks,
-      })
+      .patch<ReportCardRow>(`/exams/report-cards/${report.id}/remarks`, payload)
       .subscribe({
         next: (saved) => {
           this.reports.update((rows) => rows.map((r) => (r.id === report.id ? { ...r, ...saved } : r)));
@@ -337,13 +397,37 @@ export class AdminReportCardsComponent implements OnInit, OnDestroy {
             },
           }));
           this.savingRemarks.update((state) => ({ ...state, [report.id]: false }));
-          this.showToast('success', 'Remarks saved.');
+          if (opts?.silent) {
+            this.remarksSavedIds.update((set) => new Set(set).add(report.id));
+            setTimeout(() => {
+              this.remarksSavedIds.update((set) => {
+                const next = new Set(set);
+                next.delete(report.id);
+                return next;
+              });
+            }, 2000);
+          } else {
+            this.showToast('success', 'Remarks saved.');
+          }
         },
         error: (e) => {
           this.savingRemarks.update((state) => ({ ...state, [report.id]: false }));
           this.showToast('error', e.error?.message || 'Could not save remarks.');
         },
       });
+  }
+
+  remarksJustSaved(reportId: string): boolean {
+    return this.remarksSavedIds().has(reportId);
+  }
+
+  private clearRemarksSaved(reportId: string): void {
+    this.remarksSavedIds.update((set) => {
+      if (!set.has(reportId)) return set;
+      const next = new Set(set);
+      next.delete(reportId);
+      return next;
+    });
   }
 
   private fetchPdfBlob(report: ReportCardRow, preview: boolean): Promise<Blob | null> {
@@ -407,6 +491,17 @@ export class AdminReportCardsComponent implements OnInit, OnDestroy {
     }
     this.remarkDrafts.set(drafts);
     this.savingRemarks.set({});
+    this.remarksSavedIds.set(new Set());
+  }
+
+  private applyPortalForRole(): void {
+    if (this.currentRole === 'teacher') {
+      this.portalTitle.set('Teacher Portal');
+      this.navSections.set(TEACHER_NAV_SECTIONS);
+      return;
+    }
+    this.portalTitle.set('Admin Portal');
+    this.navSections.set(ADMIN_NAV_SECTIONS);
   }
 
   private getCurrentRole(): UserRole | null {

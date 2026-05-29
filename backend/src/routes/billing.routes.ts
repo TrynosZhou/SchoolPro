@@ -32,6 +32,70 @@ import { generateReconciliationPdf } from '../utils/pdf';
 const router = Router();
 router.use(authenticate);
 
+async function renderPdfHeaderWithLogo(
+  doc: InstanceType<typeof PDFDocument>,
+  title: string,
+  opts?: { subtitle?: string; margin?: number; logoSize?: number },
+) {
+  const margin = opts?.margin ?? 34;
+  const logoSize = opts?.logoSize ?? 36;
+  const settings = await AppDataSource.getRepository(SchoolSettings).findOne({ where: { id: 'default' } });
+  const schoolName = settings?.schoolName || 'School Pro Academy';
+  const tagline = settings?.tagline || '';
+  const logoUrl = settings?.logoUrl;
+  const logoPath = logoUrl ? path.join(process.cwd(), logoUrl.replace(/^\/+/, '')) : null;
+  const hasLogo = Boolean(logoPath && fs.existsSync(logoPath));
+
+  let titleX = margin;
+  if (hasLogo && logoPath) {
+    try {
+      doc.image(logoPath, margin, margin - 8, { fit: [logoSize, logoSize] });
+      titleX = margin + logoSize + 10;
+    } catch {
+      titleX = margin;
+    }
+  }
+
+  const lineY = margin + logoSize + 10;
+  const contentW = doc.page.width - margin * 2;
+  doc.fontSize(12).font('Helvetica-Bold').text(schoolName, titleX, margin - 2, { width: contentW - (titleX - margin) });
+  if (tagline) {
+    doc.fontSize(8).fillColor('#64748b').text(tagline, titleX, margin + 14, { width: contentW - (titleX - margin) });
+    doc.fillColor('#000000');
+  }
+  doc.fontSize(15).font('Helvetica-Bold').text(title, margin, margin + logoSize + 2);
+  if (opts?.subtitle) {
+    doc.moveDown(0.2);
+    doc.fontSize(9).font('Helvetica').text(opts.subtitle);
+  }
+  // Keep divider safely below the title/subtitle block to avoid crossing text.
+  const dividerY = Math.max(lineY, doc.y + 8);
+  doc.moveTo(margin, dividerY).lineTo(margin + contentW, dividerY).strokeColor('#e2e8f0').stroke();
+  doc.moveDown(0.6);
+}
+
+function scalePdfTableCols<T extends { w: number }>(columns: T[], targetW: number): T[] {
+  const sum = columns.reduce((s, c) => s + c.w, 0);
+  if (!sum || Math.abs(sum - targetW) < 1) return columns;
+  const scaled = columns.map((c) => ({ ...c, w: Math.floor((c.w / sum) * targetW) }));
+  const used = scaled.reduce((s, c) => s + c.w, 0);
+  scaled[scaled.length - 1] = { ...scaled[scaled.length - 1], w: scaled[scaled.length - 1].w + (targetW - used) };
+  return scaled;
+}
+
+function renderGeneratedFooter(
+  doc: InstanceType<typeof PDFDocument>,
+  generatedAt: Date,
+  margin = 34,
+) {
+  const contentW = doc.page.width - margin * 2;
+  const y = doc.page.height - margin - 8;
+  doc.font('Helvetica').fontSize(7.5).fillColor('#64748b');
+  const pad2 = (n: number) => String(n).padStart(2, '0');
+  const formatted = `${pad2(generatedAt.getDate())}/${pad2(generatedAt.getMonth() + 1)}/${generatedAt.getFullYear()}, ${pad2(generatedAt.getHours())}:${pad2(generatedAt.getMinutes())}:${pad2(generatedAt.getSeconds())}`;
+  doc.text(`Generated: ${formatted}`, margin, y, { width: contentW, align: 'center' });
+}
+
 router.get('/fees', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.TEACHER), async (req, res: Response) => {
   await ensureRegistrationSchoolFees();
   const repo = AppDataSource.getRepository(SchoolFee);
@@ -331,6 +395,11 @@ router.post('/payments', authorize(UserRole.ADMIN), async (req: AuthRequest, res
 
     const branding = await loadSchoolBranding();
     const receiptNumber = generateNumber('RCP');
+    let linkedInvoiceNumber: string | undefined;
+    if (invoiceId) {
+      const linkedInv = await invoiceRepo.findOne({ where: { id: invoiceId, studentId } });
+      linkedInvoiceNumber = linkedInv?.invoiceNumber;
+    }
     const pdfPath = await generateReceiptPdf({
       receiptNumber,
       studentName: `${student.firstName} ${student.lastName}`,
@@ -340,6 +409,9 @@ router.post('/payments', authorize(UserRole.ADMIN), async (req: AuthRequest, res
       method,
       label,
       paidAt: new Date(),
+      paymentReference: payment.paymentReference,
+      notes: notes || undefined,
+      invoiceNumber: linkedInvoiceNumber,
       ...branding,
     });
 
@@ -383,7 +455,7 @@ router.get('/receipts/:id/pdf', authorize(UserRole.ADMIN, UserRole.DIRECTOR, Use
   const repo = AppDataSource.getRepository(Receipt);
   const receipt = await repo.findOne({
     where: { id: req.params.id },
-    relations: relations('payment', 'payment.student', 'payment.student.schoolClass'),
+    relations: relations('payment', 'payment.student', 'payment.student.schoolClass', 'payment.invoice'),
   });
   if (!receipt?.payment?.student) {
     return res.status(404).json({ message: 'Receipt not found' });
@@ -401,11 +473,18 @@ router.get('/receipts/:id/pdf', authorize(UserRole.ADMIN, UserRole.DIRECTOR, Use
     method: p.method,
     label: p.label,
     paidAt: p.paidAt,
+    paymentReference: p.paymentReference,
+    notes: p.notes || undefined,
+    invoiceNumber: p.invoice?.invoiceNumber,
     ...branding,
   });
   receipt.pdfPath = pdfPath;
   await repo.save(receipt);
 
+  const inline = String(req.query.preview || '') === 'true';
+  const fileName = `receipt-${receipt.receiptNumber || receipt.id}.pdf`;
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `${inline ? 'inline' : 'attachment'}; filename="${fileName}"`);
   res.sendFile(path.resolve(pdfPath));
 });
 
@@ -460,6 +539,10 @@ router.get('/invoices/:id/pdf', authorize(UserRole.ADMIN, UserRole.DIRECTOR, Use
   invoice.pdfPath = pdfPath;
   await repo.save(invoice);
 
+  const inline = String(req.query.preview || '') === 'true';
+  const fileName = `invoice-${invoice.invoiceNumber || invoice.id}.pdf`;
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `${inline ? 'inline' : 'attachment'}; filename="${fileName}"`);
   res.sendFile(path.resolve(pdfPath));
 });
 
@@ -492,6 +575,155 @@ router.get('/statement/:studentId', authorize(UserRole.ADMIN, UserRole.DIRECTOR,
   res.json({ ledger, invoices, payments, summary: { totalInvoiced, totalPaid, balance } });
 });
 
+router.get('/statement/:studentId/pdf', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.PARENT), async (req, res: Response) => {
+  const { termId } = req.query;
+  const studentRepo = AppDataSource.getRepository(Student);
+  const ledgerRepo = AppDataSource.getRepository(LedgerEntry);
+  const invoiceRepo = AppDataSource.getRepository(Invoice);
+  const paymentRepo = AppDataSource.getRepository(Payment);
+
+  const requestedStudentId = String(req.params.studentId || '').trim();
+  let student = await studentRepo.findOne({
+    where: { id: requestedStudentId },
+    relations: relations('schoolClass', 'schoolClass.form'),
+  });
+  if (!student) {
+    student = await studentRepo.findOne({
+      where: { admissionNumber: requestedStudentId },
+      relations: relations('schoolClass', 'schoolClass.form'),
+    });
+  }
+
+  const resolvedStudentId = student?.id || requestedStudentId;
+  const where: Record<string, string> = { studentId: resolvedStudentId };
+  if (termId) where.termId = termId as string;
+
+  const ledger = await ledgerRepo.find({ where, order: { entryDate: 'ASC' } });
+  const invoices = await invoiceRepo.find({ where: { studentId: resolvedStudentId }, order: { issuedDate: 'ASC' } });
+  const payments = await paymentRepo.find({ where: { studentId: resolvedStudentId }, order: { paidAt: 'ASC' } });
+
+  const totalInvoiced = invoices.reduce((s, i) => s + Number(i.totalAmount), 0);
+  const totalPaid = payments.reduce((s, p) => s + Number(p.amount), 0);
+  const balance = totalInvoiced - totalPaid;
+
+  const doc = new PDFDocument({ size: 'A4', margin: 36 });
+  const chunks: Buffer[] = [];
+  doc.on('data', (c) => chunks.push(c));
+  doc.on('end', () => {
+    const pdf = Buffer.concat(chunks);
+    const inline = req.query.preview === 'true';
+    const statementCode = student?.admissionNumber || requestedStudentId;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader(
+      'Content-Disposition',
+      `${inline ? 'inline' : 'attachment'}; filename="student-statement-${statementCode}.pdf"`,
+    );
+    res.send(pdf);
+  });
+
+  await renderPdfHeaderWithLogo(doc, 'Student Financial Statement', { margin: 36 });
+  const studentName = student ? `${student.firstName} ${student.lastName}` : 'Unknown Student';
+  const studentCode = student?.admissionNumber || requestedStudentId;
+  const margin = 36;
+  const contentW = doc.page.width - margin * 2;
+  const pageBottom = () => doc.page.height - margin - 28;
+  let y = doc.y + 2;
+
+  // Student identity card
+  doc.save();
+  doc.roundedRect(margin, y, contentW, 58, 8).fillAndStroke('#f8fafc', '#e2e8f0');
+  doc.restore();
+  doc.font('Helvetica-Bold').fontSize(12).fillColor('#0f172a');
+  doc.text(studentName, margin + 12, y + 11, { width: contentW - 24, lineBreak: false });
+  doc.font('Helvetica').fontSize(9).fillColor('#475569');
+  doc.text(`Student ID: ${studentCode}`, margin + 12, y + 30, { lineBreak: false });
+  doc.text(`Class: ${student?.schoolClass?.name || '—'}`, margin + contentW / 2, y + 30, { lineBreak: false });
+  y += 72;
+
+  // Summary cards
+  const cardGap = 8;
+  const cardW = (contentW - cardGap * 2) / 3;
+  const drawSummaryCard = (x: number, label: string, value: string, tone: 'neutral' | 'positive' | 'warn') => {
+    const bg = tone === 'positive' ? '#ecfdf5' : tone === 'warn' ? '#fff7ed' : '#eef2ff';
+    const border = tone === 'positive' ? '#a7f3d0' : tone === 'warn' ? '#fdba74' : '#c7d2fe';
+    const fg = tone === 'positive' ? '#047857' : tone === 'warn' ? '#b45309' : '#3730a3';
+    doc.save();
+    doc.roundedRect(x, y, cardW, 48, 8).fillAndStroke(bg, border);
+    doc.restore();
+    doc.font('Helvetica').fontSize(8).fillColor('#64748b').text(label.toUpperCase(), x + 10, y + 9, { width: cardW - 20 });
+    doc.font('Helvetica-Bold').fontSize(13).fillColor(fg).text(value, x + 10, y + 23, { width: cardW - 20 });
+  };
+
+  drawSummaryCard(margin, 'Total Invoiced', `$${totalInvoiced.toFixed(2)}`, 'neutral');
+  drawSummaryCard(margin + cardW + cardGap, 'Total Paid', `$${totalPaid.toFixed(2)}`, 'positive');
+  drawSummaryCard(margin + (cardW + cardGap) * 2, 'Balance Due', `$${balance.toFixed(2)}`, balance > 0 ? 'warn' : 'positive');
+  y += 62;
+
+  // Ledger title
+  doc.font('Helvetica-Bold').fontSize(11).fillColor('#0f172a').text('Ledger', margin, y);
+  y += 14;
+
+  const colX = {
+    date: margin + 8,
+    desc: margin + 92,
+    debit: margin + contentW - 174,
+    credit: margin + contentW - 116,
+    balance: margin + contentW - 58,
+  };
+  const baseRowH = 19;
+  const descWidth = colX.debit - colX.desc - 8;
+
+  const drawLedgerHeader = () => {
+    doc.save();
+    doc.roundedRect(margin, y, contentW, baseRowH, 6).fill('#1e40af');
+    doc.restore();
+    doc.font('Helvetica-Bold').fontSize(8).fillColor('#ffffff');
+    doc.text('DATE', colX.date, y + 6);
+    doc.text('DESCRIPTION', colX.desc, y + 6);
+    doc.text('DEBIT', colX.debit, y + 6, { width: 52, align: 'right' });
+    doc.text('CREDIT', colX.credit, y + 6, { width: 52, align: 'right' });
+    doc.text('BALANCE', colX.balance, y + 6, { width: 50, align: 'right' });
+    y += baseRowH + 2;
+  };
+
+  drawLedgerHeader();
+
+  if (!ledger.length) {
+    doc.font('Helvetica').fontSize(9).fillColor('#64748b').text('No ledger entries for this statement.', margin, y + 6);
+  } else {
+    ledger.slice(0, 180).forEach((l, idx) => {
+      const description = String(l.description || '');
+      const descriptionHeight = doc
+        .font('Helvetica')
+        .fontSize(8)
+        .heightOfString(description, { width: descWidth, align: 'left' });
+      const rowH = Math.max(baseRowH, Math.ceil(descriptionHeight) + 8);
+
+      if (y + rowH > pageBottom()) {
+        doc.addPage({ size: 'A4', margin });
+        y = margin + 4;
+        drawLedgerHeader();
+      }
+      if (idx % 2 === 1) {
+        doc.save();
+        doc.rect(margin, y, contentW, rowH).fill('#f8fafc');
+        doc.restore();
+      }
+      doc.font('Helvetica').fontSize(8).fillColor('#0f172a');
+      doc.text(String(l.entryDate || ''), colX.date, y + 6, { width: 80, lineBreak: false });
+      doc.text(description, colX.desc, y + 6, { width: descWidth, align: 'left' });
+      doc.text(`$${Number(l.debit || 0).toFixed(2)}`, colX.debit, y + 6, { width: 52, align: 'right', lineBreak: false });
+      doc.text(`$${Number(l.credit || 0).toFixed(2)}`, colX.credit, y + 6, { width: 52, align: 'right', lineBreak: false });
+      doc.font('Helvetica-Bold');
+      doc.text(`$${Number(l.balance || 0).toFixed(2)}`, colX.balance, y + 6, { width: 50, align: 'right', lineBreak: false });
+      y += rowH;
+    });
+  }
+
+  renderGeneratedFooter(doc, new Date(), 36);
+  doc.end();
+});
+
 router.post('/reminders/send', authorize(UserRole.ADMIN), async (req, res: Response) => {
   const { studentIds, message } = req.body;
   const studentRepo = AppDataSource.getRepository(Student);
@@ -518,7 +750,7 @@ router.post('/reminders/send', authorize(UserRole.ADMIN), async (req, res: Respo
   res.json({ sent: sent.length, details: sent });
 });
 
-router.get('/summary', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (_req, res: Response) => {
+async function fetchBillingSummary() {
   const [debtors, monthly, today, pending] = await Promise.all([
     AppDataSource.query(`
       SELECT COALESCE(SUM("totalAmount" - "amountPaid"), 0) as total
@@ -536,13 +768,17 @@ router.get('/summary', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRI
       SELECT COUNT(*) as count FROM invoices WHERE status IN ('sent', 'partial', 'overdue')
     `),
   ]);
-  res.json({
+  return {
     totalDebtors: Number(debtors[0]?.total || 0),
     monthlyCollections: Number(monthly[0]?.total || 0),
     todayCollections: Number(today[0]?.total || 0),
     todayPaymentCount: Number(today[0]?.count || 0),
     pendingInvoices: Number(pending[0]?.count || 0),
-  });
+  };
+}
+
+router.get('/summary', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (_req, res: Response) => {
+  res.json(await fetchBillingSummary());
 });
 
 router.get('/payments', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (req, res: Response) => {
@@ -558,20 +794,279 @@ router.get('/payments', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PR
   res.json(payments);
 });
 
-router.get('/debtors', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (req, res: Response) => {
+async function fetchBillingDebtors() {
   const result = await AppDataSource.query(`
-    SELECT s.id, s."firstName", s."lastName", s."admissionNumber", c.name as "className",
+    SELECT s.id, s."firstName", s."lastName", s."admissionNumber", s.gender, c.name as "className",
       COALESCE(SUM(i."totalAmount" - i."amountPaid"), 0) as owed,
       MAX(i."dueDate") as "oldestDue"
     FROM students s
     LEFT JOIN classes c ON c.id = s."classId"
     LEFT JOIN invoices i ON i."studentId" = s.id AND i.status IN ('sent', 'partial', 'overdue')
     WHERE s."isActive" = true
-    GROUP BY s.id, c.name
+    GROUP BY s.id, s."firstName", s."lastName", s."admissionNumber", s.gender, c.name
     HAVING COALESCE(SUM(i."totalAmount" - i."amountPaid"), 0) > 0
     ORDER BY owed DESC
   `);
-  res.json(result);
+  return result.map((r: { owed: unknown }) => ({ ...r, owed: Number(r.owed || 0) }));
+}
+
+router.get('/debtors', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (_req, res: Response) => {
+  res.json(await fetchBillingDebtors());
+});
+
+router.get('/overview/export.pdf', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (req, res: Response) => {
+  const inline = String(req.query.preview || '') === 'true';
+  const tab = String(req.query.tab || 'debtors').toLowerCase();
+  const debtorQ = String(req.query.debtorQ || '').trim().toLowerCase();
+  const invoiceQ = String(req.query.invoiceQ || '').trim().toLowerCase();
+  const invoiceStatus = String(req.query.invoiceStatus || 'all').toLowerCase();
+
+  const summary = await fetchBillingSummary();
+  const money = (n: number) => `$${Number(n || 0).toFixed(2)}`;
+  const pad2 = (n: number) => String(n).padStart(2, '0');
+  const fmtDate = (d: unknown) => {
+    if (!d) return '—';
+    const dt = new Date(String(d));
+    if (Number.isNaN(dt.getTime())) return String(d);
+    return `${pad2(dt.getDate())}/${pad2(dt.getMonth() + 1)}/${dt.getFullYear()}`;
+  };
+  const classLabel = (raw: string) => {
+    const cls = String(raw || '').trim();
+    if (!cls) return '—';
+    return /^class\s+/i.test(cls) ? cls : `Class ${cls}`;
+  };
+  const formatMethod = (m: string) => {
+    const map: Record<string, string> = {
+      cash: 'Cash', bank: 'Bank', ecocash: 'EcoCash', onemoney: 'OneMoney', innbucks: 'InnBucks', other: 'Other',
+    };
+    return map[m] || m;
+  };
+  const formatGender = (g: unknown) => {
+    const raw = String(g || '').trim();
+    if (!raw) return '—';
+    return raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
+  };
+
+  type Col = { label: string; w: number; align?: 'left' | 'right' | 'center' };
+  let sectionTitle = 'Debtors';
+  let tableRows: string[][] = [];
+  let cols: Col[] = [];
+
+  if (tab === 'invoices') {
+    sectionTitle = 'Invoices';
+    const invoiceRepo = AppDataSource.getRepository(Invoice);
+    let invoices = await invoiceRepo.find({
+      relations: relations('student', 'student.schoolClass'),
+      order: { createdAt: 'DESC' },
+      take: 500,
+    });
+    if (invoiceStatus !== 'all') {
+      invoices = invoices.filter((i) => i.status === invoiceStatus);
+    }
+    if (invoiceQ) {
+      invoices = invoices.filter((i) =>
+        `${i.invoiceNumber} ${i.description} ${i.student?.firstName || ''} ${i.student?.lastName || ''}`
+          .toLowerCase()
+          .includes(invoiceQ),
+      );
+    }
+    cols = [
+      { label: 'INVOICE #', w: 88 },
+      { label: 'STUDENT', w: 120 },
+      { label: 'CLASS', w: 72 },
+      { label: 'DESCRIPTION', w: 130 },
+      { label: 'TOTAL', w: 72, align: 'right' },
+      { label: 'PAID', w: 72, align: 'right' },
+      { label: 'DUE', w: 68 },
+      { label: 'STATUS', w: 68 },
+    ];
+    tableRows = invoices.map((inv) => [
+      inv.invoiceNumber || '—',
+      `${inv.student?.firstName || ''} ${inv.student?.lastName || ''}`.trim() || '—',
+      classLabel(inv.student?.schoolClass?.name || ''),
+      inv.description || '—',
+      money(Number(inv.totalAmount)),
+      money(Number(inv.amountPaid)),
+      fmtDate(inv.dueDate),
+      String(inv.status || '—'),
+    ]);
+  } else if (tab === 'receipts') {
+    sectionTitle = 'Recent Payments';
+    const paymentRepo = AppDataSource.getRepository(Payment);
+    const payments = await paymentRepo.find({
+      relations: relations('student', 'student.schoolClass', 'receipt'),
+      order: { paidAt: 'DESC' },
+      take: 40,
+    });
+    cols = [
+      { label: 'DATE', w: 78 },
+      { label: 'RECEIPT #', w: 88 },
+      { label: 'STUDENT', w: 120 },
+      { label: 'CLASS', w: 72 },
+      { label: 'LABEL', w: 120 },
+      { label: 'METHOD', w: 72 },
+      { label: 'AMOUNT', w: 72, align: 'right' },
+    ];
+    tableRows = payments.map((p) => [
+      fmtDate(p.paidAt),
+      p.receipt?.receiptNumber || '—',
+      `${p.student?.firstName || ''} ${p.student?.lastName || ''}`.trim() || '—',
+      classLabel(p.student?.schoolClass?.name || ''),
+      p.label || '—',
+      formatMethod(String(p.method || '')),
+      money(Number(p.amount)),
+    ]);
+  } else {
+    let debtors = await fetchBillingDebtors();
+    if (debtorQ) {
+      debtors = debtors.filter((d: { firstName?: string; lastName?: string; className?: string; admissionNumber?: string; gender?: string }) =>
+        `${d.firstName} ${d.lastName} ${d.className} ${d.admissionNumber} ${d.gender || ''}`.toLowerCase().includes(debtorQ),
+      );
+    }
+    cols = [
+      { label: 'STUDENT ID', w: 72 },
+      { label: 'LAST NAME', w: 100 },
+      { label: 'FIRST NAME', w: 100 },
+      { label: 'GENDER', w: 52 },
+      { label: 'CLASS', w: 72 },
+      { label: 'OLDEST DUE', w: 76 },
+      { label: 'OWED', w: 72, align: 'right' },
+    ];
+    tableRows = debtors.map((d: {
+      firstName?: string;
+      lastName?: string;
+      admissionNumber?: string;
+      gender?: string;
+      className?: string;
+      oldestDue?: unknown;
+      owed: number;
+    }) => [
+      String(d.admissionNumber || '—'),
+      String(d.lastName || '—'),
+      String(d.firstName || '—'),
+      formatGender(d.gender),
+      classLabel(d.className || ''),
+      fmtDate(d.oldestDue),
+      money(d.owed),
+    ]);
+  }
+
+  const tabLabels: Record<string, string> = {
+    payment: 'Record Payment',
+    invoice: 'Create Invoice',
+    invoices: 'All Invoices',
+    receipts: 'Receipts',
+    debtors: 'Debtors',
+  };
+
+  const doc = new PDFDocument({ size: 'A4', layout: 'landscape', margin: 34 });
+  const chunks: Buffer[] = [];
+  doc.on('data', (c) => chunks.push(c));
+  doc.on('end', () => {
+    const pdf = Buffer.concat(chunks);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader(
+      'Content-Disposition',
+      `${inline ? 'inline' : 'attachment'}; filename="billing-overview.pdf"`,
+    );
+    res.send(pdf);
+  });
+
+  const margin = 34;
+  const contentW = doc.page.width - margin * 2;
+  const pageBottom = () => doc.page.height - margin - 20;
+  let y = margin;
+
+  await renderPdfHeaderWithLogo(doc, 'Billing & Payments Report', {
+    margin,
+    subtitle: `Section: ${tabLabels[tab] || tab}`,
+  });
+  y = Math.max(doc.y + 2, y);
+  doc.font('Helvetica').fontSize(9).fillColor('#0f172a');
+  const filterBits: string[] = [];
+  if (debtorQ) filterBits.push(`Debtor search: ${debtorQ}`);
+  if (invoiceQ) filterBits.push(`Invoice search: ${invoiceQ}`);
+  if (invoiceStatus !== 'all') filterBits.push(`Invoice status: ${invoiceStatus}`);
+  if (filterBits.length) {
+    doc.text(filterBits.join('   |   '), margin, y);
+    y += 14;
+  }
+
+  const gap = 8;
+  const cardW = (contentW - gap * 3) / 4;
+  const drawCard = (x: number, label: string, value: string, tone: 'neutral' | 'positive' | 'warn' = 'neutral') => {
+    const bg = tone === 'positive' ? '#ecfdf3' : tone === 'warn' ? '#fff7ed' : '#eff6ff';
+    const border = tone === 'positive' ? '#86efac' : tone === 'warn' ? '#fdba74' : '#bfdbfe';
+    const fg = tone === 'positive' ? '#166534' : tone === 'warn' ? '#9a3412' : '#1d4ed8';
+    doc.save();
+    doc.roundedRect(x, y, cardW, 42, 7).fillAndStroke(bg, border);
+    doc.restore();
+    doc.font('Helvetica').fontSize(7.5).fillColor('#64748b').text(label.toUpperCase(), x + 9, y + 8, { width: cardW - 18 });
+    doc.font('Helvetica-Bold').fontSize(11).fillColor(fg).text(value, x + 9, y + 21, { width: cardW - 18 });
+  };
+  drawCard(margin, "Today's Collections", money(summary.todayCollections), 'positive');
+  drawCard(margin + cardW + gap, 'This Month', money(summary.monthlyCollections), 'neutral');
+  drawCard(margin + (cardW + gap) * 2, 'Outstanding', money(summary.totalDebtors), 'warn');
+  drawCard(margin + (cardW + gap) * 3, 'Pending Invoices', String(summary.pendingInvoices), 'neutral');
+  y += 52;
+
+  doc.font('Helvetica-Bold').fontSize(10).fillColor('#0f172a').text(sectionTitle, margin, y);
+  y += 16;
+
+  cols = scalePdfTableCols(cols, contentW);
+  const tableW = cols.reduce((s, c) => s + c.w, 0);
+  const drawHeader = () => {
+    let x = margin;
+    doc.save();
+    doc.roundedRect(margin, y, tableW, 18, 5).fill('#1e40af');
+    doc.restore();
+    doc.font('Helvetica-Bold').fontSize(8).fillColor('#ffffff');
+    for (const c of cols) {
+      doc.text(c.label, x + 4, y + 6, { width: c.w - 8, align: c.align || 'left', lineBreak: false });
+      x += c.w;
+    }
+    y += 20;
+  };
+
+  if (!tableRows.length) {
+    doc.font('Helvetica').fontSize(9).fillColor('#64748b').text('No records to display.', margin, y);
+    renderGeneratedFooter(doc, new Date(), margin);
+    doc.end();
+    return;
+  }
+
+  drawHeader();
+  let rowIndex = 0;
+  tableRows.forEach((vals) => {
+    doc.font('Helvetica').fontSize(8);
+    let rowH = 0;
+    for (let i = 0; i < cols.length; i++) {
+      rowH = Math.max(rowH, doc.heightOfString(vals[i], { width: cols[i].w - 8, align: cols[i].align || 'left' }));
+    }
+    rowH = Math.max(17, Math.ceil(rowH) + 6);
+
+    if (y + rowH > pageBottom()) {
+      doc.addPage({ size: 'A4', layout: 'landscape', margin });
+      y = margin;
+      drawHeader();
+    }
+    if (rowIndex % 2 === 1) {
+      doc.save();
+      doc.rect(margin, y, tableW, rowH).fill('#f8fafc');
+      doc.restore();
+    }
+    doc.fillColor('#0f172a').font('Helvetica').fontSize(8);
+    let x = margin;
+    for (let i = 0; i < cols.length; i++) {
+      doc.text(vals[i], x + 4, y + 3, { width: cols[i].w - 8, align: cols[i].align || 'left' });
+      x += cols[i].w;
+    }
+    y += rowH;
+    rowIndex += 1;
+  });
+
+  renderGeneratedFooter(doc, new Date(), margin);
+  doc.end();
 });
 
 router.get('/reports/student-ledger', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (req, res: Response) => {
@@ -607,9 +1102,337 @@ router.get('/reports/student-ledger', authorize(UserRole.ADMIN, UserRole.DIRECTO
   return res.json({ needsSelection: false, report });
 });
 
+router.get('/reports/student-ledger/export.pdf', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (req, res: Response) => {
+  const termId = String(req.query.termId || '').trim();
+  const q = String(req.query.q || '').trim();
+  const studentId = String(req.query.studentId || '').trim();
+  const inline = String(req.query.preview || '') === 'true';
+
+  if (!termId) return res.status(400).json({ message: 'termId is required' });
+
+  const term = await AppDataSource.getRepository(Term).findOne({ where: { id: termId } });
+  if (!term) return res.status(404).json({ message: 'Term not found' });
+
+  let targetStudentId = studentId;
+  if (!targetStudentId) {
+    if (!q) return res.status(400).json({ message: 'Enter Student ID, first name, or last name' });
+    const matches = await searchStudents(q);
+    if (!matches.length) return res.status(404).json({ message: 'No matching student found' });
+    if (matches.length > 1) return res.status(400).json({ message: 'Multiple students match — select one student before exporting' });
+    targetStudentId = matches[0].id;
+  }
+
+  const report = await buildStudentLedgerReport(targetStudentId, termId);
+  if (!report) return res.status(404).json({ message: 'Student not found' });
+
+  const doc = new PDFDocument({ size: 'A4', layout: 'landscape', margin: 34 });
+  const chunks: Buffer[] = [];
+  doc.on('data', (c) => chunks.push(c));
+  doc.on('end', () => {
+    const pdf = Buffer.concat(chunks);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader(
+      'Content-Disposition',
+      `${inline ? 'inline' : 'attachment'}; filename="student-ledger-${report.student.admissionNumber || report.student.id}.pdf"`,
+    );
+    res.send(pdf);
+  });
+
+  const margin = 34;
+  const contentW = doc.page.width - margin * 2;
+  const pageBottom = () => doc.page.height - margin - 20;
+  let y = margin;
+
+  await renderPdfHeaderWithLogo(doc, 'Student Ledger Report', { margin });
+  y = Math.max(y, doc.y + 2);
+
+  const studentName = `${report.student.firstName || ''} ${report.student.lastName || ''}`.trim() || 'Unknown Student';
+  const classLabel = `${report.student.formName || ''} ${report.student.className || ''}`.trim() || '—';
+  const fmtMoney = (value: number) => `$${Number(value || 0).toFixed(2)}`;
+  const typeLabel = (type: string) =>
+    type === 'invoice' ? 'INVOICE' : type === 'payment' ? 'PAYMENT' : 'OPENING';
+
+  doc.save();
+  doc.roundedRect(margin, y, contentW, 44, 8).fillAndStroke('#f8fafc', '#e2e8f0');
+  doc.restore();
+  doc.font('Helvetica-Bold').fontSize(11).fillColor('#0f172a').text(studentName, margin + 10, y + 8);
+  doc.font('Helvetica').fontSize(8.5).fillColor('#334155');
+  doc.text(`Student ID: ${report.student.admissionNumber || '—'}`, margin + 10, y + 24);
+  doc.text(`Class: ${classLabel}`, margin + 170, y + 24);
+  doc.text(`Term: ${report.term.name}`, margin + 300, y + 24);
+  y += 54;
+
+  const cardGap = 8;
+  const cardW = (contentW - cardGap * 3) / 4;
+  const drawSummaryCard = (x: number, label: string, value: string, tone: 'neutral' | 'positive' | 'warn') => {
+    const bg = tone === 'positive' ? '#ecfdf3' : tone === 'warn' ? '#fff7ed' : '#eff6ff';
+    const border = tone === 'positive' ? '#a7f3d0' : tone === 'warn' ? '#fdba74' : '#bfdbfe';
+    const fg = tone === 'positive' ? '#047857' : tone === 'warn' ? '#c2410c' : '#1d4ed8';
+    doc.save();
+    doc.roundedRect(x, y, cardW, 42, 7).fillAndStroke(bg, border);
+    doc.restore();
+    doc.font('Helvetica').fontSize(7.5).fillColor('#64748b').text(label.toUpperCase(), x + 9, y + 8, { width: cardW - 18 });
+    doc.font('Helvetica-Bold').fontSize(11).fillColor(fg).text(value, x + 9, y + 21, { width: cardW - 18 });
+  };
+
+  drawSummaryCard(margin, 'Opening', fmtMoney(report.summary.openingBalance), 'neutral');
+  drawSummaryCard(margin + cardW + cardGap, 'Debits', fmtMoney(report.summary.totalDebits), 'neutral');
+  drawSummaryCard(margin + (cardW + cardGap) * 2, 'Credits', fmtMoney(report.summary.totalCredits), 'positive');
+  drawSummaryCard(
+    margin + (cardW + cardGap) * 3,
+    'Closing',
+    fmtMoney(report.summary.closingBalance),
+    report.summary.closingBalance > 0 ? 'warn' : 'positive',
+  );
+  y += 52;
+
+  const colX = {
+    date: margin + 4,
+    type: margin + 100,
+    ref: margin + 168,
+    desc: margin + 282,
+    debit: margin + contentW - 196,
+    credit: margin + contentW - 130,
+    balance: margin + contentW - 64,
+  };
+  const colW = {
+    date: 90,
+    type: 60,
+    ref: 106,
+    desc: 300,
+    debit: 62,
+    credit: 62,
+    balance: 60,
+  };
+
+  const drawHeader = () => {
+    doc.save();
+    doc.roundedRect(margin, y, contentW, 18, 5).fill('#1e40af');
+    doc.restore();
+    doc.font('Helvetica-Bold').fontSize(8).fillColor('#ffffff');
+    doc.text('DATE', colX.date, y + 6, { width: colW.date });
+    doc.text('TYPE', colX.type, y + 6, { width: colW.type });
+    doc.text('REFERENCE', colX.ref, y + 6, { width: colW.ref });
+    doc.text('DESCRIPTION', colX.desc, y + 6, { width: colW.desc });
+    doc.text('DEBIT', colX.debit, y + 6, { width: colW.debit, align: 'right' });
+    doc.text('CREDIT', colX.credit, y + 6, { width: colW.credit, align: 'right' });
+    doc.text('BALANCE', colX.balance, y + 6, { width: colW.balance, align: 'right' });
+    y += 20;
+  };
+
+  drawHeader();
+  let rowIndex = 0;
+  report.lines.slice(0, 400).forEach((line) => {
+    const lineDate = String(line.date || '—');
+    const type = String(line.type || '—');
+    const reference = String(line.reference || '—');
+    const description = String(line.description || '—');
+    const debit = line.debit ? fmtMoney(line.debit) : '—';
+    const credit = line.credit ? fmtMoney(line.credit) : '—';
+    const balance = fmtMoney(line.balance || 0);
+
+    doc.font('Helvetica').fontSize(8);
+    const rowH = Math.max(
+      17,
+      Math.ceil(
+        Math.max(
+          doc.heightOfString(lineDate, { width: colW.date }),
+          doc.heightOfString(typeLabel(type), { width: colW.type - 14 }),
+          doc.heightOfString(reference, { width: colW.ref }),
+          doc.heightOfString(description, { width: colW.desc }),
+          doc.heightOfString(debit, { width: colW.debit, align: 'right' }),
+          doc.heightOfString(credit, { width: colW.credit, align: 'right' }),
+          doc.heightOfString(balance, { width: colW.balance, align: 'right' }),
+        ),
+      ) + 7,
+    );
+
+    if (y + rowH > pageBottom()) {
+      doc.addPage({ size: 'A4', layout: 'landscape', margin });
+      y = margin;
+      drawHeader();
+    }
+
+    if (rowIndex % 2 === 1) {
+      doc.save();
+      doc.rect(margin, y, contentW, rowH).fill('#f8fafc');
+      doc.restore();
+    }
+
+    doc.font('Helvetica').fontSize(8).fillColor('#0f172a');
+    doc.text(lineDate, colX.date, y + 4, { width: colW.date });
+    const pillX = colX.type;
+    const pillY = y + 4;
+    const pillW = Math.min(colW.type - 6, Math.max(32, doc.widthOfString(typeLabel(type)) + 12));
+    const pillTone = type === 'payment' ? '#dcfce7' : type === 'invoice' ? '#fee2e2' : '#e0e7ff';
+    const pillText = type === 'payment' ? '#166534' : type === 'invoice' ? '#991b1b' : '#3730a3';
+    doc.save();
+    doc.roundedRect(pillX, pillY, pillW, 11, 5).fill(pillTone);
+    doc.restore();
+    doc.font('Helvetica-Bold').fontSize(6.8).fillColor(pillText).text(typeLabel(type), pillX + 6, pillY + 2, {
+      width: pillW - 10,
+      lineBreak: false,
+    });
+    doc.font('Helvetica').fontSize(8).fillColor('#0f172a');
+    doc.text(reference, colX.ref, y + 4, { width: colW.ref });
+    doc.text(description, colX.desc, y + 4, { width: colW.desc });
+    doc.text(debit, colX.debit, y + 4, { width: colW.debit, align: 'right' });
+    doc.text(credit, colX.credit, y + 4, { width: colW.credit, align: 'right' });
+    doc.font('Helvetica-Bold').text(balance, colX.balance, y + 4, { width: colW.balance, align: 'right' });
+
+    y += rowH;
+    rowIndex += 1;
+  });
+
+  renderGeneratedFooter(doc, new Date(), margin);
+  doc.end();
+});
+
 router.get('/reports/outstanding-invoices', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (_req, res: Response) => {
   const data = await buildOutstandingInvoicesReport();
   res.json(data);
+});
+
+router.get('/reports/outstanding-invoices/export.pdf', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (req, res: Response) => {
+  const data = await buildOutstandingInvoicesReport();
+  const inline = String(req.query.preview || '') === 'true';
+
+  const doc = new PDFDocument({ size: 'A4', layout: 'landscape', margin: 34 });
+  const chunks: Buffer[] = [];
+  doc.on('data', (c) => chunks.push(c));
+  doc.on('end', () => {
+    const pdf = Buffer.concat(chunks);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader(
+      'Content-Disposition',
+      `${inline ? 'inline' : 'attachment'}; filename="outstanding-invoices-report.pdf"`,
+    );
+    res.send(pdf);
+  });
+
+  const margin = 34;
+  const contentW = doc.page.width - margin * 2;
+  const pageBottom = () => doc.page.height - margin - 20;
+  let y = margin;
+
+  await renderPdfHeaderWithLogo(doc, 'Outstanding Invoices Report', { margin });
+  y = Math.max(y, doc.y + 2);
+
+  doc.font('Helvetica').fontSize(9).fillColor('#0f172a');
+  doc.text(`Classes: ${data.groups.length}   Students: ${data.studentCount}   Invoices: ${data.invoiceCount}`, margin, y);
+  y += 13;
+  doc.font('Helvetica-Bold').text(`Grand total outstanding: $${Number(data.grandTotal || 0).toFixed(2)}`, margin, y);
+  y += 16;
+
+  const colX = {
+    sid: margin + 4,
+    student: margin + 86,
+    invoice: margin + 252,
+    due: margin + 364,
+    desc: margin + 448,
+    bal: margin + contentW - 94,
+  };
+  const colW = {
+    sid: 78,
+    student: 160,
+    invoice: 104,
+    due: 78,
+    desc: 176,
+    bal: 90,
+  };
+  const formatShortDate = (value?: string) => {
+    if (!value) return '—';
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return value;
+    const pad2 = (n: number) => String(n).padStart(2, '0');
+    return `${pad2(d.getDate())}/${pad2(d.getMonth() + 1)}/${d.getFullYear()}`;
+  };
+
+  const drawTableHeader = () => {
+    doc.save();
+    doc.roundedRect(margin, y, contentW, 18, 5).fill('#1e40af');
+    doc.restore();
+    doc.font('Helvetica-Bold').fontSize(8).fillColor('#ffffff');
+    doc.text('STUDENT ID', colX.sid, y + 6, { width: colW.sid });
+    doc.text('STUDENT', colX.student, y + 6, { width: colW.student });
+    doc.text('INVOICE #', colX.invoice, y + 6, { width: colW.invoice });
+    doc.text('DUE DATE', colX.due, y + 6, { width: colW.due });
+    doc.text('DESCRIPTION', colX.desc, y + 6, { width: colW.desc });
+    doc.text('BALANCE', colX.bal, y + 6, { width: colW.bal, align: 'right' });
+    y += 20;
+  };
+
+  drawTableHeader();
+
+  let rowIndex = 0;
+  data.groups.forEach((group) => {
+    if (y + 28 > pageBottom()) {
+      doc.addPage({ size: 'A4', layout: 'landscape', margin });
+      y = margin;
+      drawTableHeader();
+    }
+
+    const className = String(group.className || '').trim();
+    const groupLabel = className
+      ? (/^class\s+/i.test(className) ? className : `Class ${className}`)
+      : 'Class —';
+    doc.font('Helvetica-Bold').fontSize(9).fillColor('#0f172a');
+    doc.text(`${groupLabel}  •  Outstanding: $${Number(group.classTotal || 0).toFixed(2)}`, margin, y + 2);
+    y += 14;
+
+    group.students.forEach((student) => {
+      const studentName = `${student.firstName || ''} ${student.lastName || ''}`.trim();
+      student.invoices.forEach((inv) => {
+        const admissionNumber = String(student.admissionNumber || '—');
+        const invoiceNumber = String(inv.invoiceNumber || '—');
+        const dueDate = formatShortDate(inv.dueDate);
+        const description = String(inv.description || '—');
+        const balanceText = `$${Number(inv.balance || 0).toFixed(2)}`;
+
+        doc.font('Helvetica').fontSize(8);
+        const rowH = Math.max(
+          17,
+          Math.ceil(
+            Math.max(
+              doc.heightOfString(admissionNumber, { width: colW.sid }),
+              doc.heightOfString(studentName || '—', { width: colW.student }),
+              doc.heightOfString(invoiceNumber, { width: colW.invoice }),
+              doc.heightOfString(dueDate, { width: colW.due }),
+              doc.heightOfString(description, { width: colW.desc }),
+              doc.heightOfString(balanceText, { width: colW.bal, align: 'right' }),
+            ),
+          ) + 7,
+        );
+
+        if (y + rowH > pageBottom()) {
+          doc.addPage({ size: 'A4', layout: 'landscape', margin });
+          y = margin;
+          drawTableHeader();
+        }
+
+        if (rowIndex % 2 === 1) {
+          doc.save();
+          doc.rect(margin, y, contentW, rowH).fill('#f8fafc');
+          doc.restore();
+        }
+
+        doc.font('Helvetica').fontSize(8).fillColor('#0f172a');
+        doc.text(admissionNumber, colX.sid, y + 4, { width: colW.sid });
+        doc.text(studentName || '—', colX.student, y + 4, { width: colW.student });
+        doc.text(invoiceNumber, colX.invoice, y + 4, { width: colW.invoice });
+        doc.text(dueDate, colX.due, y + 4, { width: colW.due });
+        doc.text(description, colX.desc, y + 4, { width: colW.desc });
+        doc.font('Helvetica-Bold').text(balanceText, colX.bal, y + 4, { width: colW.bal, align: 'right' });
+        y += rowH;
+        rowIndex += 1;
+      });
+    });
+
+    y += 6;
+  });
+
+  renderGeneratedFooter(doc, new Date(), margin);
+  doc.end();
 });
 
 function reconciliationQueryParams(req: { query: Record<string, unknown> }) {
@@ -635,6 +1458,7 @@ router.get('/reports/student-reconciliation', authorize(UserRole.ADMIN, UserRole
 
 router.get('/reports/student-reconciliation/export.pdf', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (req, res: Response) => {
   const detailed = req.query.mode !== 'summary';
+  const inline = String(req.query.preview || '') === 'true';
   const result = await buildStudentReconciliationReport({
     ...reconciliationQueryParams(req),
     detailed,
@@ -656,7 +1480,11 @@ router.get('/reports/student-reconciliation/export.pdf', authorize(UserRole.ADMI
     rows: result.students.map((r) => ({
       admissionNumber: r.student.admissionNumber,
       name: `${r.student.firstName} ${r.student.lastName}`,
-      classLabel: `${r.student.formName || ''} ${r.student.className || ''}`.trim(),
+      classLabel: (() => {
+        const cls = String(r.student.className || '').trim();
+        if (!cls) return 'Class —';
+        return /^class\s+/i.test(cls) ? cls : `Class ${cls}`;
+      })(),
       status: r.status,
       totalBilled: r.studentModule.totalBilled,
       totalCollected: r.studentModule.totalCollected,
@@ -668,7 +1496,10 @@ router.get('/reports/student-reconciliation/export.pdf', authorize(UserRole.ADMI
   });
 
   res.setHeader('Content-Type', 'application/pdf');
-  res.setHeader('Content-Disposition', `attachment; filename="student-reconciliation-${detailed ? 'detailed' : 'summary'}.pdf"`);
+  res.setHeader(
+    'Content-Disposition',
+    `${inline ? 'inline' : 'attachment'}; filename="student-reconciliation-${detailed ? 'detailed' : 'summary'}.pdf"`,
+  );
   res.send(pdf);
 });
 
@@ -725,6 +1556,7 @@ router.get('/reports/debtor-aging/export.xlsx', authorize(UserRole.ADMIN, UserRo
 
 router.get('/reports/debtor-aging/export.pdf', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (req, res: Response) => {
   const detailed = req.query.mode !== 'summary';
+  const inline = String(req.query.preview || '') === 'true';
   const result = await buildDebtorAgingReport(debtorAgingQueryParams(req));
   if ('error' in result) return res.status(400).json({ message: result.error });
   if ('needsSelection' in result) return res.status(400).json({ message: 'Multiple students match — select one before export' });
@@ -735,24 +1567,148 @@ router.get('/reports/debtor-aging/export.pdf', authorize(UserRole.ADMIN, UserRol
   doc.on('end', () => {
     const pdf = Buffer.concat(chunks);
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="debtor-aging-${detailed ? 'detailed' : 'summary'}.pdf"`);
+    res.setHeader('Content-Disposition', `${inline ? 'inline' : 'attachment'}; filename="debtor-aging-${detailed ? 'detailed' : 'summary'}.pdf"`);
     res.send(pdf);
   });
-  doc.fontSize(15).text('Debtor Aging Report');
-  doc.moveDown(0.3);
-  doc.fontSize(9).text(`Date: ${result.filters.dateFrom || 'Start'} to ${result.filters.dateTo}`);
-  doc.text(`Debtors: ${result.summary.totalDebtors}  |  Outstanding: $${result.summary.totalOutstanding.toFixed(2)}`);
-  doc.text(`Buckets: 0-30 $${result.summary.byBucket.current.toFixed(2)} | 31-60 $${result.summary.byBucket['31_60'].toFixed(2)} | 61-90 $${result.summary.byBucket['61_90'].toFixed(2)} | 91-120 $${result.summary.byBucket['91_120'].toFixed(2)} | 120+ $${result.summary.byBucket['120_plus'].toFixed(2)}`);
-  doc.moveDown(0.5);
-  result.students.slice(0, detailed ? 120 : 60).forEach((s) => {
-    doc.fontSize(8).text(
-      `${s.admissionNumber}  ${s.firstName} ${s.lastName}  ${s.formName || ''} ${s.className || ''}  Outstanding: $${s.outstandingBalance.toFixed(2)}  120+: $${s.aging['120_plus'].toFixed(2)}  Status: ${s.accountStatus}`,
-    );
-    if (detailed) {
-      doc.fontSize(7).fillColor('#666').text(`Guardian: ${s.guardianName || 'N/A'}  Phone: ${s.guardianPhone || 'N/A'}  Last payment: ${s.lastPaymentDate || 'N/A'}  Escalate: ${s.escalationFlag ? 'Yes' : 'No'}`);
-      doc.fillColor('#000');
+
+  const margin = 34;
+  const contentW = doc.page.width - margin * 2;
+  const pageBottom = () => doc.page.height - margin - 20;
+  const money = (n: number) => `$${Number(n || 0).toFixed(2)}`;
+  const classLabel = (s: { className?: string }) => {
+    const cls = String(s.className || '').trim();
+    if (!cls) return 'Class —';
+    return /^class\s+/i.test(cls) ? cls : `Class ${cls}`;
+  };
+  let y = margin;
+
+  await renderPdfHeaderWithLogo(doc, 'Debtor Aging Report', { margin });
+  y = Math.max(doc.y + 2, y);
+  doc.font('Helvetica').fontSize(9).fillColor('#0f172a');
+  doc.text(`Period: ${result.filters.dateFrom || 'Start'} to ${result.filters.dateTo}${result.filters.termName ? `   Term: ${result.filters.termName}` : ''}`, margin, y);
+  y += 14;
+
+  const gap = 8;
+  const cardW = (contentW - gap * 3) / 4;
+  const drawCard = (x: number, label: string, value: string, tone: 'neutral' | 'warn' | 'danger' | 'positive' = 'neutral') => {
+    const bg = tone === 'positive' ? '#ecfdf3' : tone === 'warn' ? '#fff7ed' : tone === 'danger' ? '#fef2f2' : '#eff6ff';
+    const border = tone === 'positive' ? '#86efac' : tone === 'warn' ? '#fdba74' : tone === 'danger' ? '#fecaca' : '#bfdbfe';
+    const fg = tone === 'positive' ? '#166534' : tone === 'warn' ? '#9a3412' : tone === 'danger' ? '#991b1b' : '#1d4ed8';
+    doc.save();
+    doc.roundedRect(x, y, cardW, 42, 7).fillAndStroke(bg, border);
+    doc.restore();
+    doc.font('Helvetica').fontSize(7.5).fillColor('#64748b').text(label.toUpperCase(), x + 9, y + 8, { width: cardW - 18 });
+    doc.font('Helvetica-Bold').fontSize(11).fillColor(fg).text(value, x + 9, y + 21, { width: cardW - 18 });
+  };
+  drawCard(margin, 'Debtors', String(result.summary.totalDebtors), 'neutral');
+  drawCard(margin + cardW + gap, 'Outstanding', money(result.summary.totalOutstanding), 'danger');
+  drawCard(margin + (cardW + gap) * 2, 'Collected %', `${result.summary.collectedPct.toFixed(2)}%`, 'positive');
+  drawCard(margin + (cardW + gap) * 3, '120+ Bucket', money(result.summary.byBucket['120_plus']), 'warn');
+  y += 52;
+
+  const cols = detailed
+    ? [
+      { label: 'ID', w: 70 },
+      { label: 'Student', w: 132 },
+      { label: 'Class', w: 88 },
+      { label: 'Status', w: 84 },
+      { label: 'Outstanding', w: 82, align: 'right' as const },
+      { label: '120+', w: 64, align: 'right' as const },
+      { label: 'Guardian', w: 150 },
+      { label: 'Last Payment', w: 84 },
+      { label: 'Escalate', w: 62 },
+    ]
+    : [
+      { label: 'ID', w: 80 },
+      { label: 'Student', w: 190 },
+      { label: 'Class', w: 110 },
+      { label: 'Status', w: 96 },
+      { label: 'Outstanding', w: 100, align: 'right' as const },
+      { label: '120+', w: 80, align: 'right' as const },
+      { label: 'Last Payment', w: 90 },
+    ];
+  const tableW = cols.reduce((s, c) => s + c.w, 0);
+  const drawHeader = () => {
+    let x = margin;
+    doc.save();
+    doc.roundedRect(margin, y, tableW, 18, 5).fill('#1e40af');
+    doc.restore();
+    doc.font('Helvetica-Bold').fontSize(8).fillColor('#ffffff');
+    for (const c of cols) {
+      doc.text(c.label, x + 4, y + 6, { width: c.w - 8, align: c.align || 'left', lineBreak: false });
+      x += c.w;
     }
+    y += 20;
+  };
+  drawHeader();
+
+  let rowIndex = 0;
+  result.students.slice(0, detailed ? 180 : 120).forEach((s) => {
+    const status = String(s.accountStatus || '').toUpperCase();
+    const values = detailed
+      ? [
+        s.admissionNumber || '—',
+        `${s.firstName || ''} ${s.lastName || ''}`.trim() || '—',
+        classLabel(s),
+        status,
+        money(s.outstandingBalance),
+        money(s.aging['120_plus']),
+        `${s.guardianName || 'N/A'}${s.guardianPhone ? ` (${s.guardianPhone})` : ''}`,
+        s.lastPaymentDate || '—',
+        s.escalationFlag ? 'Yes' : 'No',
+      ]
+      : [
+        s.admissionNumber || '—',
+        `${s.firstName || ''} ${s.lastName || ''}`.trim() || '—',
+        classLabel(s),
+        status,
+        money(s.outstandingBalance),
+        money(s.aging['120_plus']),
+        s.lastPaymentDate || '—',
+      ];
+
+    doc.font('Helvetica').fontSize(8);
+    let rowH = 0;
+    for (let i = 0; i < cols.length; i++) {
+      if (cols[i].label === 'Status') continue;
+      rowH = Math.max(rowH, doc.heightOfString(String(values[i]), { width: cols[i].w - 8, align: cols[i].align || 'left' }));
+    }
+    rowH = Math.max(17, Math.ceil(rowH) + 6);
+
+    if (y + rowH > pageBottom()) {
+      doc.addPage({ size: 'A4', layout: 'landscape', margin });
+      y = margin;
+      drawHeader();
+    }
+
+    if (rowIndex % 2 === 1) {
+      doc.save();
+      doc.rect(margin, y, tableW, rowH).fill('#f8fafc');
+      doc.restore();
+    }
+
+    let x = margin;
+    for (let i = 0; i < cols.length; i++) {
+      if (cols[i].label === 'Status') {
+        const bg = status === 'RECONCILED' ? '#dcfce7' : status === 'UNRECONCILED' ? '#fee2e2' : '#fef3c7';
+        const fg = status === 'RECONCILED' ? '#166534' : status === 'UNRECONCILED' ? '#991b1b' : '#92400e';
+        const pillW = Math.min(cols[i].w - 10, Math.max(42, doc.widthOfString(status) + 14));
+        const pillY = y + Math.max(3, Math.floor((rowH - 11) / 2));
+        doc.save();
+        doc.roundedRect(x + 4, pillY, pillW, 11, 5).fill(bg);
+        doc.restore();
+        doc.font('Helvetica-Bold').fontSize(6.7).fillColor(fg).text(status, x + 8, pillY + 2, { width: pillW - 8, align: 'center', lineBreak: false });
+        doc.fillColor('#0f172a').font('Helvetica').fontSize(8);
+      } else {
+        doc.text(String(values[i]), x + 4, y + 3, { width: cols[i].w - 8, align: cols[i].align || 'left' });
+      }
+      x += cols[i].w;
+    }
+    y += rowH;
+    rowIndex += 1;
   });
+
+  renderGeneratedFooter(doc, new Date(), margin);
   doc.end();
 });
 
@@ -820,6 +1776,7 @@ router.get('/reports/fee-collection-revenue/export.xlsx', authorize(UserRole.ADM
 router.get('/reports/fee-collection-revenue/export.pdf', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (req: AuthRequest, res: Response) => {
   const summaryOnly = req.user!.role === UserRole.PRINCIPAL;
   const detailed = !summaryOnly && req.query.mode !== 'summary';
+  const inline = String(req.query.preview || '') === 'true';
   const result = await buildFeeCollectionRevenueReport(feeCollectionQueryParams(req, summaryOnly));
   if ('error' in result) return res.status(400).json({ message: result.error });
   if ('needsSelection' in result) return res.status(400).json({ message: 'Multiple students match — select one before export' });
@@ -830,34 +1787,145 @@ router.get('/reports/fee-collection-revenue/export.pdf', authorize(UserRole.ADMI
   doc.on('end', () => {
     const pdf = Buffer.concat(chunks);
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="fee-collection-revenue-${detailed ? 'detailed' : 'summary'}.pdf"`);
+    res.setHeader(
+      'Content-Disposition',
+      `${inline ? 'inline' : 'attachment'}; filename="fee-collection-revenue-${detailed ? 'detailed' : 'summary'}.pdf"`,
+    );
     res.send(pdf);
   });
+
   const o = result.overview;
-  doc.fontSize(15).text('Fee Collection & Revenue Report');
-  doc.moveDown(0.3);
-  doc.fontSize(9).text(`Period: ${result.filters.dateFrom} to ${result.filters.dateTo}`);
-  if (result.filters.termName) doc.text(`Term: ${result.filters.termName}`);
-  doc.text(`Expected: $${o.totalExpected.toFixed(2)}  |  Collected: $${o.totalCollected.toFixed(2)}  |  Outstanding: $${o.totalOutstanding.toFixed(2)}  |  Rate: ${o.collectionRatePct}%`);
-  doc.text(`Paid in full: ${o.studentsPaidInFull}  |  Partial: ${o.studentsPartial}  |  Unpaid: ${o.studentsUnpaid}`);
+  const margin = 34;
+  const contentW = doc.page.width - margin * 2;
+  const pageBottom = () => doc.page.height - margin - 20;
+  const money = (n: number) => `$${Number(n || 0).toFixed(2)}`;
+  const classLabel = (raw: string) => {
+    const cls = String(raw || '').trim();
+    if (!cls) return 'Class —';
+    return /^class\s+/i.test(cls) ? cls : `Class ${cls}`;
+  };
+  let y = margin;
+
+  await renderPdfHeaderWithLogo(doc, 'Fee Collection & Revenue Report', { margin });
+  y = Math.max(doc.y + 2, y);
+  doc.font('Helvetica').fontSize(9).fillColor('#0f172a');
+  doc.text(`Period: ${result.filters.dateFrom} to ${result.filters.dateTo}${result.filters.termName ? `   Term: ${result.filters.termName}` : ''}`, margin, y);
+  y += 14;
+
+  const gap = 8;
+  const cardW = (contentW - gap * 3) / 4;
+  const drawCard = (x: number, label: string, value: string, tone: 'neutral' | 'positive' | 'warn' | 'danger' = 'neutral') => {
+    const bg = tone === 'positive' ? '#ecfdf3' : tone === 'warn' ? '#fff7ed' : tone === 'danger' ? '#fef2f2' : '#eff6ff';
+    const border = tone === 'positive' ? '#86efac' : tone === 'warn' ? '#fdba74' : tone === 'danger' ? '#fecaca' : '#bfdbfe';
+    const fg = tone === 'positive' ? '#166534' : tone === 'warn' ? '#9a3412' : tone === 'danger' ? '#991b1b' : '#1d4ed8';
+    doc.save();
+    doc.roundedRect(x, y, cardW, 42, 7).fillAndStroke(bg, border);
+    doc.restore();
+    doc.font('Helvetica').fontSize(7.5).fillColor('#64748b').text(label.toUpperCase(), x + 9, y + 8, { width: cardW - 18 });
+    doc.font('Helvetica-Bold').fontSize(11).fillColor(fg).text(value, x + 9, y + 21, { width: cardW - 18 });
+  };
+  drawCard(margin, 'Expected', money(o.totalExpected), 'neutral');
+  drawCard(margin + cardW + gap, 'Collected', money(o.totalCollected), 'positive');
+  drawCard(margin + (cardW + gap) * 2, 'Outstanding', money(o.totalOutstanding), 'danger');
+  drawCard(margin + (cardW + gap) * 3, 'Collection Rate', `${Number(o.collectionRatePct || 0).toFixed(1)}%`, 'warn');
+  y += 52;
+
   if (result.compareOverview) {
     const c = result.compareOverview;
-    doc.text(`Compare period — Expected: $${c.totalExpected.toFixed(2)}  Collected: $${c.totalCollected.toFixed(2)}  Rate: ${c.collectionRatePct}%`);
+    doc.font('Helvetica').fontSize(8.5).fillColor('#334155');
+    doc.text(`Compare Period — Expected ${money(c.totalExpected)}  Collected ${money(c.totalCollected)}  Rate ${Number(c.collectionRatePct || 0).toFixed(1)}%`, margin, y);
+    y += 12;
   }
-  doc.moveDown(0.4);
-  doc.text(`Projected end-of-term collection: $${result.projections.projectedEndOfTermCollection.toFixed(2)}  Shortfall: $${result.projections.projectedShortfall.toFixed(2)}`);
-  doc.moveDown(0.5);
-  if (detailed && result.daily.length) {
-    doc.fontSize(10).text('Daily collections (sample)');
-    result.daily.slice(0, 14).forEach((day) => {
-      doc.fontSize(8).text(`${day.date}: $${day.dayTotal.toFixed(2)} (${day.payments.length} payments${day.reversedCount ? `, ${day.reversedCount} reversed` : ''})`);
-    });
-  }
-  doc.moveDown(0.3);
-  doc.fontSize(10).text('By fee category');
-  result.byCategory.slice(0, 12).forEach((c) => {
-    doc.fontSize(8).text(`${c.label}: expected $${c.expected.toFixed(2)}  collected $${c.collected.toFixed(2)}  (${c.collectionRatePct}%)`);
+
+  const cols = [
+    { label: 'GRADE', w: 120 },
+    { label: 'CLASS', w: 150 },
+    { label: 'STUDENTS', w: 72, align: 'right' as const },
+    { label: 'EXPECTED', w: 106, align: 'right' as const },
+    { label: 'COLLECTED', w: 106, align: 'right' as const },
+    { label: 'OUTSTANDING', w: 106, align: 'right' as const },
+    { label: 'RATE %', w: 80, align: 'right' as const },
+  ];
+  const tableW = cols.reduce((s, c) => s + c.w, 0);
+  const drawHeader = () => {
+    let x = margin;
+    doc.save();
+    doc.roundedRect(margin, y, tableW, 18, 5).fill('#1e40af');
+    doc.restore();
+    doc.font('Helvetica-Bold').fontSize(8).fillColor('#ffffff');
+    for (const c of cols) {
+      doc.text(c.label, x + 4, y + 6, { width: c.w - 8, align: c.align || 'left', lineBreak: false });
+      x += c.w;
+    }
+    y += 20;
+  };
+
+  doc.font('Helvetica-Bold').fontSize(10).fillColor('#0f172a').text('Collection by Grade / Class', margin, y);
+  y += 14;
+  drawHeader();
+
+  let rowIndex = 0;
+  (result.byGradeClass || []).slice(0, detailed ? 180 : 120).forEach((g) => {
+    const vals = [
+      String((g as { gradeLabel?: string }).gradeLabel || '—'),
+      classLabel(String((g as { classLabel?: string }).classLabel || '')),
+      String((g as { studentCount?: number }).studentCount ?? 0),
+      money(Number((g as { totalExpected?: number }).totalExpected || 0)),
+      money(Number((g as { totalCollected?: number }).totalCollected || 0)),
+      money(Number((g as { outstanding?: number }).outstanding || 0)),
+      `${Number((g as { collectionRatePct?: number }).collectionRatePct || 0).toFixed(1)}%`,
+    ];
+    doc.font('Helvetica').fontSize(8);
+    let rowH = 0;
+    for (let i = 0; i < cols.length; i++) {
+      rowH = Math.max(rowH, doc.heightOfString(vals[i], { width: cols[i].w - 8, align: cols[i].align || 'left' }));
+    }
+    rowH = Math.max(17, Math.ceil(rowH) + 6);
+
+    if (y + rowH > pageBottom()) {
+      doc.addPage({ size: 'A4', layout: 'landscape', margin });
+      y = margin;
+      drawHeader();
+    }
+    if (rowIndex % 2 === 1) {
+      doc.save();
+      doc.rect(margin, y, tableW, rowH).fill('#f8fafc');
+      doc.restore();
+    }
+    doc.fillColor('#0f172a').font('Helvetica').fontSize(8);
+    let x = margin;
+    for (let i = 0; i < cols.length; i++) {
+      doc.text(vals[i], x + 4, y + 3, { width: cols[i].w - 8, align: cols[i].align || 'left' });
+      x += cols[i].w;
+    }
+    y += rowH;
+    rowIndex += 1;
   });
+
+  y += 10;
+  if (y + 120 > pageBottom()) {
+    doc.addPage({ size: 'A4', layout: 'landscape', margin });
+    y = margin;
+  }
+  doc.font('Helvetica-Bold').fontSize(10).fillColor('#0f172a').text('By Fee Category', margin, y);
+  y += 14;
+  (result.byCategory || []).slice(0, 10).forEach((c, idx) => {
+    const line = `${String((c as { label?: string }).label || '—')}: expected ${money(Number((c as { expected?: number }).expected || 0))}   collected ${money(Number((c as { collected?: number }).collected || 0))}   outstanding ${money(Number((c as { outstanding?: number }).outstanding || 0))}   rate ${Number((c as { collectionRatePct?: number }).collectionRatePct || 0).toFixed(1)}%`;
+    const h = Math.max(12, Math.ceil(doc.heightOfString(line, { width: contentW - 8 })) + 3);
+    if (y + h > pageBottom()) {
+      doc.addPage({ size: 'A4', layout: 'landscape', margin });
+      y = margin;
+    }
+    if (idx % 2 === 1) {
+      doc.save();
+      doc.rect(margin, y - 1, contentW, h).fill('#f8fafc');
+      doc.restore();
+    }
+    doc.font('Helvetica').fontSize(8).fillColor('#0f172a').text(line, margin + 4, y, { width: contentW - 8 });
+    y += h;
+  });
+
+  renderGeneratedFooter(doc, new Date(), margin);
   doc.end();
 });
 
@@ -941,7 +2009,7 @@ router.get('/reports/debtor-aging/reminder-letter.pdf', authorize(UserRole.ADMIN
     res.setHeader('Content-Disposition', `attachment; filename="fee-reminder-${s.admissionNumber}.pdf"`);
     res.send(pdf);
   });
-  doc.fontSize(14).text('Fee Reminder Letter');
+  await renderPdfHeaderWithLogo(doc, 'Fee Reminder Letter', { margin: 48 });
   doc.moveDown(0.7);
   doc.fontSize(11).text(`Student: ${s.firstName} ${s.lastName} (${s.admissionNumber})`);
   doc.text(`Class: ${s.formName || ''} ${s.className || ''}`);
@@ -954,15 +2022,11 @@ router.get('/reports/debtor-aging/reminder-letter.pdf', authorize(UserRole.ADMIN
   doc.text('This is a reminder that the above student account has outstanding school fees. Kindly settle the balance or contact the finance office to agree a payment plan.');
   doc.moveDown(1.2);
   doc.text('Finance Office');
+  renderGeneratedFooter(doc, new Date(), 48);
   doc.end();
 });
 
-router.get('/student-balance', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (req, res: Response) => {
-  const rawQ = String(req.query.q || '').trim();
-  if (!rawQ) {
-    return res.status(400).json({ message: 'Query is required' });
-  }
-
+async function fetchStudentBalances(rawQ: string) {
   const q = `%${rawQ.replace(/\s+/g, '%')}%`;
   const result = await AppDataSource.query(
     `
@@ -1003,12 +2067,145 @@ router.get('/student-balance', authorize(UserRole.ADMIN, UserRole.DIRECTOR, User
     [rawQ, q],
   );
 
-  res.json(result.map((r: any) => ({
+  return result.map((r: any) => ({
     ...r,
     totalInvoiced: Number(r.totalInvoiced || 0),
     totalPaid: Number(r.totalPaid || 0),
     balance: Number(r.balance || 0),
-  })));
+  }));
+}
+
+router.get('/student-balance', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (req, res: Response) => {
+  const rawQ = String(req.query.q || '').trim();
+  if (!rawQ) {
+    return res.status(400).json({ message: 'Query is required' });
+  }
+  res.json(await fetchStudentBalances(rawQ));
+});
+
+router.get('/student-balance/export.pdf', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (req, res: Response) => {
+  const rawQ = String(req.query.q || '').trim();
+  if (!rawQ) return res.status(400).json({ message: 'Query is required' });
+
+  const rows = await fetchStudentBalances(rawQ);
+  if (!rows.length) return res.status(404).json({ message: 'No matching student found' });
+
+  const inline = String(req.query.preview || '') === 'true';
+  const doc = new PDFDocument({ size: 'A4', layout: 'landscape', margin: 34 });
+  const chunks: Buffer[] = [];
+  doc.on('data', (c) => chunks.push(c));
+  doc.on('end', () => {
+    const pdf = Buffer.concat(chunks);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader(
+      'Content-Disposition',
+      `${inline ? 'inline' : 'attachment'}; filename="student-balance-report.pdf"`,
+    );
+    res.send(pdf);
+  });
+
+  const margin = 34;
+  const contentW = doc.page.width - margin * 2;
+  const pageBottom = () => doc.page.height - margin - 20;
+  const money = (n: number) => `$${Number(n || 0).toFixed(2)}`;
+  const classLabel = (raw: string) => {
+    const cls = String(raw || '').trim();
+    if (!cls) return 'Class —';
+    return /^class\s+/i.test(cls) ? cls : `Class ${cls}`;
+  };
+
+  let y = margin;
+  await renderPdfHeaderWithLogo(doc, 'Student Balance Report', { margin });
+  y = Math.max(doc.y + 2, y);
+  doc.font('Helvetica').fontSize(9).fillColor('#0f172a');
+  doc.text(`Search: ${rawQ}`, margin, y);
+  y += 14;
+
+  const totalInvoiced = rows.reduce((s, r) => s + r.totalInvoiced, 0);
+  const totalPaid = rows.reduce((s, r) => s + r.totalPaid, 0);
+  const totalBalance = rows.reduce((s, r) => s + r.balance, 0);
+
+  const gap = 8;
+  const cardW = (contentW - gap * 2) / 3;
+  const drawCard = (x: number, label: string, value: string, tone: 'neutral' | 'positive' | 'warn' = 'neutral') => {
+    const bg = tone === 'positive' ? '#ecfdf3' : tone === 'warn' ? '#fff7ed' : '#eff6ff';
+    const border = tone === 'positive' ? '#86efac' : tone === 'warn' ? '#fdba74' : '#bfdbfe';
+    const fg = tone === 'positive' ? '#166534' : tone === 'warn' ? '#9a3412' : '#1d4ed8';
+    doc.save();
+    doc.roundedRect(x, y, cardW, 42, 7).fillAndStroke(bg, border);
+    doc.restore();
+    doc.font('Helvetica').fontSize(7.5).fillColor('#64748b').text(label.toUpperCase(), x + 9, y + 8, { width: cardW - 18 });
+    doc.font('Helvetica-Bold').fontSize(11).fillColor(fg).text(value, x + 9, y + 21, { width: cardW - 18 });
+  };
+  drawCard(margin, 'Students', String(rows.length), 'neutral');
+  drawCard(margin + cardW + gap, 'Total Invoiced', money(totalInvoiced), 'neutral');
+  drawCard(margin + (cardW + gap) * 2, 'Outstanding', money(totalBalance), 'warn');
+  y += 52;
+
+  const cols = [
+    { label: 'STUDENT ID', w: 90 },
+    { label: 'NAME', w: 150 },
+    { label: 'CLASS', w: 100 },
+    { label: 'INVOICED', w: 100, align: 'right' as const },
+    { label: 'PAID', w: 100, align: 'right' as const },
+    { label: 'BALANCE', w: 100, align: 'right' as const },
+  ];
+  const tableW = cols.reduce((s, c) => s + c.w, 0);
+  const drawHeader = () => {
+    let x = margin;
+    doc.save();
+    doc.roundedRect(margin, y, tableW, 18, 5).fill('#1e40af');
+    doc.restore();
+    doc.font('Helvetica-Bold').fontSize(8).fillColor('#ffffff');
+    for (const c of cols) {
+      doc.text(c.label, x + 4, y + 6, { width: c.w - 8, align: c.align || 'left', lineBreak: false });
+      x += c.w;
+    }
+    y += 20;
+  };
+  drawHeader();
+
+  let rowIndex = 0;
+  rows.forEach((r) => {
+    const vals = [
+      String(r.admissionNumber || r.id || '—'),
+      `${r.firstName || ''} ${r.lastName || ''}`.trim() || '—',
+      classLabel(r.className || ''),
+      money(r.totalInvoiced),
+      money(r.totalPaid),
+      money(r.balance),
+    ];
+    doc.font('Helvetica').fontSize(8);
+    let rowH = 0;
+    for (let i = 0; i < cols.length; i++) {
+      rowH = Math.max(rowH, doc.heightOfString(vals[i], { width: cols[i].w - 8, align: cols[i].align || 'left' }));
+    }
+    rowH = Math.max(17, Math.ceil(rowH) + 6);
+
+    if (y + rowH > pageBottom()) {
+      doc.addPage({ size: 'A4', layout: 'landscape', margin });
+      y = margin;
+      drawHeader();
+    }
+    if (rowIndex % 2 === 1) {
+      doc.save();
+      doc.rect(margin, y, tableW, rowH).fill('#f8fafc');
+      doc.restore();
+    }
+    doc.fillColor('#0f172a').font('Helvetica').fontSize(8);
+    let x = margin;
+    for (let i = 0; i < cols.length; i++) {
+      if (i === cols.length - 1 && r.balance > 0) doc.font('Helvetica-Bold');
+      doc.text(vals[i], x + 4, y + 3, { width: cols[i].w - 8, align: cols[i].align || 'left' });
+      if (i === cols.length - 1 && r.balance > 0) doc.font('Helvetica');
+      x += cols[i].w;
+    }
+    y += rowH;
+    rowIndex += 1;
+  });
+
+  renderGeneratedFooter(doc, new Date(), margin);
+  doc.end();
 });
 
 router.get('/class-balances/:classId', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (req, res: Response) => {

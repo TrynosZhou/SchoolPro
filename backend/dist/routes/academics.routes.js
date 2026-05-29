@@ -73,6 +73,40 @@ router.post('/weekly-assessments/bulk', (0, auth_1.authorize)(enums_1.UserRole.T
     }
     res.json(saved);
 });
+router.get('/messages/recipients', (0, auth_1.authorize)(enums_1.UserRole.TEACHER, enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), async (req, res) => {
+    const userRepo = data_source_1.AppDataSource.getRepository(entities_1.User);
+    const users = await userRepo.find({
+        where: { isActive: true },
+        order: { lastName: 'ASC', firstName: 'ASC' },
+    });
+    res.json(users
+        .filter((u) => u.id !== req.user.userId)
+        .map((u) => ({
+        id: u.id,
+        firstName: u.firstName,
+        lastName: u.lastName,
+        email: u.email,
+        role: u.role,
+    })));
+});
+router.get('/messages/inbox', (0, auth_1.authorize)(enums_1.UserRole.TEACHER, enums_1.UserRole.PARENT, enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), async (req, res) => {
+    const repo = data_source_1.AppDataSource.getRepository(entities_1.Message);
+    const messages = await repo.find({
+        where: { recipientId: req.user.userId },
+        relations: (0, typeorm_helpers_1.relations)('sender', 'recipient', 'student'),
+        order: { sentAt: 'DESC' },
+    });
+    res.json(messages);
+});
+router.get('/messages/sent', (0, auth_1.authorize)(enums_1.UserRole.TEACHER, enums_1.UserRole.PARENT, enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), async (req, res) => {
+    const repo = data_source_1.AppDataSource.getRepository(entities_1.Message);
+    const messages = await repo.find({
+        where: { senderId: req.user.userId },
+        relations: (0, typeorm_helpers_1.relations)('sender', 'recipient', 'student'),
+        order: { sentAt: 'DESC' },
+    });
+    res.json(messages);
+});
 router.get('/messages', async (req, res) => {
     const repo = data_source_1.AppDataSource.getRepository(entities_1.Message);
     const messages = await repo.find({
@@ -82,9 +116,53 @@ router.get('/messages', async (req, res) => {
     });
     res.json(messages);
 });
-router.post('/messages', (0, auth_1.authorize)(enums_1.UserRole.TEACHER, enums_1.UserRole.PARENT, enums_1.UserRole.ADMIN), async (req, res) => {
+router.post('/messages', (0, auth_1.authorize)(enums_1.UserRole.TEACHER, enums_1.UserRole.PARENT, enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), async (req, res) => {
+    const { recipientId, subject, body, studentId } = req.body || {};
+    if (!recipientId || !String(subject || '').trim() || !String(body || '').trim()) {
+        return res.status(400).json({ message: 'recipientId, subject, and body are required' });
+    }
+    const userRepo = data_source_1.AppDataSource.getRepository(entities_1.User);
+    const recipient = await userRepo.findOne({ where: { id: recipientId, isActive: true } });
+    if (!recipient)
+        return res.status(404).json({ message: 'Recipient not found' });
     const repo = data_source_1.AppDataSource.getRepository(entities_1.Message);
-    const msg = await repo.save(repo.create({ ...req.body, senderId: req.user.userId }));
-    res.status(201).json(msg);
+    const msg = await repo.save(repo.create({
+        recipientId,
+        subject: String(subject).trim(),
+        body: String(body).trim(),
+        studentId: studentId || undefined,
+        senderId: req.user.userId,
+        isRead: false,
+    }));
+    const full = await repo.findOne({
+        where: { id: msg.id },
+        relations: (0, typeorm_helpers_1.relations)('sender', 'recipient', 'student'),
+    });
+    res.status(201).json(full);
+});
+router.patch('/messages/:id/read', (0, auth_1.authorize)(enums_1.UserRole.TEACHER, enums_1.UserRole.PARENT, enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), async (req, res) => {
+    const repo = data_source_1.AppDataSource.getRepository(entities_1.Message);
+    const msg = await repo.findOne({
+        where: { id: req.params.id, recipientId: req.user.userId },
+        relations: (0, typeorm_helpers_1.relations)('sender', 'recipient', 'student'),
+    });
+    if (!msg)
+        return res.status(404).json({ message: 'Message not found' });
+    msg.isRead = true;
+    await repo.save(msg);
+    res.json(msg);
+});
+router.delete('/messages/:id', (0, auth_1.authorize)(enums_1.UserRole.TEACHER, enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), async (req, res) => {
+    const repo = data_source_1.AppDataSource.getRepository(entities_1.Message);
+    const msg = await repo.findOne({
+        where: { id: req.params.id },
+    });
+    if (!msg)
+        return res.status(404).json({ message: 'Message not found' });
+    if (msg.senderId !== req.user.userId && msg.recipientId !== req.user.userId) {
+        return res.status(403).json({ message: 'Not allowed to delete this message' });
+    }
+    await repo.remove(msg);
+    res.json({ ok: true });
 });
 exports.default = router;

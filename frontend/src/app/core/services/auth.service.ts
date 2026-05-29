@@ -18,12 +18,31 @@ export class AuthService {
 
   login(email: string, password: string) {
     return this.api.post<AuthResponse>('/auth/login', { email, password }).pipe(
-      tap((res) => {
-        localStorage.setItem(TOKEN_KEY, res.token);
-        localStorage.setItem(USER_KEY, JSON.stringify(res.user));
-        this.userSignal.set(res.user);
-      })
+      tap((res) => this.persistSession(res))
     );
+  }
+
+  register(payload: {
+    email: string;
+    password: string;
+    firstName: string;
+    lastName: string;
+    role: 'parent' | 'student';
+    phone?: string;
+    admissionNumber?: string;
+    dateOfBirth?: string;
+    linkAdmissionNumber?: string;
+    relationship?: string;
+  }) {
+    return this.api.post<AuthResponse & { message?: string }>('/auth/register', payload).pipe(
+      tap((res) => this.persistSession(res))
+    );
+  }
+
+  private persistSession(res: AuthResponse) {
+    localStorage.setItem(TOKEN_KEY, res.token);
+    localStorage.setItem(USER_KEY, JSON.stringify(res.user));
+    this.userSignal.set(res.user);
   }
 
   logout() {

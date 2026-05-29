@@ -10,22 +10,35 @@
     <nav class="sidebar-nav">
       @if (useSections) {
         @for (section of navSections; track section.heading; let si = $index) {
-          <div
-            class="nav-section"
-            [class.expanded]="isExpanded(section.heading)"
-            [class.has-active]="sectionHasActive(section)"
-          >
-            <button
-              type="button"
-              class="nav-section-toggle"
-              (click)="toggleSection(section.heading)"
-              [attr.aria-expanded]="isExpanded(section.heading)"
-              [attr.aria-controls]="'nav-section-' + si"
-            >
-              <span class="nav-heading-text">{{ section.heading }}</span>
-              <span class="nav-chevron" aria-hidden="true"></span>
-            </button>
-            @if (isExpanded(section.heading)) {
+          <div class="nav-section" [class.expanded]="isExpanded(section.heading)" [class.has-active]="sectionHasActive(section)">
+            @if (!section.items.length) {
+              <a
+                class="nav-section-link"
+                [routerLink]="section.path || '/admin'"
+                routerLinkActive="active"
+                [routerLinkActiveOptions]="{ exact: true }"
+              >
+                <span class="menu-heading">
+                  <span class="menu-icon" aria-hidden="true">{{ sectionIcon(section.heading) }}</span>
+                  <span class="nav-section-title">{{ section.heading }}</span>
+                </span>
+              </a>
+            } @else {
+              <button
+                type="button"
+                class="nav-section-toggle"
+                (click)="toggleSection(section.heading)"
+                [attr.aria-expanded]="isExpanded(section.heading)"
+                [attr.aria-controls]="'nav-section-' + si"
+              >
+                <span class="menu-heading">
+                  <span class="menu-icon" aria-hidden="true">{{ sectionIcon(section.heading) }}</span>
+                  <span class="nav-section-title">{{ section.heading }}</span>
+                </span>
+                <span class="nav-toggle-chevron" aria-hidden="true">›</span>
+              </button>
+            }
+            @if (section.items.length && isExpanded(section.heading)) {
               <div class="nav-section-items" [id]="'nav-section-' + si">
                 @for (item of section.items; track item.path + item.label) {
                   <a
@@ -33,9 +46,7 @@
                     routerLinkActive="active"
                     [routerLinkActiveOptions]="{ exact: item.path === '/admin' || item.path === '/teacher' }"
                   >
-                    @if (item.icon) {
-                      <span class="nav-icon" aria-hidden="true">{{ item.icon }}</span>
-                    }
+                    <span class="sub-bullet" aria-hidden="true">•</span>
                     <span class="nav-label">{{ item.label }}</span>
                   </a>
                 }
@@ -55,14 +66,12 @@
       }
     </nav>
     <div class="user-panel">
-      <span class="user-name">{{ auth.user()?.firstName }} {{ auth.user()?.lastName }}</span>
-      <button type="button" class="btn-outline btn-logout" (click)="requestLogout()">
-        <span>Sign out</span>
-        <svg class="sign-out-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-          <path d="M16 17l5-5-5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-          <path d="M21 12H9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
+      <button type="button" class="user-identity-card" (click)="requestLogout()" aria-label="Open account menu">
+        <span class="user-avatar">{{ userInitials }}</span>
+        <span class="user-meta">
+          <span class="user-name">{{ fullName }}</span>
+          <span class="user-role">{{ userRoleLabel }}</span>
+        </span>
       </button>
     </div>
   </aside>

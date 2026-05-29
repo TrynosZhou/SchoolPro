@@ -64,6 +64,8 @@ router.get('/class-list/pdf', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enum
     const classLabel = cls?.form?.name ? `${cls.form.name} · ${cls.name}` : cls?.name || 'Class';
     const pdf = await (0, pdf_1.generateClassListPdf)({
         schoolName,
+        tagline: settings?.tagline || undefined,
+        logoUrl: settings?.logoUrl || undefined,
         classLabel,
         generatedAt: new Date(),
         students: students.map((s) => ({
@@ -90,7 +92,81 @@ router.get('/parent/my-children', (0, auth_1.authorize)(enums_1.UserRole.PARENT)
         where: { parentId: req.user.parentId },
         relations: (0, typeorm_helpers_1.relations)('student', 'student.schoolClass', 'student.schoolClass.form'),
     });
-    res.json(links.map((l) => l.student));
+    res.json(links.map((l) => ({
+        linkId: l.id,
+        relationship: l.relationship,
+        student: l.student,
+    })));
+});
+router.post('/parent/link-child', (0, auth_1.authorize)(enums_1.UserRole.PARENT), async (req, res) => {
+    const parentId = req.user.parentId;
+    if (!parentId)
+        return res.status(400).json({ message: 'Parent profile not found. Sign out and sign in again.' });
+    const { admissionNumber, relationship } = req.body;
+    if (!admissionNumber?.trim()) {
+        return res.status(400).json({ message: 'Student ID is required' });
+    }
+    const userRepo = data_source_1.AppDataSource.getRepository(entities_1.User);
+    const studentRepo = data_source_1.AppDataSource.getRepository(entities_1.Student);
+    const guardianRepo = data_source_1.AppDataSource.getRepository(entities_1.Guardian);
+    const user = await userRepo.findOne({ where: { id: req.user.userId } });
+    if (!user)
+        return res.status(404).json({ message: 'User not found' });
+    const admission = String(admissionNumber).trim().toUpperCase();
+    const student = await studentRepo.findOne({
+        where: { admissionNumber: admission, isActive: true },
+        relations: (0, typeorm_helpers_1.relations)('schoolClass', 'schoolClass.form', 'form'),
+    });
+    if (!student) {
+        return res.status(404).json({ message: 'No student found with that Student ID. Check the number on the admission letter or with the school office.' });
+    }
+    const alreadyLinked = await guardianRepo.findOne({ where: { studentId: student.id, parentId } });
+    if (alreadyLinked) {
+        return res.status(409).json({ message: `${student.firstName} ${student.lastName} is already linked to your account` });
+    }
+    let guardian = await guardianRepo.findOne({
+        where: [
+            { studentId: student.id, parentId },
+            { studentId: student.id, email: user.email.toLowerCase() },
+        ],
+    });
+    const rel = String(relationship || 'Parent').trim() || 'Parent';
+    if (guardian) {
+        guardian.parentId = parentId;
+        guardian.relationship = rel;
+        guardian.fullName = `${user.firstName} ${user.lastName}`;
+        guardian.phone = user.phone || guardian.phone;
+        guardian.email = user.email;
+    }
+    else {
+        const existingForStudent = await guardianRepo.count({ where: { studentId: student.id } });
+        guardian = guardianRepo.create({
+            studentId: student.id,
+            parentId,
+            fullName: `${user.firstName} ${user.lastName}`,
+            relationship: rel,
+            phone: user.phone || '—',
+            email: user.email,
+            isPrimary: existingForStudent === 0,
+            isEmergencyContact: false,
+        });
+    }
+    const saved = await guardianRepo.save(guardian);
+    res.status(201).json({
+        message: `Linked to ${student.firstName} ${student.lastName}`,
+        link: {
+            linkId: saved.id,
+            relationship: saved.relationship,
+            student: {
+                id: student.id,
+                admissionNumber: student.admissionNumber,
+                firstName: student.firstName,
+                lastName: student.lastName,
+                className: student.schoolClass?.name,
+                formName: student.schoolClass?.form?.name || student.form?.name,
+            },
+        },
+    });
 });
 router.get('/:id', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.TEACHER, enums_1.UserRole.PARENT, enums_1.UserRole.STUDENT), async (req, res) => {
     const repo = data_source_1.AppDataSource.getRepository(entities_1.Student);

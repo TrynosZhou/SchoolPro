@@ -51,7 +51,15 @@
         }
       </button>
     </div>
-    <a routerLink="/admin/finance" class="btn-ghost">Full finance books →</a>
+    <div class="header-actions">
+      <button type="button" class="btn-outline btn-pdf-preview" (click)="previewPdf()" [disabled]="loading() || pdfLoading()">
+        {{ pdfLoading() ? 'Generating…' : 'Preview PDF' }}
+      </button>
+      <button type="button" class="btn-outline btn-pdf-download" (click)="downloadPdf()" [disabled]="loading() || pdfLoading()">
+        {{ pdfLoading() ? 'Generating…' : 'Download PDF' }}
+      </button>
+      <a routerLink="/admin/finance" class="btn-ghost">Full finance books →</a>
+    </div>
   </div>
 
   <!-- RECORD PAYMENT -->
@@ -245,12 +253,19 @@
                 <td>{{ inv.dueDate }}</td>
                 <td><span class="status" [attr.data-s]="inv.status">{{ inv.status }}</span></td>
                 <td class="row-actions">
-                  <button type="button" class="btn-outline btn-sm" (click)="downloadInvoice(inv.id, inv.invoiceNumber)">
-                    PDF
-                  </button>
-                  @if (inv.status !== 'paid') {
-                    <button type="button" class="btn-ghost btn-sm" (click)="payDebtorFromInvoice(inv)">Pay</button>
-                  }
+                  <div class="invoice-actions">
+                    <button
+                      type="button"
+                      class="btn-outline btn-sm btn-pdf-preview"
+                      (click)="previewInvoice(inv.id)"
+                      [disabled]="previewingInvoiceId() === inv.id"
+                    >
+                      {{ previewingInvoiceId() === inv.id ? 'Opening…' : 'Preview PDF' }}
+                    </button>
+                    @if (inv.status !== 'paid') {
+                      <button type="button" class="btn-ghost btn-sm" (click)="payDebtorFromInvoice(inv)">Pay</button>
+                    }
+                  </div>
                 </td>
               </tr>
             } @empty {
@@ -286,7 +301,14 @@
                 <td class="num text-green">{{ '$' + (p.amount | number:'1.2-2') }}</td>
                 <td>
                   @if (p.receipt?.id) {
-                    <button type="button" class="btn-outline btn-sm" (click)="downloadReceipt(p.receipt!.id)">PDF</button>
+                    <button
+                      type="button"
+                      class="btn-outline btn-sm btn-pdf-preview"
+                      (click)="previewReceipt(p.receipt!.id)"
+                      [disabled]="previewingReceiptId() === p.receipt!.id"
+                    >
+                      {{ previewingReceiptId() === p.receipt!.id ? 'Opening…' : 'Preview PDF' }}
+                    </button>
                   }
                 </td>
               </tr>

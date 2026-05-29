@@ -7,6 +7,8 @@ export interface AuthPayload {
   userId: string;
   email: string;
   role: UserRole;
+  permissions?: string[];
+  schoolRoleId?: string;
   staffId?: string;
   parentId?: string;
   studentId?: string;
@@ -40,6 +42,22 @@ export function authorize(...roles: UserRole[]) {
       return res.status(403).json({ message: 'Insufficient permissions' });
     }
     next();
+  };
+}
+
+export function authorizePermission(...required: string[]) {
+  return (req: AuthRequest, res: Response, next: NextFunction) => {
+    if (!req.user) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+    if (req.user.role === UserRole.ADMIN) {
+      return next();
+    }
+    const granted = new Set(req.user.permissions ?? []);
+    if (required.some((key) => granted.has(key))) {
+      return next();
+    }
+    return res.status(403).json({ message: 'Insufficient permissions' });
   };
 }
 

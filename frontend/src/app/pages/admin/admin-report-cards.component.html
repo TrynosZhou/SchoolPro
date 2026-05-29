@@ -1,4 +1,4 @@
-<app-portal-layout portalTitle="Admin Portal" pageTitle="Report Cards" [navSections]="adminNav">
+<app-portal-layout [portalTitle]="portalTitle()" pageTitle="Report Cards" [navSections]="navSections()">
 
   @if (toast(); as t) {
     <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>
@@ -164,7 +164,7 @@
                     {{ report.classPosition }}
                   </span>
                   <span class="jump-name">{{ report.student?.lastName }}, {{ report.student?.firstName }}</span>
-                  <span class="jump-grade">{{ report.overallGrade }}</span>
+                  <span class="jump-grade">{{ positionOutOfLabel(report.classPosition, report.classTotal) }}</span>
                 </button>
               </li>
             }
@@ -179,17 +179,33 @@
               [attr.id]="'report-' + report.studentId"
             >
               <header class="report-card-head" (click)="toggleExpanded(report.id)">
-                <div class="position-badge" [class.top-three]="(report.classPosition || 0) <= 3">
-                  <span class="pos-label">Position</span>
-                  <span class="pos-value">{{ positionLabel(report.classPosition) }}</span>
+                <div class="position-badges">
+                  @if (report.classPosition) {
+                    <div class="position-badge" [class.top-three]="(report.classPosition || 0) <= 3">
+                      <span class="pos-label">Class</span>
+                      <span class="pos-value">{{ positionOutOfLabel(report.classPosition, report.classTotal) }}</span>
+                    </div>
+                  }
+                  @if (report.formPosition) {
+                    <div class="position-badge form" [class.top-three]="(report.formPosition || 0) <= 3">
+                      <span class="pos-label">Form</span>
+                      <span class="pos-value">{{ positionOutOfLabel(report.formPosition, report.formTotal) }}</span>
+                    </div>
+                  }
                 </div>
                 <div class="student-block">
                   <h2>{{ report.student?.firstName }} {{ report.student?.lastName }}</h2>
                   <p class="meta">
                     <span class="chip">{{ report.student?.admissionNumber }}</span>
                     <span class="chip">{{ report.student?.schoolClass?.name }}</span>
-                    @if (report.overallGrade) {
-                      <span class="chip grade-chip">{{ report.overallGrade }}</span>
+                    @if (report.classPosition) {
+                      <span class="chip grade-chip">Class: {{ positionOutOfLabel(report.classPosition, report.classTotal) }}</span>
+                    }
+                    @if (report.formPosition) {
+                      <span class="chip form-chip">Form: {{ positionOutOfLabel(report.formPosition, report.formTotal) }}</span>
+                    }
+                    @if (report.subjectsPassed != null && report.totalSubjects) {
+                      <span class="chip pass-chip">Passed: {{ subjectsPassedLabel(report.subjectsPassed, report.totalSubjects) }}</span>
                     }
                     @if (report.averageMark != null) {
                       <span class="chip avg-chip">{{ report.averageMark | number:'1.1-1' }}%</span>
@@ -211,23 +227,24 @@
                     <table class="results-table">
                       <thead>
                         <tr>
-                          <th>Subject</th>
-                          <th>Marks</th>
-                          <th>Grade</th>
+                          <th class="col-subject">Subject</th>
+                          <th class="col-code">Code</th>
+                          <th class="col-mark">Mark</th>
+                          <th class="col-grade">Grade</th>
+                          <th class="col-rank nowrap">Rank</th>
+                          <th class="col-avg nowrap">Mean</th>
                           <th>Remarks</th>
                         </tr>
                       </thead>
                       <tbody>
                         @for (row of report.subjectResults; track row.subject) {
                           <tr>
-                            <td>
-                              {{ row.subjectName || row.subject }}
-                              @if (row.subjectCode) {
-                                <span class="subject-code">({{ row.subjectCode }})</span>
-                              }
-                            </td>
-                            <td class="marks">{{ row.marks }}</td>
-                            <td><span class="grade-pill">{{ row.grade }}</span></td>
+                            <td class="col-subject">{{ row.subjectName || row.subject }}</td>
+                            <td class="code col-code">{{ row.subjectCode || '—' }}</td>
+                            <td class="marks mark-cell">{{ row.marks }}</td>
+                            <td class="grade-cell"><span class="grade-pill">{{ row.grade }}</span></td>
+                            <td class="rank col-rank">{{ subjectPositionLabel(row.subjectPosition, row.subjectPositionTotal) }}</td>
+                            <td class="mean col-avg">{{ row.mean != null ? (row.mean | number:'1.1-1') : '—' }}</td>
                             <td class="remarks">{{ row.remarks || '—' }}</td>
                           </tr>
                         }
@@ -235,36 +252,43 @@
                     </table>
                   </div>
                   <div class="comments remarks-editor">
+                    <p class="remarks-hint">
+                      Teachers and administrators may comment on each learner’s performance and behaviour.
+                      Remarks save automatically when you leave the text box.
+                    </p>
                     <div class="comment-box">
-                      <span class="comment-label">Class Teacher Remark</span>
+                      <span class="comment-label">Class teacher — performance &amp; behaviour</span>
                       <textarea
-                        rows="3"
+                        rows="4"
                         [value]="remarkDraft(report.id).classTeacherRemarks"
                         (input)="onClassTeacherRemarkInput(report.id, $any($event.target).value)"
-                        [disabled]="!canEditClassTeacherRemark() || !!savingRemarks()[report.id]"
-                        placeholder="Write class teacher comment..."
+                        (blur)="onRemarksBlur(report)"
+                        [readonly]="!canEditClassTeacherRemark()"
+                        [class.readonly]="!canEditClassTeacherRemark()"
+                        placeholder="Comment on academic performance, attitude, conduct, and participation…"
                       ></textarea>
                     </div>
                     <div class="comment-box">
-                      <span class="comment-label">Principal / Headmaster Remark</span>
+                      <span class="comment-label">Principal / head — performance &amp; behaviour</span>
                       <textarea
-                        rows="3"
+                        rows="4"
                         [value]="remarkDraft(report.id).principalRemarks"
                         (input)="onPrincipalRemarkInput(report.id, $any($event.target).value)"
-                        [disabled]="!canEditPrincipalRemark() || !!savingRemarks()[report.id]"
-                        placeholder="Write principal comment..."
+                        (blur)="onRemarksBlur(report)"
+                        [readonly]="!canEditPrincipalRemark()"
+                        [class.readonly]="!canEditPrincipalRemark()"
+                        placeholder="Overall assessment of performance, behaviour, and recommendations…"
                       ></textarea>
                     </div>
                   </div>
                   <div class="remarks-actions">
-                    <button
-                      type="button"
-                      class="btn-primary-sm"
-                      (click)="saveRemarks(report)"
-                      [disabled]="!!savingRemarks()[report.id]"
-                    >
-                      {{ savingRemarks()[report.id] ? 'Saving...' : 'Save Remarks' }}
-                    </button>
+                    @if (savingRemarks()[report.id]) {
+                      <span class="remarks-status saving">Saving remarks…</span>
+                    } @else if (remarksJustSaved(report.id)) {
+                      <span class="remarks-status saved">Remarks saved</span>
+                    } @else if (canEditClassTeacherRemark() || canEditPrincipalRemark()) {
+                      <span class="remarks-status hint">Edits save when you click outside the text box</span>
+                    }
                   </div>
                 </div>
               }
@@ -293,10 +317,17 @@
     <header class="pdf-toolbar">
       <div class="pdf-toolbar-title">
         <strong>{{ pdfPreviewTitle() }}</strong>
-        <span>Report card preview</span>
+        <span>Report card preview — scroll to view full document</span>
       </div>
       <button type="button" class="btn-close-pdf" (click)="closePdfPreview()">Close</button>
     </header>
-    <iframe class="pdf-frame" [src]="pdfPreviewUrl()!" title="Report card PDF preview"></iframe>
+    <div class="pdf-viewport">
+      <iframe
+        class="pdf-frame"
+        [src]="pdfPreviewUrl()!"
+        title="Report card PDF preview"
+        scrolling="yes"
+      ></iframe>
+    </div>
   </div>
 }

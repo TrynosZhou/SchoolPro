@@ -24,7 +24,7 @@ function labelToSentinel(label: string): string | undefined {
   return COMPLETION_OPTIONS.find((o) => o.label.replace('🎓 ', '') === label)?.value;
 }
 
-type Tab = 'calendar' | 'classes' | 'subjects' | 'exams' | 'promotion';
+type Tab = 'calendar' | 'classes' | 'subjects' | 'departments' | 'exams' | 'promotion';
 
 interface GradeBoundaryRow {
   grade: string;
@@ -79,6 +79,15 @@ interface SubjectRow {
   description?: string;
 }
 
+interface DepartmentRow {
+  id: string;
+  code: string;
+  name: string;
+  description?: string;
+  isActive: boolean;
+  sortOrder: number;
+}
+
 interface ClassSubjectRow {
   id: string;
   classId: string;
@@ -128,6 +137,7 @@ export class AdminAcademicSettingsComponent implements OnInit {
     { id: 'calendar', label: 'Academic Calendar', icon: '📅', desc: 'Years, terms & sessions' },
     { id: 'classes', label: 'Forms & Classes', icon: '🎓', desc: 'Structure & teachers' },
     { id: 'subjects', label: 'Subjects', icon: '📖', desc: 'Catalogue & class assignments' },
+    { id: 'departments', label: 'Departments', icon: '🏛️', desc: 'School departments & faculties' },
     { id: 'exams', label: 'Exams & Grades', icon: '📝', desc: 'Weights & grade boundaries' },
     { id: 'promotion', label: 'Promotion Rules', icon: '🎯', desc: 'Class progression at year-end' },
   ];
@@ -141,6 +151,7 @@ export class AdminAcademicSettingsComponent implements OnInit {
   forms = signal<FormRow[]>([]);
   classes = signal<ClassRow[]>([]);
   subjects = signal<SubjectRow[]>([]);
+  departments = signal<DepartmentRow[]>([]);
   classSubjects = signal<ClassSubjectRow[]>([]);
   staff = signal<StaffRow[]>([]);
   examTypes = signal<ExamTypeRow[]>([]);
@@ -155,8 +166,18 @@ export class AdminAcademicSettingsComponent implements OnInit {
   newForm = { name: '', level: 1 };
   editingFormId = signal<string | null>(null);
   editFormData = { name: '', level: 1 };
+  editingClassId = signal<string | null>(null);
+  editClassName = '';
+  editingClassFormName = signal('');
+  editingSubjectId = signal<string | null>(null);
+  editingSubjectField = signal<'name' | 'code' | null>(null);
+  editSubjectValue = '';
+  editingSubjectHint = signal('');
   newClass = { name: '', formId: '', capacity: 40, classTeacherId: '' };
   newSubject = { code: '', name: '', description: '' };
+  newDepartment = { code: '', name: '', description: '', isActive: true, sortOrder: 0 };
+  editingDepartmentId = signal<string | null>(null);
+  editDepartmentData = { code: '', name: '', description: '', isActive: true, sortOrder: 0 };
   newAssignment = { classId: '', subjectId: '', teacherId: '' };
   selectedClassId = signal('');
 
@@ -170,6 +191,7 @@ export class AdminAcademicSettingsComponent implements OnInit {
 
   pageStats = computed(() => ({
     subjects: this.subjects().length,
+    departments: this.departments().length,
     classes: this.classes().length,
     forms: this.forms().length,
     assignments: this.filteredClassSubjects().length,
@@ -229,6 +251,7 @@ export class AdminAcademicSettingsComponent implements OnInit {
       forms: this.api.get<FormRow[]>('/admin/forms'),
       classes: this.api.get<ClassRow[]>('/admin/classes'),
       subjects: this.api.get<SubjectRow[]>('/admin/subjects'),
+      departments: this.api.get<DepartmentRow[]>('/admin/departments'),
       classSubjects: this.api.get<ClassSubjectRow[]>('/admin/class-subjects'),
       staff: this.api.get<StaffRow[]>('/admin/staff'),
       examTypes: this.api.get<ExamTypeRow[]>('/admin/exam-types'),
@@ -246,6 +269,7 @@ export class AdminAcademicSettingsComponent implements OnInit {
         this.forms.set(data.forms);
         this.classes.set(data.classes);
         this.subjects.set(data.subjects);
+        this.departments.set(data.departments);
         this.classSubjects.set(data.classSubjects);
         this.staff.set(data.staff);
         this.examTypes.set(data.examTypes);
@@ -460,6 +484,48 @@ export class AdminAcademicSettingsComponent implements OnInit {
     });
   }
 
+  openEditClass(cls: ClassRow) {
+    this.editingClassId.set(cls.id);
+    this.editClassName = cls.name;
+    this.editingClassFormName.set(cls.form?.name || '—');
+  }
+
+  closeEditClass() {
+    this.editingClassId.set(null);
+    this.editClassName = '';
+    this.editingClassFormName.set('');
+  }
+
+  saveEditClass() {
+    const id = this.editingClassId();
+    const name = this.editClassName.trim();
+    if (!id || !name) {
+      this.showToast('error', 'Class name is required');
+      return;
+    }
+    this.submitting.set(true);
+    this.api.patch<ClassRow>(`/admin/classes/${id}`, { name }).subscribe({
+      next: (updated) => {
+        this.classes.update((rows) =>
+          rows.map((c) => (c.id === id ? { ...c, ...updated, name: updated.name } : c)),
+        );
+        this.forms.update((forms) =>
+          forms.map((f) => ({
+            ...f,
+            classes: f.classes?.map((c) => (c.id === id ? { ...c, name: updated.name } : c)),
+          })),
+        );
+        this.closeEditClass();
+        this.submitting.set(false);
+        this.showToast('success', 'Class name updated');
+      },
+      error: (e) => {
+        this.submitting.set(false);
+        this.showToast('error', e.error?.message || 'Failed to update class name');
+      },
+    });
+  }
+
   addSubject() {
     if (!this.newSubject.code || !this.newSubject.name) {
       this.showToast('error', 'Enter subject code and name');
@@ -472,6 +538,121 @@ export class AdminAcademicSettingsComponent implements OnInit {
         this.showToast('success', 'Subject added');
       },
       error: () => this.showToast('error', 'Failed to add subject'),
+    });
+  }
+
+  openEditSubjectName(subject: SubjectRow) {
+    this.editingSubjectId.set(subject.id);
+    this.editingSubjectField.set('name');
+    this.editSubjectValue = subject.name;
+    this.editingSubjectHint.set(`Code: ${subject.code}`);
+  }
+
+  openEditSubjectCode(subject: SubjectRow) {
+    this.editingSubjectId.set(subject.id);
+    this.editingSubjectField.set('code');
+    this.editSubjectValue = subject.code;
+    this.editingSubjectHint.set(`Name: ${subject.name}`);
+  }
+
+  closeEditSubject() {
+    this.editingSubjectId.set(null);
+    this.editingSubjectField.set(null);
+    this.editSubjectValue = '';
+    this.editingSubjectHint.set('');
+  }
+
+  private applySubjectUpdate(updated: SubjectRow) {
+    this.subjects.update((rows) => rows.map((s) => (s.id === updated.id ? { ...s, ...updated } : s)));
+    this.classSubjects.update((rows) =>
+      rows.map((cs) =>
+        cs.subjectId === updated.id && cs.subject
+          ? { ...cs, subject: { ...cs.subject, code: updated.code, name: updated.name } }
+          : cs,
+      ),
+    );
+  }
+
+  saveEditSubject() {
+    const id = this.editingSubjectId();
+    const field = this.editingSubjectField();
+    const value = this.editSubjectValue.trim();
+    if (!id || !field) return;
+    if (!value) {
+      this.showToast('error', field === 'code' ? 'Subject code is required' : 'Subject name is required');
+      return;
+    }
+
+    const body = field === 'code' ? { code: value.toUpperCase() } : { name: value };
+    this.submitting.set(true);
+    this.api.patch<SubjectRow>(`/admin/subjects/${id}`, body).subscribe({
+      next: (updated) => {
+        this.applySubjectUpdate(updated);
+        this.closeEditSubject();
+        this.submitting.set(false);
+        this.showToast('success', field === 'code' ? 'Subject code updated' : 'Subject name updated');
+      },
+      error: (e) => {
+        this.submitting.set(false);
+        this.showToast('error', e.error?.message || 'Failed to update subject');
+      },
+    });
+  }
+
+  addDepartment() {
+    if (!this.newDepartment.code.trim() || !this.newDepartment.name.trim()) {
+      this.showToast('error', 'Enter department code and name');
+      return;
+    }
+    this.api.post<DepartmentRow>('/admin/departments', this.newDepartment).subscribe({
+      next: () => {
+        this.newDepartment = { code: '', name: '', description: '', isActive: true, sortOrder: 0 };
+        this.reloadDepartments();
+        this.showToast('success', 'Department added');
+      },
+      error: (e) => this.showToast('error', e.error?.message || 'Failed to add department'),
+    });
+  }
+
+  startEditDepartment(d: DepartmentRow) {
+    this.editingDepartmentId.set(d.id);
+    this.editDepartmentData = {
+      code: d.code,
+      name: d.name,
+      description: d.description || '',
+      isActive: d.isActive,
+      sortOrder: d.sortOrder,
+    };
+  }
+
+  cancelEditDepartment() {
+    this.editingDepartmentId.set(null);
+  }
+
+  saveEditDepartment() {
+    const id = this.editingDepartmentId();
+    if (!id || !this.editDepartmentData.code.trim() || !this.editDepartmentData.name.trim()) {
+      this.showToast('error', 'Department code and name are required');
+      return;
+    }
+    this.api.patch(`/admin/departments/${id}`, this.editDepartmentData).subscribe({
+      next: () => {
+        this.editingDepartmentId.set(null);
+        this.reloadDepartments();
+        this.showToast('success', 'Department updated');
+      },
+      error: (e) => this.showToast('error', e.error?.message || 'Failed to update department'),
+    });
+  }
+
+  deleteDepartment(d: DepartmentRow) {
+    if (!confirm(`Delete department "${d.name}"? This cannot be undone.`)) return;
+    this.api.delete(`/admin/departments/${d.id}`).subscribe({
+      next: () => {
+        this.reloadDepartments();
+        this.showToast('success', `${d.name} deleted`);
+      },
+      error: (e) => this.showToast('error', e.error?.message || 'Cannot delete this department'),
     });
   }
 
@@ -669,6 +850,10 @@ export class AdminAcademicSettingsComponent implements OnInit {
 
   private reloadClasses() {
     this.api.get<ClassRow[]>('/admin/classes').subscribe((c) => this.classes.set(c));
+  }
+
+  private reloadDepartments() {
+    this.api.get<DepartmentRow[]>('/admin/departments').subscribe((d) => this.departments.set(d));
   }
 
   private showToast(type: 'success' | 'error', msg: string) {

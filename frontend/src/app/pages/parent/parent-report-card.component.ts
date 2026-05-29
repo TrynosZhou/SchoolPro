@@ -7,9 +7,14 @@ import { environment } from '../../../environments/environment';
 
 interface SubjectResult {
   subject: string;
+  subjectName?: string;
+  subjectCode?: string;
   marks: number;
   grade: string;
   remarks?: string;
+  mean?: number;
+  subjectPosition?: number;
+  subjectPositionTotal?: number;
 }
 
 interface ReportCardDto {
@@ -21,6 +26,10 @@ interface ReportCardDto {
   overallGrade?: string;
   classPosition?: number;
   formPosition?: number;
+  classTotal?: number;
+  formTotal?: number;
+  subjectsPassed?: number;
+  totalSubjects?: number;
   classTeacherRemarks?: string;
   principalRemarks?: string;
   student?: {
@@ -93,6 +102,21 @@ export class ParentReportCardComponent implements OnInit {
         this.loading.set(false);
       },
     });
+  }
+
+  positionOutOfLabel(position?: number, total?: number): string {
+    if (!position || !total) return '—';
+    return `${position} Out Of ${total}`;
+  }
+
+  subjectsPassedLabel(passed?: number, total?: number): string {
+    if (passed == null || !total) return '—';
+    return `${passed} Out Of ${total}`;
+  }
+
+  subjectPositionLabel(pos?: number, total?: number): string {
+    if (!pos || !total) return '—';
+    return `${pos}/${total}`;
   }
 
   downloadPdf() {

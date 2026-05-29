@@ -102,7 +102,7 @@
         <button type="button" class="btn-ghost" (click)="setTab('cashbook')">View cashbook →</button>
       </div>
       <div class="table-wrap">
-        <table class="modern-table">
+        <table class="modern-table debtors-table">
           <thead>
             <tr>
               <th>Date</th><th>Student</th><th>Class</th><th>Label</th><th>Method</th><th class="num">Amount</th>
@@ -220,7 +220,7 @@
         <table class="modern-table">
           <thead>
             <tr>
-              <th>Student</th><th>Student ID</th><th>Class</th><th class="num">Amount Owed</th><th></th>
+              <th>Student</th><th>Student ID</th><th>Class</th><th class="amount-owed">Amount Owed</th><th class="stmt-action"></th>
             </tr>
           </thead>
           <tbody>
@@ -229,8 +229,8 @@
                 <td><strong>{{ d.firstName }} {{ d.lastName }}</strong></td>
                 <td>{{ d.admissionNumber || '—' }}</td>
                 <td><span class="pill">{{ d.className || '—' }}</span></td>
-                <td class="num text-red">{{ '$' + (d.owed | number:'1.2-2') }}</td>
-                <td>
+                <td class="amount-owed text-red">{{ '$' + (d.owed | number:'1.2-2') }}</td>
+                <td class="stmt-action">
                   <button type="button" class="btn-ghost btn-sm" (click)="viewDebtorStatement(d.id)">Statement</button>
                 </td>
               </tr>
@@ -254,6 +254,14 @@
           }
         </select>
       </label>
+      <div class="toolbar-actions">
+        <button type="button" class="btn-outline" (click)="previewStatementPdf()" [disabled]="statementPdfLoading() || !selectedStudentId">
+          {{ statementPdfLoading() ? 'Generating…' : 'Preview PDF' }}
+        </button>
+        <button type="button" class="btn-primary btn-sm" (click)="downloadStatementPdf()" [disabled]="statementPdfLoading() || !selectedStudentId">
+          Download PDF
+        </button>
+      </div>
     </div>
 
     @if (statementLoading()) {
@@ -320,7 +328,7 @@
         <table class="modern-table">
           <thead><tr><th>Date</th><th>Description</th><th class="num">Debit</th><th class="num">Credit</th><th class="num">Balance</th></tr></thead>
           <tbody>
-            @for (l of statement()!.ledger; track l.entryDate + l.description) {
+            @for (l of statement()!.ledger; track l.entryDate + l.description + '-' + $index) {
               <tr>
                 <td>{{ l.entryDate }}</td>
                 <td>{{ l.description }}</td>
@@ -336,3 +344,13 @@
   }
 
 </app-portal-layout>
+
+@if (statementPdfPreviewOpen() && statementPdfPreviewUrl()) {
+  <div class="pdf-overlay" role="dialog" aria-modal="true" aria-label="Student statement PDF preview">
+    <header class="pdf-toolbar">
+      <strong>Student Statement Preview</strong>
+      <button type="button" class="btn-ghost" (click)="closeStatementPdfPreview()">Close</button>
+    </header>
+    <iframe class="pdf-frame" [src]="statementPdfPreviewUrl()!" title="Student statement PDF preview"></iframe>
+  </div>
+}

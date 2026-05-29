@@ -1,9 +1,11 @@
 import { User } from './User';
+import { SchoolRole } from './SchoolRole';
 import { SchoolYear } from './SchoolYear';
 import { Term } from './Term';
 import { Form } from './Form';
 import { SchoolClass } from './SchoolClass';
 import { Subject } from './Subject';
+import { Department } from './Department';
 import { ClassSubject } from './ClassSubject';
 import { Parent } from './Parent';
 import { Student } from './Student';
@@ -35,6 +37,7 @@ import { ClassPromotionRule } from './ClassPromotionRule';
 
 export const entities = [
   User,
+  SchoolRole,
   SchoolSettings,
   SchoolFee,
   ClassPromotionRule,
@@ -43,6 +46,7 @@ export const entities = [
   Form,
   SchoolClass,
   Subject,
+  Department,
   ClassSubject,
   Parent,
   Student,
@@ -73,11 +77,13 @@ export const entities = [
 export * from './enums';
 export {
   User,
+  SchoolRole,
   SchoolYear,
   Term,
   Form,
   SchoolClass,
   Subject,
+  Department,
   ClassSubject,
   Parent,
   Student,

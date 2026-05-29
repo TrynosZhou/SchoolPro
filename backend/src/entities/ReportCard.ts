@@ -54,6 +54,21 @@ export class ReportCard {
   @Column({ type: 'int', nullable: true })
   formPosition?: number;
 
+  /** Active students enrolled in the learner's class (ranking denominator). */
+  @Column({ type: 'int', nullable: true })
+  classTotal?: number;
+
+  /** Active students enrolled in the learner's form/grade (ranking denominator). */
+  @Column({ type: 'int', nullable: true })
+  formTotal?: number;
+
+  /** Subjects at or above the pass threshold (default 50%). */
+  @Column({ type: 'int', nullable: true })
+  subjectsPassed?: number;
+
+  @Column({ type: 'int', nullable: true })
+  totalSubjects?: number;
+
   @Column({ nullable: true })
   classTeacherRemarks?: string;
 

@@ -3,7 +3,7 @@ import { Router, Response } from 'express';
 import { AppDataSource } from '../config/data-source';
 import { In } from 'typeorm';
 import {
-  SchoolYear, Term, Form, SchoolClass, Subject, ClassSubject, Staff, User, TuckshopItem, UniformSale, TuckshopSale,
+  SchoolYear, Term, Form, SchoolClass, Subject, Department, ClassSubject, Staff, User, TuckshopItem, UniformSale, TuckshopSale,
   SchoolSettings, ExamType, ClassPromotionRule, Student,
 } from '../entities';
 import { UserRole } from '../entities/enums';
@@ -12,9 +12,18 @@ import bcrypt from 'bcryptjs';
 import { relations } from '../utils/typeorm-helpers';
 import { generateEmployeeNumber, today } from '../utils/helpers';
 import { DEFAULT_GRADE_BOUNDARIES, validateGradeBoundaries } from '../types/grade-boundaries';
+import { DEFAULT_SECURITY_POLICY, normalizeSecurityPolicy, validateSecurityPolicy, validatePasswordAgainstPolicy } from '../types/security-policy';
 import { invalidateGradeBoundariesCache } from '../services/grade.service';
-import { env } from '../config/env';
+import { getSecurityPolicy, invalidateSecurityPolicyCache } from '../services/security-policy.service';
+import {
+  getIntegrationsPublic,
+  saveIntegrationsConfig,
+  testCustomApiConnection,
+  testWebhookConnection,
+} from '../services/integrations.service';
+import { DEFAULT_INTEGRATIONS } from '../types/integrations-config';
 import { sendWhatsAppReminder } from '../services/whatsapp.service';
+import permissionsRoutes from './permissions.routes';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
@@ -59,10 +68,20 @@ async function getOrCreateSettings() {
       currency: 'USD',
       feeReminderTemplate: 'Fee reminder: {student} ({class}) owes ${amount}. Please arrange payment.',
       gradeBoundaries: DEFAULT_GRADE_BOUNDARIES,
+      securityPolicy: DEFAULT_SECURITY_POLICY,
+      integrationsConfig: DEFAULT_INTEGRATIONS,
     }));
   }
   if (!settings.gradeBoundaries?.length) {
     settings.gradeBoundaries = DEFAULT_GRADE_BOUNDARIES;
+    await repo.save(settings);
+  }
+  if (!settings.securityPolicy) {
+    settings.securityPolicy = DEFAULT_SECURITY_POLICY;
+    await repo.save(settings);
+  }
+  if (!settings.integrationsConfig) {
+    settings.integrationsConfig = DEFAULT_INTEGRATIONS;
     await repo.save(settings);
   }
   return settings;
@@ -70,12 +89,16 @@ async function getOrCreateSettings() {
 
 router.get('/settings', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (_req, res: Response) => {
   const school = await getOrCreateSettings();
+  const integrations = await getIntegrationsPublic();
   res.json({
     school,
+    security: normalizeSecurityPolicy(school.securityPolicy || DEFAULT_SECURITY_POLICY),
     whatsapp: {
-      enabled: env.whatsapp.enabled,
-      configured: !!(env.whatsapp.accountSid && env.whatsapp.authToken && env.whatsapp.from),
-      from: env.whatsapp.from ? env.whatsapp.from.replace(/(\+\d{3}).+(\d{4})/, '$1***$2') : null,
+      enabled: integrations.status.whatsapp !== 'disabled',
+      configured: integrations.status.whatsapp === 'active',
+      from: integrations.integrations.whatsapp.from
+        ? integrations.integrations.whatsapp.from.replace(/(\+\d{3}).+(\d{4})/, '$1***$2')
+        : null,
     },
   });
 });
@@ -93,10 +116,17 @@ router.patch('/settings', authorize(UserRole.ADMIN), async (req, res: Response) 
     }));
     invalidateGradeBoundariesCache();
   }
-  const { gradeBoundaries: _gb, logoUrl: _logo, ...rest } = req.body;
+  if (req.body.securityPolicy !== undefined) {
+    const err = validateSecurityPolicy(req.body.securityPolicy);
+    if (err) return res.status(400).json({ message: err });
+    settings.securityPolicy = normalizeSecurityPolicy(req.body.securityPolicy);
+    invalidateSecurityPolicyCache();
+  }
+  const { gradeBoundaries: _gb, securityPolicy: _sp, logoUrl: _logo, ...rest } = req.body;
   Object.assign(settings, rest);
   const saved = await repo.save(settings);
   if (req.body.gradeBoundaries !== undefined) invalidateGradeBoundariesCache();
+  if (req.body.securityPolicy !== undefined) invalidateSecurityPolicyCache();
   res.json(saved);
 });
 
@@ -133,8 +163,70 @@ router.post('/settings/test-whatsapp', authorize(UserRole.ADMIN), async (req, re
     phone,
     message || 'Test message from School Pro — WhatsApp integration is working.'
   );
-  if (!ok) return res.status(400).json({ message: 'WhatsApp not configured or send failed. Check .env TWILIO settings.' });
+  if (!ok) return res.status(400).json({ message: 'WhatsApp not configured or send failed. Check Integrations settings.' });
   res.json({ sent: true });
+});
+
+router.get('/integrations', authorize(UserRole.ADMIN), async (_req, res: Response) => {
+  res.json(await getIntegrationsPublic());
+});
+
+router.patch('/integrations', authorize(UserRole.ADMIN), async (req, res: Response) => {
+  const patch = req.body?.integrations ?? req.body;
+  if (!patch || typeof patch !== 'object') {
+    return res.status(400).json({ message: 'Invalid integrations payload' });
+  }
+  const saved = await saveIntegrationsConfig(patch);
+  res.json({
+    integrations: saved,
+    status: (await getIntegrationsPublic()).status,
+  });
+});
+
+router.post('/integrations/test/:provider', authorize(UserRole.ADMIN), async (req, res: Response) => {
+  const { provider } = req.params;
+  const { phone, message, email } = req.body || {};
+
+  if (provider === 'whatsapp') {
+    if (!phone) return res.status(400).json({ message: 'Phone number required' });
+    const ok = await sendWhatsAppReminder(
+      phone,
+      message || 'Test message from School Pro Integrations.',
+    );
+    if (!ok) return res.status(400).json({ ok: false, message: 'WhatsApp send failed. Check credentials.' });
+    return res.json({ ok: true, message: 'Test WhatsApp message sent (or logged in mock mode).' });
+  }
+
+  if (provider === 'webhook') {
+    const result = await testWebhookConnection();
+    return res.status(result.ok ? 200 : 400).json(result);
+  }
+
+  if (provider === 'custom-api') {
+    const result = await testCustomApiConnection();
+    return res.status(result.ok ? 200 : 400).json(result);
+  }
+
+  if (provider === 'email') {
+    const cfg = (await getIntegrationsPublic()).integrations.email;
+    if (!cfg.host || !cfg.user || !cfg.hasPassword) {
+      return res.status(400).json({ ok: false, message: 'Complete SMTP host, user, and password first.' });
+    }
+    if (!email) {
+      return res.json({ ok: true, message: 'SMTP settings look complete. Provide a test email address to send (coming soon).' });
+    }
+    return res.json({ ok: true, message: `SMTP configuration saved. Test delivery to ${email} will be enabled in a future update.` });
+  }
+
+  if (provider === 'payment') {
+    const cfg = (await getIntegrationsPublic()).integrations.payment;
+    if (!cfg.merchantId || !cfg.hasApiKey) {
+      return res.status(400).json({ ok: false, message: 'Merchant ID and API key are required.' });
+    }
+    return res.json({ ok: true, message: `${cfg.provider} credentials saved. Live payment test pending provider SDK.` });
+  }
+
+  return res.status(404).json({ message: 'Unknown integration provider' });
 });
 
 router.get('/school-years', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (_req, res: Response) => {
@@ -253,6 +345,96 @@ router.post('/subjects', authorize(UserRole.ADMIN), async (req, res: Response) =
   res.status(201).json(subject);
 });
 
+router.patch('/subjects/:id', authorize(UserRole.ADMIN), async (req, res: Response) => {
+  const repo = AppDataSource.getRepository(Subject);
+  const subject = await repo.findOne({ where: { id: req.params.id } });
+  if (!subject) return res.status(404).json({ message: 'Subject not found' });
+
+  const { code, name, description } = req.body as {
+    code?: string;
+    name?: string;
+    description?: string | null;
+  };
+
+  if (code !== undefined) {
+    const normalized = String(code).trim().toUpperCase();
+    if (!normalized) return res.status(400).json({ message: 'Subject code is required' });
+    const clash = await repo.findOne({ where: { code: normalized } });
+    if (clash && clash.id !== subject.id) {
+      return res.status(409).json({ message: 'A subject with this code already exists' });
+    }
+    subject.code = normalized;
+  }
+  if (name !== undefined) {
+    const trimmed = String(name).trim();
+    if (!trimmed) return res.status(400).json({ message: 'Subject name is required' });
+    subject.name = trimmed;
+  }
+  if (description !== undefined) subject.description = description?.trim() || undefined;
+
+  res.json(await repo.save(subject));
+});
+
+router.get('/departments', async (_req, res: Response) => {
+  res.json(
+    await AppDataSource.getRepository(Department).find({
+      order: { sortOrder: 'ASC', name: 'ASC' },
+    }),
+  );
+});
+
+router.post('/departments', authorize(UserRole.ADMIN), async (req, res: Response) => {
+  const { code, name, description, isActive, sortOrder } = req.body;
+  if (!code?.trim() || !name?.trim()) {
+    return res.status(400).json({ message: 'Department code and name are required' });
+  }
+  const repo = AppDataSource.getRepository(Department);
+  const existing = await repo.findOne({ where: { code: String(code).trim().toUpperCase() } });
+  if (existing) {
+    return res.status(409).json({ message: 'A department with this code already exists' });
+  }
+  const department = await repo.save(
+    repo.create({
+      code: String(code).trim().toUpperCase(),
+      name: String(name).trim(),
+      description: description?.trim() || undefined,
+      isActive: isActive !== false,
+      sortOrder: Number(sortOrder) || 0,
+    }),
+  );
+  res.status(201).json(department);
+});
+
+router.patch('/departments/:id', authorize(UserRole.ADMIN), async (req, res: Response) => {
+  const repo = AppDataSource.getRepository(Department);
+  const department = await repo.findOne({ where: { id: req.params.id } });
+  if (!department) return res.status(404).json({ message: 'Department not found' });
+
+  const { code, name, description, isActive, sortOrder } = req.body;
+  if (code !== undefined) {
+    const normalized = String(code).trim().toUpperCase();
+    const clash = await repo.findOne({ where: { code: normalized } });
+    if (clash && clash.id !== department.id) {
+      return res.status(409).json({ message: 'A department with this code already exists' });
+    }
+    department.code = normalized;
+  }
+  if (name !== undefined) department.name = String(name).trim();
+  if (description !== undefined) department.description = description?.trim() || null;
+  if (isActive !== undefined) department.isActive = Boolean(isActive);
+  if (sortOrder !== undefined) department.sortOrder = Number(sortOrder) || 0;
+
+  res.json(await repo.save(department));
+});
+
+router.delete('/departments/:id', authorize(UserRole.ADMIN), async (req, res: Response) => {
+  const repo = AppDataSource.getRepository(Department);
+  const department = await repo.findOne({ where: { id: req.params.id } });
+  if (!department) return res.status(404).json({ message: 'Department not found' });
+  await repo.remove(department);
+  res.json({ message: 'Department deleted' });
+});
+
 router.get('/class-subjects', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (req, res: Response) => {
   const { classId } = req.query;
   const qb = AppDataSource.getRepository(ClassSubject).createQueryBuilder('cs')
@@ -286,10 +468,34 @@ router.delete('/class-subjects/:id', authorize(UserRole.ADMIN), async (req, res:
 
 router.patch('/classes/:id', authorize(UserRole.ADMIN), async (req, res: Response) => {
   const repo = AppDataSource.getRepository(SchoolClass);
-  const cls = await repo.findOne({ where: { id: req.params.id } });
+  const cls = await repo.findOne({
+    where: { id: req.params.id },
+    relations: relations('form', 'students'),
+  });
   if (!cls) return res.status(404).json({ message: 'Class not found' });
-  Object.assign(cls, req.body);
-  res.json(await repo.save(cls));
+
+  const { name, formId, capacity, classTeacherId } = req.body as {
+    name?: string;
+    formId?: string;
+    capacity?: number;
+    classTeacherId?: string | null;
+  };
+
+  if (name !== undefined) {
+    const trimmed = String(name).trim();
+    if (!trimmed) return res.status(400).json({ message: 'Class name is required' });
+    cls.name = trimmed;
+  }
+  if (formId !== undefined) cls.formId = formId;
+  if (capacity !== undefined) cls.capacity = Number(capacity) || cls.capacity;
+  if (classTeacherId !== undefined) cls.classTeacherId = classTeacherId || undefined;
+
+  const saved = await repo.save(cls);
+  const full = await repo.findOne({
+    where: { id: saved.id },
+    relations: relations('form', 'students'),
+  });
+  res.json(full ?? saved);
 });
 
 router.get('/promotion-rules', authorize(UserRole.ADMIN), async (_req, res: Response) => {
@@ -578,7 +784,12 @@ router.post('/staff', authorize(UserRole.ADMIN), async (req, res: Response) => {
   const allowedRoles = [UserRole.TEACHER, UserRole.ADMIN, UserRole.PRINCIPAL];
   const staffRole = allowedRoles.includes(role) ? role : UserRole.TEACHER;
 
-  const passwordHash = await bcrypt.hash(password || 'Teacher123!', 10);
+  const plainPassword = password || 'Teacher123!';
+  const policy = await getSecurityPolicy();
+  const pwdErr = validatePasswordAgainstPolicy(plainPassword, policy);
+  if (pwdErr) return res.status(400).json({ message: pwdErr });
+
+  const passwordHash = await bcrypt.hash(plainPassword, 10);
   const user = await userRepo.save(userRepo.create({
     email: email.toLowerCase(),
     passwordHash,
@@ -640,7 +851,12 @@ router.patch('/staff/:id', authorize(UserRole.ADMIN), async (req, res: Response)
   if (role && [UserRole.TEACHER, UserRole.ADMIN, UserRole.PRINCIPAL].includes(role)) {
     staff.user.role = role;
   }
-  if (password) staff.user.passwordHash = await bcrypt.hash(password, 10);
+  if (password) {
+    const policy = await getSecurityPolicy();
+    const pwdErr = validatePasswordAgainstPolicy(password, policy);
+    if (pwdErr) return res.status(400).json({ message: pwdErr });
+    staff.user.passwordHash = await bcrypt.hash(password, 10);
+  }
   if (department !== undefined) staff.department = department;
   if (qualification !== undefined) staff.qualification = qualification;
   if (hireDate !== undefined) staff.hireDate = hireDate;
@@ -716,6 +932,8 @@ router.post('/uniform/sales', authorize(UserRole.ADMIN), async (req, res: Respon
   );
   res.status(201).json(sale);
 });
+
+router.use('/permissions', permissionsRoutes);
 
 export default router;
 

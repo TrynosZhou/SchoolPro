@@ -382,6 +382,47 @@ $list-cols: 40px 7.5rem 1.4fr 6.5rem 1fr 1.2fr 5.5rem 5rem;
   .subtitle code { background: #f1f5f9; padding: 0.1rem 0.35rem; border-radius: 4px; }
 }
 
+.panel-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.progress-card {
+  width: min(260px, 100%);
+  padding: 0.6rem 0.7rem;
+  border-radius: 10px;
+  border: 1px solid #d1fae5;
+  background: #f0fdfa;
+}
+
+.progress-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 0.76rem;
+  color: #0f766e;
+  margin-bottom: 0.4rem;
+
+  strong { font-size: 0.88rem; color: #0f766e; }
+}
+
+.progress-track {
+  height: 8px;
+  border-radius: 999px;
+  background: #ccfbf1;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #0d9488, #14b8a6);
+  transition: width 0.2s ease;
+}
+
 .emp-preview {
   margin-bottom: 1.25rem;
   label { font-size: 0.82rem; font-weight: 600; color: #475569; display: block; margin-bottom: 0.35rem; }
@@ -406,6 +447,16 @@ $list-cols: 40px 7.5rem 1.4fr 6.5rem 1fr 1.2fr 5.5rem 5rem;
   @media (max-width: 600px) { grid-template-columns: 1fr; }
 }
 
+.form-intro {
+  margin-bottom: 0.85rem;
+  font-size: 0.82rem;
+  color: #0f766e;
+  background: #f0fdfa;
+  border: 1px solid #99f6e4;
+  border-radius: 8px;
+  padding: 0.5rem 0.65rem;
+}
+
 .field {
   display: flex;
   flex-direction: column;
@@ -415,7 +466,26 @@ $list-cols: 40px 7.5rem 1.4fr 6.5rem 1fr 1.2fr 5.5rem 5rem;
     padding: 0.55rem 0.75rem;
     border: 1px solid #e2e8f0;
     border-radius: 8px;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    &::placeholder { color: #94a3b8; }
     &:focus { outline: none; border-color: #0d9488; box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.12); }
+  }
+}
+
+.password-field {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.45rem;
+
+  .toggle-pw {
+    border: 1px solid #99f6e4;
+    background: #f0fdfa;
+    color: #0f766e;
+    border-radius: 8px;
+    padding: 0.45rem 0.65rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
   }
 }
 
@@ -515,6 +585,10 @@ $list-cols: 40px 7.5rem 1.4fr 6.5rem 1fr 1.2fr 5.5rem 5rem;
   cursor: pointer;
   &:disabled { opacity: 0.6; cursor: not-allowed; }
   &.btn-lg { width: 100%; margin-top: 0.5rem; padding: 0.75rem; }
+}
+
+.modern-submit {
+  margin-top: 0.85rem !important;
 }
 
 .btn-outline {

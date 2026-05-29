@@ -265,6 +265,25 @@ export class AdminStudentsComponent implements OnInit {
     this.nextStudentId.set('');
   }
 
+  registrationProgress(): number {
+    const requiredChecks = [
+      Boolean(this.form.firstName?.trim()),
+      Boolean(this.form.lastName?.trim()),
+      Boolean(this.form.gender),
+      Boolean(this.form.studentType),
+      Boolean(this.form.formId),
+    ];
+    const complete = requiredChecks.filter(Boolean).length;
+    return Math.round((complete / requiredChecks.length) * 100);
+  }
+
+  selectedFormHint(): string {
+    const selected = this.forms().find((f) => f.id === this.form.formId);
+    if (!selected) return 'Select a form to auto-apply the correct tuition structure.';
+    if (selected.level <= 4) return 'Ordinary Level selected. Tuition follows O-Level settings.';
+    return 'Advanced Level selected. Tuition follows A-Level settings.';
+  }
+
   enrollmentStatus(s: Student): 'pending' | 'enrolled' {
     return s.classId || s.schoolClass ? 'enrolled' : 'pending';
   }

@@ -15,6 +15,12 @@ interface ClassOption {
   form?: { name: string };
 }
 
+interface TermOption {
+  id: string;
+  name: string;
+  isCurrent?: boolean;
+}
+
 @Component({
   selector: 'app-class-list',
   standalone: true,
@@ -35,8 +41,11 @@ export class ClassListComponent implements OnInit, OnDestroy {
   readonly teacherNav = TEACHER_NAV_SECTIONS;
 
   classes = signal<ClassOption[]>([]);
+  terms = signal<TermOption[]>([]);
+  selectedTermId = '';
   selectedClassId = '';
   students = signal<Student[]>([]);
+  loadingTerms = signal(true);
   loadingClasses = signal(true);
   loadingStudents = signal(false);
   hasFetched = signal(false);
@@ -50,6 +59,9 @@ export class ClassListComponent implements OnInit, OnDestroy {
 
   selectedClassLabel = computed(() =>
     classDisplayName(this.classes(), this.selectedClassId),
+  );
+  selectedTermLabel = computed(
+    () => this.terms().find((t) => t.id === this.selectedTermId)?.name || '',
   );
 
   pdfFilename = computed(() => {
@@ -71,6 +83,20 @@ export class ClassListComponent implements OnInit, OnDestroy {
   });
 
   ngOnInit(): void {
+    this.api.get<TermOption[]>('/exams/terms').subscribe({
+      next: (terms) => {
+        const ordered = [...terms].sort((a, b) => a.name.localeCompare(b.name));
+        this.terms.set(ordered);
+        const current = ordered.find((t) => t.isCurrent);
+        if (current) this.selectedTermId = current.id;
+        this.loadingTerms.set(false);
+      },
+      error: () => {
+        this.loadingTerms.set(false);
+        this.showToast('error', 'Could not load terms.');
+      },
+    });
+
     if (this.isTeacherPortal) {
       this.api.get<{ assignedClasses: ClassOption[] }>('/dashboard/teacher').subscribe({
         next: (d) => {
@@ -102,6 +128,10 @@ export class ClassListComponent implements OnInit, OnDestroy {
   }
 
   fetchStudents(): void {
+    if (!this.selectedTermId) {
+      this.showToast('error', 'Select a term first.');
+      return;
+    }
     if (!this.selectedClassId) {
       this.showToast('error', 'Select a class first.');
       return;
@@ -111,7 +141,7 @@ export class ClassListComponent implements OnInit, OnDestroy {
     this.loadingStudents.set(true);
     this.hasFetched.set(false);
     this.api
-      .get<Student[]>('/students', { classId: this.selectedClassId, enrolled: 'true' })
+      .get<Student[]>('/students', { classId: this.selectedClassId, enrolled: 'true', termId: this.selectedTermId })
       .subscribe({
         next: (rows) => {
           this.students.set(rows);
@@ -165,6 +195,13 @@ export class ClassListComponent implements OnInit, OnDestroy {
     this.closePdfPreview();
   }
 
+  onTermChange(): void {
+    this.students.set([]);
+    this.hasFetched.set(false);
+    this.search.set('');
+    this.closePdfPreview();
+  }
+
   private fetchPdfBlob(preview: boolean): Promise<Blob | null> {
     if (!this.canExportPdf()) {
       this.showToast('error', 'Load students for a class before exporting PDF.');
@@ -176,6 +213,7 @@ export class ClassListComponent implements OnInit, OnDestroy {
       this.api
         .getBlob('/students/class-list/pdf', {
           classId: this.selectedClassId,
+          termId: this.selectedTermId,
           ...(preview ? { preview: 'true' } : {}),
         })
         .subscribe({

@@ -7,7 +7,12 @@ import { authenticate, authorize, AuthRequest } from '../middleware/auth';
 import { gradeForMarks } from '../services/grade.service';
 import { ClassSubject } from '../entities';
 import { calculateHonoursRoll } from '../services/honours.service';
-import { generateClassReportCards, syncReportCardForStudent } from '../services/report-card.service';
+import {
+  generateClassReportCards,
+  getReportCardPdfMetrics,
+  syncReportCardForStudent,
+} from '../services/report-card.service';
+import { DEFAULT_GRADE_BOUNDARIES } from '../types/grade-boundaries';
 import { generateMarkSheetPdf, generateRankingsPdf, generateReportCardPdf } from '../utils/pdf';
 import { buildMarkSheet } from '../services/mark-sheet.service';
 import { buildResultsAnalysis } from '../services/results-analysis.service';
@@ -571,6 +576,8 @@ router.get('/report-cards/:studentId/:termId/pdf', authorize(UserRole.ADMIN, Use
 
   const settings = await AppDataSource.getRepository(SchoolSettings).findOne({ where: { id: 'default' } });
   const inline = req.query.preview === 'true';
+  const maxMarks = Number(report.examType?.maxMarks) || 100;
+  const metrics = await getReportCardPdfMetrics(report, maxMarks);
 
   const pdf = await generateReportCardPdf({
     schoolName: settings?.schoolName || 'School Pro Academy',
@@ -582,14 +589,22 @@ router.get('/report-cards/:studentId/:termId/pdf', authorize(UserRole.ADMIN, Use
     formName: report.student.schoolClass?.form?.name || '',
     termName: report.term.name,
     examTypeName: report.examType?.name,
-    subjectResults: report.subjectResults as { subject: string; marks: number; grade: string; remarks?: string }[],
+    subjectResults: metrics.subjectResults,
     averageMark: Number(report.averageMark),
     overallGrade: report.overallGrade,
-    classPosition: report.classPosition,
-    formPosition: report.formPosition,
+    classPosition: metrics.classPosition ?? report.classPosition,
+    formPosition: metrics.formPosition ?? report.formPosition,
+    classTotal: metrics.classTotal,
+    formTotal: metrics.formTotal,
+    subjectsPassed: metrics.subjectsPassed,
+    totalSubjects: metrics.totalSubjects,
     classTeacherRemarks: report.classTeacherRemarks,
     principalRemarks: report.principalRemarks,
     generatedAt: report.generatedAt ? new Date(report.generatedAt) : new Date(),
+    gradeBoundaries: settings?.gradeBoundaries?.length
+      ? settings.gradeBoundaries
+      : DEFAULT_GRADE_BOUNDARIES,
+    reportCardId: report.id,
   });
 
   res.setHeader('Content-Type', 'application/pdf');

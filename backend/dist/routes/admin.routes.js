@@ -14,9 +14,13 @@ const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const typeorm_helpers_1 = require("../utils/typeorm-helpers");
 const helpers_1 = require("../utils/helpers");
 const grade_boundaries_1 = require("../types/grade-boundaries");
+const security_policy_1 = require("../types/security-policy");
 const grade_service_1 = require("../services/grade.service");
-const env_1 = require("../config/env");
+const security_policy_service_1 = require("../services/security-policy.service");
+const integrations_service_1 = require("../services/integrations.service");
+const integrations_config_1 = require("../types/integrations-config");
 const whatsapp_service_1 = require("../services/whatsapp.service");
+const permissions_routes_1 = __importDefault(require("./permissions.routes"));
 const multer_1 = __importDefault(require("multer"));
 const path_1 = __importDefault(require("path"));
 const fs_1 = __importDefault(require("fs"));
@@ -57,22 +61,36 @@ async function getOrCreateSettings() {
             currency: 'USD',
             feeReminderTemplate: 'Fee reminder: {student} ({class}) owes ${amount}. Please arrange payment.',
             gradeBoundaries: grade_boundaries_1.DEFAULT_GRADE_BOUNDARIES,
+            securityPolicy: security_policy_1.DEFAULT_SECURITY_POLICY,
+            integrationsConfig: integrations_config_1.DEFAULT_INTEGRATIONS,
         }));
     }
     if (!settings.gradeBoundaries?.length) {
         settings.gradeBoundaries = grade_boundaries_1.DEFAULT_GRADE_BOUNDARIES;
         await repo.save(settings);
     }
+    if (!settings.securityPolicy) {
+        settings.securityPolicy = security_policy_1.DEFAULT_SECURITY_POLICY;
+        await repo.save(settings);
+    }
+    if (!settings.integrationsConfig) {
+        settings.integrationsConfig = integrations_config_1.DEFAULT_INTEGRATIONS;
+        await repo.save(settings);
+    }
     return settings;
 }
 router.get('/settings', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), async (_req, res) => {
     const school = await getOrCreateSettings();
+    const integrations = await (0, integrations_service_1.getIntegrationsPublic)();
     res.json({
         school,
+        security: (0, security_policy_1.normalizeSecurityPolicy)(school.securityPolicy || security_policy_1.DEFAULT_SECURITY_POLICY),
         whatsapp: {
-            enabled: env_1.env.whatsapp.enabled,
-            configured: !!(env_1.env.whatsapp.accountSid && env_1.env.whatsapp.authToken && env_1.env.whatsapp.from),
-            from: env_1.env.whatsapp.from ? env_1.env.whatsapp.from.replace(/(\+\d{3}).+(\d{4})/, '$1***$2') : null,
+            enabled: integrations.status.whatsapp !== 'disabled',
+            configured: integrations.status.whatsapp === 'active',
+            from: integrations.integrations.whatsapp.from
+                ? integrations.integrations.whatsapp.from.replace(/(\+\d{3}).+(\d{4})/, '$1***$2')
+                : null,
         },
     });
 });
@@ -90,11 +108,20 @@ router.patch('/settings', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (
         }));
         (0, grade_service_1.invalidateGradeBoundariesCache)();
     }
-    const { gradeBoundaries: _gb, logoUrl: _logo, ...rest } = req.body;
+    if (req.body.securityPolicy !== undefined) {
+        const err = (0, security_policy_1.validateSecurityPolicy)(req.body.securityPolicy);
+        if (err)
+            return res.status(400).json({ message: err });
+        settings.securityPolicy = (0, security_policy_1.normalizeSecurityPolicy)(req.body.securityPolicy);
+        (0, security_policy_service_1.invalidateSecurityPolicyCache)();
+    }
+    const { gradeBoundaries: _gb, securityPolicy: _sp, logoUrl: _logo, ...rest } = req.body;
     Object.assign(settings, rest);
     const saved = await repo.save(settings);
     if (req.body.gradeBoundaries !== undefined)
         (0, grade_service_1.invalidateGradeBoundariesCache)();
+    if (req.body.securityPolicy !== undefined)
+        (0, security_policy_service_1.invalidateSecurityPolicyCache)();
     res.json(saved);
 });
 router.post('/settings/logo', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), logoUpload.single('logo'), async (req, res) => {
@@ -124,8 +151,60 @@ router.post('/settings/test-whatsapp', (0, auth_1.authorize)(enums_1.UserRole.AD
         return res.status(400).json({ message: 'Phone number required' });
     const ok = await (0, whatsapp_service_1.sendWhatsAppReminder)(phone, message || 'Test message from School Pro — WhatsApp integration is working.');
     if (!ok)
-        return res.status(400).json({ message: 'WhatsApp not configured or send failed. Check .env TWILIO settings.' });
+        return res.status(400).json({ message: 'WhatsApp not configured or send failed. Check Integrations settings.' });
     res.json({ sent: true });
+});
+router.get('/integrations', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (_req, res) => {
+    res.json(await (0, integrations_service_1.getIntegrationsPublic)());
+});
+router.patch('/integrations', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (req, res) => {
+    const patch = req.body?.integrations ?? req.body;
+    if (!patch || typeof patch !== 'object') {
+        return res.status(400).json({ message: 'Invalid integrations payload' });
+    }
+    const saved = await (0, integrations_service_1.saveIntegrationsConfig)(patch);
+    res.json({
+        integrations: saved,
+        status: (await (0, integrations_service_1.getIntegrationsPublic)()).status,
+    });
+});
+router.post('/integrations/test/:provider', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (req, res) => {
+    const { provider } = req.params;
+    const { phone, message, email } = req.body || {};
+    if (provider === 'whatsapp') {
+        if (!phone)
+            return res.status(400).json({ message: 'Phone number required' });
+        const ok = await (0, whatsapp_service_1.sendWhatsAppReminder)(phone, message || 'Test message from School Pro Integrations.');
+        if (!ok)
+            return res.status(400).json({ ok: false, message: 'WhatsApp send failed. Check credentials.' });
+        return res.json({ ok: true, message: 'Test WhatsApp message sent (or logged in mock mode).' });
+    }
+    if (provider === 'webhook') {
+        const result = await (0, integrations_service_1.testWebhookConnection)();
+        return res.status(result.ok ? 200 : 400).json(result);
+    }
+    if (provider === 'custom-api') {
+        const result = await (0, integrations_service_1.testCustomApiConnection)();
+        return res.status(result.ok ? 200 : 400).json(result);
+    }
+    if (provider === 'email') {
+        const cfg = (await (0, integrations_service_1.getIntegrationsPublic)()).integrations.email;
+        if (!cfg.host || !cfg.user || !cfg.hasPassword) {
+            return res.status(400).json({ ok: false, message: 'Complete SMTP host, user, and password first.' });
+        }
+        if (!email) {
+            return res.json({ ok: true, message: 'SMTP settings look complete. Provide a test email address to send (coming soon).' });
+        }
+        return res.json({ ok: true, message: `SMTP configuration saved. Test delivery to ${email} will be enabled in a future update.` });
+    }
+    if (provider === 'payment') {
+        const cfg = (await (0, integrations_service_1.getIntegrationsPublic)()).integrations.payment;
+        if (!cfg.merchantId || !cfg.hasApiKey) {
+            return res.status(400).json({ ok: false, message: 'Merchant ID and API key are required.' });
+        }
+        return res.json({ ok: true, message: `${cfg.provider} credentials saved. Live payment test pending provider SDK.` });
+    }
+    return res.status(404).json({ message: 'Unknown integration provider' });
 });
 router.get('/school-years', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), async (_req, res) => {
     const repo = data_source_1.AppDataSource.getRepository(entities_1.SchoolYear);
@@ -227,6 +306,88 @@ router.post('/subjects', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (r
     const subject = await data_source_1.AppDataSource.getRepository(entities_1.Subject).save(data_source_1.AppDataSource.getRepository(entities_1.Subject).create(req.body));
     res.status(201).json(subject);
 });
+router.patch('/subjects/:id', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (req, res) => {
+    const repo = data_source_1.AppDataSource.getRepository(entities_1.Subject);
+    const subject = await repo.findOne({ where: { id: req.params.id } });
+    if (!subject)
+        return res.status(404).json({ message: 'Subject not found' });
+    const { code, name, description } = req.body;
+    if (code !== undefined) {
+        const normalized = String(code).trim().toUpperCase();
+        if (!normalized)
+            return res.status(400).json({ message: 'Subject code is required' });
+        const clash = await repo.findOne({ where: { code: normalized } });
+        if (clash && clash.id !== subject.id) {
+            return res.status(409).json({ message: 'A subject with this code already exists' });
+        }
+        subject.code = normalized;
+    }
+    if (name !== undefined) {
+        const trimmed = String(name).trim();
+        if (!trimmed)
+            return res.status(400).json({ message: 'Subject name is required' });
+        subject.name = trimmed;
+    }
+    if (description !== undefined)
+        subject.description = description?.trim() || undefined;
+    res.json(await repo.save(subject));
+});
+router.get('/departments', async (_req, res) => {
+    res.json(await data_source_1.AppDataSource.getRepository(entities_1.Department).find({
+        order: { sortOrder: 'ASC', name: 'ASC' },
+    }));
+});
+router.post('/departments', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (req, res) => {
+    const { code, name, description, isActive, sortOrder } = req.body;
+    if (!code?.trim() || !name?.trim()) {
+        return res.status(400).json({ message: 'Department code and name are required' });
+    }
+    const repo = data_source_1.AppDataSource.getRepository(entities_1.Department);
+    const existing = await repo.findOne({ where: { code: String(code).trim().toUpperCase() } });
+    if (existing) {
+        return res.status(409).json({ message: 'A department with this code already exists' });
+    }
+    const department = await repo.save(repo.create({
+        code: String(code).trim().toUpperCase(),
+        name: String(name).trim(),
+        description: description?.trim() || undefined,
+        isActive: isActive !== false,
+        sortOrder: Number(sortOrder) || 0,
+    }));
+    res.status(201).json(department);
+});
+router.patch('/departments/:id', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (req, res) => {
+    const repo = data_source_1.AppDataSource.getRepository(entities_1.Department);
+    const department = await repo.findOne({ where: { id: req.params.id } });
+    if (!department)
+        return res.status(404).json({ message: 'Department not found' });
+    const { code, name, description, isActive, sortOrder } = req.body;
+    if (code !== undefined) {
+        const normalized = String(code).trim().toUpperCase();
+        const clash = await repo.findOne({ where: { code: normalized } });
+        if (clash && clash.id !== department.id) {
+            return res.status(409).json({ message: 'A department with this code already exists' });
+        }
+        department.code = normalized;
+    }
+    if (name !== undefined)
+        department.name = String(name).trim();
+    if (description !== undefined)
+        department.description = description?.trim() || null;
+    if (isActive !== undefined)
+        department.isActive = Boolean(isActive);
+    if (sortOrder !== undefined)
+        department.sortOrder = Number(sortOrder) || 0;
+    res.json(await repo.save(department));
+});
+router.delete('/departments/:id', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (req, res) => {
+    const repo = data_source_1.AppDataSource.getRepository(entities_1.Department);
+    const department = await repo.findOne({ where: { id: req.params.id } });
+    if (!department)
+        return res.status(404).json({ message: 'Department not found' });
+    await repo.remove(department);
+    res.json({ message: 'Department deleted' });
+});
 router.get('/class-subjects', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), async (req, res) => {
     const { classId } = req.query;
     const qb = data_source_1.AppDataSource.getRepository(entities_1.ClassSubject).createQueryBuilder('cs')
@@ -256,11 +417,31 @@ router.delete('/class-subjects/:id', (0, auth_1.authorize)(enums_1.UserRole.ADMI
 });
 router.patch('/classes/:id', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (req, res) => {
     const repo = data_source_1.AppDataSource.getRepository(entities_1.SchoolClass);
-    const cls = await repo.findOne({ where: { id: req.params.id } });
+    const cls = await repo.findOne({
+        where: { id: req.params.id },
+        relations: (0, typeorm_helpers_1.relations)('form', 'students'),
+    });
     if (!cls)
         return res.status(404).json({ message: 'Class not found' });
-    Object.assign(cls, req.body);
-    res.json(await repo.save(cls));
+    const { name, formId, capacity, classTeacherId } = req.body;
+    if (name !== undefined) {
+        const trimmed = String(name).trim();
+        if (!trimmed)
+            return res.status(400).json({ message: 'Class name is required' });
+        cls.name = trimmed;
+    }
+    if (formId !== undefined)
+        cls.formId = formId;
+    if (capacity !== undefined)
+        cls.capacity = Number(capacity) || cls.capacity;
+    if (classTeacherId !== undefined)
+        cls.classTeacherId = classTeacherId || undefined;
+    const saved = await repo.save(cls);
+    const full = await repo.findOne({
+        where: { id: saved.id },
+        relations: (0, typeorm_helpers_1.relations)('form', 'students'),
+    });
+    res.json(full ?? saved);
 });
 router.get('/promotion-rules', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (_req, res) => {
     const rules = await data_source_1.AppDataSource.getRepository(entities_1.ClassPromotionRule).find({
@@ -335,6 +516,127 @@ router.put('/promotion-rules', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), as
     });
     res.json(rules);
 });
+/** Calendar year label for a school year (Jan–Dec), e.g. "2025" or "2025/2026" → 2025 */
+function schoolYearCalendarYear(sy) {
+    const matches = String(sy.name).match(/20\d{2}/g);
+    if (matches?.length)
+        return parseInt(matches[0], 10);
+    return new Date(sy.startDate).getFullYear();
+}
+function findTargetSchoolYear(completing, allYears) {
+    const nextCal = schoolYearCalendarYear(completing) + 1;
+    const matches = allYears
+        .filter((y) => schoolYearCalendarYear(y) === nextCal)
+        .sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
+    return matches[0] ?? null;
+}
+router.post('/class-promotion/promote', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (req, res) => {
+    const { classId, completingSchoolYearId, targetSchoolYearId } = req.body || {};
+    if (!completingSchoolYearId || !classId) {
+        return res.status(400).json({ message: 'completingSchoolYearId and classId are required' });
+    }
+    const yearRepo = data_source_1.AppDataSource.getRepository(entities_1.SchoolYear);
+    const allYears = await yearRepo.find({ order: { startDate: 'ASC' } });
+    const completingYear = allYears.find((y) => y.id === String(completingSchoolYearId));
+    if (!completingYear)
+        return res.status(404).json({ message: 'Completing school year not found' });
+    let targetYear = null;
+    if (targetSchoolYearId) {
+        targetYear = allYears.find((y) => y.id === String(targetSchoolYearId)) ?? null;
+        if (!targetYear)
+            return res.status(404).json({ message: 'Target school year not found' });
+        if (schoolYearCalendarYear(targetYear) !== schoolYearCalendarYear(completingYear) + 1) {
+            return res.status(400).json({
+                message: `Target school year must be the year after ${completingYear.name} (e.g. ${schoolYearCalendarYear(completingYear)} → ${schoolYearCalendarYear(completingYear) + 1}).`,
+            });
+        }
+    }
+    else {
+        targetYear = findTargetSchoolYear(completingYear, allYears);
+        if (!targetYear) {
+            return res.status(400).json({
+                message: `No school year found for ${schoolYearCalendarYear(completingYear) + 1}. Add it under Academic Settings → School Calendar.`,
+            });
+        }
+    }
+    const fromClass = await data_source_1.AppDataSource.getRepository(entities_1.SchoolClass).findOne({
+        where: { id: String(classId) },
+        relations: (0, typeorm_helpers_1.relations)('form'),
+    });
+    if (!fromClass)
+        return res.status(404).json({ message: 'Class not found' });
+    const rule = await data_source_1.AppDataSource.getRepository(entities_1.ClassPromotionRule).findOne({
+        where: { fromClassId: fromClass.id, isActive: true },
+    });
+    if (!rule) {
+        return res.status(400).json({
+            message: `No active promotion rule for ${fromClass.form?.name || 'Form'} ${fromClass.name}. Configure it in Academic Settings → Promotion Rules.`,
+        });
+    }
+    let toClass = null;
+    if (rule.toClassId) {
+        toClass = await data_source_1.AppDataSource.getRepository(entities_1.SchoolClass).findOne({
+            where: { id: rule.toClassId },
+            relations: (0, typeorm_helpers_1.relations)('form'),
+        });
+        if (!toClass)
+            return res.status(400).json({ message: 'Promotion target class not found' });
+    }
+    const studentRepo = data_source_1.AppDataSource.getRepository(entities_1.Student);
+    const students = await studentRepo.find({
+        where: { classId: fromClass.id, isActive: true },
+        select: { id: true, admissionNumber: true },
+    });
+    if (!students.length) {
+        return res.json({
+            promoted: 0,
+            fromClassId: fromClass.id,
+            toClassId: toClass?.id,
+            completionLabel: rule.completionLabel,
+            message: 'No active students found in this class.',
+        });
+    }
+    const enrollmentDate = targetYear.startDate || (0, helpers_1.today)();
+    if (toClass) {
+        await studentRepo
+            .createQueryBuilder()
+            .update(entities_1.Student)
+            .set({
+            classId: toClass.id,
+            formId: toClass.formId,
+            enrollmentDate,
+        })
+            .where('classId = :classId', { classId: fromClass.id })
+            .andWhere('isActive = true')
+            .execute();
+    }
+    else {
+        // Completion: remove from class; keep student active.
+        await studentRepo
+            .createQueryBuilder()
+            .update(entities_1.Student)
+            .set({
+            classId: null,
+            enrollmentDate: null,
+        })
+            .where('classId = :classId', { classId: fromClass.id })
+            .andWhere('isActive = true')
+            .execute();
+    }
+    const fromLabel = `${fromClass.form?.name || 'Form'} ${fromClass.name}`;
+    const toLabel = toClass ? `${toClass.form?.name || 'Form'} ${toClass.name}` : null;
+    return res.json({
+        promoted: students.length,
+        completingSchoolYearId: completingYear.id,
+        targetSchoolYearId: targetYear.id,
+        fromClassId: fromClass.id,
+        toClassId: toClass?.id,
+        completionLabel: rule.completionLabel,
+        message: toClass
+            ? `Promoted ${students.length} student(s) from ${fromLabel} (${completingYear.name}) to ${toLabel} for ${targetYear.name}.`
+            : `Marked ${students.length} student(s) in ${fromLabel} (${completingYear.name}) as completed (${rule.completionLabel || 'Completed'}) for ${targetYear.name}.`,
+    });
+});
 router.get('/exam-types', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), async (_req, res) => {
     res.json(await data_source_1.AppDataSource.getRepository(entities_1.ExamType).find({ order: { name: 'ASC' } }));
 });
@@ -386,7 +688,12 @@ router.post('/staff', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (req,
         return res.status(400).json({ message: 'Email already registered' });
     const allowedRoles = [enums_1.UserRole.TEACHER, enums_1.UserRole.ADMIN, enums_1.UserRole.PRINCIPAL];
     const staffRole = allowedRoles.includes(role) ? role : enums_1.UserRole.TEACHER;
-    const passwordHash = await bcryptjs_1.default.hash(password || 'Teacher123!', 10);
+    const plainPassword = password || 'Teacher123!';
+    const policy = await (0, security_policy_service_1.getSecurityPolicy)();
+    const pwdErr = (0, security_policy_1.validatePasswordAgainstPolicy)(plainPassword, policy);
+    if (pwdErr)
+        return res.status(400).json({ message: pwdErr });
+    const passwordHash = await bcryptjs_1.default.hash(plainPassword, 10);
     const user = await userRepo.save(userRepo.create({
         email: email.toLowerCase(),
         passwordHash,
@@ -435,8 +742,13 @@ router.patch('/staff/:id', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async 
     if (role && [enums_1.UserRole.TEACHER, enums_1.UserRole.ADMIN, enums_1.UserRole.PRINCIPAL].includes(role)) {
         staff.user.role = role;
     }
-    if (password)
+    if (password) {
+        const policy = await (0, security_policy_service_1.getSecurityPolicy)();
+        const pwdErr = (0, security_policy_1.validatePasswordAgainstPolicy)(password, policy);
+        if (pwdErr)
+            return res.status(400).json({ message: pwdErr });
         staff.user.passwordHash = await bcryptjs_1.default.hash(password, 10);
+    }
     if (department !== undefined)
         staff.department = department;
     if (qualification !== undefined)
@@ -503,4 +815,5 @@ router.post('/uniform/sales', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), asy
     }));
     res.status(201).json(sale);
 });
+router.use('/permissions', permissions_routes_1.default);
 exports.default = router;

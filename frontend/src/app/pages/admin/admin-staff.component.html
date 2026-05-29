@@ -135,8 +135,19 @@
   <!-- ADD STAFF -->
   @if (activeTab() === 'add') {
     <section class="panel">
-      <h2>Add New Staff Member</h2>
-      <p class="subtitle">Creates a portal login. Default password is <code>Teacher123!</code> if left blank.</p>
+      <div class="panel-head">
+        <div>
+          <h2>Add New Staff Member</h2>
+          <p class="subtitle">Creates a portal login. Default password is <code>Teacher123!</code> if left blank.</p>
+        </div>
+        <div class="progress-card" aria-label="Staff form completion">
+          <div class="progress-meta">
+            <span>Completion</span>
+            <strong>{{ addFormProgress() }}%</strong>
+          </div>
+          <div class="progress-track"><div class="progress-fill" [style.width.%]="addFormProgress()"></div></div>
+        </div>
+      </div>
 
       <div class="emp-preview">
         <label>Employee ID (auto-generated)</label>
@@ -144,22 +155,23 @@
       </div>
 
       <form class="add-form" (ngSubmit)="addStaff()">
+        <div class="form-intro">{{ roleHint() }}</div>
         <div class="form-grid">
           <div class="field">
             <label>First Name *</label>
-            <input [(ngModel)]="newStaff.firstName" name="nfn" required />
+            <input [(ngModel)]="newStaff.firstName" name="nfn" required placeholder="Enter first name" autocomplete="given-name" />
           </div>
           <div class="field">
             <label>Last Name *</label>
-            <input [(ngModel)]="newStaff.lastName" name="nln" required />
+            <input [(ngModel)]="newStaff.lastName" name="nln" required placeholder="Enter last name" autocomplete="family-name" />
           </div>
           <div class="field">
             <label>Email *</label>
-            <input type="email" [(ngModel)]="newStaff.email" name="nem" required />
+            <input type="email" [(ngModel)]="newStaff.email" name="nem" required placeholder="name@schoolpro.ac.zw" autocomplete="email" />
           </div>
           <div class="field">
             <label>Phone</label>
-            <input [(ngModel)]="newStaff.phone" name="nph" />
+            <input [(ngModel)]="newStaff.phone" name="nph" placeholder="+263..." autocomplete="tel" />
           </div>
           <div class="field">
             <label>Role *</label>
@@ -183,10 +195,21 @@
           </div>
           <div class="field">
             <label>Initial Password</label>
-            <input type="password" [(ngModel)]="newStaff.password" name="npw" placeholder="Leave blank for default" />
+            <div class="password-field">
+              <input
+                [type]="showInitialPassword() ? 'text' : 'password'"
+                [(ngModel)]="newStaff.password"
+                name="npw"
+                placeholder="Leave blank for default"
+                autocomplete="new-password"
+              />
+              <button type="button" class="toggle-pw" (click)="toggleInitialPasswordVisibility()">
+                {{ showInitialPassword() ? 'Hide' : 'Show' }}
+              </button>
+            </div>
           </div>
         </div>
-        <button type="submit" class="btn-primary btn-lg" [disabled]="submitting()">
+        <button type="submit" class="btn-primary btn-lg modern-submit" [disabled]="submitting()">
           {{ submitting() ? 'Adding…' : 'Add Staff Member' }}
         </button>
       </form>

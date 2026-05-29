@@ -101,6 +101,13 @@ export class AdminDashboardComponent implements OnInit {
       ],
     },
     {
+      title: 'Attendance',
+      links: [
+        { label: 'Mark Register', path: '/admin/attendance/mark-register', icon: '✅' },
+        { label: 'Attendance Report', path: '/admin/attendance/report', icon: '📊' },
+      ],
+    },
+    {
       title: 'Finance',
       links: [
         { label: 'Billing & Payments', path: '/admin/billing', icon: '💳' },
@@ -137,8 +144,6 @@ export class AdminDashboardComponent implements OnInit {
     {
       title: 'Academics',
       links: [
-        { label: 'Mark Register', path: '/admin/attendance/mark-register', icon: '✅' },
-        { label: 'Attendance Report', path: '/admin/attendance/report', icon: '📊' },
         { label: 'Exam Marks', path: '/admin/exams', icon: '🧾' },
         { label: 'Mark Sheet', path: '/admin/mark-sheet', icon: '📑' },
         { label: 'Results Analysis', path: '/admin/results-analysis', icon: '📈' },
@@ -151,6 +156,7 @@ export class AdminDashboardComponent implements OnInit {
       links: [
         { label: 'School Settings', path: '/admin/settings', icon: '⚙️' },
         { label: 'Academic Settings', path: '/admin/academic-settings', icon: '📚' },
+        { label: 'User Permissions', path: '/admin/user-permissions', icon: '🔐' },
       ],
     },
   ];

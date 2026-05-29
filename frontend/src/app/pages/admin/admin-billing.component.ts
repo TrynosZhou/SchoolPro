@@ -1,7 +1,7 @@
 import { Component, inject, OnInit, signal, computed } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { DecimalPipe, DatePipe } from '@angular/common';
-import { RouterLink } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { forkJoin } from 'rxjs';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
@@ -92,12 +92,16 @@ interface Term {
 export class AdminBillingComponent implements OnInit {
   private api = inject(ApiService);
   private auth = inject(AuthService);
+  private route = inject(ActivatedRoute);
 
   readonly adminNav = ADMIN_NAV_SECTIONS;
 
   activeTab = signal<Tab>('payment');
   loading = signal(true);
   submitting = signal(false);
+  pdfLoading = signal(false);
+  previewingReceiptId = signal<string | null>(null);
+  previewingInvoiceId = signal<string | null>(null);
   toast = signal<{ type: 'success' | 'error'; msg: string } | null>(null);
 
   summary = signal<BillingSummary | null>(null);
@@ -169,6 +173,8 @@ export class AdminBillingComponent implements OnInit {
   };
 
   fees = signal<SchoolFeeRow[]>([]);
+  private prefillStudentId = '';
+  private prefillAmount: number | null = null;
 
   feePresets = computed<FeePreset[]>(() =>
     this.fees()
@@ -182,6 +188,9 @@ export class AdminBillingComponent implements OnInit {
   );
 
   ngOnInit() {
+    this.prefillStudentId = this.route.snapshot.queryParamMap.get('studentId') || '';
+    const amountParam = this.route.snapshot.queryParamMap.get('amount');
+    this.prefillAmount = amountParam ? Number(amountParam) : null;
     this.loadData();
   }
 
@@ -217,6 +226,7 @@ export class AdminBillingComponent implements OnInit {
           this.payment.label = firstFee.name;
           this.newInvoice.feeType = firstFee.code;
         }
+        this.applyPaymentPrefill();
         this.loading.set(false);
       },
       error: () => {
@@ -361,6 +371,56 @@ export class AdminBillingComponent implements OnInit {
     });
   }
 
+  previewPdf() {
+    this.exportPdf(true);
+  }
+
+  downloadPdf() {
+    this.exportPdf(false);
+  }
+
+  private exportPdf(preview: boolean) {
+    if (this.loading()) {
+      this.showToast('error', 'Wait for billing data to finish loading.');
+      return;
+    }
+
+    this.pdfLoading.set(true);
+    const params: Record<string, string> = { tab: this.activeTab() };
+    if (preview) params['preview'] = 'true';
+    const debtorQ = this.debtorSearch().trim();
+    const invoiceQ = this.invoiceSearch().trim();
+    const invoiceStatus = this.invoiceFilter();
+    if (debtorQ) params['debtorQ'] = debtorQ;
+    if (invoiceQ) params['invoiceQ'] = invoiceQ;
+    if (invoiceStatus !== 'all') params['invoiceStatus'] = invoiceStatus;
+
+    this.api.getBlob('/billing/overview/export.pdf', params).subscribe({
+      next: (blob) => {
+        this.pdfLoading.set(false);
+        if (blob.type && !blob.type.includes('pdf')) {
+          this.showToast('error', 'Server did not return a PDF file');
+          return;
+        }
+        const url = URL.createObjectURL(blob);
+        if (preview) {
+          window.open(url, '_blank', 'noopener,noreferrer');
+          setTimeout(() => URL.revokeObjectURL(url), 90_000);
+          return;
+        }
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'billing-overview.pdf';
+        a.click();
+        URL.revokeObjectURL(url);
+      },
+      error: (e) => {
+        this.pdfLoading.set(false);
+        this.showToast('error', e.error?.message || 'Failed to generate PDF');
+      },
+    });
+  }
+
   sendReminders() {
     const ids = this.debtors().map((d) => d.id);
     if (!ids.length) {
@@ -415,11 +475,51 @@ export class AdminBillingComponent implements OnInit {
     this.downloadBillingPdf(`/billing/receipts/${receiptId}/pdf`, `receipt-${receiptId}.pdf`);
   }
 
+  previewReceipt(receiptId: string) {
+    this.previewingReceiptId.set(receiptId);
+    this.api.getBlob(`/billing/receipts/${receiptId}/pdf`, { preview: 'true' }).subscribe({
+      next: (blob) => {
+        this.previewingReceiptId.set(null);
+        if (blob.type && !blob.type.includes('pdf')) {
+          this.showToast('error', 'Server did not return a PDF file');
+          return;
+        }
+        const url = URL.createObjectURL(blob);
+        window.open(url, '_blank', 'noopener,noreferrer');
+        setTimeout(() => URL.revokeObjectURL(url), 90_000);
+      },
+      error: (e) => {
+        this.previewingReceiptId.set(null);
+        this.showToast('error', e.error?.message || 'Could not preview receipt PDF');
+      },
+    });
+  }
+
   downloadInvoice(invoiceId: string, invoiceNumber?: string) {
     this.downloadBillingPdf(
       `/billing/invoices/${invoiceId}/pdf`,
       `invoice-${invoiceNumber || invoiceId}.pdf`,
     );
+  }
+
+  previewInvoice(invoiceId: string) {
+    this.previewingInvoiceId.set(invoiceId);
+    this.api.getBlob(`/billing/invoices/${invoiceId}/pdf`, { preview: 'true' }).subscribe({
+      next: (blob) => {
+        this.previewingInvoiceId.set(null);
+        if (blob.type && !blob.type.includes('pdf')) {
+          this.showToast('error', 'Server did not return a PDF file');
+          return;
+        }
+        const url = URL.createObjectURL(blob);
+        window.open(url, '_blank', 'noopener,noreferrer');
+        setTimeout(() => URL.revokeObjectURL(url), 90_000);
+      },
+      error: (e) => {
+        this.previewingInvoiceId.set(null);
+        this.showToast('error', e.error?.message || 'Could not preview invoice PDF');
+      },
+    });
   }
 
   formatMethod(m: string): string {
@@ -436,5 +536,17 @@ export class AdminBillingComponent implements OnInit {
   private showToast(type: 'success' | 'error', msg: string) {
     this.toast.set({ type, msg });
     setTimeout(() => this.toast.set(null), 4500);
+  }
+
+  private applyPaymentPrefill(): void {
+    if (!this.prefillStudentId) return;
+    this.payment.studentId = this.prefillStudentId;
+    if (this.prefillAmount && this.prefillAmount > 0) {
+      this.payment.amount = Number(this.prefillAmount.toFixed(2));
+    }
+    this.setTab('payment');
+    this.onStudentChange();
+    this.prefillStudentId = '';
+    this.prefillAmount = null;
   }
 }

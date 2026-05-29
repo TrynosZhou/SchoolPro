@@ -9,11 +9,26 @@
   }
 
   <header class="page-intro">
-    <p>Select a class to view all enrolled students. Records show Student ID, name, and gender.</p>
+    <p>Select term and class, then click <strong>Load Students</strong> to view enrolled learners for that class.</p>
   </header>
 
   <section class="filter-bar card">
     <div class="filter-row">
+      <div class="field">
+        <label for="termSelect">Term</label>
+        <select
+          id="termSelect"
+          [(ngModel)]="selectedTermId"
+          (ngModelChange)="onTermChange()"
+          name="termId"
+          [disabled]="loadingTerms()"
+        >
+          <option value="">— Select term —</option>
+          @for (t of terms(); track t.id) {
+            <option [value]="t.id">{{ t.name }}</option>
+          }
+        </select>
+      </div>
       <div class="field">
         <label for="classSelect">Class</label>
         <select
@@ -33,15 +48,19 @@
         type="button"
         class="btn-fetch"
         (click)="fetchStudents()"
-        [disabled]="!selectedClassId || loadingStudents()"
+        [disabled]="!selectedTermId || !selectedClassId || loadingStudents()"
       >
-        {{ loadingStudents() ? 'Loading…' : 'Load students' }}
+        {{ loadingStudents() ? 'Loading…' : 'Load Students' }}
       </button>
     </div>
-    @if (loadingClasses()) {
-      <p class="hint">Loading classes…</p>
+    @if (loadingTerms() || loadingClasses()) {
+      <p class="hint">Loading terms and classes…</p>
+    } @else if (!terms().length) {
+      <p class="hint warn">No terms available.</p>
     } @else if (!classes().length) {
       <p class="hint warn">No classes available.</p>
+    } @else {
+      <p class="hint">Selected: {{ selectedTermLabel() || '—' }} · {{ selectedClassLabel() || '—' }}</p>
     }
   </section>
 

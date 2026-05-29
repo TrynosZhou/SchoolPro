@@ -7,11 +7,13 @@ export interface NavItem {
   label: string;
   path: string;
   icon?: string;
+  badge?: string | number;
 }
 
 export interface NavSection {
   heading: string;
   items: NavItem[];
+  path?: string;
 }
 
 @Component({
@@ -58,6 +60,23 @@ export class PortalLayoutComponent implements OnInit, OnDestroy {
     return `${u?.firstName ?? ''} ${u?.lastName ?? ''}`.trim() || 'User';
   }
 
+  get userRoleLabel(): string {
+    const role = (this.auth.user()?.role || 'user').toString().toLowerCase();
+    return role
+      .split('_')
+      .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+      .join(' ');
+  }
+
+  get userInitials(): string {
+    const u = this.auth.user();
+    const first = (u?.firstName || '').trim();
+    const last = (u?.lastName || '').trim();
+    const a = first ? first.charAt(0).toUpperCase() : '';
+    const b = last ? last.charAt(0).toUpperCase() : '';
+    return `${a}${b}` || 'SP';
+  }
+
   toggleUserMenu(): void {
     this.userMenuOpen.update((open) => !open);
   }
@@ -102,6 +121,7 @@ export class PortalLayoutComponent implements OnInit, OnDestroy {
   }
 
   sectionHasActive(section: NavSection): boolean {
+    if (section.path && this.isNavItemActive(section.path)) return true;
     return section.items.some((item) => this.isNavItemActive(item.path));
   }
 
@@ -115,8 +135,8 @@ export class PortalLayoutComponent implements OnInit, OnDestroy {
       return;
     }
 
-    const overview = this.navSections.find((s) => s.heading === 'Overview');
-    this.expandedSections.set(new Set([overview?.heading ?? this.navSections[0]?.heading].filter(Boolean) as string[]));
+    const dashboard = this.navSections.find((s) => s.heading === 'Dashboard');
+    this.expandedSections.set(new Set([dashboard?.heading ?? this.navSections[0]?.heading].filter(Boolean) as string[]));
   }
 
   /** Keep the section for the current route open without collapsing others the user opened. */
@@ -141,5 +161,28 @@ export class PortalLayoutComponent implements OnInit, OnDestroy {
       return url === '/admin' || url === '/admin/';
     }
     return url === path || url.startsWith(`${path}/`);
+  }
+
+  sectionGroup(heading: string): string {
+    const h = heading.toLowerCase();
+    if (h === 'overview' || h === 'dashboard') return 'Main';
+    if (h === 'students' || h === 'staff' || h === 'attendance' || h === 'communication') return 'People';
+    if (h === 'academics' || h === 'timetable') return 'Learning';
+    if (h === 'finance' || h === 'fin.reports') return 'Finance';
+    return 'Administration';
+  }
+
+  sectionIcon(heading: string): string {
+    const h = heading.toLowerCase();
+    if (h === 'overview' || h === 'dashboard') return '⌘';
+    if (h === 'students') return '👥';
+    if (h === 'attendance') return '📋';
+    if (h === 'staff') return '🧑';
+    if (h === 'academics') return '📘';
+    if (h === 'finance') return '💳';
+    if (h === 'fin.reports') return '◔';
+    if (h === 'communication') return '💬';
+    if (h === 'timetable') return '📅';
+    return '⚙';
   }
 }

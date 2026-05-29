@@ -8,7 +8,9 @@ const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const data_source_1 = require("./config/data-source");
 const entities_1 = require("./entities");
 const enums_1 = require("./entities/enums");
+const role_permissions_service_1 = require("./services/role-permissions.service");
 async function seedDatabase() {
+    await (0, role_permissions_service_1.ensureDefaultRoles)();
     const userRepo = data_source_1.AppDataSource.getRepository(entities_1.User);
     const existing = await userRepo.count();
     if (existing > 0)

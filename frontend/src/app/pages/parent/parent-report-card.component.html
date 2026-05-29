@@ -34,9 +34,14 @@
       @if (report()!.averageMark != null) {
         <p class="summary">
           Average: <strong>{{ report()!.averageMark | number:'1.1-1' }}%</strong>
-          · Overall grade: <strong>{{ report()!.overallGrade || '—' }}</strong>
           @if (report()!.classPosition) {
-            · Class position: <strong>{{ report()!.classPosition }}</strong>
+            · Class position: <strong>{{ positionOutOfLabel(report()!.classPosition, report()!.classTotal) }}</strong>
+          }
+          @if (report()!.formPosition) {
+            · Form position: <strong>{{ positionOutOfLabel(report()!.formPosition, report()!.formTotal) }}</strong>
+          }
+          @if (report()!.subjectsPassed != null && report()!.totalSubjects) {
+            · Subjects passed: <strong>{{ subjectsPassedLabel(report()!.subjectsPassed, report()!.totalSubjects) }}</strong>
           }
         </p>
       }
@@ -46,22 +51,28 @@
       <table class="results-table">
         <thead>
           <tr>
-            <th>Subject / Exam</th>
-            <th>Marks</th>
-            <th>Grade</th>
+            <th class="col-subject">Subject</th>
+            <th class="col-code">Code</th>
+            <th class="col-mark">Mark</th>
+            <th class="col-grade">Grade</th>
+            <th class="col-rank">Rank</th>
+            <th class="col-avg">Mean</th>
             <th>Remarks</th>
           </tr>
         </thead>
         <tbody>
           @for (row of report()!.subjectResults; track row.subject) {
             <tr>
-              <td>{{ row.subject }}</td>
-              <td>{{ row.marks }}</td>
-              <td class="grade">{{ row.grade }}</td>
+              <td class="col-subject">{{ row.subjectName || row.subject }}</td>
+              <td class="col-code">{{ row.subjectCode || '—' }}</td>
+              <td class="mark-cell">{{ row.marks }}</td>
+              <td class="grade-cell"><span class="grade-pill">{{ row.grade }}</span></td>
+              <td class="col-rank">{{ subjectPositionLabel(row.subjectPosition, row.subjectPositionTotal) }}</td>
+              <td class="col-avg">{{ row.mean != null ? (row.mean | number:'1.1-1') : '—' }}</td>
               <td class="remarks">{{ row.remarks || '—' }}</td>
             </tr>
           } @empty {
-            <tr><td colspan="4">No subject results recorded.</td></tr>
+            <tr><td colspan="7">No subject results recorded.</td></tr>
           }
         </tbody>
       </table>

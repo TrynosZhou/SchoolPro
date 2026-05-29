@@ -26,6 +26,8 @@ import { AdminRankingComponent } from './pages/admin/admin-ranking.component';
 import { AdminManageFeesComponent } from './pages/admin/admin-manage-fees.component';
 import { AdminStudentBalanceComponent } from './pages/admin/admin-student-balance.component';
 import { AdminAcademicSettingsComponent } from './pages/admin/admin-academic-settings.component';
+import { AdminIntegrationsComponent } from './pages/admin/admin-integrations.component';
+import { AdminUserPermissionsComponent } from './pages/admin/admin-user-permissions.component';
 import { AdminClassPromotionComponent } from './pages/admin/admin-class-promotion.component';
 import { AdminStudentLedgerComponent } from './pages/admin/admin-student-ledger.component';
 import { AdminOutstandingInvoicesComponent } from './pages/admin/admin-outstanding-invoices.component';
@@ -60,6 +62,7 @@ export const routes: Routes = [
       { path: '', component: DirectorDashboardComponent },
       { path: 'finance', component: DirectorFinanceComponent },
       { path: 'exams', component: ExamMarksEntryComponent },
+      { path: 'report-cards', component: AdminReportCardsComponent },
     ],
   },
   {
@@ -99,6 +102,8 @@ export const routes: Routes = [
       { path: 'staff-attendance', redirectTo: 'staff', pathMatch: 'full' },
       { path: 'settings', component: AdminSettingsComponent },
       { path: 'academic-settings', component: AdminAcademicSettingsComponent },
+      { path: 'user-permissions', component: AdminUserPermissionsComponent },
+      { path: 'integrations', component: AdminIntegrationsComponent },
     ],
   },
   {
@@ -107,6 +112,7 @@ export const routes: Routes = [
     children: [
       { path: '', component: TeacherDashboardComponent },
       { path: 'exams', component: TeacherExamsComponent },
+      { path: 'report-cards', component: AdminReportCardsComponent },
       { path: 'attendance', redirectTo: 'attendance/mark-register', pathMatch: 'full' },
       { path: 'attendance/mark-register', component: AttendanceMarkRegisterComponent },
       { path: 'attendance/report', component: AttendanceReportComponent },

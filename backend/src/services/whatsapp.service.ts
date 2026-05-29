@@ -1,21 +1,24 @@
-import { env } from '../config/env';
+import { getEffectiveWhatsApp } from './integrations.service';
 
 export async function sendWhatsAppReminder(
   phone: string,
   message: string
 ): Promise<boolean> {
-  if (!env.whatsapp.enabled) {
+  const whatsapp = await getEffectiveWhatsApp();
+
+  if (whatsapp.useMock || !whatsapp.enabled) {
     console.log(`[WhatsApp mock] To: ${phone} | ${message}`);
     return true;
   }
+
   try {
-    const url = `https://api.twilio.com/2010-04-01/Accounts/${env.whatsapp.accountSid}/Messages.json`;
+    const url = `https://api.twilio.com/2010-04-01/Accounts/${whatsapp.accountSid}/Messages.json`;
     const body = new URLSearchParams({
-      From: env.whatsapp.from,
+      From: whatsapp.from,
       To: `whatsapp:${phone}`,
       Body: message,
     });
-    const auth = Buffer.from(`${env.whatsapp.accountSid}:${env.whatsapp.authToken}`).toString('base64');
+    const auth = Buffer.from(`${whatsapp.accountSid}:${whatsapp.authToken}`).toString('base64');
     const res = await fetch(url, {
       method: 'POST',
       headers: {
@@ -30,4 +33,3 @@ export async function sendWhatsAppReminder(
     return false;
   }
 }
-

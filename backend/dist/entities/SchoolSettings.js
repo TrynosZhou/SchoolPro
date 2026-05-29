@@ -59,6 +59,14 @@ __decorate([
     __metadata("design:type", Array)
 ], SchoolSettings.prototype, "gradeBoundaries", void 0);
 __decorate([
+    (0, typeorm_1.Column)({ type: 'jsonb', nullable: true }),
+    __metadata("design:type", Object)
+], SchoolSettings.prototype, "securityPolicy", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'jsonb', nullable: true }),
+    __metadata("design:type", Object)
+], SchoolSettings.prototype, "integrationsConfig", void 0);
+__decorate([
     (0, typeorm_1.UpdateDateColumn)(),
     __metadata("design:type", Date)
 ], SchoolSettings.prototype, "updatedAt", void 0);

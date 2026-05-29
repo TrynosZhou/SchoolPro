@@ -286,7 +286,36 @@
   &.compact td, &.compact th { padding: 0.5rem 0.65rem; }
 }
 
-.num { text-align: right; font-variant-numeric: tabular-nums; }
+.modern-table th.num,
+.modern-table td.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Debtors table: keep amount + statement starting further left in compact view */
+.debtors-table {
+  --debt-col-start: 0.4rem;
+}
+
+.debtors-table th.num,
+.debtors-table td.num,
+.debtors-table th.amount-owed,
+.debtors-table td.amount-owed,
+.debtors-table th.stmt-action,
+.debtors-table td.stmt-action {
+  text-align: left;
+  padding-left: var(--debt-col-start);
+}
+
+.debtors-table th.amount-owed,
+.debtors-table td.amount-owed {
+  font-variant-numeric: tabular-nums;
+}
+
+.debtors-table td.stmt-action .btn-ghost {
+  padding: 0;
+  margin: 0;
+}
 
 .pill {
   display: inline-block;
@@ -366,3 +395,28 @@
 
 .text-green { color: #059669; }
 .text-red { color: #dc2626; }
+
+.pdf-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  display: flex;
+  flex-direction: column;
+  background: #0f172a;
+}
+
+.pdf-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.7rem 1rem;
+  background: #1e293b;
+  color: #f8fafc;
+}
+
+.pdf-frame {
+  flex: 1;
+  width: 100%;
+  border: none;
+  background: #525659;
+}
