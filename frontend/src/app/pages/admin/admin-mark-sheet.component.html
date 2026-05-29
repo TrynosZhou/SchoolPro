@@ -1,4 +1,9 @@
-<app-portal-layout portalTitle="Admin Portal" pageTitle="Mark Sheet" [navSections]="adminNav">
+<app-portal-layout
+  [portalTitle]="portalLayout.portalTitle"
+  pageTitle="Mark Sheet"
+  [navSections]="portalLayout.navSections || []"
+  [navItems]="portalLayout.navItems || []"
+>
 
   @if (toast(); as t) {
     <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>

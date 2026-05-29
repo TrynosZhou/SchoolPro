@@ -134,9 +134,9 @@
           }
 
           <div class="child-actions">
-            <a [routerLink]="['/parent/finance', child.student.id]" class="action-btn finance">Financial statement</a>
-            <a [routerLink]="['/parent/attendance', child.student.id]" class="action-btn">Attendance</a>
-            <a [routerLink]="['/parent/report-card', child.student.id]" class="action-btn primary">Report card</a>
+            <a [routerLink]="['/parent/finance']" [queryParams]="{ studentId: child.student.id }" class="action-btn finance">Financial statement</a>
+            <a [routerLink]="['/parent/attendance']" [queryParams]="{ studentId: child.student.id }" class="action-btn">Attendance</a>
+            <a [routerLink]="['/parent/report-cards']" [queryParams]="{ studentId: child.student.id }" class="action-btn primary">Report card</a>
           </div>
         </article>
       }

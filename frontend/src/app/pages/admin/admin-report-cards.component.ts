@@ -2,14 +2,31 @@ import { Component, computed, inject, OnDestroy, OnInit, signal } from '@angular
 import { FormsModule } from '@angular/forms';
 import { DecimalPipe } from '@angular/common';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
-import { RouterLink } from '@angular/router';
+import { RouterLink, Router } from '@angular/router';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
 import { TEACHER_NAV_SECTIONS } from '../../core/config/teacher-nav';
-import type { NavSection } from '../../shared/portal-layout/portal-layout.component';
+import { DIRECTOR_NAV_ITEMS } from '../../core/config/director-nav';
+import { reportCardPdfFilename } from '../../core/utils/report-card-filename';
+import type { NavItem, NavSection } from '../../shared/portal-layout/portal-layout.component';
 import { ApiService } from '../../core/services/api.service';
 import { classDisplayName } from '../../core/utils/class-display';
 import { environment } from '../../../environments/environment';
+
+interface StudentTermAttendance {
+  daysMarked: number;
+  present: number;
+  absent: number;
+  late: number;
+  excused: number;
+  attendancePercent: number | null;
+}
+
+interface SchoolBranding {
+  schoolName?: string;
+  tagline?: string;
+  logoUrl?: string;
+}
 
 interface SubjectResult {
   subject: string;
@@ -47,6 +64,7 @@ export interface ReportCardRow {
   };
   term?: { name: string };
   examType?: { name: string };
+  attendance?: StudentTermAttendance;
 }
 
 interface GenerateResponse {
@@ -68,9 +86,11 @@ type UserRole = 'director' | 'principal' | 'admin' | 'teacher' | 'parent' | 'stu
 export class AdminReportCardsComponent implements OnInit, OnDestroy {
   private api = inject(ApiService);
   private sanitizer = inject(DomSanitizer);
+  private router = inject(Router);
 
   portalTitle = signal('Admin Portal');
   navSections = signal<NavSection[]>(ADMIN_NAV_SECTIONS);
+  navItems = signal<NavItem[]>([]);
 
   examTypes = signal<{ id: string; name: string }[]>([]);
   terms = signal<{ id: string; name: string; isCurrent?: boolean }[]>([]);
@@ -96,6 +116,8 @@ export class AdminReportCardsComponent implements OnInit, OnDestroy {
   remarkDrafts = signal<Record<string, { classTeacherRemarks: string; principalRemarks: string }>>({});
   savingRemarks = signal<Record<string, boolean>>({});
   remarksSavedIds = signal<Set<string>>(new Set());
+
+  schoolBranding = signal<SchoolBranding | null>(null);
 
   filtersReady(): boolean {
     return !!(this.filters.examTypeId && this.filters.termId && this.filters.classId);
@@ -160,6 +182,21 @@ export class AdminReportCardsComponent implements OnInit, OnDestroy {
     this.api.get<{ id: string; name: string; form?: { name: string } }[]>('/admin/classes').subscribe((c) =>
       this.classes.set(c),
     );
+    this.api.get<SchoolBranding>('/exams/school-branding').subscribe({
+      next: (b) => this.schoolBranding.set(b),
+      error: () => this.schoolBranding.set({ schoolName: 'School Pro Academy' }),
+    });
+  }
+
+  schoolName(): string {
+    return this.schoolBranding()?.schoolName || 'School Pro Academy';
+  }
+
+  logoFullUrl(): string | null {
+    const url = this.schoolBranding()?.logoUrl;
+    if (!url) return null;
+    const origin = environment.apiUrl.replace(/\/api$/, '');
+    return `${origin}${url}`;
   }
 
   ngOnDestroy(): void {
@@ -263,8 +300,12 @@ export class AdminReportCardsComponent implements OnInit, OnDestroy {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      const id = report.student?.admissionNumber || report.studentId;
-      a.download = `report-card-${id}.pdf`;
+      const student = report.student;
+      a.download = reportCardPdfFilename(
+        student?.firstName,
+        student?.lastName,
+        student?.admissionNumber || report.studentId,
+      );
       a.click();
       URL.revokeObjectURL(url);
     });
@@ -495,13 +536,32 @@ export class AdminReportCardsComponent implements OnInit, OnDestroy {
   }
 
   private applyPortalForRole(): void {
+    if (this.router.url.includes('/director')) {
+      this.portalTitle.set('Director Portal');
+      this.navSections.set([]);
+      this.navItems.set(DIRECTOR_NAV_ITEMS);
+      return;
+    }
+    if (this.router.url.includes('/principal')) {
+      this.portalTitle.set('Principal Portal');
+      this.navSections.set([]);
+      this.navItems.set([
+        { label: 'Dashboard', path: '/principal', icon: '🏠' },
+        { label: 'Exam Marks', path: '/principal/exams', icon: '📊' },
+        { label: 'Report Cards', path: '/principal/report-cards', icon: '📄' },
+        { label: 'Finance', path: '/principal/finance', icon: '💰' },
+      ]);
+      return;
+    }
     if (this.currentRole === 'teacher') {
       this.portalTitle.set('Teacher Portal');
       this.navSections.set(TEACHER_NAV_SECTIONS);
+      this.navItems.set([]);
       return;
     }
     this.portalTitle.set('Admin Portal');
     this.navSections.set(ADMIN_NAV_SECTIONS);
+    this.navItems.set([]);
   }
 
   private getCurrentRole(): UserRole | null {

@@ -129,8 +129,8 @@ export class AdminDashboardComponent implements OnInit {
     {
       title: 'Communication',
       links: [
-        { label: 'Send Message', path: '/admin/communication/send', icon: '✉️' },
-        { label: 'Inbox', path: '/admin/communication/inbox', icon: '📥' },
+        { label: 'Announcements', path: '/admin/communication/send', icon: '✉️' },
+        { label: 'Messages', path: '/admin/communication/inbox', icon: '📥' },
       ],
     },
     {
@@ -142,7 +142,7 @@ export class AdminDashboardComponent implements OnInit {
       ],
     },
     {
-      title: 'Academics',
+      title: 'Examinations',
       links: [
         { label: 'Exam Marks', path: '/admin/exams', icon: '🧾' },
         { label: 'Mark Sheet', path: '/admin/mark-sheet', icon: '📑' },
@@ -156,6 +156,7 @@ export class AdminDashboardComponent implements OnInit {
       links: [
         { label: 'School Settings', path: '/admin/settings', icon: '⚙️' },
         { label: 'Academic Settings', path: '/admin/academic-settings', icon: '📚' },
+        { label: 'User Management', path: '/admin/user-management', icon: '👤' },
         { label: 'User Permissions', path: '/admin/user-permissions', icon: '🔐' },
       ],
     },

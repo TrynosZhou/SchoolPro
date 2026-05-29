@@ -10,11 +10,13 @@ const grade_service_1 = require("../services/grade.service");
 const entities_2 = require("../entities");
 const honours_service_1 = require("../services/honours.service");
 const report_card_service_1 = require("../services/report-card.service");
+const school_branding_service_1 = require("../services/school-branding.service");
 const grade_boundaries_1 = require("../types/grade-boundaries");
 const pdf_1 = require("../utils/pdf");
 const mark_sheet_service_1 = require("../services/mark-sheet.service");
 const results_analysis_service_1 = require("../services/results-analysis.service");
 const ranking_service_1 = require("../services/ranking.service");
+const helpers_1 = require("../utils/helpers");
 const typeorm_helpers_1 = require("../utils/typeorm-helpers");
 const router = (0, express_1.Router)();
 router.use(auth_1.authenticate);
@@ -22,7 +24,10 @@ router.get('/types', async (_req, res) => {
     const repo = data_source_1.AppDataSource.getRepository(entities_1.ExamType);
     res.json(await repo.find());
 });
-router.get('/terms', (0, auth_1.authorize)(enums_1.UserRole.TEACHER, enums_1.UserRole.ADMIN, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.DIRECTOR), async (_req, res) => {
+router.get('/school-branding', (0, auth_1.authorize)(enums_1.UserRole.TEACHER, enums_1.UserRole.ADMIN, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.DIRECTOR), async (_req, res) => {
+    res.json(await (0, school_branding_service_1.loadSchoolBranding)());
+});
+router.get('/terms', (0, auth_1.authorize)(enums_1.UserRole.TEACHER, enums_1.UserRole.ADMIN, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PARENT, enums_1.UserRole.STUDENT), async (_req, res) => {
     const years = await data_source_1.AppDataSource.getRepository(entities_1.SchoolYear).find({
         relations: (0, typeorm_helpers_1.relations)('terms'),
         order: { startDate: 'DESC' },
@@ -454,7 +459,11 @@ router.get('/report-cards/by-class', (0, auth_1.authorize)(enums_1.UserRole.ADMI
         .orderBy('rc.classPosition', 'ASC', 'NULLS LAST')
         .addOrderBy('student.lastName', 'ASC')
         .getMany();
-    res.json({ count: reports.length, reports });
+    const attendanceMap = await (0, report_card_service_1.getClassTermAttendanceMap)(classId, termId);
+    res.json({
+        count: reports.length,
+        reports: (0, report_card_service_1.attachAttendanceToReports)(reports, attendanceMap),
+    });
 });
 router.get('/report-cards/:studentId/:termId', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.DIRECTOR, enums_1.UserRole.TEACHER, enums_1.UserRole.PARENT, enums_1.UserRole.STUDENT), async (req, res) => {
     const repo = data_source_1.AppDataSource.getRepository(entities_1.ReportCard);
@@ -520,6 +529,7 @@ router.get('/report-cards/:studentId/:termId/pdf', (0, auth_1.authorize)(enums_1
         formTotal: metrics.formTotal,
         subjectsPassed: metrics.subjectsPassed,
         totalSubjects: metrics.totalSubjects,
+        attendance: metrics.attendance,
         classTeacherRemarks: report.classTeacherRemarks,
         principalRemarks: report.principalRemarks,
         generatedAt: report.generatedAt ? new Date(report.generatedAt) : new Date(),
@@ -529,7 +539,8 @@ router.get('/report-cards/:studentId/:termId/pdf', (0, auth_1.authorize)(enums_1
         reportCardId: report.id,
     });
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `${inline ? 'inline' : 'attachment'}; filename="report-card-${report.student.admissionNumber}.pdf"`);
+    const pdfFilename = (0, helpers_1.reportCardPdfFilename)(report.student.firstName, report.student.lastName, report.student.admissionNumber || 'report-card');
+    res.setHeader('Content-Disposition', `${inline ? 'inline' : 'attachment'}; filename="${pdfFilename}"`);
     res.send(pdf);
 });
 router.patch('/report-cards/:id/remarks', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.DIRECTOR, enums_1.UserRole.TEACHER), async (req, res) => {

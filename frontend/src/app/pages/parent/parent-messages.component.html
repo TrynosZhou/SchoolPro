@@ -1,0 +1,84 @@
+<app-portal-layout portalTitle="Parent Portal" pageTitle="Messages" [navItems]="nav">
+  <div class="messages-page">
+    <section class="card intro">
+      <h3>School messages &amp; announcements</h3>
+      <p class="sub">
+        Announcements and messages sent to you by the school administration appear here.
+        @if (unreadCount() > 0) {
+          You have <strong>{{ unreadCount() }}</strong> unread message{{ unreadCount() === 1 ? '' : 's' }}.
+        }
+      </p>
+    </section>
+
+    <section class="card inbox-layout">
+      <div class="inbox-list-pane">
+        <label class="toggle">
+          <input type="checkbox" [(ngModel)]="filterUnreadOnly" name="unreadOnly" />
+          Unread only
+        </label>
+
+        @if (loading()) {
+          <p class="empty">Loading messages…</p>
+        } @else {
+          <div class="message-list">
+            @for (m of visibleMessages(); track m.id) {
+              <button
+                type="button"
+                class="message-item"
+                [class.unread]="!m.isRead"
+                [class.active]="selected()?.id === m.id"
+                (click)="openMessage(m)"
+              >
+                <div class="message-top">
+                  <div class="subject-row">
+                    @if (isSchoolAnnouncement(m)) {
+                      <span class="announcement-badge">Announcement</span>
+                    }
+                    <strong>{{ m.subject }}</strong>
+                  </div>
+                  <span class="date">{{ m.sentAt | date:'short' }}</span>
+                </div>
+                <span class="preview">From {{ senderLabel(m) }}</span>
+              </button>
+            } @empty {
+              <div class="empty">
+                <span class="empty-icon">📬</span>
+                <p>No messages yet.</p>
+                <p class="empty-hint">School announcements will appear here when the administration sends them.</p>
+              </div>
+            }
+          </div>
+        }
+      </div>
+
+      <div class="inbox-detail-pane">
+        @if (selected(); as msg) {
+          <div class="detail-head">
+            <div>
+              @if (isSchoolAnnouncement(msg)) {
+                <span class="announcement-badge lg">School announcement</span>
+              }
+              <h4>{{ msg.subject }}</h4>
+              <p class="meta">
+                From <strong>{{ senderLabel(msg) }}</strong>
+                · {{ msg.sentAt | date:'medium' }}
+              </p>
+              @if (msg.student) {
+                <p class="meta student-ref">
+                  Re: {{ msg.student.firstName }} {{ msg.student.lastName }} ({{ msg.student.admissionNumber }})
+                </p>
+              }
+            </div>
+            <button type="button" class="btn-outline" (click)="closeDetail()">Close</button>
+          </div>
+          <div class="detail-body">{{ msg.body }}</div>
+        } @else {
+          <div class="detail-empty">
+            <span class="empty-icon">📬</span>
+            <p>Select a message to read</p>
+          </div>
+        }
+      </div>
+    </section>
+  </div>
+</app-portal-layout>

@@ -1,7 +1,8 @@
 <app-portal-layout
   [portalTitle]="portalTitle"
   [pageTitle]="pageTitle"
-  [navSections]="isTeacherPortal ? teacherNav : adminNav"
+  [navSections]="isTeacherPortal ? teacherNav : (isDirectorPortal ? [] : adminNav)"
+  [navItems]="isDirectorPortal ? directorNav : []"
 >
   @if (toast(); as t) {
     <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>

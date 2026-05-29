@@ -4,6 +4,8 @@ import { DecimalPipe } from '@angular/common';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { ApiService } from '../../core/services/api.service';
 import { environment } from '../../../environments/environment';
+import { PARENT_NAV_ITEMS } from '../../core/config/parent-nav';
+import { reportCardPdfFilename } from '../../core/utils/report-card-filename';
 
 interface SubjectResult {
   subject: string;
@@ -59,12 +61,7 @@ export class ParentReportCardComponent implements OnInit {
   loading = signal(false);
   notFound = signal(false);
 
-  readonly nav = [
-    { label: 'My Children', path: '/parent', icon: '👨‍👩‍👧' },
-    { label: 'Report Cards', path: '/parent/report-cards', icon: '📄' },
-    { label: 'Finance', path: '/parent/finance', icon: '💳' },
-    { label: 'Messages', path: '/parent/messages', icon: '💬' },
-  ];
+  readonly nav = PARENT_NAV_ITEMS;
 
   ngOnInit() {
     this.studentId = this.route.snapshot.paramMap.get('studentId') || '';
@@ -121,15 +118,20 @@ export class ParentReportCardComponent implements OnInit {
 
   downloadPdf() {
     const termId = this.selectedTermId();
+    const report = this.report();
     if (!this.studentId || !termId) return;
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('school_pro_token');
     const url = `${environment.apiUrl}/exams/report-cards/${this.studentId}/${termId}/pdf`;
     fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
       .then((r) => r.blob())
       .then((blob) => {
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
-        a.download = `report-card.pdf`;
+        a.download = reportCardPdfFilename(
+          report?.student?.firstName,
+          report?.student?.lastName,
+          report?.student?.admissionNumber || this.studentId,
+        );
         a.click();
         URL.revokeObjectURL(a.href);
       });

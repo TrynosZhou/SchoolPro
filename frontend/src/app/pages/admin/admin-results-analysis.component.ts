@@ -1,11 +1,12 @@
 import { Component, inject, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { DecimalPipe } from '@angular/common';
-import { RouterLink } from '@angular/router';
+import { RouterLink, Router } from '@angular/router';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
 import { ApiService } from '../../core/services/api.service';
 import { classDisplayName } from '../../core/utils/class-display';
+import { resolveExecutivePortalLayout } from '../../core/utils/portal-layout.util';
 
 interface ResultsAnalysisPerformer {
   rank: number;
@@ -42,7 +43,9 @@ interface ResultsAnalysisData {
 })
 export class AdminResultsAnalysisComponent implements OnInit {
   private api = inject(ApiService);
+  private router = inject(Router);
 
+  readonly portalLayout = resolveExecutivePortalLayout(this.router);
   readonly adminNav = ADMIN_NAV_SECTIONS;
   readonly topCount = 5;
 

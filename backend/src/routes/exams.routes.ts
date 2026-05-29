@@ -8,15 +8,19 @@ import { gradeForMarks } from '../services/grade.service';
 import { ClassSubject } from '../entities';
 import { calculateHonoursRoll } from '../services/honours.service';
 import {
+  attachAttendanceToReports,
   generateClassReportCards,
+  getClassTermAttendanceMap,
   getReportCardPdfMetrics,
   syncReportCardForStudent,
 } from '../services/report-card.service';
+import { loadSchoolBranding } from '../services/school-branding.service';
 import { DEFAULT_GRADE_BOUNDARIES } from '../types/grade-boundaries';
 import { generateMarkSheetPdf, generateRankingsPdf, generateReportCardPdf } from '../utils/pdf';
 import { buildMarkSheet } from '../services/mark-sheet.service';
 import { buildResultsAnalysis } from '../services/results-analysis.service';
 import { buildRankings, RankingType } from '../services/ranking.service';
+import { reportCardPdfFilename } from '../utils/helpers';
 import { relations } from '../utils/typeorm-helpers';
 
 const router = Router();
@@ -27,7 +31,15 @@ router.get('/types', async (_req, res: Response) => {
   res.json(await repo.find());
 });
 
-router.get('/terms', authorize(UserRole.TEACHER, UserRole.ADMIN, UserRole.PRINCIPAL, UserRole.DIRECTOR), async (_req, res: Response) => {
+router.get(
+  '/school-branding',
+  authorize(UserRole.TEACHER, UserRole.ADMIN, UserRole.PRINCIPAL, UserRole.DIRECTOR),
+  async (_req, res: Response) => {
+    res.json(await loadSchoolBranding());
+  },
+);
+
+router.get('/terms', authorize(UserRole.TEACHER, UserRole.ADMIN, UserRole.PRINCIPAL, UserRole.DIRECTOR, UserRole.PARENT, UserRole.STUDENT), async (_req, res: Response) => {
   const years = await AppDataSource.getRepository(SchoolYear).find({
     relations: relations('terms'),
     order: { startDate: 'DESC' },
@@ -529,7 +541,11 @@ router.get(
       .orderBy('rc.classPosition', 'ASC', 'NULLS LAST')
       .addOrderBy('student.lastName', 'ASC')
       .getMany();
-    res.json({ count: reports.length, reports });
+    const attendanceMap = await getClassTermAttendanceMap(classId as string, termId as string);
+    res.json({
+      count: reports.length,
+      reports: attachAttendanceToReports(reports, attendanceMap),
+    });
   },
 );
 
@@ -598,6 +614,7 @@ router.get('/report-cards/:studentId/:termId/pdf', authorize(UserRole.ADMIN, Use
     formTotal: metrics.formTotal,
     subjectsPassed: metrics.subjectsPassed,
     totalSubjects: metrics.totalSubjects,
+    attendance: metrics.attendance,
     classTeacherRemarks: report.classTeacherRemarks,
     principalRemarks: report.principalRemarks,
     generatedAt: report.generatedAt ? new Date(report.generatedAt) : new Date(),
@@ -608,9 +625,14 @@ router.get('/report-cards/:studentId/:termId/pdf', authorize(UserRole.ADMIN, Use
   });
 
   res.setHeader('Content-Type', 'application/pdf');
+  const pdfFilename = reportCardPdfFilename(
+    report.student.firstName,
+    report.student.lastName,
+    report.student.admissionNumber || 'report-card',
+  );
   res.setHeader(
     'Content-Disposition',
-    `${inline ? 'inline' : 'attachment'}; filename="report-card-${report.student.admissionNumber}.pdf"`,
+    `${inline ? 'inline' : 'attachment'}; filename="${pdfFilename}"`,
   );
   res.send(pdf);
 });

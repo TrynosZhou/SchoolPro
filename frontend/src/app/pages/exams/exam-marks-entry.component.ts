@@ -6,6 +6,7 @@ import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.
 import { ApiService } from '../../core/services/api.service';
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
 import { TEACHER_NAV_SECTIONS } from '../../core/config/teacher-nav';
+import { DIRECTOR_NAV_ITEMS } from '../../core/config/director-nav';
 
 interface ExamMarkRow {
   studentId: string;
@@ -44,7 +45,7 @@ export class ExamMarksEntryComponent implements OnInit, OnDestroy {
 
   readonly isAdminPortal = computed(() => {
     const url = this.router.url;
-    return url.includes('/admin') || url.includes('/principal');
+    return url.includes('/admin') || url.includes('/principal') || url.includes('/director');
   });
 
   examTypes = signal<{ id: string; name: string; maxMarks?: number }[]>([]);
@@ -64,6 +65,7 @@ export class ExamMarksEntryComponent implements OnInit, OnDestroy {
   filters = { examTypeId: '', classId: '', subjectId: '', termId: '' };
 
   readonly portalTitle = computed(() => {
+    if (this.router.url.includes('/director')) return 'Director Portal';
     if (this.router.url.includes('/principal')) return 'Principal Portal';
     if (this.isAdminPortal()) return 'Admin Portal';
     return 'Teacher Portal';
@@ -71,8 +73,10 @@ export class ExamMarksEntryComponent implements OnInit, OnDestroy {
   readonly pageTitle = 'Exam Marks Entry';
   readonly adminNav = ADMIN_NAV_SECTIONS;
   readonly teacherNav = TEACHER_NAV_SECTIONS;
+  readonly directorNav = DIRECTOR_NAV_ITEMS;
   readonly isAdminRoute = computed(() => this.router.url.includes('/admin'));
   readonly isPrincipalRoute = computed(() => this.router.url.includes('/principal'));
+  readonly isDirectorRoute = computed(() => this.router.url.includes('/director'));
   readonly principalNav = [
     { label: 'Dashboard', path: '/principal', icon: '🏠' },
     { label: 'Exam Marks', path: '/principal/exams', icon: '📊' },

@@ -1,0 +1,237 @@
+<app-portal-layout portalTitle="Admin Portal" pageTitle="User Management" [navSections]="adminNav">
+  @if (toast(); as t) {
+    <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>
+  }
+
+  <div class="page-head">
+    <div>
+      <p class="eyebrow">System Admin</p>
+      <h2>User Management</h2>
+      <p class="sub">Create portal accounts, reset passwords, and manage access for staff, parents, and students.</p>
+    </div>
+    <div class="head-actions">
+      <a routerLink="/admin/user-permissions" class="btn-outline">User Permissions →</a>
+      <button type="button" class="btn-primary" (click)="openCreate()">+ Add user</button>
+    </div>
+  </div>
+
+  <div class="kpi-grid">
+    <div class="kpi"><span>Total users</span><strong>{{ stats().total }}</strong></div>
+    <div class="kpi active"><span>Active</span><strong>{{ stats().active }}</strong></div>
+    <div class="kpi staff"><span>Staff</span><strong>{{ stats().staff }}</strong></div>
+    <div class="kpi parents"><span>Parents</span><strong>{{ stats().parents }}</strong></div>
+    <div class="kpi students"><span>Students</span><strong>{{ stats().students }}</strong></div>
+    <div class="kpi locked" [class.alert]="stats().locked > 0"><span>Locked</span><strong>{{ stats().locked }}</strong></div>
+  </div>
+
+  <section class="toolbar panel">
+    <input
+      type="search"
+      class="search"
+      placeholder="Search name, email, employee ID, student ID…"
+      [ngModel]="search()"
+      (ngModelChange)="search.set($event)"
+      (keyup.enter)="applyFilters()"
+      name="userSearch"
+    />
+    <select [ngModel]="roleFilter()" (ngModelChange)="roleFilter.set($event); applyFilters()" name="roleFilter">
+      <option value="">All roles</option>
+      @for (r of roleOptions; track r.value) {
+        <option [value]="r.value">{{ r.label }}</option>
+      }
+    </select>
+    <select [ngModel]="statusFilter()" (ngModelChange)="statusFilter.set($event); applyFilters()" name="statusFilter">
+      <option value="active">Active only</option>
+      <option value="inactive">Inactive only</option>
+      <option value="all">All statuses</option>
+    </select>
+    <button type="button" class="btn-ghost" (click)="applyFilters()">Refresh</button>
+  </section>
+
+  @if (loading()) {
+    <p class="loading">Loading users…</p>
+  } @else {
+    <section class="panel">
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>User</th>
+              <th>Email</th>
+              <th>Role</th>
+              <th>Profile</th>
+              <th>Status</th>
+              <th>Created</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (u of filteredUsers(); track u.id) {
+              <tr [class.inactive-row]="!u.isActive">
+                <td>
+                  <div class="user-cell">
+                    <span class="avatar" [class]="roleBadgeClass(u.role)">{{ initials(u) }}</span>
+                    <div>
+                      <strong>{{ u.firstName }} {{ u.lastName }}</strong>
+                      @if (u.phone) { <span class="muted">{{ u.phone }}</span> }
+                    </div>
+                  </div>
+                </td>
+                <td>{{ u.email }}</td>
+                <td>
+                  <span class="role-pill" [class]="roleBadgeClass(u.role)">{{ u.roleLabel }}</span>
+                  @if (u.schoolRole) {
+                    <span class="assigned-role">{{ u.schoolRole.name }}</span>
+                  }
+                </td>
+                <td>{{ profileHint(u) }}</td>
+                <td>
+                  @if (isLocked(u)) {
+                    <span class="status-pill locked">Locked</span>
+                  } @else if (u.isActive) {
+                    <span class="status-pill active">Active</span>
+                  } @else {
+                    <span class="status-pill inactive">Inactive</span>
+                  }
+                </td>
+                <td>{{ u.createdAt | date:'mediumDate' }}</td>
+                <td class="actions">
+                  <button type="button" class="btn-ghost btn-sm" (click)="openEdit(u)">Edit</button>
+                  @if (isLocked(u)) {
+                    <button type="button" class="btn-ghost btn-sm" (click)="unlockUser(u)">Unlock</button>
+                  }
+                  <button type="button" class="btn-ghost btn-sm" (click)="toggleActive(u)">
+                    {{ u.isActive ? 'Deactivate' : 'Activate' }}
+                  </button>
+                </td>
+              </tr>
+            } @empty {
+              <tr><td colspan="7" class="empty">No users match your filters.</td></tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+  }
+
+  @if (drawerOpen()) {
+    <div class="drawer-backdrop" (click)="closeDrawer()"></div>
+    <aside class="drawer" (click)="$event.stopPropagation()">
+      <header class="drawer-head">
+        <div>
+          <p class="eyebrow">{{ isEditMode() ? 'Edit user' : 'New user' }}</p>
+          <h3>{{ isEditMode() ? (editingUser()?.firstName + ' ' + editingUser()?.lastName) : 'Create account' }}</h3>
+        </div>
+        <button type="button" class="btn-icon" (click)="closeDrawer()" aria-label="Close">×</button>
+      </header>
+
+      <form class="drawer-body" (ngSubmit)="saveUser()">
+        <div class="form-grid">
+          <label>
+            First name
+            <input [(ngModel)]="form.firstName" name="firstName" required />
+          </label>
+          <label>
+            Last name
+            <input [(ngModel)]="form.lastName" name="lastName" required />
+          </label>
+          <label class="span-2">
+            Email
+            <input type="email" [(ngModel)]="form.email" name="email" required autocomplete="off" />
+          </label>
+          <label class="span-2">
+            Phone
+            <input [(ngModel)]="form.phone" name="phone" />
+          </label>
+
+          @if (!isEditMode()) {
+            <label class="span-2">
+              Portal role
+              <select [(ngModel)]="form.role" name="role">
+                @for (r of roleOptions; track r.value) {
+                  <option [value]="r.value">{{ r.label }}</option>
+                }
+              </select>
+            </label>
+          } @else {
+            <label class="span-2">
+              Portal role
+              <input [value]="editingUser()?.roleLabel" disabled />
+            </label>
+          }
+
+          @if (isStaffRole()) {
+            <label class="span-2">
+              Permission role (optional)
+              <select [(ngModel)]="form.schoolRoleId" name="schoolRoleId">
+                <option value="">Default permissions for {{ form.role }}</option>
+                @for (r of filteredSchoolRoles(); track r.id) {
+                  <option [value]="r.id">{{ r.name }}</option>
+                }
+              </select>
+            </label>
+            @if (form.role !== 'director') {
+              <label>
+                Department
+                <input [(ngModel)]="form.department" name="department" />
+              </label>
+              <label>
+                Hire date
+                <input type="date" [(ngModel)]="form.hireDate" name="hireDate" />
+              </label>
+              @if (!isEditMode()) {
+                <label class="span-2">
+                  Qualification
+                  <input [(ngModel)]="form.qualification" name="qualification" />
+                </label>
+              }
+            }
+          }
+
+          @if (isParentRole() && !isEditMode()) {
+            <label>
+              Link student ID
+              <input [(ngModel)]="form.linkAdmissionNumber" name="linkAdmissionNumber" placeholder="Optional admission number" />
+            </label>
+            <label>
+              Relationship
+              <input [(ngModel)]="form.relationship" name="relationship" />
+            </label>
+          }
+
+          @if (isStudentRole()) {
+            <label class="span-2">
+              Student ID (admission number)
+              <input [(ngModel)]="form.admissionNumber" name="admissionNumber" [disabled]="isEditMode()" required />
+            </label>
+          }
+
+          <label class="span-2">
+            {{ isEditMode() ? 'New password (leave blank to keep current)' : 'Password' }}
+            <div class="password-field">
+              <input [type]="showPassword() ? 'text' : 'password'" [(ngModel)]="form.password" name="password" autocomplete="new-password" [required]="!isEditMode()" />
+              <button type="button" class="btn-ghost btn-sm" (click)="showPassword.set(!showPassword())">
+                {{ showPassword() ? 'Hide' : 'Show' }}
+              </button>
+            </div>
+            <span class="hint">{{ passwordHint() }}</span>
+          </label>
+
+          @if (isEditMode()) {
+            <label class="checkbox span-2">
+              <input type="checkbox" [(ngModel)]="form.isActive" name="isActive" />
+              Account is active
+            </label>
+          }
+        </div>
+
+        <footer class="drawer-foot">
+          <button type="button" class="btn-ghost" (click)="closeDrawer()">Cancel</button>
+          <button type="submit" class="btn-primary" [disabled]="submitting()">
+            {{ submitting() ? 'Saving…' : (isEditMode() ? 'Save changes' : 'Create user') }}
+          </button>
+        </footer>
+      </form>
+    </aside>
+  }
+</app-portal-layout>

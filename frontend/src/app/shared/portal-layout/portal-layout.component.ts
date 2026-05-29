@@ -1,3 +1,4 @@
+import { NgTemplateOutlet } from '@angular/common';
 import { Component, ElementRef, HostListener, Input, OnDestroy, OnInit, inject, signal } from '@angular/core';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive } from '@angular/router';
 import { filter, Subscription } from 'rxjs';
@@ -19,7 +20,7 @@ export interface NavSection {
 @Component({
   selector: 'app-portal-layout',
   standalone: true,
-  imports: [RouterLink, RouterLinkActive],
+  imports: [RouterLink, RouterLinkActive, NgTemplateOutlet],
   templateUrl: './portal-layout.component.html',
   styleUrl: './portal-layout.component.scss',
 })
@@ -167,22 +168,23 @@ export class PortalLayoutComponent implements OnInit, OnDestroy {
     const h = heading.toLowerCase();
     if (h === 'overview' || h === 'dashboard') return 'Main';
     if (h === 'students' || h === 'staff' || h === 'attendance' || h === 'communication') return 'People';
-    if (h === 'academics' || h === 'timetable') return 'Learning';
+    if (h === 'academics' || h === 'examination' || h === 'examinations' || h === 'timetable') return 'Learning';
     if (h === 'finance' || h === 'fin.reports') return 'Finance';
     return 'Administration';
   }
 
-  sectionIcon(heading: string): string {
+  sectionIconKey(heading: string): string {
     const h = heading.toLowerCase();
-    if (h === 'overview' || h === 'dashboard') return '⌘';
-    if (h === 'students') return '👥';
-    if (h === 'attendance') return '📋';
-    if (h === 'staff') return '🧑';
-    if (h === 'academics') return '📘';
-    if (h === 'finance') return '💳';
-    if (h === 'fin.reports') return '◔';
-    if (h === 'communication') return '💬';
-    if (h === 'timetable') return '📅';
-    return '⚙';
+    if (h === 'overview' || h === 'dashboard') return 'dashboard';
+    if (h === 'students') return 'students';
+    if (h === 'attendance') return 'attendance';
+    if (h === 'staff') return 'staff';
+    if (h === 'academics' || h === 'examination' || h === 'examinations') return 'examinations';
+    if (h === 'finance') return 'finance';
+    if (h === 'fin.reports' || h === 'fin. reports') return 'fin-reports';
+    if (h === 'communication') return 'communication';
+    if (h === 'timetable') return 'timetable';
+    if (h === 'system admin') return 'system-admin';
+    return 'default';
   }
 }

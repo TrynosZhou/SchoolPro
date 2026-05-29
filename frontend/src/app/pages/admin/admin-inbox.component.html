@@ -1,10 +1,10 @@
-<app-portal-layout portalTitle="Admin Portal" pageTitle="Inbox" [navSections]="adminNav">
+<app-portal-layout portalTitle="Admin Portal" pageTitle="Messages" [navSections]="adminNav">
   <div class="comm-page">
     <section class="card intro">
-      <h3>Inbox</h3>
+      <h3>Messages</h3>
       <p class="sub">View received messages and your sent items.</p>
       <div class="intro-row">
-        <a routerLink="/admin/communication/send" class="link-btn">Send Message →</a>
+        <a routerLink="/admin/communication/send" class="link-btn">Announcements →</a>
         @if (unreadCount() > 0) {
           <span class="badge-unread">{{ unreadCount() }} unread</span>
         }

@@ -20,6 +20,14 @@ interface StudentRow {
   lastName: string;
 }
 
+interface RecipientsResponse {
+  recipients: RecipientRow[];
+  registeredParentCount: number;
+}
+
+/** Sentinel value for broadcasting to every registered parent account. */
+export const ALL_REGISTERED_PARENTS = '__all_registered_parents__';
+
 @Component({
   selector: 'app-admin-send-message',
   standalone: true,
@@ -30,8 +38,10 @@ interface StudentRow {
 export class AdminSendMessageComponent implements OnInit {
   private api = inject(ApiService);
   readonly adminNav = ADMIN_NAV_SECTIONS;
+  readonly allRegisteredParents = ALL_REGISTERED_PARENTS;
 
   recipients = signal<RecipientRow[]>([]);
+  registeredParentCount = signal(0);
   students = signal<StudentRow[]>([]);
   sending = signal(false);
   toast = signal<{ type: 'success' | 'error'; msg: string } | null>(null);
@@ -41,10 +51,25 @@ export class AdminSendMessageComponent implements OnInit {
   subject = '';
   body = '';
 
+  isAllParentsBroadcast(): boolean {
+    return this.recipientId === ALL_REGISTERED_PARENTS;
+  }
+
   ngOnInit() {
-    this.api.get<RecipientRow[]>('/academics/messages/recipients').subscribe({
-      next: (rows) => this.recipients.set(rows),
-      error: () => this.recipients.set([]),
+    this.api.get<RecipientsResponse | RecipientRow[]>('/academics/messages/recipients').subscribe({
+      next: (data) => {
+        if (Array.isArray(data)) {
+          this.recipients.set(data);
+          this.registeredParentCount.set(data.filter((r) => r.role === 'parent').length);
+          return;
+        }
+        this.recipients.set(data.recipients);
+        this.registeredParentCount.set(data.registeredParentCount);
+      },
+      error: () => {
+        this.recipients.set([]);
+        this.registeredParentCount.set(0);
+      },
     });
     this.api.get<StudentRow[]>('/students').subscribe({
       next: (rows) => this.students.set(rows),
@@ -65,27 +90,45 @@ export class AdminSendMessageComponent implements OnInit {
       this.showToast('error', 'Recipient, subject, and message are required.');
       return;
     }
+
+    if (this.isAllParentsBroadcast() && this.registeredParentCount() === 0) {
+      this.showToast('error', 'No registered parents are available to receive this announcement.');
+      return;
+    }
+
     this.sending.set(true);
-    this.api
-      .post('/academics/messages', {
-        recipientId: this.recipientId,
-        studentId: this.studentId || undefined,
-        subject: this.subject.trim(),
-        body: this.body.trim(),
-      })
-      .subscribe({
-        next: () => {
-          this.sending.set(false);
-          this.subject = '';
-          this.body = '';
-          this.studentId = '';
-          this.showToast('success', 'Message sent successfully.');
-        },
-        error: (e) => {
-          this.sending.set(false);
-          this.showToast('error', e.error?.message || 'Failed to send message');
-        },
-      });
+    const isBroadcast = this.isAllParentsBroadcast();
+    const payload = isBroadcast
+      ? {
+          broadcastToAllParents: true,
+          subject: this.subject.trim(),
+          body: this.body.trim(),
+        }
+      : {
+          recipientId: this.recipientId,
+          studentId: this.studentId || undefined,
+          subject: this.subject.trim(),
+          body: this.body.trim(),
+        };
+
+    this.api.post<{ sentCount?: number }>('/academics/messages', payload).subscribe({
+      next: (res) => {
+        this.sending.set(false);
+        this.subject = '';
+        this.body = '';
+        this.studentId = '';
+        this.recipientId = '';
+        const msg =
+          res.sentCount != null
+            ? `Announcement sent to ${res.sentCount} registered parent${res.sentCount === 1 ? '' : 's'}.`
+            : 'Message sent successfully.';
+        this.showToast('success', msg);
+      },
+      error: (e) => {
+        this.sending.set(false);
+        this.showToast('error', e.error?.message || 'Failed to send message');
+      },
+    });
   }
 
   private showToast(type: 'success' | 'error', msg: string) {

@@ -1,26 +1,27 @@
-<app-portal-layout [portalTitle]="portalTitle()" pageTitle="Report Cards" [navSections]="navSections()">
+<app-portal-layout [portalTitle]="portalTitle()" pageTitle="Report Cards" [navSections]="navSections()" [navItems]="navItems()">
 
   @if (toast(); as t) {
     <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>
   }
 
-  <header class="admin-hero">
-    <div class="admin-hero-text">
-      <p class="eyebrow">Academics · Results</p>
-      <h1 class="admin-hero-title">Class Report Cards</h1>
-      <p class="admin-hero-sub">
-        Generate report cards from exam marks, ranked by class position. Preview or download polished PDFs for each learner.
-      </p>
+  <header class="rc-page-header card">
+    <div class="rc-page-header-text">
+      <p class="eyebrow">Examinations · Results</p>
+      <h1 class="rc-page-title">Class Report Cards</h1>
+      <p class="rc-page-subtitle">{{ schoolName() }}</p>
+      @if (schoolBranding()?.tagline) {
+        <p class="rc-page-tagline">{{ schoolBranding()!.tagline }}</p>
+      }
     </div>
-    <div class="admin-hero-actions">
-      <a routerLink="/admin/exams" class="hero-link">Exam marks →</a>
-      <a routerLink="/admin/settings" class="hero-link">Grade boundaries →</a>
+    <div class="rc-page-header-actions">
+      <a routerLink="/admin/exams" class="header-link">Exam marks →</a>
+      <a routerLink="/admin/settings" class="header-link">Grade boundaries →</a>
       @if (hasLoaded() && reports().length) {
-        <span class="live-pill light"><span class="pulse"></span> {{ reports().length }} generated</span>
+        <span class="live-pill"><span class="pulse"></span> {{ reports().length }} generated</span>
       }
     </div>
     @if (hasLoaded() && reports().length) {
-      <div class="hero-mini-stats">
+      <div class="header-mini-stats">
         <span>{{ stats().count }} students</span>
         <span>Class avg {{ stats().classAvg | number:'1.1-1' }}%</span>
         <span>Top {{ stats().topMark | number:'1.1-1' }}%</span>
@@ -179,38 +180,37 @@
               [attr.id]="'report-' + report.studentId"
             >
               <header class="report-card-head" (click)="toggleExpanded(report.id)">
-                <div class="position-badges">
-                  @if (report.classPosition) {
-                    <div class="position-badge" [class.top-three]="(report.classPosition || 0) <= 3">
-                      <span class="pos-label">Class</span>
-                      <span class="pos-value">{{ positionOutOfLabel(report.classPosition, report.classTotal) }}</span>
+                <div class="report-head-main">
+                  <div class="report-brand-row">
+                    <div class="report-card-brand">
+                      @if (logoFullUrl()) {
+                        <img [src]="logoFullUrl()!" alt="School logo" class="report-school-logo" />
+                      } @else {
+                        <div class="report-school-logo placeholder" aria-hidden="true">🏫</div>
+                      }
                     </div>
-                  }
-                  @if (report.formPosition) {
-                    <div class="position-badge form" [class.top-three]="(report.formPosition || 0) <= 3">
-                      <span class="pos-label">Form</span>
-                      <span class="pos-value">{{ positionOutOfLabel(report.formPosition, report.formTotal) }}</span>
+                    <div class="report-brand-text">
+                      <h3 class="report-school-name">{{ schoolName() }}</h3>
                     </div>
-                  }
-                </div>
-                <div class="student-block">
-                  <h2>{{ report.student?.firstName }} {{ report.student?.lastName }}</h2>
-                  <p class="meta">
-                    <span class="chip">{{ report.student?.admissionNumber }}</span>
-                    <span class="chip">{{ report.student?.schoolClass?.name }}</span>
-                    @if (report.classPosition) {
-                      <span class="chip grade-chip">Class: {{ positionOutOfLabel(report.classPosition, report.classTotal) }}</span>
-                    }
-                    @if (report.formPosition) {
-                      <span class="chip form-chip">Form: {{ positionOutOfLabel(report.formPosition, report.formTotal) }}</span>
-                    }
-                    @if (report.subjectsPassed != null && report.totalSubjects) {
-                      <span class="chip pass-chip">Passed: {{ subjectsPassedLabel(report.subjectsPassed, report.totalSubjects) }}</span>
-                    }
-                    @if (report.averageMark != null) {
-                      <span class="chip avg-chip">{{ report.averageMark | number:'1.1-1' }}%</span>
-                    }
-                  </p>
+                  </div>
+                  <div class="report-head-lower">
+                    <div class="student-block">
+                      <h2>{{ report.student?.firstName }} {{ report.student?.lastName }}</h2>
+                      <p class="meta">
+                        <span class="chip student-id-chip">Student ID: {{ report.student?.admissionNumber }}</span>
+                        <span class="chip">Class: {{ report.student?.schoolClass?.name || '—' }}</span>
+                        @if (report.classPosition) {
+                          <span class="chip grade-chip">Class Position: {{ positionOutOfLabel(report.classPosition, report.classTotal) }}</span>
+                        }
+                        @if (report.formPosition) {
+                          <span class="chip form-chip">Form Position: {{ positionOutOfLabel(report.formPosition, report.formTotal) }}</span>
+                        }
+                        @if (report.subjectsPassed != null && report.totalSubjects) {
+                          <span class="chip pass-chip">Subjects Passed: {{ subjectsPassedLabel(report.subjectsPassed, report.totalSubjects) }}</span>
+                        }
+                      </p>
+                    </div>
+                  </div>
                 </div>
                 <div class="head-actions" (click)="$event.stopPropagation()">
                   <button type="button" class="btn-ghost" (click)="previewPdf(report)" [disabled]="pdfLoading()">
@@ -223,6 +223,32 @@
 
               @if (isExpanded(report.id)) {
                 <div class="report-body">
+                  @if (report.attendance) {
+                    <section class="attendance-panel">
+                      <h4>Attendance (term)</h4>
+                      @if (report.attendance.daysMarked > 0) {
+                        <div class="attendance-stats">
+                          <div class="att-stat"><span class="lbl">Days marked</span><strong>{{ report.attendance.daysMarked }}</strong></div>
+                          <div class="att-stat"><span class="lbl">Present</span><strong>{{ report.attendance.present }}</strong></div>
+                          <div class="att-stat"><span class="lbl">Late</span><strong>{{ report.attendance.late }}</strong></div>
+                          <div class="att-stat"><span class="lbl">Absent</span><strong>{{ report.attendance.absent }}</strong></div>
+                          <div class="att-stat"><span class="lbl">Excused</span><strong>{{ report.attendance.excused }}</strong></div>
+                          <div class="att-stat highlight">
+                            <span class="lbl">Attendance %</span>
+                            <strong>
+                              @if (report.attendance.attendancePercent != null) {
+                                {{ report.attendance.attendancePercent | number:'1.1-1' }}%
+                              } @else {
+                                —
+                              }
+                            </strong>
+                          </div>
+                        </div>
+                      } @else {
+                        <p class="attendance-empty">No attendance records for this term.</p>
+                      }
+                    </section>
+                  }
                   <div class="table-wrap">
                     <table class="results-table">
                       <thead>
@@ -249,6 +275,18 @@
                           </tr>
                         }
                       </tbody>
+                      <tfoot>
+                        <tr class="average-row">
+                          <td colspan="5" class="avg-label-cell">Average Mark</td>
+                          <td colspan="2" class="avg-value-cell">
+                            @if (report.averageMark != null) {
+                              {{ report.averageMark | number:'1.1-1' }}%
+                            } @else {
+                              —
+                            }
+                          </td>
+                        </tr>
+                      </tfoot>
                     </table>
                   </div>
                   <div class="comments remarks-editor">

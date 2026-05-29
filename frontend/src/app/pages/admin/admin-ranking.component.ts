@@ -2,10 +2,11 @@ import { Component, computed, inject, OnDestroy, OnInit, signal } from '@angular
 import { FormsModule } from '@angular/forms';
 import { DecimalPipe } from '@angular/common';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
-import { RouterLink } from '@angular/router';
+import { RouterLink, Router } from '@angular/router';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
 import { ApiService } from '../../core/services/api.service';
+import { resolveExecutivePortalLayout } from '../../core/utils/portal-layout.util';
 
 export type RankingType = 'class' | 'form' | 'subject';
 
@@ -52,7 +53,9 @@ interface FormOption {
 export class AdminRankingComponent implements OnInit, OnDestroy {
   private api = inject(ApiService);
   private sanitizer = inject(DomSanitizer);
+  private router = inject(Router);
 
+  readonly portalLayout = resolveExecutivePortalLayout(this.router);
   readonly adminNav = ADMIN_NAV_SECTIONS;
   readonly rankingTypes: { value: RankingType; label: string }[] = [
     { value: 'class', label: 'By Class Position' },

@@ -4,7 +4,7 @@ import path from 'path';
 import fs from 'fs';
 import PDFDocument from 'pdfkit';
 import { AppDataSource } from '../config/data-source';
-import { Invoice, Payment, Receipt, LedgerEntry, Student, Notification, CashbookEntry, SchoolSettings, Term, SchoolFee } from '../entities';
+import { Invoice, Payment, Receipt, LedgerEntry, Student, Notification, CashbookEntry, SchoolSettings, Term, SchoolFee, Guardian, Message, User } from '../entities';
 import { UserRole, InvoiceStatus, PaymentMethod } from '../entities/enums';
 import { authenticate, authorize, AuthRequest } from '../middleware/auth';
 import { generateNumber, today } from '../utils/helpers';
@@ -31,6 +31,68 @@ import { generateReconciliationPdf } from '../utils/pdf';
 
 const router = Router();
 router.use(authenticate);
+
+async function assertParentStudentAccess(req: AuthRequest, studentId: string): Promise<string | null> {
+  if (req.user!.role === UserRole.STUDENT) {
+    return req.user!.studentId === studentId ? null : 'You can only view your own finance records';
+  }
+  if (req.user!.role !== UserRole.PARENT) {
+    return null;
+  }
+  if (!req.user!.parentId) {
+    return 'Parent profile not linked';
+  }
+  const link = await AppDataSource.getRepository(Guardian).findOne({
+    where: { parentId: req.user!.parentId, studentId },
+  });
+  return link ? null : 'You can only view finance for your linked students';
+}
+
+async function notifyLinkedParentUsersOfReceipt(
+  manager: typeof AppDataSource.manager,
+  senderId: string,
+  student: Student,
+  receipt: Receipt,
+  payment: Payment,
+) {
+  const guardianRepo = manager.getRepository(Guardian);
+  const messageRepo = manager.getRepository(Message);
+
+  const guardians = await guardianRepo.find({
+    where: { studentId: student.id },
+    relations: relations('parent', 'parent.user'),
+  });
+
+  const parentUserIds = new Set<string>();
+  for (const g of guardians) {
+    const user = g.parent?.user;
+    if (g.parent?.userId && user?.isActive !== false) {
+      parentUserIds.add(g.parent.userId);
+    }
+  }
+  if (!parentUserIds.size) return;
+
+  const amount = Number(payment.amount);
+  const subject = `Payment receipt — ${student.firstName} ${student.lastName}`;
+  const body =
+    `A payment of $${amount.toFixed(2)} was received for ${student.firstName} ${student.lastName}.\n\n` +
+    `Receipt number: ${receipt.receiptNumber}\n` +
+    `Payment reference: ${payment.paymentReference}\n` +
+    `Description: ${payment.label}\n\n` +
+    `Open Finance in the Parent Portal to view and download all receipts.`;
+
+  const messages = [...parentUserIds].map((recipientId) =>
+    messageRepo.create({
+      senderId,
+      recipientId,
+      studentId: student.id,
+      subject,
+      body,
+      isRead: false,
+    }),
+  );
+  await messageRepo.save(messages);
+}
 
 async function renderPdfHeaderWithLogo(
   doc: InstanceType<typeof PDFDocument>,
@@ -421,6 +483,14 @@ router.post('/payments', authorize(UserRole.ADMIN), async (req: AuthRequest, res
       pdfPath,
     }));
 
+    await notifyLinkedParentUsersOfReceipt(
+      queryRunner.manager,
+      req.user!.userId,
+      student,
+      receipt,
+      payment,
+    );
+
     await notifRepo.save(notifRepo.create({
       title: 'Payment Received',
       message: `${student.firstName} ${student.lastName} (${student.schoolClass?.name}) paid $${paymentAmount} for ${label}`,
@@ -451,7 +521,7 @@ router.post('/payments', authorize(UserRole.ADMIN), async (req: AuthRequest, res
   }
 });
 
-router.get('/receipts/:id/pdf', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.PARENT), async (req, res: Response) => {
+router.get('/receipts/:id/pdf', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.PARENT), async (req: AuthRequest, res: Response) => {
   const repo = AppDataSource.getRepository(Receipt);
   const receipt = await repo.findOne({
     where: { id: req.params.id },
@@ -459,6 +529,11 @@ router.get('/receipts/:id/pdf', authorize(UserRole.ADMIN, UserRole.DIRECTOR, Use
   });
   if (!receipt?.payment?.student) {
     return res.status(404).json({ message: 'Receipt not found' });
+  }
+
+  const accessError = await assertParentStudentAccess(req, receipt.payment.studentId);
+  if (accessError) {
+    return res.status(403).json({ message: accessError });
   }
 
   const branding = await loadSchoolBranding();
@@ -546,7 +621,12 @@ router.get('/invoices/:id/pdf', authorize(UserRole.ADMIN, UserRole.DIRECTOR, Use
   res.sendFile(path.resolve(pdfPath));
 });
 
-router.get('/receipts/student/:studentId', authorize(UserRole.ADMIN, UserRole.PARENT, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (req, res: Response) => {
+router.get('/receipts/student/:studentId', authorize(UserRole.ADMIN, UserRole.PARENT, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (req: AuthRequest, res: Response) => {
+  const accessError = await assertParentStudentAccess(req, req.params.studentId);
+  if (accessError) {
+    return res.status(403).json({ message: accessError });
+  }
+
   const payments = await AppDataSource.getRepository(Payment).find({
     where: { studentId: req.params.studentId },
     relations: relations('receipt'),
@@ -555,7 +635,12 @@ router.get('/receipts/student/:studentId', authorize(UserRole.ADMIN, UserRole.PA
   res.json(payments.filter((p) => p.receipt).map((p) => ({ ...p.receipt, payment: p })));
 });
 
-router.get('/statement/:studentId', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.PARENT), async (req, res: Response) => {
+router.get('/statement/:studentId', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.PARENT), async (req: AuthRequest, res: Response) => {
+  const accessError = await assertParentStudentAccess(req, req.params.studentId);
+  if (accessError) {
+    return res.status(403).json({ message: accessError });
+  }
+
   const { termId } = req.query;
   const ledgerRepo = AppDataSource.getRepository(LedgerEntry);
   const invoiceRepo = AppDataSource.getRepository(Invoice);
@@ -575,14 +660,24 @@ router.get('/statement/:studentId', authorize(UserRole.ADMIN, UserRole.DIRECTOR,
   res.json({ ledger, invoices, payments, summary: { totalInvoiced, totalPaid, balance } });
 });
 
-router.get('/statement/:studentId/pdf', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.PARENT), async (req, res: Response) => {
-  const { termId } = req.query;
+router.get('/statement/:studentId/pdf', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.PARENT), async (req: AuthRequest, res: Response) => {
+  const requestedStudentId = String(req.params.studentId || '').trim();
   const studentRepo = AppDataSource.getRepository(Student);
+  let resolvedForAccess = requestedStudentId;
+  const studentForAccess = await studentRepo.findOne({ where: { id: requestedStudentId } })
+    ?? await studentRepo.findOne({ where: { admissionNumber: requestedStudentId } });
+  if (studentForAccess) resolvedForAccess = studentForAccess.id;
+
+  const accessError = await assertParentStudentAccess(req, resolvedForAccess);
+  if (accessError) {
+    return res.status(403).json({ message: accessError });
+  }
+
+  const { termId } = req.query;
   const ledgerRepo = AppDataSource.getRepository(LedgerEntry);
   const invoiceRepo = AppDataSource.getRepository(Invoice);
   const paymentRepo = AppDataSource.getRepository(Payment);
 
-  const requestedStudentId = String(req.params.studentId || '').trim();
   let student = await studentRepo.findOne({
     where: { id: requestedStudentId },
     relations: relations('schoolClass', 'schoolClass.form'),

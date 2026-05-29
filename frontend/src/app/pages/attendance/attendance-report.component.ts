@@ -5,6 +5,7 @@ import { Router } from '@angular/router';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
 import { TEACHER_NAV_SECTIONS } from '../../core/config/teacher-nav';
+import { DIRECTOR_NAV_ITEMS } from '../../core/config/director-nav';
 import { ApiService } from '../../core/services/api.service';
 import { classDisplayName } from '../../core/utils/class-display';
 
@@ -61,9 +62,11 @@ export class AttendanceReportComponent implements OnInit {
   private router = inject(Router);
 
   readonly isTeacherPortal = this.router.url.startsWith('/teacher');
+  readonly isDirectorPortal = this.router.url.startsWith('/director');
   readonly adminNav = ADMIN_NAV_SECTIONS;
   readonly teacherNav = TEACHER_NAV_SECTIONS;
-  portalTitle = this.isTeacherPortal ? 'Teacher Portal' : 'Admin Portal';
+  readonly directorNav = DIRECTOR_NAV_ITEMS;
+  portalTitle = this.isDirectorPortal ? 'Director Portal' : this.isTeacherPortal ? 'Teacher Portal' : 'Admin Portal';
   pageTitle = 'Attendance Report';
 
   classes = signal<ClassOption[]>([]);

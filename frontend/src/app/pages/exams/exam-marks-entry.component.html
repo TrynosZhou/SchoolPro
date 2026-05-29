@@ -1,8 +1,8 @@
 <app-portal-layout
   [portalTitle]="portalTitle()"
   [pageTitle]="pageTitle"
-  [navSections]="isAdminRoute() ? adminNav : (isPrincipalRoute() ? [] : teacherNav)"
-  [navItems]="isPrincipalRoute() ? principalNav : []"
+  [navSections]="isAdminRoute() ? adminNav : (isDirectorRoute() || isPrincipalRoute() ? [] : teacherNav)"
+  [navItems]="isDirectorRoute() ? directorNav : (isPrincipalRoute() ? principalNav : [])"
 >
 
   @if (toast(); as t) {

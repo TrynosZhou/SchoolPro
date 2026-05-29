@@ -1,8 +1,95 @@
 import { AppDataSource } from '../config/data-source';
-import { ExamMark, ExamType, ReportCard, SchoolClass, Student } from '../entities';
+import { ExamMark, ExamType, ReportCard, SchoolClass, Student, Term } from '../entities';
 import { gradeForMarks } from './grade.service';
 import { relations } from '../utils/typeorm-helpers';
+import { termReportDateRange } from '../utils/helpers';
 import { In } from 'typeorm';
+
+export interface StudentTermAttendance {
+  daysMarked: number;
+  present: number;
+  absent: number;
+  late: number;
+  excused: number;
+  attendancePercent: number | null;
+}
+
+function parseAttendanceRow(r: Record<string, number | string>): StudentTermAttendance {
+  const daysMarked = Number(r.daysMarked) || 0;
+  const present = Number(r.present) || 0;
+  const absent = Number(r.absent) || 0;
+  const late = Number(r.late) || 0;
+  const excused = Number(r.excused) || 0;
+  const attendancePercent = daysMarked
+    ? Math.round(((present + late) / daysMarked) * 1000) / 10
+    : null;
+  return { daysMarked, present, absent, late, excused, attendancePercent };
+}
+
+/** Class attendance totals for a term (same logic as attendance report). */
+export async function getClassTermAttendanceMap(
+  classId: string,
+  termId: string,
+): Promise<Map<string, StudentTermAttendance>> {
+  const map = new Map<string, StudentTermAttendance>();
+  const term = await AppDataSource.getRepository(Term).findOne({ where: { id: termId } });
+  if (!term) return map;
+
+  const { startDate, endDate } = termReportDateRange(term);
+  const rows = await AppDataSource.query(
+    `
+    SELECT
+      s.id AS "studentId",
+      COUNT(a.id)::int AS "daysMarked",
+      COUNT(*) FILTER (WHERE a.status::text = 'present')::int AS present,
+      COUNT(*) FILTER (WHERE a.status::text = 'absent')::int AS absent,
+      COUNT(*) FILTER (WHERE a.status::text = 'late')::int AS late,
+      COUNT(*) FILTER (WHERE a.status::text = 'excused')::int AS excused
+    FROM students s
+    LEFT JOIN student_attendance a
+      ON a."studentId" = s.id
+      AND a.date::date >= $2::date
+      AND a.date::date <= $3::date
+    WHERE s."classId" = $1 AND s."isActive" = true
+    GROUP BY s.id
+    `,
+    [classId, startDate, endDate],
+  );
+
+  for (const row of rows) {
+    map.set(String(row.studentId), parseAttendanceRow(row));
+  }
+  return map;
+}
+
+export async function getStudentTermAttendance(
+  studentId: string,
+  termId: string,
+  classId?: string,
+): Promise<StudentTermAttendance> {
+  let resolvedClassId = classId;
+  if (!resolvedClassId) {
+    const student = await AppDataSource.getRepository(Student).findOne({
+      where: { id: studentId },
+    });
+    resolvedClassId = student?.classId;
+  }
+  if (!resolvedClassId) {
+    return parseAttendanceRow({});
+  }
+  const map = await getClassTermAttendanceMap(resolvedClassId, termId);
+  return map.get(studentId) ?? parseAttendanceRow({});
+}
+
+export function attachAttendanceToReports<T extends { studentId: string }>(
+  reports: T[],
+  attendanceMap: Map<string, StudentTermAttendance>,
+): (T & { attendance: StudentTermAttendance })[] {
+  return reports.map((r) => ({
+    ...r,
+    attendance: attendanceMap.get(r.studentId) ?? parseAttendanceRow({}),
+  }));
+}
 
 export interface ClassReportCardParams {
   examTypeId: string;
@@ -237,6 +324,7 @@ export interface ReportCardPdfMetrics {
   formPosition?: number;
   subjectsPassed: number;
   totalSubjects: number;
+  attendance: StudentTermAttendance;
 }
 
 /** Metrics and enriched rows for PDF / API display. */
@@ -260,6 +348,12 @@ export async function getReportCardPdfMetrics(
     formPosition = formPosMap.get(report.studentId);
   }
 
+  const attendance = await getStudentTermAttendance(
+    report.studentId,
+    report.termId,
+    student?.classId,
+  );
+
   return {
     subjectResults,
     classTotal: report.classTotal ?? classTotal,
@@ -268,6 +362,7 @@ export async function getReportCardPdfMetrics(
     formPosition: formPosition ?? undefined,
     subjectsPassed: report.subjectsPassed ?? subjectsPassed,
     totalSubjects: report.totalSubjects ?? totalSubjects,
+    attendance,
   };
 }
 
@@ -559,9 +654,11 @@ export async function generateClassReportCards(params: ClassReportCardParams) {
   }
 
   saved.sort((a, b) => (a.classPosition ?? 999) - (b.classPosition ?? 999));
+
+  const attendanceMap = await getClassTermAttendanceMap(classId, termId);
   return {
     examType: { id: examType.id, name: examType.name },
     count: saved.length,
-    reports: saved,
+    reports: attachAttendanceToReports(saved, attendanceMap),
   };
 }

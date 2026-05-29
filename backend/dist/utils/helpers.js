@@ -7,6 +7,7 @@ exports.calculateGrade = calculateGrade;
 exports.today = today;
 exports.toDateOnly = toDateOnly;
 exports.termReportDateRange = termReportDateRange;
+exports.reportCardPdfFilename = reportCardPdfFilename;
 const uuid_1 = require("uuid");
 const data_source_1 = require("../config/data-source");
 const grade_boundaries_1 = require("../types/grade-boundaries");
@@ -72,4 +73,15 @@ function termReportDateRange(term) {
         extendedEnd = true;
     }
     return { startDate, endDate, extendedEnd };
+}
+/** Safe PDF filename from a student's full name (e.g. Jane-Smith.pdf). */
+function reportCardPdfFilename(firstName, lastName, fallback = 'report-card') {
+    const raw = `${firstName ?? ''} ${lastName ?? ''}`.trim();
+    const base = raw || fallback;
+    const safe = base
+        .replace(/[<>:"/\\|?*\u0000-\u001f]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .replace(/ /g, '-');
+    return `${safe || fallback}.pdf`;
 }

@@ -77,10 +77,14 @@ router.get('/messages/recipients', authorize(UserRole.TEACHER, UserRole.ADMIN, U
   const userRepo = AppDataSource.getRepository(User);
   const users = await userRepo.find({
     where: { isActive: true },
+    relations: relations('parentProfile'),
     order: { lastName: 'ASC', firstName: 'ASC' },
   });
-  res.json(
-    users
+  const registeredParentCount = users.filter(
+    (u) => u.role === UserRole.PARENT && u.parentProfile && u.id !== req.user!.userId,
+  ).length;
+  res.json({
+    recipients: users
       .filter((u) => u.id !== req.user!.userId)
       .map((u) => ({
         id: u.id,
@@ -89,7 +93,8 @@ router.get('/messages/recipients', authorize(UserRole.TEACHER, UserRole.ADMIN, U
         email: u.email,
         role: u.role,
       })),
-  );
+    registeredParentCount,
+  });
 });
 
 router.get('/messages/inbox', authorize(UserRole.TEACHER, UserRole.PARENT, UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (req: AuthRequest, res: Response) => {
@@ -123,20 +128,72 @@ router.get('/messages', async (req: AuthRequest, res: Response) => {
 });
 
 router.post('/messages', authorize(UserRole.TEACHER, UserRole.PARENT, UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (req: AuthRequest, res: Response) => {
-  const { recipientId, subject, body, studentId } = req.body || {};
-  if (!recipientId || !String(subject || '').trim() || !String(body || '').trim()) {
-    return res.status(400).json({ message: 'recipientId, subject, and body are required' });
+  const { recipientId, subject, body, studentId, broadcastToAllParents } = req.body || {};
+  const trimmedSubject = String(subject || '').trim();
+  const trimmedBody = String(body || '').trim();
+  const ALL_REGISTERED_PARENTS = '__all_registered_parents__';
+  const wantsBroadcast =
+    broadcastToAllParents === true ||
+    recipientId === ALL_REGISTERED_PARENTS ||
+    String(recipientId || '') === ALL_REGISTERED_PARENTS;
+
+  if (!trimmedSubject || !trimmedBody) {
+    return res.status(400).json({ message: 'subject and body are required' });
   }
+
+  const repo = AppDataSource.getRepository(Message);
   const userRepo = AppDataSource.getRepository(User);
+
+  if (wantsBroadcast) {
+    const canBroadcast = [UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL].includes(req.user!.role);
+    if (!canBroadcast) {
+      return res.status(403).json({ message: 'Only administrators can send announcements to all parents' });
+    }
+
+    const parentUsers = await userRepo.find({
+      where: { role: UserRole.PARENT, isActive: true },
+      relations: relations('parentProfile'),
+    });
+    const recipients = parentUsers.filter((u) => u.parentProfile && u.id !== req.user!.userId);
+    if (!recipients.length) {
+      return res.status(400).json({ message: 'No registered parents found to receive this announcement' });
+    }
+
+    const messages = recipients.map((recipient) =>
+      repo.create({
+        recipientId: recipient.id,
+        subject: trimmedSubject,
+        body: trimmedBody,
+        senderId: req.user!.userId,
+        isRead: false,
+      }),
+    );
+    await repo.save(messages);
+
+    return res.status(201).json({
+      broadcast: true,
+      sentCount: messages.length,
+      subject: trimmedSubject,
+    });
+  }
+
+  if (!recipientId) {
+    return res.status(400).json({ message: 'recipientId is required' });
+  }
+
+  const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  if (!uuidPattern.test(String(recipientId))) {
+    return res.status(400).json({ message: 'Invalid recipient selected' });
+  }
+
   const recipient = await userRepo.findOne({ where: { id: recipientId, isActive: true } });
   if (!recipient) return res.status(404).json({ message: 'Recipient not found' });
 
-  const repo = AppDataSource.getRepository(Message);
   const msg = await repo.save(
     repo.create({
       recipientId,
-      subject: String(subject).trim(),
-      body: String(body).trim(),
+      subject: trimmedSubject,
+      body: trimmedBody,
       studentId: studentId || undefined,
       senderId: req.user!.userId,
       isRead: false,

@@ -1,0 +1,202 @@
+<app-portal-layout portalTitle="Parent Portal" pageTitle="Finance" [navItems]="nav">
+  @if (toast(); as t) {
+    <div class="toast" [class.error]="t.type === 'error'" [class.success]="t.type === 'success'">{{ t.msg }}</div>
+  }
+
+  <header class="page-intro">
+    <p>View the statement of account, invoice statements, and payment receipts for a linked student.</p>
+    <a routerLink="/parent" class="back-link">← Back to My Children</a>
+  </header>
+
+  @if (loading()) {
+    <div class="empty card"><p>Loading…</p></div>
+  } @else if (!children().length) {
+    <div class="empty card">
+      <p>No linked children found. Link a student on <a routerLink="/parent">My Children</a> first.</p>
+    </div>
+  } @else {
+    <section class="card filter-card">
+      <div class="filter-row">
+        @if (children().length > 1) {
+          <div class="field">
+            <label for="studentSelect">Student</label>
+            <select id="studentSelect" [(ngModel)]="selectedStudentId" name="student" (ngModelChange)="onStudentChange()">
+              <option value="">— Select student —</option>
+              @for (c of children(); track c.student.id) {
+                <option [value]="c.student.id">{{ childLabel(c) }}</option>
+              }
+            </select>
+          </div>
+        } @else {
+          @if (children()[0]; as onlyChild) {
+            <div class="selected-student">
+              <span class="field-label">Student</span>
+              <strong>{{ onlyChild.student.firstName }} {{ onlyChild.student.lastName }}</strong>
+              @if (onlyChild.student.admissionNumber) {
+                <span class="student-id">{{ onlyChild.student.admissionNumber }}</span>
+              }
+            </div>
+          }
+        }
+
+        <div class="field field-actions">
+          <label class="sr-only">Statement PDF</label>
+          <button type="button" class="btn-outline" [disabled]="pdfLoading() || !selectedStudentId" (click)="previewStatementPdf()">
+            {{ pdfLoading() ? 'Generating…' : 'Preview statement PDF' }}
+          </button>
+          <button type="button" class="btn-primary" [disabled]="pdfLoading() || !selectedStudentId" (click)="downloadStatementPdf()">
+            Download statement
+          </button>
+        </div>
+      </div>
+    </section>
+
+    @if (!selectedStudentId) {
+      <div class="empty card"><p>Select a student to view their finance records.</p></div>
+    } @else if (loadingStatement()) {
+      <div class="empty card"><p>Loading statement…</p></div>
+    } @else {
+      @if (statement(); as stmt) {
+      <div class="kpi-row">
+        <div class="kpi">
+          <span>Total invoiced</span>
+          <strong>{{ '$' + (stmt.summary.totalInvoiced | number:'1.2-2') }}</strong>
+        </div>
+        <div class="kpi paid">
+          <span>Total paid</span>
+          <strong>{{ '$' + (stmt.summary.totalPaid | number:'1.2-2') }}</strong>
+        </div>
+        <div class="kpi balance" [class.overdue]="stmt.summary.balance > 0">
+          <span>Balance due</span>
+          <strong>{{ '$' + (stmt.summary.balance | number:'1.2-2') }}</strong>
+        </div>
+      </div>
+
+      <section class="card">
+        <div class="section-head">
+          <h3>Statement of account</h3>
+          <p>Ledger entries showing invoices and payments.</p>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Description</th>
+                <th class="num">Debit</th>
+                <th class="num">Credit</th>
+                <th class="num">Balance</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of stmt.ledger; track row.id || row.entryDate + row.description) {
+                <tr>
+                  <td>{{ row.entryDate | date:'mediumDate' }}</td>
+                  <td>{{ row.description }}</td>
+                  <td class="num">{{ row.debit ? ('$' + (row.debit | number:'1.2-2')) : '—' }}</td>
+                  <td class="num">{{ row.credit ? ('$' + (row.credit | number:'1.2-2')) : '—' }}</td>
+                  <td class="num">{{ '$' + (row.balance | number:'1.2-2') }}</td>
+                </tr>
+              } @empty {
+                <tr><td colspan="5" class="empty-cell">No ledger entries yet</td></tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="section-head">
+          <h3>Invoice statements</h3>
+          <p>Download a PDF for any invoice issued to this student.</p>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Invoice #</th>
+                <th>Description</th>
+                <th class="num">Total</th>
+                <th class="num">Paid</th>
+                <th>Status</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (inv of stmt.invoices; track inv.id) {
+                <tr>
+                  <td>{{ inv.invoiceNumber }}</td>
+                  <td>{{ inv.description }}</td>
+                  <td class="num">{{ '$' + (inv.totalAmount | number:'1.2-2') }}</td>
+                  <td class="num">{{ '$' + (inv.amountPaid | number:'1.2-2') }}</td>
+                  <td><span class="status-pill" [attr.data-status]="inv.status">{{ inv.status }}</span></td>
+                  <td class="actions">
+                    <button type="button" class="btn-ghost btn-sm" (click)="downloadInvoicePdf(inv)">Download PDF</button>
+                  </td>
+                </tr>
+              } @empty {
+                <tr><td colspan="6" class="empty-cell">No invoices</td></tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="section-head">
+          <h3>Payment receipts</h3>
+          <p>All receipts generated when payments are recorded. A copy is also sent to your Messages inbox.</p>
+        </div>
+        @if (loadingReceipts()) {
+          <p class="muted">Loading receipts…</p>
+        } @else {
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Receipt #</th>
+                  <th>Date</th>
+                  <th>Description</th>
+                  <th>Method</th>
+                  <th class="num">Amount</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (r of receipts(); track r.id) {
+                  <tr>
+                    <td>{{ r.receiptNumber }}</td>
+                    <td>{{ r.payment?.paidAt ? (r.payment!.paidAt | date:'mediumDate') : '—' }}</td>
+                    <td>{{ r.payment?.label || '—' }}</td>
+                    <td>{{ formatMethod(r.payment?.method) }}</td>
+                    <td class="num">{{ '$' + ((r.payment?.amount ?? 0) | number:'1.2-2') }}</td>
+                    <td class="actions">
+                      <button type="button" class="btn-ghost btn-sm" (click)="downloadReceiptPdf(r)">Download PDF</button>
+                    </td>
+                  </tr>
+                } @empty {
+                  <tr><td colspan="6" class="empty-cell">No receipts yet</td></tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </section>
+      }
+    }
+  }
+
+  @if (statementPdfPreviewOpen()) {
+    <div class="pdf-overlay" (click)="closeStatementPdfPreview()">
+      <div class="pdf-modal" (click)="$event.stopPropagation()">
+        <div class="pdf-modal-head">
+          <h4>Statement preview</h4>
+          <button type="button" class="btn-ghost btn-sm" (click)="closeStatementPdfPreview()">Close</button>
+        </div>
+        @if (statementPdfPreviewUrl(); as url) {
+          <iframe [src]="url" title="Statement PDF preview"></iframe>
+        }
+      </div>
+    </div>
+  }
+</app-portal-layout>

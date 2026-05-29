@@ -1,0 +1,67 @@
+<app-portal-layout portalTitle="Director Portal" pageTitle="Store & Inventory" [navItems]="nav">
+  <div class="director-page">
+    <header class="page-head">
+      <div>
+        <p class="eyebrow">Executive · Operations</p>
+        <h2>Store &amp; inventory</h2>
+        <p class="sub">Monitor tuckshop stock levels and identify items that need reordering.</p>
+      </div>
+      <a routerLink="/director" class="back-link">← Dashboard</a>
+    </header>
+
+    <div class="kpi-grid">
+      <div class="kpi"><span>Active items</span><strong>{{ stats().total }}</strong></div>
+      <div class="kpi warn"><span>Low stock</span><strong>{{ stats().low }}</strong></div>
+      <div class="kpi danger"><span>Out of stock</span><strong>{{ stats().out }}</strong></div>
+      <div class="kpi value"><span>Stock value</span><strong>{{ '$' + (stats().value | number:'1.2-2') }}</strong></div>
+    </div>
+
+    <section class="toolbar panel">
+      <input type="search" placeholder="Search items…" [ngModel]="search()" (ngModelChange)="search.set($event)" name="search" />
+      <select [ngModel]="filter()" (ngModelChange)="filter.set($event)" name="filter">
+        <option value="all">All items</option>
+        <option value="low">Low stock only</option>
+        <option value="out">Out of stock</option>
+      </select>
+    </section>
+
+    @if (loading()) {
+      <p class="muted">Loading inventory…</p>
+    } @else {
+      <section class="panel">
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Item</th>
+                <th>Category</th>
+                <th class="num">Unit price</th>
+                <th class="num">In stock</th>
+                <th class="num">Reorder at</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (item of filteredItems(); track item.id) {
+                <tr [class.critical-row]="stockStatus(item) !== 'ok'">
+                  <td><strong>{{ item.name }}</strong></td>
+                  <td>{{ item.category || '—' }}</td>
+                  <td class="num">{{ '$' + (item.unitPrice | number:'1.2-2') }}</td>
+                  <td class="num">{{ item.stockQuantity }}</td>
+                  <td class="num">{{ item.reorderLevel }}</td>
+                  <td>
+                    <span class="status-pill" [class]="stockStatus(item)">
+                      {{ stockStatus(item) === 'ok' ? 'OK' : stockStatus(item) === 'low' ? 'Low' : 'Out' }}
+                    </span>
+                  </td>
+                </tr>
+              } @empty {
+                <tr><td colspan="6" class="empty">No items match your filters.</td></tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </section>
+    }
+  </div>
+</app-portal-layout>

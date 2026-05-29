@@ -1,13 +1,13 @@
-<app-portal-layout portalTitle="Admin Portal" pageTitle="Send Message" [navSections]="adminNav">
+<app-portal-layout portalTitle="Admin Portal" pageTitle="Announcements" [navSections]="adminNav">
   <div class="comm-page">
     @if (toast(); as t) {
       <div class="toast" [class.error]="t.type === 'error'">{{ t.msg }}</div>
     }
 
     <section class="card intro">
-      <h3>Send Message</h3>
-      <p class="sub">Send announcements or direct messages to parents, teachers, and staff.</p>
-      <a routerLink="/admin/communication/inbox" class="link-btn">Go to Inbox →</a>
+      <h3>Announcements</h3>
+      <p class="sub">Send announcements to all registered parents, or direct messages to individual parents, teachers, and staff.</p>
+      <a routerLink="/admin/communication/inbox" class="link-btn">Go to Messages →</a>
     </section>
 
     <section class="card form-card">
@@ -15,21 +15,32 @@
         <label>Recipient *</label>
         <select [(ngModel)]="recipientId" name="recipient">
           <option value="">Select recipient</option>
+          <option [ngValue]="allRegisteredParents">
+            All registered parents ({{ registeredParentCount() }})
+          </option>
           @for (r of recipients(); track r.id) {
             <option [value]="r.id">{{ recipientLabel(r) }}</option>
           }
         </select>
+        @if (isAllParentsBroadcast()) {
+          <p class="field-hint">
+            This announcement will be delivered to every active parent account registered on the portal
+            ({{ registeredParentCount() }} recipient{{ registeredParentCount() === 1 ? '' : 's' }}).
+          </p>
+        }
       </div>
 
-      <div class="field">
-        <label>Related student (optional)</label>
-        <select [(ngModel)]="studentId" name="student">
-          <option value="">None</option>
-          @for (s of students(); track s.id) {
-            <option [value]="s.id">{{ studentLabel(s) }}</option>
-          }
-        </select>
-      </div>
+      @if (!isAllParentsBroadcast()) {
+        <div class="field">
+          <label>Related student (optional)</label>
+          <select [(ngModel)]="studentId" name="student">
+            <option value="">None</option>
+            @for (s of students(); track s.id) {
+              <option [value]="s.id">{{ studentLabel(s) }}</option>
+            }
+          </select>
+        </div>
+      }
 
       <div class="field">
         <label>Subject *</label>
@@ -43,7 +54,13 @@
 
       <div class="actions">
         <button type="button" class="btn-primary" (click)="send()" [disabled]="sending()">
-          {{ sending() ? 'Sending…' : 'Send message' }}
+          @if (sending()) {
+            Sending…
+          } @else if (isAllParentsBroadcast()) {
+            Send announcement to all parents
+          } @else {
+            Send message
+          }
         </button>
       </div>
     </section>

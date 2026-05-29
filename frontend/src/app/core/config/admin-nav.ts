@@ -31,7 +31,7 @@ export const ADMIN_NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
-    heading: 'Academics',
+    heading: 'Examinations',
     items: [
       { label: 'Exam Marks', path: '/admin/exams', icon: '📝' },
       { label: 'Report Cards', path: '/admin/report-cards', icon: '📄' },
@@ -50,7 +50,7 @@ export const ADMIN_NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
-    heading: 'Fin.Reports',
+    heading: 'Fin. Reports',
     items: [
       { label: 'Student Ledger', path: '/admin/fin-reports/student-ledger', icon: '📒' },
       { label: 'Outstanding Invoices', path: '/admin/fin-reports/outstanding-invoices', icon: '🧾' },
@@ -62,8 +62,8 @@ export const ADMIN_NAV_SECTIONS: NavSection[] = [
   {
     heading: 'Communication',
     items: [
-      { label: 'Send Message', path: '/admin/communication/send', icon: '✉' },
-      { label: 'Inbox', path: '/admin/communication/inbox', icon: '📥' },
+      { label: 'Announcements', path: '/admin/communication/send', icon: '✉' },
+      { label: 'Messages', path: '/admin/communication/inbox', icon: '📥' },
     ],
   },
   {
@@ -79,6 +79,7 @@ export const ADMIN_NAV_SECTIONS: NavSection[] = [
     items: [
       { label: 'School Settings', path: '/admin/settings', icon: '⚙' },
       { label: 'Academic Settings', path: '/admin/academic-settings', icon: '🧭' },
+      { label: 'User Management', path: '/admin/user-management', icon: '👤' },
       { label: 'User Permissions', path: '/admin/user-permissions', icon: '🔐' },
       { label: 'Integrations', path: '/admin/integrations', icon: '🔌' },
     ],

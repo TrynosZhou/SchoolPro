@@ -1,5 +1,6 @@
 import { Component, inject, OnInit, signal, computed } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
 import { ApiService } from '../../core/services/api.service';
@@ -45,7 +46,7 @@ interface AssignableUser {
 @Component({
   selector: 'app-admin-user-permissions',
   standalone: true,
-  imports: [PortalLayoutComponent, FormsModule],
+  imports: [PortalLayoutComponent, FormsModule, RouterLink],
   templateUrl: './admin-user-permissions.component.html',
   styleUrl: './admin-user-permissions.component.scss',
 })

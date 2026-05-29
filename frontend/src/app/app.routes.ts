@@ -3,6 +3,8 @@ import { authGuard, roleGuard } from './core/guards/auth.guard';
 import { LoginComponent } from './pages/login/login.component';
 import { DirectorDashboardComponent } from './pages/director/director-dashboard.component';
 import { DirectorFinanceComponent } from './pages/director/director-finance.component';
+import { DirectorAcademicsComponent } from './pages/director/director-academics.component';
+import { DirectorStoreComponent } from './pages/director/director-store.component';
 import { AdminFinanceComponent } from './pages/admin/admin-finance.component';
 import { AdminDashboardComponent } from './pages/admin/admin-dashboard.component';
 import { AdminStudentsComponent } from './pages/admin/admin-students.component';
@@ -18,6 +20,9 @@ import { ExamMarksEntryComponent } from './pages/exams/exam-marks-entry.componen
 import { ParentDashboardComponent } from './pages/parent/parent-dashboard.component';
 import { ParentFinanceComponent } from './pages/parent/parent-finance.component';
 import { ParentReportCardComponent } from './pages/parent/parent-report-card.component';
+import { ParentReportCardsComponent } from './pages/parent/parent-report-cards.component';
+import { ParentMessagesComponent } from './pages/parent/parent-messages.component';
+import { ParentAttendanceComponent } from './pages/parent/parent-attendance.component';
 import { AttendanceMarkRegisterComponent } from './pages/attendance/attendance-mark-register.component';
 import { AttendanceReportComponent } from './pages/attendance/attendance-report.component';
 import { AdminMarkSheetComponent } from './pages/admin/admin-mark-sheet.component';
@@ -28,6 +33,7 @@ import { AdminStudentBalanceComponent } from './pages/admin/admin-student-balanc
 import { AdminAcademicSettingsComponent } from './pages/admin/admin-academic-settings.component';
 import { AdminIntegrationsComponent } from './pages/admin/admin-integrations.component';
 import { AdminUserPermissionsComponent } from './pages/admin/admin-user-permissions.component';
+import { AdminUserManagementComponent } from './pages/admin/admin-user-management.component';
 import { AdminClassPromotionComponent } from './pages/admin/admin-class-promotion.component';
 import { AdminStudentLedgerComponent } from './pages/admin/admin-student-ledger.component';
 import { AdminOutstandingInvoicesComponent } from './pages/admin/admin-outstanding-invoices.component';
@@ -50,9 +56,14 @@ export const routes: Routes = [
     children: [
       { path: '', component: DirectorDashboardComponent },
       { path: 'finance', component: DirectorFinanceComponent },
-      { path: 'attendance', component: DirectorDashboardComponent },
-      { path: 'academics', component: DirectorDashboardComponent },
-      { path: 'store', component: DirectorDashboardComponent },
+      { path: 'attendance', component: AttendanceReportComponent },
+      { path: 'academics', component: DirectorAcademicsComponent },
+      { path: 'store', component: DirectorStoreComponent },
+      { path: 'exams', component: ExamMarksEntryComponent },
+      { path: 'report-cards', component: AdminReportCardsComponent },
+      { path: 'mark-sheet', component: AdminMarkSheetComponent },
+      { path: 'results-analysis', component: AdminResultsAnalysisComponent },
+      { path: 'ranking', component: AdminRankingComponent },
     ],
   },
   {
@@ -102,6 +113,7 @@ export const routes: Routes = [
       { path: 'staff-attendance', redirectTo: 'staff', pathMatch: 'full' },
       { path: 'settings', component: AdminSettingsComponent },
       { path: 'academic-settings', component: AdminAcademicSettingsComponent },
+      { path: 'user-management', component: AdminUserManagementComponent },
       { path: 'user-permissions', component: AdminUserPermissionsComponent },
       { path: 'integrations', component: AdminIntegrationsComponent },
     ],
@@ -131,10 +143,10 @@ export const routes: Routes = [
       { path: '', component: ParentDashboardComponent },
       { path: 'finance', component: ParentFinanceComponent },
       { path: 'finance/:studentId', component: ParentFinanceComponent },
-      { path: 'attendance/:studentId', component: ParentDashboardComponent },
+      { path: 'attendance', component: ParentAttendanceComponent },
       { path: 'report-card/:studentId', component: ParentReportCardComponent },
-      { path: 'report-cards', component: ParentDashboardComponent },
-      { path: 'messages', component: ParentDashboardComponent },
+      { path: 'report-cards', component: ParentReportCardsComponent },
+      { path: 'messages', component: ParentMessagesComponent },
     ],
   },
 

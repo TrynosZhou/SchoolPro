@@ -1,5 +1,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.getClassTermAttendanceMap = getClassTermAttendanceMap;
+exports.getStudentTermAttendance = getStudentTermAttendance;
+exports.attachAttendanceToReports = attachAttendanceToReports;
 exports.buildClassMeanMap = buildClassMeanMap;
 exports.buildFormSubjectPositionMap = buildFormSubjectPositionMap;
 exports.computeFormPositionMap = computeFormPositionMap;
@@ -13,7 +16,67 @@ const data_source_1 = require("../config/data-source");
 const entities_1 = require("../entities");
 const grade_service_1 = require("./grade.service");
 const typeorm_helpers_1 = require("../utils/typeorm-helpers");
+const helpers_1 = require("../utils/helpers");
 const typeorm_1 = require("typeorm");
+function parseAttendanceRow(r) {
+    const daysMarked = Number(r.daysMarked) || 0;
+    const present = Number(r.present) || 0;
+    const absent = Number(r.absent) || 0;
+    const late = Number(r.late) || 0;
+    const excused = Number(r.excused) || 0;
+    const attendancePercent = daysMarked
+        ? Math.round(((present + late) / daysMarked) * 1000) / 10
+        : null;
+    return { daysMarked, present, absent, late, excused, attendancePercent };
+}
+/** Class attendance totals for a term (same logic as attendance report). */
+async function getClassTermAttendanceMap(classId, termId) {
+    const map = new Map();
+    const term = await data_source_1.AppDataSource.getRepository(entities_1.Term).findOne({ where: { id: termId } });
+    if (!term)
+        return map;
+    const { startDate, endDate } = (0, helpers_1.termReportDateRange)(term);
+    const rows = await data_source_1.AppDataSource.query(`
+    SELECT
+      s.id AS "studentId",
+      COUNT(a.id)::int AS "daysMarked",
+      COUNT(*) FILTER (WHERE a.status::text = 'present')::int AS present,
+      COUNT(*) FILTER (WHERE a.status::text = 'absent')::int AS absent,
+      COUNT(*) FILTER (WHERE a.status::text = 'late')::int AS late,
+      COUNT(*) FILTER (WHERE a.status::text = 'excused')::int AS excused
+    FROM students s
+    LEFT JOIN student_attendance a
+      ON a."studentId" = s.id
+      AND a.date::date >= $2::date
+      AND a.date::date <= $3::date
+    WHERE s."classId" = $1 AND s."isActive" = true
+    GROUP BY s.id
+    `, [classId, startDate, endDate]);
+    for (const row of rows) {
+        map.set(String(row.studentId), parseAttendanceRow(row));
+    }
+    return map;
+}
+async function getStudentTermAttendance(studentId, termId, classId) {
+    let resolvedClassId = classId;
+    if (!resolvedClassId) {
+        const student = await data_source_1.AppDataSource.getRepository(entities_1.Student).findOne({
+            where: { id: studentId },
+        });
+        resolvedClassId = student?.classId;
+    }
+    if (!resolvedClassId) {
+        return parseAttendanceRow({});
+    }
+    const map = await getClassTermAttendanceMap(resolvedClassId, termId);
+    return map.get(studentId) ?? parseAttendanceRow({});
+}
+function attachAttendanceToReports(reports, attendanceMap) {
+    return reports.map((r) => ({
+        ...r,
+        attendance: attendanceMap.get(r.studentId) ?? parseAttendanceRow({}),
+    }));
+}
 function groupKey(subjectId, examTypeId) {
     return `${subjectId}|${examTypeId}`;
 }
@@ -193,6 +256,7 @@ async function getReportCardPdfMetrics(report, maxMarks = 100) {
         const formPosMap = await computeFormPositionMap(report.examTypeId, report.termId, formId);
         formPosition = formPosMap.get(report.studentId);
     }
+    const attendance = await getStudentTermAttendance(report.studentId, report.termId, student?.classId);
     return {
         subjectResults,
         classTotal: report.classTotal ?? classTotal,
@@ -201,6 +265,7 @@ async function getReportCardPdfMetrics(report, maxMarks = 100) {
         formPosition: formPosition ?? undefined,
         subjectsPassed: report.subjectsPassed ?? subjectsPassed,
         totalSubjects: report.totalSubjects ?? totalSubjects,
+        attendance,
     };
 }
 /** Recompute subject means/positions from class marks (e.g. before PDF export). */
@@ -426,9 +491,10 @@ async function generateClassReportCards(params) {
             saved.push(full);
     }
     saved.sort((a, b) => (a.classPosition ?? 999) - (b.classPosition ?? 999));
+    const attendanceMap = await getClassTermAttendanceMap(classId, termId);
     return {
         examType: { id: examType.id, name: examType.name },
         count: saved.length,
-        reports: saved,
+        reports: attachAttendanceToReports(saved, attendanceMap),
     };
 }

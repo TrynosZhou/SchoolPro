@@ -77,17 +77,22 @@ router.get('/messages/recipients', (0, auth_1.authorize)(enums_1.UserRole.TEACHE
     const userRepo = data_source_1.AppDataSource.getRepository(entities_1.User);
     const users = await userRepo.find({
         where: { isActive: true },
+        relations: (0, typeorm_helpers_1.relations)('parentProfile'),
         order: { lastName: 'ASC', firstName: 'ASC' },
     });
-    res.json(users
-        .filter((u) => u.id !== req.user.userId)
-        .map((u) => ({
-        id: u.id,
-        firstName: u.firstName,
-        lastName: u.lastName,
-        email: u.email,
-        role: u.role,
-    })));
+    const registeredParentCount = users.filter((u) => u.role === enums_1.UserRole.PARENT && u.parentProfile && u.id !== req.user.userId).length;
+    res.json({
+        recipients: users
+            .filter((u) => u.id !== req.user.userId)
+            .map((u) => ({
+            id: u.id,
+            firstName: u.firstName,
+            lastName: u.lastName,
+            email: u.email,
+            role: u.role,
+        })),
+        registeredParentCount,
+    });
 });
 router.get('/messages/inbox', (0, auth_1.authorize)(enums_1.UserRole.TEACHER, enums_1.UserRole.PARENT, enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), async (req, res) => {
     const repo = data_source_1.AppDataSource.getRepository(entities_1.Message);
@@ -117,19 +122,59 @@ router.get('/messages', async (req, res) => {
     res.json(messages);
 });
 router.post('/messages', (0, auth_1.authorize)(enums_1.UserRole.TEACHER, enums_1.UserRole.PARENT, enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), async (req, res) => {
-    const { recipientId, subject, body, studentId } = req.body || {};
-    if (!recipientId || !String(subject || '').trim() || !String(body || '').trim()) {
-        return res.status(400).json({ message: 'recipientId, subject, and body are required' });
+    const { recipientId, subject, body, studentId, broadcastToAllParents } = req.body || {};
+    const trimmedSubject = String(subject || '').trim();
+    const trimmedBody = String(body || '').trim();
+    const ALL_REGISTERED_PARENTS = '__all_registered_parents__';
+    const wantsBroadcast = broadcastToAllParents === true ||
+        recipientId === ALL_REGISTERED_PARENTS ||
+        String(recipientId || '') === ALL_REGISTERED_PARENTS;
+    if (!trimmedSubject || !trimmedBody) {
+        return res.status(400).json({ message: 'subject and body are required' });
     }
+    const repo = data_source_1.AppDataSource.getRepository(entities_1.Message);
     const userRepo = data_source_1.AppDataSource.getRepository(entities_1.User);
+    if (wantsBroadcast) {
+        const canBroadcast = [enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL].includes(req.user.role);
+        if (!canBroadcast) {
+            return res.status(403).json({ message: 'Only administrators can send announcements to all parents' });
+        }
+        const parentUsers = await userRepo.find({
+            where: { role: enums_1.UserRole.PARENT, isActive: true },
+            relations: (0, typeorm_helpers_1.relations)('parentProfile'),
+        });
+        const recipients = parentUsers.filter((u) => u.parentProfile && u.id !== req.user.userId);
+        if (!recipients.length) {
+            return res.status(400).json({ message: 'No registered parents found to receive this announcement' });
+        }
+        const messages = recipients.map((recipient) => repo.create({
+            recipientId: recipient.id,
+            subject: trimmedSubject,
+            body: trimmedBody,
+            senderId: req.user.userId,
+            isRead: false,
+        }));
+        await repo.save(messages);
+        return res.status(201).json({
+            broadcast: true,
+            sentCount: messages.length,
+            subject: trimmedSubject,
+        });
+    }
+    if (!recipientId) {
+        return res.status(400).json({ message: 'recipientId is required' });
+    }
+    const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!uuidPattern.test(String(recipientId))) {
+        return res.status(400).json({ message: 'Invalid recipient selected' });
+    }
     const recipient = await userRepo.findOne({ where: { id: recipientId, isActive: true } });
     if (!recipient)
         return res.status(404).json({ message: 'Recipient not found' });
-    const repo = data_source_1.AppDataSource.getRepository(entities_1.Message);
     const msg = await repo.save(repo.create({
         recipientId,
-        subject: String(subject).trim(),
-        body: String(body).trim(),
+        subject: trimmedSubject,
+        body: trimmedBody,
         studentId: studentId || undefined,
         senderId: req.user.userId,
         isRead: false,

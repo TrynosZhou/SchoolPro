@@ -987,6 +987,14 @@ export async function generateReportCardPdf(data: {
   formTotal?: number;
   subjectsPassed?: number;
   totalSubjects?: number;
+  attendance?: {
+    daysMarked: number;
+    present: number;
+    absent: number;
+    late: number;
+    excused: number;
+    attendancePercent: number | null;
+  };
   classTeacherRemarks?: string;
   principalRemarks?: string;
   generatedAt?: Date;
@@ -1062,13 +1070,13 @@ export async function generateReportCardPdf(data: {
     const chips = [
       data.termName ? `Term: ${data.termName}` : '',
       data.examTypeName ? `Exam: ${data.examTypeName}` : '',
-      data.formName ? `Form: ${data.formName}` : '',
-      data.className ? `Class: ${data.className}` : '',
     ].filter(Boolean);
 
-    doc.font('Helvetica').fontSize(9.5).fillColor(RC.muted);
-    doc.text(chips.join('   ·   '), margin, y, { width: contentW, align: 'center' });
-    y += 24;
+    if (chips.length) {
+      doc.font('Helvetica').fontSize(9.5).fillColor(RC.muted);
+      doc.text(chips.join('   ·   '), margin, y, { width: contentW, align: 'center' });
+      y += 24;
+    }
 
     // —— Student identity card ——
     const cardH = 84;
@@ -1077,10 +1085,6 @@ export async function generateReportCardPdf(data: {
     doc.text(data.studentName, margin + 16, y + 12);
     doc.font('Helvetica').fontSize(10.5).fillColor(RC.muted);
     doc.text(`Student ID: ${data.admissionNumber}`, margin + 16, y + 34);
-    doc.text(`Class: ${data.className || '—'}`, margin + 16, y + 50);
-    if (data.formName) {
-      doc.text(`Form: ${data.formName}`, margin + 16, y + 64);
-    }
 
     const drawPositionBadge = (
       label: string,
@@ -1157,6 +1161,43 @@ export async function generateReportCardPdf(data: {
       doc.text(s.value, bx + 6, y + 24, { width: boxW - 12, lineGap: 0 });
     });
     y += 64;
+
+    // —— Attendance (term) ——
+    const att = data.attendance;
+    doc.fillColor(RC.ink).font('Helvetica-Bold').fontSize(12);
+    doc.text('Attendance', margin, y);
+    y += 16;
+
+    const attStats = att
+      ? [
+          { label: 'Days marked', value: String(att.daysMarked) },
+          { label: 'Present', value: String(att.present) },
+          { label: 'Late', value: String(att.late) },
+          { label: 'Absent', value: String(att.absent) },
+          { label: 'Excused', value: String(att.excused) },
+          {
+            label: 'Attendance %',
+            value: att.attendancePercent != null ? `${att.attendancePercent}%` : '—',
+          },
+        ]
+      : [];
+    const attGap = 5;
+    const attBoxW = (contentW - attGap * (attStats.length - 1)) / Math.max(attStats.length, 1);
+    if (!attStats.length || (att && att.daysMarked === 0)) {
+      doc.font('Helvetica').fontSize(9.5).fillColor(RC.muted);
+      doc.text('No attendance records for this term.', margin, y, { width: contentW });
+      y += 22;
+    } else {
+      attStats.forEach((s, i) => {
+        const bx = margin + i * (attBoxW + attGap);
+        doc.roundedRect(bx, y, attBoxW, 48, 6).fillAndStroke(RC.rowAlt, RC.border);
+        doc.fillColor(RC.muted).font('Helvetica').fontSize(7);
+        doc.text(s.label.toUpperCase(), bx + 4, y + 8, { width: attBoxW - 8, align: 'center' });
+        doc.fillColor(RC.ink).font('Helvetica-Bold').fontSize(10);
+        doc.text(s.value, bx + 4, y + 24, { width: attBoxW - 8, align: 'center' });
+      });
+      y += 56;
+    }
 
     // —— Results table ——
     doc.fillColor(RC.ink).font('Helvetica-Bold').fontSize(12);

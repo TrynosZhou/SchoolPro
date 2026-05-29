@@ -1,0 +1,24 @@
+<app-portal-layout portalTitle="Director Portal" pageTitle="Academics" [navItems]="nav">
+  <div class="director-page">
+    <header class="page-head">
+      <p class="eyebrow">Executive · Academics</p>
+      <h2>Academic oversight</h2>
+      <p class="sub">Monitor examinations, report cards, mark sheets, and performance analytics across the school.</p>
+    </header>
+
+    <div class="module-grid">
+      @for (m of modules; track m.path) {
+        <a [routerLink]="m.path" class="module-card" [class]="m.tone">
+          <span class="module-icon">{{ m.icon }}</span>
+          <div>
+            <h3>{{ m.title }}</h3>
+            <p>{{ m.description }}</p>
+          </div>
+          <svg class="arrow" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </a>
+      }
+    </div>
+  </div>
+</app-portal-layout>

@@ -2,12 +2,13 @@ import { Component, computed, inject, OnDestroy, OnInit, signal } from '@angular
 import { FormsModule } from '@angular/forms';
 import { DecimalPipe } from '@angular/common';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
-import { RouterLink } from '@angular/router';
+import { RouterLink, Router } from '@angular/router';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
 import { ApiService } from '../../core/services/api.service';
 import { classDisplayName } from '../../core/utils/class-display';
 import { formatSubjectAbbrev } from '../../core/utils/subject-abbrev';
+import { resolveExecutivePortalLayout } from '../../core/utils/portal-layout.util';
 
 interface MarkSheetSubject {
   id: string;
@@ -62,7 +63,9 @@ interface MarkSheetData {
 export class AdminMarkSheetComponent implements OnInit, OnDestroy {
   private api = inject(ApiService);
   private sanitizer = inject(DomSanitizer);
+  private router = inject(Router);
 
+  readonly portalLayout = resolveExecutivePortalLayout(this.router);
   readonly adminNav = ADMIN_NAV_SECTIONS;
   readonly gradeLetters: (keyof MarkSheetGradeCounts)[] = ['A', 'B', 'C', 'D', 'E', 'U'];
 

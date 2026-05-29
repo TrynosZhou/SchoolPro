@@ -5,6 +5,7 @@ import { FormsModule } from '@angular/forms';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { ApiService } from '../../core/services/api.service';
 import { AuthService } from '../../core/services/auth.service';
+import { PARENT_NAV_ITEMS } from '../../core/config/parent-nav';
 
 interface ParentChildSummary {
   linkId?: string;
@@ -44,13 +45,7 @@ export class ParentDashboardComponent implements OnInit {
     relationship: 'Parent',
   };
 
-  readonly nav = [
-    { label: 'My Children', path: '/parent', icon: '👨‍👩‍👧' },
-    { label: 'Finance', path: '/parent/finance', icon: '💳' },
-    { label: 'Attendance', path: '/parent/attendance', icon: '📋' },
-    { label: 'Report Cards', path: '/parent/report-cards', icon: '📄' },
-    { label: 'Messages', path: '/parent/messages', icon: '💬' },
-  ];
+  readonly nav = PARENT_NAV_ITEMS;
 
   childCount = computed(() => this.children().length);
 
