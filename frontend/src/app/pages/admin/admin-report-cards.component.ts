@@ -7,6 +7,7 @@ import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
 import { TEACHER_NAV_SECTIONS } from '../../core/config/teacher-nav';
 import { DIRECTOR_NAV_ITEMS } from '../../core/config/director-nav';
+import { PRINCIPAL_NAV_ITEMS } from '../../core/config/principal-nav';
 import { reportCardPdfFilename } from '../../core/utils/report-card-filename';
 import type { NavItem, NavSection } from '../../shared/portal-layout/portal-layout.component';
 import { ApiService } from '../../core/services/api.service';
@@ -545,12 +546,7 @@ export class AdminReportCardsComponent implements OnInit, OnDestroy {
     if (this.router.url.includes('/principal')) {
       this.portalTitle.set('Principal Portal');
       this.navSections.set([]);
-      this.navItems.set([
-        { label: 'Dashboard', path: '/principal', icon: '🏠' },
-        { label: 'Exam Marks', path: '/principal/exams', icon: '📊' },
-        { label: 'Report Cards', path: '/principal/report-cards', icon: '📄' },
-        { label: 'Finance', path: '/principal/finance', icon: '💰' },
-      ]);
+      this.navItems.set(PRINCIPAL_NAV_ITEMS);
       return;
     }
     if (this.currentRole === 'teacher') {

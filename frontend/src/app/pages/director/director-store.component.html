@@ -1,4 +1,4 @@
-<app-portal-layout portalTitle="Director Portal" pageTitle="Store & Inventory" [navItems]="nav">
+<app-portal-layout [portalTitle]="portal().portalTitle" pageTitle="Store & Inventory" [navItems]="portal().nav">
   <div class="director-page">
     <header class="page-head">
       <div>
@@ -6,7 +6,7 @@
         <h2>Store &amp; inventory</h2>
         <p class="sub">Monitor tuckshop stock levels and identify items that need reordering.</p>
       </div>
-      <a routerLink="/director" class="back-link">← Dashboard</a>
+      <a [routerLink]="portal().basePath" class="back-link">← Dashboard</a>
     </header>
 
     <div class="kpi-grid">

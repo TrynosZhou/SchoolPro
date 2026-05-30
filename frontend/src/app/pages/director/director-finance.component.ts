@@ -1,7 +1,8 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
-import { DIRECTOR_NAV_ITEMS } from '../../core/config/director-nav';
+import { AuthService } from '../../core/services/auth.service';
+import { executivePortalForRole } from '../../core/utils/executive-portal.util';
 import { ApiService } from '../../core/services/api.service';
 
 @Component({
@@ -9,8 +10,7 @@ import { ApiService } from '../../core/services/api.service';
   standalone: true,
   imports: [PortalLayoutComponent, DecimalPipe],
   template: `
-    <app-portal-layout portalTitle="Director Portal" pageTitle="Financial Books"
-      [navItems]="nav">
+    <app-portal-layout [portalTitle]="portal().portalTitle" pageTitle="Financial Books" [navItems]="portal().nav">
       <div class="stats-grid">
         <div class="stat-card green"><span class="stat-value">{{ '$' + (balanceSheet()?.cashBalance | number:'1.2-2') }}</span><span class="stat-label">Cash Balance</span></div>
         <div class="stat-card orange"><span class="stat-value">{{ '$' + (balanceSheet()?.totalDebtors | number:'1.2-2') }}</span><span class="stat-label">Total Debtors</span></div>
@@ -49,7 +49,10 @@ import { ApiService } from '../../core/services/api.service';
 })
 export class DirectorFinanceComponent implements OnInit {
   private api = inject(ApiService);
-  readonly nav = DIRECTOR_NAV_ITEMS;
+  private auth = inject(AuthService);
+
+  readonly portal = computed(() => executivePortalForRole(this.auth.user()?.role));
+
   balanceSheet = signal<{ cashBalance: number; totalDebtors: number; monthlyCollections: number } | null>(null);
   aging = signal<{ bucket: string; count: number; amount: number }[]>([]);
   cashbook = signal<{ id: string; entryDate: string; description: string; moneyIn?: number; moneyOut?: number; balance: number }[]>([]);

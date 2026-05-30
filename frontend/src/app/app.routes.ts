@@ -72,8 +72,14 @@ export const routes: Routes = [
     children: [
       { path: '', component: DirectorDashboardComponent },
       { path: 'finance', component: DirectorFinanceComponent },
+      { path: 'attendance', component: AttendanceReportComponent },
+      { path: 'academics', component: DirectorAcademicsComponent },
+      { path: 'store', component: DirectorStoreComponent },
       { path: 'exams', component: ExamMarksEntryComponent },
       { path: 'report-cards', component: AdminReportCardsComponent },
+      { path: 'mark-sheet', component: AdminMarkSheetComponent },
+      { path: 'results-analysis', component: AdminResultsAnalysisComponent },
+      { path: 'ranking', component: AdminRankingComponent },
     ],
   },
   {

@@ -7,6 +7,7 @@ import { ApiService } from '../../core/services/api.service';
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
 import { TEACHER_NAV_SECTIONS } from '../../core/config/teacher-nav';
 import { DIRECTOR_NAV_ITEMS } from '../../core/config/director-nav';
+import { PRINCIPAL_NAV_ITEMS } from '../../core/config/principal-nav';
 
 interface ExamMarkRow {
   studentId: string;
@@ -74,14 +75,10 @@ export class ExamMarksEntryComponent implements OnInit, OnDestroy {
   readonly adminNav = ADMIN_NAV_SECTIONS;
   readonly teacherNav = TEACHER_NAV_SECTIONS;
   readonly directorNav = DIRECTOR_NAV_ITEMS;
+  readonly principalNav = PRINCIPAL_NAV_ITEMS;
   readonly isAdminRoute = computed(() => this.router.url.includes('/admin'));
   readonly isPrincipalRoute = computed(() => this.router.url.includes('/principal'));
   readonly isDirectorRoute = computed(() => this.router.url.includes('/director'));
-  readonly principalNav = [
-    { label: 'Dashboard', path: '/principal', icon: '🏠' },
-    { label: 'Exam Marks', path: '/principal/exams', icon: '📊' },
-    { label: 'Finance', path: '/principal/finance', icon: '💰' },
-  ];
 
   private filtersReady(): boolean {
     const f = this.filters;

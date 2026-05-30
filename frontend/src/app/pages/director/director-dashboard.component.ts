@@ -2,9 +2,9 @@ import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { DecimalPipe, DatePipe } from '@angular/common';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
-import { DIRECTOR_NAV_ITEMS } from '../../core/config/director-nav';
 import { ApiService } from '../../core/services/api.service';
 import { AuthService } from '../../core/services/auth.service';
+import { executivePortalForRole, executiveActionGroups } from '../../core/utils/executive-portal.util';
 
 interface DirectorDashboardData {
   currentTerm: { id: string; name: string } | null;
@@ -67,7 +67,8 @@ export class DirectorDashboardComponent implements OnInit {
   private api = inject(ApiService);
   private auth = inject(AuthService);
 
-  readonly nav = DIRECTOR_NAV_ITEMS;
+  readonly portal = computed(() => executivePortalForRole(this.auth.user()?.role));
+  readonly actionGroups = computed(() => executiveActionGroups(this.portal().basePath));
 
   data = signal<DirectorDashboardData | null>(null);
   loading = signal(true);
@@ -88,12 +89,12 @@ export class DirectorDashboardComponent implements OnInit {
 
   readonly directorName = computed(() => {
     const u = this.auth.user();
-    return u ? `${u.firstName} ${u.lastName}`.trim() : 'Director';
+    const name = u ? `${u.firstName} ${u.lastName}`.trim() : '';
+    if (name) return name;
+    return this.portal().basePath === '/principal' ? 'Principal' : 'Director';
   });
 
-  readonly portalTitle = computed(() =>
-    this.auth.user()?.role === 'principal' ? 'Principal Portal' : 'Director Portal',
-  );
+  readonly portalTitle = computed(() => this.portal().portalTitle);
 
   readonly statCards = computed(() => {
     const d = this.data();
@@ -157,23 +158,6 @@ export class DirectorDashboardComponent implements OnInit {
     const values = (this.data()?.collectionsTrend ?? []).map((t) => t.total);
     return Math.max(...values, 1);
   });
-
-  readonly actionGroups = [
-    {
-      title: 'Finance',
-      links: [
-        { label: 'Financial Books', path: '/director/finance', icon: '💰' },
-      ],
-    },
-    {
-      title: 'Operations',
-      links: [
-        { label: 'Attendance', path: '/director/attendance', icon: '📋' },
-        { label: 'Academics', path: '/director/academics', icon: '📚' },
-        { label: 'Store & Inventory', path: '/director/store', icon: '🏪' },
-      ],
-    },
-  ];
 
   ngOnInit() {
     this.api.get<DirectorDashboardData>('/dashboard/director').subscribe({

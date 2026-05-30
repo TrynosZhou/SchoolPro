@@ -1,6 +1,7 @@
 import { Router } from '@angular/router';
 import { NavItem, NavSection } from '../../shared/portal-layout/portal-layout.component';
 import { DIRECTOR_NAV_ITEMS } from '../config/director-nav';
+import { PRINCIPAL_NAV_ITEMS } from '../config/principal-nav';
 import { ADMIN_NAV_SECTIONS } from '../config/admin-nav';
 
 export interface PortalLayoutConfig {
@@ -15,15 +16,7 @@ export function resolveExecutivePortalLayout(router: Router, defaultTitle = 'Adm
     return { portalTitle: 'Director Portal', navItems: DIRECTOR_NAV_ITEMS };
   }
   if (router.url.includes('/principal')) {
-    return {
-      portalTitle: 'Principal Portal',
-      navItems: [
-        { label: 'Dashboard', path: '/principal', icon: '🏠' },
-        { label: 'Exam Marks', path: '/principal/exams', icon: '📊' },
-        { label: 'Report Cards', path: '/principal/report-cards', icon: '📄' },
-        { label: 'Finance', path: '/principal/finance', icon: '💰' },
-      ],
-    };
+    return { portalTitle: 'Principal Portal', navItems: PRINCIPAL_NAV_ITEMS };
   }
   return { portalTitle: defaultTitle, navSections: ADMIN_NAV_SECTIONS };
 }

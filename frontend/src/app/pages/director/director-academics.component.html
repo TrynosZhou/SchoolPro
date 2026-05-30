@@ -1,4 +1,4 @@
-<app-portal-layout portalTitle="Director Portal" pageTitle="Academics" [navItems]="nav">
+<app-portal-layout [portalTitle]="portal().portalTitle" pageTitle="Academics" [navItems]="portal().nav">
   <div class="director-page">
     <header class="page-head">
       <p class="eyebrow">Executive · Academics</p>
@@ -7,7 +7,7 @@
     </header>
 
     <div class="module-grid">
-      @for (m of modules; track m.path) {
+      @for (m of modules(); track m.path) {
         <a [routerLink]="m.path" class="module-card" [class]="m.tone">
           <span class="module-icon">{{ m.icon }}</span>
           <div>

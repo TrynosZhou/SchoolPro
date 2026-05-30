@@ -3,7 +3,8 @@ import { FormsModule } from '@angular/forms';
 import { DecimalPipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
-import { DIRECTOR_NAV_ITEMS } from '../../core/config/director-nav';
+import { AuthService } from '../../core/services/auth.service';
+import { executivePortalForRole } from '../../core/utils/executive-portal.util';
 import { ApiService } from '../../core/services/api.service';
 
 interface TuckshopItem {
@@ -25,8 +26,9 @@ interface TuckshopItem {
 })
 export class DirectorStoreComponent implements OnInit {
   private api = inject(ApiService);
+  private auth = inject(AuthService);
 
-  readonly nav = DIRECTOR_NAV_ITEMS;
+  readonly portal = computed(() => executivePortalForRole(this.auth.user()?.role));
 
   items = signal<TuckshopItem[]>([]);
   loading = signal(true);

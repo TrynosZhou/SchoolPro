@@ -1,4 +1,4 @@
-<app-portal-layout [portalTitle]="portalTitle()" pageTitle="Executive Overview" [navItems]="nav">
+<app-portal-layout [portalTitle]="portalTitle()" pageTitle="Executive Overview" [navItems]="portal().nav">
   <div class="director-dashboard">
     <section class="hero">
       <div class="hero-glow" aria-hidden="true"></div>
@@ -77,7 +77,7 @@
             <h3>Financial Health</h3>
             <p class="panel-sub">Debt pressure vs monthly collections</p>
           </div>
-          <a routerLink="/director/finance" class="chip link-chip">Full books →</a>
+          <a [routerLink]="[portal().basePath, 'finance']" class="chip link-chip">Full books →</a>
         </div>
         <div class="finance-summary">
           <div class="finance-metric">
@@ -261,7 +261,7 @@
         <span class="chip accent">Shortcuts</span>
       </div>
       <div class="action-columns">
-        @for (group of actionGroups; track group.title) {
+        @for (group of actionGroups(); track group.title) {
           <div class="action-group">
             <h4>{{ group.title }}</h4>
             <div class="action-grid">
