@@ -1,71 +1,216 @@
 <app-portal-layout portalTitle="Admin Portal" pageTitle="Class Promotion" [navSections]="adminNav">
-  @if (toast(); as t) {
-    <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>
-  }
+  <div class="promotion-page">
+    @if (toast(); as t) {
+      <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>
+    }
 
-  <header class="page-intro">
-    <p>
-      <strong>Year-end process.</strong> Run this after the school year ends (January–December). Students in a class
-      during the completing year move to the next class for the <em>coming</em> school year (e.g. Form 1A in 2025 →
-      Form 2A in 2026), using rules in
-      <a routerLink="/admin/academic-settings">Academic Settings → Promotion Rules</a>.
-    </p>
-  </header>
-
-  @if (loading()) {
-    <div class="loading">
-      <div class="spinner"></div>
-      <p>Loading school years and classes…</p>
-    </div>
-  } @else {
-    <section class="card">
-      <h3>Promote a class (year end)</h3>
-      <div class="grid">
-        <div class="field">
-          <label>School year completing *</label>
-          <select [(ngModel)]="selectedCompletingYearId" name="completingYearId" required>
-            <option value="">— Select year —</option>
-            @for (y of sortedYears(); track y.id) {
-              <option [value]="y.id">
-                {{ y.name }} ({{ y.startDate }} → {{ y.endDate }})
-              </option>
-            }
-          </select>
-          <span class="hint">The calendar year students just finished (e.g. 2025).</span>
-        </div>
-
-        <div class="field">
-          <label>Promoting into</label>
-          @if (targetYear(); as ty) {
-            <p class="target-year">{{ ty.name }} ({{ ty.startDate }} → {{ ty.endDate }})</p>
-          } @else if (completingYear()) {
-            <p class="target-year missing">No school year found for the coming year — add it in Academic Settings.</p>
-          } @else {
-            <p class="target-year muted">Select the completing year first.</p>
-          }
-          <span class="hint">Students will be enrolled for this school year.</span>
-        </div>
-
-        <div class="field field--full">
-          <label>Class *</label>
-          <select [(ngModel)]="selectedClassId" name="classId" required>
-            <option value="">— Select class —</option>
-            @for (c of sortedClasses(); track c.id) {
-              <option [value]="c.id">{{ classLabel(c) }}</option>
-            }
-          </select>
-          <span class="hint">All active students in this class for the completing year.</span>
+    <header class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">Year-end process</p>
+        <h2>Class promotion</h2>
+        <p class="hero-sub">
+          Move students to the next class for the coming school year using rules configured in
+          <a routerLink="/admin/academic-settings">Academic Settings → Promotion Rules</a>.
+          Run this after the completing calendar year ends (January–December).
+        </p>
+        <div class="hero-actions">
+          <a routerLink="/admin/academic-settings" class="secondary-action">Promotion rules</a>
+          <button type="button" class="refresh-action" (click)="load(true)" [disabled]="refreshing() || loading()">
+            {{ refreshing() ? 'Refreshing…' : 'Refresh data' }}
+          </button>
         </div>
       </div>
+      <div class="kpi-grid">
+        <article class="kpi">
+          <span class="kpi-icon">📅</span>
+          <div>
+            <strong>{{ stats().years }}</strong>
+            <span>School years</span>
+          </div>
+        </article>
+        <article class="kpi accent">
+          <span class="kpi-icon">🏫</span>
+          <div>
+            <strong>{{ stats().classes }}</strong>
+            <span>Classes</span>
+          </div>
+        </article>
+        <article class="kpi">
+          <span class="kpi-icon">⬆</span>
+          <div>
+            <strong>{{ stats().rules }}</strong>
+            <span>Rules set</span>
+          </div>
+        </article>
+        <article class="kpi" [class.warn]="stats().unconfigured > 0">
+          <span class="kpi-icon">⚠</span>
+          <div>
+            <strong>{{ stats().unconfigured }}</strong>
+            <span>Need rules</span>
+          </div>
+        </article>
+      </div>
+    </header>
 
-      <button
-        type="button"
-        class="btn-primary"
-        (click)="promote()"
-        [disabled]="promoting() || !targetYear()"
-      >
-        {{ promoting() ? 'Promoting…' : 'Promote for coming year' }}
-      </button>
-    </section>
-  }
+    @if (stats().unconfigured && !loading()) {
+      <div class="alert-banner">
+        {{ stats().unconfigured }} class{{ stats().unconfigured === 1 ? '' : 'es' }} without an active promotion rule.
+        <a routerLink="/admin/academic-settings">Configure rules</a>
+      </div>
+    }
+
+    @if (lastResult(); as result) {
+      <div class="success-banner">
+        <strong>{{ result.promoted }}</strong> student{{ result.promoted === 1 ? '' : 's' }} promoted.
+        <span>{{ result.message }}</span>
+      </div>
+    }
+
+    @if (loading()) {
+      <div class="loading-panel">
+        <div class="spinner"></div>
+        <p>Loading school years, classes, and promotion rules…</p>
+      </div>
+    } @else {
+      <section class="list-shell">
+        <div class="list-toolbar">
+          <h3>Promotion setup</h3>
+          <p>Select the completing school year and the class to promote for the coming year.</p>
+
+          <div class="year-grid">
+            <div class="field">
+              <label for="completingYearId">School year completing *</label>
+              <select [(ngModel)]="selectedCompletingYearId" id="completingYearId" name="completingYearId">
+                <option value="">— Select year —</option>
+                @for (y of sortedYears(); track y.id) {
+                  <option [value]="y.id">{{ y.name }} ({{ y.startDate }} → {{ y.endDate }})</option>
+                }
+              </select>
+              <span class="hint">The calendar year students just finished (e.g. 2025).</span>
+            </div>
+
+            <div class="flow-arrow" aria-hidden="true">→</div>
+
+            <div class="field">
+              <label>Promoting into</label>
+              @if (targetYear(); as ty) {
+                <div class="target-year">{{ ty.name }}</div>
+                <span class="hint">{{ ty.startDate }} → {{ ty.endDate }}</span>
+              } @else if (completingYear()) {
+                <div class="target-year missing">No school year for the coming year</div>
+                <span class="hint warn-text">Add it in Academic Settings → School Calendar.</span>
+              } @else {
+                <div class="target-year muted">Select completing year first</div>
+              }
+            </div>
+          </div>
+        </div>
+
+        @if (selectedClassId && completingYear() && targetYear()) {
+          <div class="preview-panel">
+            <div class="preview-step from">
+              <span class="step-label">From</span>
+              <strong>{{ selectedClassLabel() }}</strong>
+              <span>{{ completingYear()!.name }}</span>
+              <span class="count-chip">{{ stats().studentsInSelected }} student(s)</span>
+            </div>
+            <div class="preview-arrow">➜</div>
+            <div class="preview-step to">
+              <span class="step-label">To</span>
+              @if (promotionPreview(); as preview) {
+                @if (preview.kind === 'missing') {
+                  <strong class="missing-text">No rule configured</strong>
+                  <span>Set up in Academic Settings</span>
+                } @else if (preview.kind === 'completion') {
+                  <strong>{{ preview.label }}</strong>
+                  <span>{{ targetYear()!.name }} · completion</span>
+                } @else {
+                  <strong>{{ preview.label }}</strong>
+                  <span>{{ targetYear()!.name }}</span>
+                }
+              }
+            </div>
+          </div>
+        }
+
+        <div class="class-picker">
+          <div class="picker-head">
+            <div>
+              <h4>Select class to promote *</h4>
+              <p>All active students in the selected class will be moved.</p>
+            </div>
+            @if (classFormOptions().length) {
+              <select class="form-filter" [ngModel]="formFilter()" (ngModelChange)="formFilter.set($event)" name="formFilter">
+                <option value="all">All forms</option>
+                @for (f of classFormOptions(); track f) {
+                  <option [value]="f">{{ f }}</option>
+                }
+              </select>
+            }
+          </div>
+
+          <div class="search-wrap">
+            <span class="search-icon" aria-hidden="true">🔍</span>
+            <input
+              type="search"
+              class="search-input"
+              placeholder="Search classes…"
+              [ngModel]="classSearch()"
+              (ngModelChange)="classSearch.set($event)"
+              name="classSearch"
+            />
+            @if (classSearch()) {
+              <button type="button" class="clear-search" (click)="classSearch.set('')" aria-label="Clear search">×</button>
+            }
+          </div>
+
+          <div class="class-grid">
+            @for (c of visibleClasses(); track c.id) {
+              <button
+                type="button"
+                class="class-card"
+                [class.active]="selectedClassId === c.id"
+                [class.no-rule]="!hasPromotionRule(c.id)"
+                (click)="selectClass(c.id)"
+              >
+                <div class="class-card-top">
+                  <strong>{{ c.name }}</strong>
+                  @if (hasPromotionRule(c.id)) {
+                    <span class="rule-badge">Rule set</span>
+                  } @else {
+                    <span class="rule-badge missing">No rule</span>
+                  }
+                </div>
+                <span class="form-name">{{ c.form?.name || 'Form' }}</span>
+                <span class="student-count">{{ classStudentCount(c) }} student{{ classStudentCount(c) === 1 ? '' : 's' }}</span>
+              </button>
+            } @empty {
+              <p class="empty-inline">No classes match your search.</p>
+            }
+          </div>
+        </div>
+
+        <div class="action-bar">
+          <div class="action-copy">
+            @if (canPromote()) {
+              <strong>Ready to promote</strong>
+              <span>{{ stats().studentsInSelected }} student(s) in {{ selectedClassLabel() }} for {{ completingYear()?.name }}.</span>
+            } @else if (!targetYear() && completingYear()) {
+              <strong>Target year missing</strong>
+              <span>Add the coming school year before promoting.</span>
+            } @else if (promotionPreview()?.kind === 'missing') {
+              <strong>Promotion rule required</strong>
+              <span>Configure where this class promotes to in Academic Settings.</span>
+            } @else {
+              <strong>Select a class</strong>
+              <span>Choose the class you want to promote for the coming year.</span>
+            }
+          </div>
+          <button type="button" class="btn-primary" (click)="promote()" [disabled]="promoting() || !canPromote()">
+            {{ promoting() ? 'Promoting…' : 'Promote for coming year' }}
+          </button>
+        </div>
+      </section>
+    }
+  </div>
 </app-portal-layout>

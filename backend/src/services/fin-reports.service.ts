@@ -125,20 +125,39 @@ export async function buildStudentLedgerReport(
   });
   if (!student) return null;
 
-  const termStart = `${term.startDate}T00:00:00.000Z`;
-  const termEnd = `${term.endDate}T23:59:59.999Z`;
+  const termStartDate = toDateKey(term.startDate);
+  const termEndDate = toDateKey(term.endDate);
+  const termStart = `${termStartDate}T00:00:00.000Z`;
+  const termEnd = `${termEndDate}T23:59:59.999Z`;
+
+  const ledgerRepo = AppDataSource.getRepository(LedgerEntry);
+  const termLedgerPaymentRows = await ledgerRepo
+    .createQueryBuilder('l')
+    .select('l.referenceId', 'referenceId')
+    .where('l.studentId = :studentId', { studentId })
+    .andWhere('l.termId = :termId', { termId })
+    .andWhere('l.referenceType = :referenceType', { referenceType: 'payment' })
+    .getRawMany<{ referenceId: string | null }>();
+  const termLedgerPaymentIds = termLedgerPaymentRows
+    .map((row) => row.referenceId)
+    .filter((id): id is string => Boolean(id));
 
   const priorInvoices = await invoiceRepo
     .createQueryBuilder('i')
     .where('i.studentId = :studentId', { studentId })
-    .andWhere('COALESCE(i."issuedDate", i."dueDate") < :termStart', { termStart: term.startDate })
+    .andWhere('COALESCE(i."issuedDate", i."dueDate") < :termStart', { termStart: termStartDate })
     .getMany();
 
-  const priorPayments = await paymentRepo
+  const priorPaymentQb = paymentRepo
     .createQueryBuilder('p')
     .where('p.studentId = :studentId', { studentId })
-    .andWhere('p."paidAt" < :termStart', { termStart })
-    .getMany();
+    .andWhere('p."paidAt" < :termStart', { termStart });
+
+  if (termLedgerPaymentIds.length) {
+    priorPaymentQb.andWhere('p.id NOT IN (:...termLedgerPaymentIds)', { termLedgerPaymentIds });
+  }
+
+  const priorPayments = await priorPaymentQb.getMany();
 
   const openingBalance =
     priorInvoices.reduce((s, i) => s + Number(i.totalAmount), 0) -
@@ -153,24 +172,28 @@ export async function buildStudentLedgerReport(
   const termInvoiceIds = termInvoices.map((i) => i.id);
 
   let termPayments: Payment[] = [];
+  const termPaymentQb = paymentRepo
+    .createQueryBuilder('p')
+    .where('p.studentId = :studentId', { studentId });
+
+  const termPaymentConditions: string[] = [
+    '(p."paidAt" >= :termStart AND p."paidAt" <= :termEnd)',
+  ];
+  const termPaymentParams: Record<string, unknown> = { studentId, termStart, termEnd };
+
   if (termInvoiceIds.length) {
-    termPayments = await paymentRepo
-      .createQueryBuilder('p')
-      .where('p.studentId = :studentId', { studentId })
-      .andWhere(
-        '(p."invoiceId" IN (:...ids) OR (p."invoiceId" IS NULL AND p."paidAt" >= :termStart AND p."paidAt" <= :termEnd))',
-        { ids: termInvoiceIds, termStart, termEnd },
-      )
-      .orderBy('p.paidAt', 'ASC')
-      .getMany();
-  } else {
-    termPayments = await paymentRepo
-      .createQueryBuilder('p')
-      .where('p.studentId = :studentId', { studentId })
-      .andWhere('p."paidAt" >= :termStart AND p."paidAt" <= :termEnd', { termStart, termEnd })
-      .orderBy('p.paidAt', 'ASC')
-      .getMany();
+    termPaymentConditions.push('p."invoiceId" IN (:...ids)');
+    termPaymentParams.ids = termInvoiceIds;
   }
+  if (termLedgerPaymentIds.length) {
+    termPaymentConditions.push('p.id IN (:...termLedgerPaymentIds)');
+    termPaymentParams.termLedgerPaymentIds = termLedgerPaymentIds;
+  }
+
+  termPayments = await termPaymentQb
+    .andWhere(`(${termPaymentConditions.join(' OR ')})`, termPaymentParams)
+    .orderBy('p.paidAt', 'ASC')
+    .getMany();
 
   type RawTxn = {
     date: string;
@@ -609,15 +632,16 @@ async function reconcileStudent(
     periodInvoices = allInvoices.filter((i) => i.termId === termId);
     const periodInvoiceIds = new Set(periodInvoices.map((i) => i.id));
     priorInvoices = allInvoices.filter((i) => !periodInvoiceIds.has(i.id) && invoiceDate(i) < dateFrom);
-    if (periodInvoices.length) {
-      periodPayments = allPayments.filter((p) => {
-        if (p.invoiceId && periodInvoiceIds.has(p.invoiceId)) return true;
-        if (!p.invoiceId) return inDateRange(paymentDate(p), dateFrom, dateTo);
-        return false;
-      });
-    } else {
-      periodPayments = allPayments.filter((p) => inDateRange(paymentDate(p), dateFrom, dateTo));
-    }
+    const termLedgerPaymentIds = new Set(
+      allLedger
+        .filter((l) => l.termId === termId && l.referenceType === 'payment' && l.referenceId)
+        .map((l) => l.referenceId as string),
+    );
+    periodPayments = allPayments.filter((p) => {
+      if (p.invoiceId && periodInvoiceIds.has(p.invoiceId)) return true;
+      if (termLedgerPaymentIds.has(p.id)) return true;
+      return inDateRange(paymentDate(p), dateFrom, dateTo);
+    });
   } else {
     priorInvoices = allInvoices.filter((i) => invoiceDate(i) < dateFrom);
     periodInvoices = allInvoices.filter((i) => inDateRange(invoiceDate(i), dateFrom, dateTo));

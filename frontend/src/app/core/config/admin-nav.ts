@@ -17,6 +17,12 @@ export const ADMIN_NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
+    heading: 'Parents',
+    items: [
+      { label: 'All Parents', path: '/admin/parents', icon: '👨‍👩‍👧' },
+    ],
+  },
+  {
     heading: 'Attendance',
     items: [
       { label: 'Mark Register', path: '/admin/attendance/mark-register', icon: '☑' },

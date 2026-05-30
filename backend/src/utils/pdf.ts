@@ -1492,63 +1492,155 @@ export async function generateClassListPdf(data: {
     doc.on('end', () => resolve(Buffer.concat(chunks)));
     doc.on('error', reject);
 
-    const pageBottom = () => doc.page.height - 50;
-
-    const pageW = doc.page.width;
-    const margin = 40;
-    const contentW = pageW - margin * 2;
-    const logoPath = resolveUploadPath(data.logoUrl);
-    if (logoPath) {
-      try {
-        doc.image(logoPath, margin, 26, { fit: [36, 36], align: 'center', valign: 'center' });
-      } catch {
-        /* skip invalid logo */
-      }
-    }
-    const titleX = logoPath ? margin + 46 : margin;
-    const titleW = logoPath ? contentW - 46 : contentW;
-
-    doc.fontSize(16).text(data.schoolName, titleX, 32, { width: titleW, align: logoPath ? 'left' : 'center' });
-    if (data.tagline) {
-      doc.fontSize(9).fillColor('#64748b').text(data.tagline, titleX, 50, { width: titleW, align: logoPath ? 'left' : 'center' });
-      doc.fillColor('#000000');
-    }
-    doc.fontSize(13).text('CLASS LIST REPORT', { align: 'center' });
-    doc.moveDown(0.5);
-    doc.fontSize(10);
-    doc.text(`Class: ${data.classLabel}`, { align: 'center' });
-    doc.text(`Total students: ${data.students.length}`, { align: 'center' });
-    doc.moveDown();
-
-    const colX = { num: 40, id: 70, last: 165, first: 295, gender: 430 };
-    const drawHeader = () => {
-      const y = doc.y;
-      doc.fontSize(9).font('Helvetica-Bold');
-      doc.text('#', colX.num, y);
-      doc.text('Student ID', colX.id, y);
-      doc.text('Last Name', colX.last, y);
-      doc.text('First Name', colX.first, y);
-      doc.text('Gender', colX.gender, y);
-      doc.moveDown(0.6);
-      doc.font('Helvetica');
+    const CL = {
+      primary: '#1e40af',
+      primaryLight: '#2563eb',
+      headerBg: '#1e3a8a',
+      headerText: '#ffffff',
+      rowBlue: '#eff6ff',
+      rowGrey: '#f1f5f9',
+      grid: '#94a3b8',
+      gridLight: '#cbd5e1',
+      ink: '#0f172a',
+      muted: '#64748b',
+      white: '#ffffff',
+      metaBg: '#dbeafe',
     };
 
-    drawHeader();
+    const margin = 40;
+    const pageW = doc.page.width;
+    const contentW = pageW - margin * 2;
+    const rowH = 22;
+    const headerRowH = 24;
+    const colWidths = [32, 98, 138, 138, 109];
+    const tableW = colWidths.reduce((a, b) => a + b, 0);
+    const tableX = margin + (contentW - tableW) / 2;
+    const pageBottom = () => doc.page.height - 58;
 
-    data.students.forEach((s, index) => {
-      if (doc.y > pageBottom()) {
-        doc.addPage();
-        drawHeader();
+    const colX = (index: number) => {
+      let x = tableX;
+      for (let i = 0; i < index; i++) x += colWidths[i];
+      return x;
+    };
+
+    const drawPageHeader = () => {
+      const bannerH = 56;
+      doc.rect(0, 0, pageW, bannerH).fill(CL.headerBg);
+      doc.rect(0, bannerH - 3, pageW, 3).fill(CL.primaryLight);
+
+      const logoPath = resolveUploadPath(data.logoUrl);
+      let textX = margin;
+      if (logoPath) {
+        try {
+          doc.image(logoPath, margin, 10, { fit: [36, 36], align: 'center', valign: 'center' });
+          textX = margin + 46;
+        } catch {
+          /* skip invalid logo */
+        }
       }
+
+      doc.fillColor(CL.white).font('Helvetica-Bold').fontSize(15);
+      doc.text(data.schoolName, textX, 14, { width: contentW - (textX - margin), lineBreak: false });
+      if (data.tagline) {
+        doc.font('Helvetica').fontSize(8.5).fillColor('#bfdbfe');
+        doc.text(data.tagline, textX, 32, { width: contentW - (textX - margin), lineBreak: false });
+      }
+
+      doc.font('Helvetica-Bold').fontSize(10).fillColor('#dbeafe');
+      doc.text('CLASS LIST REPORT', margin, bannerH + 14, { width: contentW, align: 'center' });
+
+      const metaY = bannerH + 32;
+      doc.roundedRect(margin, metaY, contentW, 34, 6).fill(CL.metaBg);
+      doc.roundedRect(margin, metaY, contentW, 34, 6).strokeColor(CL.gridLight).lineWidth(0.75).stroke();
+
+      doc.fillColor(CL.muted).font('Helvetica').fontSize(7.5);
+      doc.text('CLASS', margin + 12, metaY + 7, { lineBreak: false });
+      doc.text('TOTAL STUDENTS', margin + contentW / 2 + 6, metaY + 7, { lineBreak: false });
+      doc.text('GENERATED', margin + contentW - 120, metaY + 7, { width: 108, align: 'right', lineBreak: false });
+
+      doc.fillColor(CL.ink).font('Helvetica-Bold').fontSize(10);
+      doc.text(data.classLabel, margin + 12, metaY + 18, { width: contentW / 2 - 18, lineBreak: false });
+      doc.text(String(data.students.length), margin + contentW / 2 + 6, metaY + 18, { lineBreak: false });
+      doc.font('Helvetica').fontSize(8.5).fillColor(CL.muted);
+      doc.text(formatGeneratedTimestamp(data.generatedAt), margin + contentW - 120, metaY + 18, {
+        width: 108,
+        align: 'right',
+        lineBreak: false,
+      });
+
+      doc.y = metaY + 44;
+    };
+
+    const drawTableHeader = () => {
       const y = doc.y;
-      doc.fontSize(9);
-      doc.text(String(index + 1), colX.num, y);
-      doc.text(s.admissionNumber, colX.id, y);
-      doc.text(s.lastName, colX.last, y, { width: 120 });
-      doc.text(s.firstName, colX.first, y, { width: 120 });
-      doc.text(s.gender || '—', colX.gender, y);
-      doc.moveDown(0.55);
+      const headers = ['#', 'Student ID', 'Last Name', 'First Name', 'Gender'];
+
+      doc.rect(tableX, y, tableW, headerRowH).fill(CL.primary);
+      doc.fillColor(CL.headerText).font('Helvetica-Bold').fontSize(8.5);
+
+      headers.forEach((label, i) => {
+        const x = colX(i);
+        const w = colWidths[i];
+        doc.text(label, x + 5, y + 7, { width: w - 10, lineBreak: false });
+        if (i > 0) {
+          doc.moveTo(x, y).lineTo(x, y + headerRowH).strokeColor(CL.grid).lineWidth(0.75).stroke();
+        }
+      });
+
+      doc.rect(tableX, y, tableW, headerRowH).strokeColor(CL.grid).lineWidth(0.85).stroke();
+      doc.y = y + headerRowH;
+    };
+
+    const drawStudentRow = (index: number, student: (typeof data.students)[0]) => {
+      const y = doc.y;
+      const bg = index % 2 === 0 ? CL.rowBlue : CL.rowGrey;
+      const values = [
+        String(index + 1),
+        student.admissionNumber,
+        student.lastName,
+        student.firstName,
+        student.gender || '—',
+      ];
+
+      doc.rect(tableX, y, tableW, rowH).fill(bg);
+      doc.fillColor(CL.ink).font('Helvetica').fontSize(8.5);
+
+      values.forEach((value, i) => {
+        const x = colX(i);
+        const w = colWidths[i];
+        const isId = i === 1;
+        if (isId) doc.font('Helvetica-Bold').fillColor(CL.primaryLight);
+        else doc.font('Helvetica').fillColor(CL.ink);
+        doc.text(value, x + 5, y + 6, { width: w - 10, lineBreak: false, ellipsis: true });
+        if (i > 0) {
+          doc.moveTo(x, y).lineTo(x, y + rowH).strokeColor(CL.gridLight).lineWidth(0.6).stroke();
+        }
+      });
+
+      doc.rect(tableX, y, tableW, rowH).strokeColor(CL.grid).lineWidth(0.75).stroke();
+      doc.y = y + rowH;
+    };
+
+    drawPageHeader();
+    drawTableHeader();
+
+    data.students.forEach((student, index) => {
+      if (doc.y + rowH > pageBottom()) {
+        doc.addPage();
+        drawPageHeader();
+        drawTableHeader();
+      }
+      drawStudentRow(index, student);
     });
+
+    doc.moveDown(0.6);
+    doc.fillColor(CL.muted).font('Helvetica').fontSize(7.5);
+    doc.text(
+      `End of class list · ${data.students.length} student${data.students.length === 1 ? '' : 's'}`,
+      margin,
+      doc.y,
+      { width: contentW, align: 'center' },
+    );
 
     drawGeneratedFooter(doc, data.generatedAt, margin, contentW);
     doc.end();

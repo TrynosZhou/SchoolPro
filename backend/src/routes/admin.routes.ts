@@ -1243,6 +1243,370 @@ router.post('/users/:id/unlock', authorize(UserRole.ADMIN), async (req, res: Res
   res.json(serializeManagedUser(full!));
 });
 
+async function loadParentRecord(parentId: string) {
+  return AppDataSource.getRepository(Parent).findOne({
+    where: { id: parentId },
+    relations: relations(
+      'user',
+      'guardianships',
+      'guardianships.student',
+      'guardianships.student.schoolClass',
+      'guardianships.student.form',
+    ),
+  });
+}
+
+function serializeParent(parent: Parent) {
+  const user = parent.user;
+  const linkedStudents = (parent.guardianships || [])
+    .filter((g) => g.student && g.parentId === parent.id)
+    .map((g) => ({
+      guardianId: g.id,
+      studentId: g.student.id,
+      admissionNumber: g.student.admissionNumber,
+      firstName: g.student.firstName,
+      lastName: g.student.lastName,
+      className: g.student.schoolClass?.name ?? null,
+      formName: g.student.form?.name ?? null,
+      relationship: g.relationship || 'Parent',
+    }));
+
+  return {
+    id: parent.id,
+    userId: user.id,
+    firstName: user.firstName,
+    lastName: user.lastName,
+    email: user.email,
+    phone: user.phone ?? null,
+    isActive: user.isActive,
+    occupation: parent.occupation ?? null,
+    address: parent.address ?? null,
+    receivesWhatsApp: parent.receivesWhatsApp,
+    linkedStudents,
+    createdAt: user.createdAt,
+  };
+}
+
+router.get('/parents', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (req, res: Response) => {
+  const search = String(req.query.search || '').trim();
+  const status = String(req.query.status || 'active');
+
+  const qb = AppDataSource.getRepository(Parent)
+    .createQueryBuilder('p')
+    .innerJoinAndSelect('p.user', 'u')
+    .leftJoinAndSelect('p.guardianships', 'g')
+    .leftJoinAndSelect('g.student', 's')
+    .where('u.role = :role', { role: UserRole.PARENT });
+
+  if (status === 'active') qb.andWhere('u.isActive = true');
+  else if (status === 'inactive') qb.andWhere('u.isActive = false');
+
+  if (search) {
+    qb.andWhere(
+      `(u.firstName ILIKE :q OR u.lastName ILIKE :q OR u.email ILIKE :q OR u.phone ILIKE :q OR p.occupation ILIKE :q OR s."admissionNumber" ILIKE :q OR s."firstName" ILIKE :q OR s."lastName" ILIKE :q)`,
+      { q: `%${search}%` },
+    );
+  }
+
+  qb.orderBy('u.lastName', 'ASC').addOrderBy('u.firstName', 'ASC');
+  const parents = await qb.getMany();
+  res.json(parents.map(serializeParent));
+});
+
+router.get('/parents/:id', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (req, res: Response) => {
+  const parent = await loadParentRecord(req.params.id);
+  if (!parent) return res.status(404).json({ message: 'Parent not found' });
+  res.json(serializeParent(parent));
+});
+
+router.get('/parents/:id/students/search', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (req, res: Response) => {
+  const q = String(req.query.q || '').trim();
+  if (!q) {
+    return res.status(400).json({ message: 'Enter a first name or last name to search' });
+  }
+
+  const parent = await loadParentRecord(req.params.id);
+  if (!parent) return res.status(404).json({ message: 'Parent not found' });
+
+  const linkedStudentIds = new Set(
+    (parent.guardianships || [])
+      .filter((g) => g.parentId === parent.id && g.studentId)
+      .map((g) => g.studentId as string),
+  );
+
+  const students = await AppDataSource.getRepository(Student)
+    .createQueryBuilder('s')
+    .leftJoinAndSelect('s.schoolClass', 'c')
+    .leftJoinAndSelect('s.form', 'f')
+    .where('s.isActive = true')
+    .andWhere('(s.firstName ILIKE :q OR s.lastName ILIKE :q)', { q: `%${q}%` })
+    .orderBy('s.lastName', 'ASC')
+    .addOrderBy('s.firstName', 'ASC')
+    .take(50)
+    .getMany();
+
+  res.json(
+    students.map((s) => ({
+      id: s.id,
+      admissionNumber: s.admissionNumber,
+      firstName: s.firstName,
+      lastName: s.lastName,
+      className: s.schoolClass?.name ?? null,
+      formName: s.form?.name ?? null,
+      alreadyLinked: linkedStudentIds.has(s.id),
+    })),
+  );
+});
+
+router.post('/parents/:id/students/link', authorize(UserRole.ADMIN), async (req: AuthRequest, res: Response) => {
+  const { studentIds, relationship } = req.body || {};
+  const ids = Array.isArray(studentIds) ? [...new Set(studentIds.filter(Boolean))] : [];
+  if (!ids.length) {
+    return res.status(400).json({ message: 'Select at least one student to link' });
+  }
+
+  const parent = await loadParentRecord(req.params.id);
+  if (!parent) return res.status(404).json({ message: 'Parent not found' });
+
+  const user = parent.user;
+  const rel = String(relationship || 'Parent').trim() || 'Parent';
+  const studentRepo = AppDataSource.getRepository(Student);
+  const guardianRepo = AppDataSource.getRepository(Guardian);
+  let linked = 0;
+
+  for (const studentId of ids) {
+    const student = await studentRepo.findOne({ where: { id: studentId, isActive: true } });
+    if (!student) continue;
+
+    const existingLink = await guardianRepo.findOne({ where: { studentId, parentId: parent.id } });
+    if (existingLink) continue;
+
+    let guardian = await guardianRepo.findOne({
+      where: [{ studentId, email: user.email }, { studentId, parentId: parent.id }],
+    });
+
+    if (guardian) {
+      guardian.parentId = parent.id;
+      guardian.relationship = rel;
+      guardian.fullName = `${user.firstName} ${user.lastName}`;
+      guardian.email = user.email;
+      guardian.phone = user.phone || guardian.phone;
+    } else {
+      guardian = guardianRepo.create({
+        studentId,
+        parentId: parent.id,
+        fullName: `${user.firstName} ${user.lastName}`,
+        relationship: rel,
+        phone: user.phone || undefined,
+        email: user.email,
+        isPrimary: false,
+      });
+    }
+
+    await guardianRepo.save(guardian);
+    linked += 1;
+  }
+
+  const full = await loadParentRecord(parent.id);
+  res.json({ linked, parent: serializeParent(full!) });
+});
+
+router.delete('/parents/:id/students/:studentId/unlink', authorize(UserRole.ADMIN), async (req: AuthRequest, res: Response) => {
+  const parent = await loadParentRecord(req.params.id);
+  if (!parent) return res.status(404).json({ message: 'Parent not found' });
+
+  const guardianRepo = AppDataSource.getRepository(Guardian);
+  const guardian = await guardianRepo.findOne({
+    where: { studentId: req.params.studentId, parentId: parent.id },
+  });
+  if (!guardian) {
+    return res.status(404).json({ message: 'This student is not linked to the parent' });
+  }
+
+  guardian.parentId = null;
+  await guardianRepo.save(guardian);
+
+  const full = await loadParentRecord(parent.id);
+  res.json({ parent: serializeParent(full!) });
+});
+
+router.post('/parents', authorize(UserRole.ADMIN), async (req: AuthRequest, res: Response) => {
+  const {
+    email,
+    password,
+    firstName,
+    lastName,
+    phone,
+    occupation,
+    address,
+    receivesWhatsApp,
+    linkAdmissionNumber,
+    relationship,
+  } = req.body || {};
+
+  const trimmedEmail = String(email || '').trim().toLowerCase();
+  const trimmedFirst = String(firstName || '').trim();
+  const trimmedLast = String(lastName || '').trim();
+
+  if (!trimmedEmail || !trimmedFirst || !trimmedLast) {
+    return res.status(400).json({ message: 'Email, first name, and last name are required' });
+  }
+
+  const userRepo = AppDataSource.getRepository(User);
+  const existing = await userRepo.findOne({ where: { email: trimmedEmail } });
+  if (existing) return res.status(409).json({ message: 'Email already registered' });
+
+  const plainPassword = password || 'ChangeMe123!';
+  const policy = await getSecurityPolicy();
+  const pwdErr = validatePasswordAgainstPolicy(plainPassword, policy);
+  if (pwdErr) return res.status(400).json({ message: pwdErr });
+
+  const passwordHash = await bcrypt.hash(plainPassword, 10);
+  const user = await userRepo.save(userRepo.create({
+    email: trimmedEmail,
+    passwordHash,
+    firstName: trimmedFirst,
+    lastName: trimmedLast,
+    phone: phone?.trim() || undefined,
+    role: UserRole.PARENT,
+    isActive: true,
+  }));
+
+  const parentRepo = AppDataSource.getRepository(Parent);
+  const parent = await parentRepo.save(parentRepo.create({
+    userId: user.id,
+    occupation: occupation?.trim() || undefined,
+    address: address?.trim() || undefined,
+    receivesWhatsApp: receivesWhatsApp !== false,
+  }));
+
+  const linkAdmission = String(linkAdmissionNumber || '').trim().toUpperCase();
+  if (linkAdmission) {
+    const studentRepo = AppDataSource.getRepository(Student);
+    const guardianRepo = AppDataSource.getRepository(Guardian);
+    const student = await studentRepo.findOne({ where: { admissionNumber: linkAdmission, isActive: true } });
+    if (student) {
+      let guardian = await guardianRepo.findOne({
+        where: [{ studentId: student.id, email: trimmedEmail }, { studentId: student.id, parentId: parent.id }],
+      });
+      if (guardian) {
+        guardian.parentId = parent.id;
+        if (relationship) guardian.relationship = String(relationship).trim();
+      } else {
+        guardian = guardianRepo.create({
+          studentId: student.id,
+          parentId: parent.id,
+          fullName: `${trimmedFirst} ${trimmedLast}`,
+          relationship: relationship?.trim() || 'Parent',
+          phone: phone?.trim() || undefined,
+          email: trimmedEmail,
+          isPrimary: false,
+        });
+      }
+      await guardianRepo.save(guardian);
+    }
+  }
+
+  const full = await loadParentRecord(parent.id);
+  res.status(201).json(serializeParent(full!));
+});
+
+router.patch('/parents/:id', authorize(UserRole.ADMIN), async (req: AuthRequest, res: Response) => {
+  const parent = await loadParentRecord(req.params.id);
+  if (!parent) return res.status(404).json({ message: 'Parent not found' });
+
+  const {
+    email,
+    password,
+    firstName,
+    lastName,
+    phone,
+    occupation,
+    address,
+    receivesWhatsApp,
+    isActive,
+    linkAdmissionNumber,
+    relationship,
+  } = req.body || {};
+
+  const userRepo = AppDataSource.getRepository(User);
+  const parentRepo = AppDataSource.getRepository(Parent);
+  const user = parent.user;
+
+  if (email !== undefined) {
+    const trimmedEmail = String(email).trim().toLowerCase();
+    if (!trimmedEmail) return res.status(400).json({ message: 'Email is required' });
+    if (trimmedEmail !== user.email) {
+      const dup = await userRepo.findOne({ where: { email: trimmedEmail } });
+      if (dup) return res.status(409).json({ message: 'Email already in use' });
+      user.email = trimmedEmail;
+    }
+  }
+  if (firstName !== undefined) user.firstName = String(firstName).trim();
+  if (lastName !== undefined) user.lastName = String(lastName).trim();
+  if (phone !== undefined) user.phone = phone?.trim() || undefined;
+  if (isActive !== undefined) user.isActive = Boolean(isActive);
+
+  if (password) {
+    const policy = await getSecurityPolicy();
+    const pwdErr = validatePasswordAgainstPolicy(String(password), policy);
+    if (pwdErr) return res.status(400).json({ message: pwdErr });
+    user.passwordHash = await bcrypt.hash(String(password), 10);
+  }
+
+  if (occupation !== undefined) parent.occupation = occupation?.trim() || undefined;
+  if (address !== undefined) parent.address = address?.trim() || undefined;
+  if (receivesWhatsApp !== undefined) parent.receivesWhatsApp = Boolean(receivesWhatsApp);
+
+  await userRepo.save(user);
+  await parentRepo.save(parent);
+
+  const linkAdmission = String(linkAdmissionNumber || '').trim().toUpperCase();
+  if (linkAdmission) {
+    const studentRepo = AppDataSource.getRepository(Student);
+    const guardianRepo = AppDataSource.getRepository(Guardian);
+    const student = await studentRepo.findOne({ where: { admissionNumber: linkAdmission, isActive: true } });
+    if (student) {
+      let guardian = await guardianRepo.findOne({
+        where: [{ studentId: student.id, parentId: parent.id }, { studentId: student.id, email: user.email }],
+      });
+      if (guardian) {
+        guardian.parentId = parent.id;
+        guardian.email = user.email;
+        guardian.fullName = `${user.firstName} ${user.lastName}`;
+        if (relationship) guardian.relationship = String(relationship).trim();
+        if (phone !== undefined) guardian.phone = phone?.trim() || undefined;
+      } else {
+        guardian = guardianRepo.create({
+          studentId: student.id,
+          parentId: parent.id,
+          fullName: `${user.firstName} ${user.lastName}`,
+          relationship: relationship?.trim() || 'Parent',
+          phone: user.phone || undefined,
+          email: user.email,
+          isPrimary: false,
+        });
+      }
+      await guardianRepo.save(guardian);
+    }
+  }
+
+  const full = await loadParentRecord(parent.id);
+  res.json(serializeParent(full!));
+});
+
+router.delete('/parents/:id', authorize(UserRole.ADMIN), async (req: AuthRequest, res: Response) => {
+  const parent = await loadParentRecord(req.params.id);
+  if (!parent) return res.status(404).json({ message: 'Parent not found' });
+
+  if (parent.userId === req.user!.userId) {
+    return res.status(400).json({ message: 'You cannot delete your own account' });
+  }
+
+  await AppDataSource.getRepository(User).delete({ id: parent.userId });
+  res.json({ message: 'Parent deleted' });
+});
+
 router.use('/permissions', permissionsRoutes);
 
 export default router;

@@ -402,6 +402,7 @@ router.post('/payments', authorize(UserRole.ADMIN), async (req: AuthRequest, res
     } else {
       // Auto-allocate payment against outstanding invoices (oldest first).
       let remaining = paymentAmount;
+      let primaryInvoiceId: string | undefined;
       const outstanding = await invoiceRepo.find({
         where: { studentId },
         order: { dueDate: 'ASC', createdAt: 'ASC' },
@@ -416,8 +417,13 @@ router.post('/payments', authorize(UserRole.ADMIN), async (req: AuthRequest, res
           ? InvoiceStatus.PAID
           : InvoiceStatus.PARTIAL;
         await invoiceRepo.save(inv);
+        if (!primaryInvoiceId) primaryInvoiceId = inv.id;
         if (!ledgerTermId && inv.termId) ledgerTermId = inv.termId;
         remaining -= applied;
+      }
+      if (primaryInvoiceId) {
+        payment.invoiceId = primaryInvoiceId;
+        await paymentRepo.save(payment);
       }
     }
 

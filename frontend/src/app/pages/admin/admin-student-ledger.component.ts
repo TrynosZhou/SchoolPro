@@ -1,6 +1,7 @@
 import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
 import { ApiService } from '../../core/services/api.service';
@@ -57,10 +58,12 @@ interface LedgerApiResponse {
   term?: { id: string; name: string };
 }
 
+type LineTypeFilter = 'all' | LedgerLine['type'];
+
 @Component({
   selector: 'app-admin-student-ledger',
   standalone: true,
-  imports: [PortalLayoutComponent, FormsModule, DecimalPipe],
+  imports: [PortalLayoutComponent, FormsModule, DecimalPipe, RouterLink],
   templateUrl: './admin-student-ledger.component.html',
   styleUrl: './admin-student-ledger.component.scss',
 })
@@ -80,9 +83,37 @@ export class AdminStudentLedgerComponent implements OnInit {
 
   matches = signal<StudentMatch[]>([]);
   report = signal<StudentLedgerReport | null>(null);
+  lineSearch = signal('');
+  typeFilter = signal<LineTypeFilter>('all');
 
   sortedTerms = computed(() =>
     [...this.terms()].sort((a, b) => (a.termNumber || 0) - (b.termNumber || 0)),
+  );
+
+  filteredLines = computed(() => {
+    const r = this.report();
+    if (!r) return [];
+    let lines = [...r.lines];
+    const q = this.lineSearch().trim().toLowerCase();
+    if (q) {
+      lines = lines.filter((l) =>
+        `${l.reference} ${l.description} ${l.type} ${l.date}`.toLowerCase().includes(q),
+      );
+    }
+    const type = this.typeFilter();
+    if (type !== 'all') lines = lines.filter((l) => l.type === type);
+    return lines;
+  });
+
+  balanceStatus = computed(() => {
+    const closing = this.report()?.summary.closingBalance ?? 0;
+    if (closing > 0) return { label: 'Amount owed', tone: 'owed' as const };
+    if (closing < 0) return { label: 'Credit balance', tone: 'credit' as const };
+    return { label: 'Settled', tone: 'clear' as const };
+  });
+
+  hasLineFilters = computed(
+    () => Boolean(this.lineSearch().trim()) || this.typeFilter() !== 'all',
   );
 
   ngOnInit() {
@@ -98,6 +129,11 @@ export class AdminStudentLedgerComponent implements OnInit {
     });
   }
 
+  selectTerm(termId: string) {
+    this.selectedTermId = termId;
+    if (this.selectedStudentId || this.query.trim()) this.getReport();
+  }
+
   getReport() {
     if (!this.selectedTermId) {
       this.showToast('error', 'Select a term.');
@@ -111,6 +147,8 @@ export class AdminStudentLedgerComponent implements OnInit {
     this.loading.set(true);
     this.matches.set([]);
     this.report.set(null);
+    this.lineSearch.set('');
+    this.typeFilter.set('all');
 
     const params: Record<string, string> = { termId: this.selectedTermId };
     if (this.selectedStudentId) params['studentId'] = this.selectedStudentId;
@@ -146,8 +184,16 @@ export class AdminStudentLedgerComponent implements OnInit {
 
   clearSelection() {
     this.selectedStudentId = '';
+    this.query = '';
     this.matches.set([]);
     this.report.set(null);
+    this.lineSearch.set('');
+    this.typeFilter.set('all');
+  }
+
+  clearLineFilters() {
+    this.lineSearch.set('');
+    this.typeFilter.set('all');
   }
 
   previewPdf() {
@@ -162,6 +208,10 @@ export class AdminStudentLedgerComponent implements OnInit {
     if (type === 'invoice') return 'Invoice';
     if (type === 'payment') return 'Payment';
     return 'Opening';
+  }
+
+  initials(student: { firstName: string; lastName: string }): string {
+    return `${student.firstName.charAt(0)}${student.lastName.charAt(0)}`.toUpperCase();
   }
 
   private exportPdf(preview: boolean) {

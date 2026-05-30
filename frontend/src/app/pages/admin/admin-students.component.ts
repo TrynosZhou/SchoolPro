@@ -14,6 +14,10 @@ interface FormOption {
 }
 
 type StudentResidenceType = 'day_scholar' | 'boarder';
+type EnrollmentFilter = 'all' | 'enrolled' | 'pending';
+type TypeFilter = 'all' | 'day_scholar' | 'boarder';
+type SortOrder = 'name-asc' | 'name-desc' | 'id-asc' | 'id-desc';
+type ViewMode = 'table' | 'cards';
 
 type StudentForm = {
   firstName: string;
@@ -51,19 +55,81 @@ export class AdminStudentsComponent implements OnInit {
   lastCreatedId = signal('');
   lastInvoiceInfo = signal('');
   saving = signal(false);
-  search = '';
-  showForm = false;
+  loading = signal(true);
+  refreshing = signal(false);
+  search = signal('');
+  registerDrawerOpen = signal(false);
   editingStudent = signal<Student | null>(null);
   deleteTarget = signal<Student | null>(null);
   toast = signal<{ type: 'success' | 'error'; msg: string } | null>(null);
+
+  enrollmentFilter = signal<EnrollmentFilter>('all');
+  typeFilter = signal<TypeFilter>('all');
+  formFilter = signal('all');
+  sortOrder = signal<SortOrder>('name-asc');
+  viewMode = signal<ViewMode>('table');
 
   form: StudentForm = this.emptyForm();
   guardian = { fullName: '', phone: '', relationship: 'Parent', isPrimary: true };
 
   readonly adminNav = ADMIN_NAV_SECTIONS;
 
-  registeredCount = computed(() => this.students().length);
-  pendingEnrollmentCount = computed(() => this.students().filter((s) => !s.classId && !s.schoolClass).length);
+  stats = computed(() => {
+    const rows = this.students();
+    return {
+      total: rows.length,
+      enrolled: rows.filter((s) => this.enrollmentStatus(s) === 'enrolled').length,
+      pending: rows.filter((s) => this.enrollmentStatus(s) === 'pending').length,
+      boarders: rows.filter((s) => s.studentType === 'boarder').length,
+      dayScholars: rows.filter((s) => s.studentType !== 'boarder').length,
+    };
+  });
+
+  visibleStudents = computed(() => {
+    let rows = [...this.students()];
+    const q = this.search().trim().toLowerCase();
+
+    if (q) {
+      rows = rows.filter((s) =>
+        `${s.firstName} ${s.lastName} ${s.admissionNumber} ${s.schoolClass?.name ?? ''} ${s.guardians?.[0]?.fullName ?? ''}`
+          .toLowerCase()
+          .includes(q),
+      );
+    }
+
+    const enrollment = this.enrollmentFilter();
+    if (enrollment === 'enrolled') rows = rows.filter((s) => this.enrollmentStatus(s) === 'enrolled');
+    else if (enrollment === 'pending') rows = rows.filter((s) => this.enrollmentStatus(s) === 'pending');
+
+    const type = this.typeFilter();
+    if (type === 'day_scholar') rows = rows.filter((s) => s.studentType !== 'boarder');
+    else if (type === 'boarder') rows = rows.filter((s) => s.studentType === 'boarder');
+
+    const formId = this.formFilter();
+    if (formId !== 'all') {
+      rows = rows.filter((s) => (s.formId || s.form?.id) === formId);
+    }
+
+    const sort = this.sortOrder();
+    rows.sort((a, b) => {
+      if (sort === 'id-asc') return a.admissionNumber.localeCompare(b.admissionNumber);
+      if (sort === 'id-desc') return b.admissionNumber.localeCompare(a.admissionNumber);
+      const nameA = `${a.lastName} ${a.firstName}`.toLowerCase();
+      const nameB = `${b.lastName} ${b.firstName}`.toLowerCase();
+      if (sort === 'name-desc') return nameB.localeCompare(nameA);
+      return nameA.localeCompare(nameB);
+    });
+
+    return rows;
+  });
+
+  hasActiveFilters = computed(
+    () =>
+      Boolean(this.search().trim()) ||
+      this.enrollmentFilter() !== 'all' ||
+      this.typeFilter() !== 'all' ||
+      this.formFilter() !== 'all',
+  );
 
   ngOnInit() {
     this.load();
@@ -95,28 +161,56 @@ export class AdminStudentsComponent implements OnInit {
     return student.form?.name || student.schoolClass?.form?.name || '—';
   }
 
-  toggleForm() {
-    this.showForm = !this.showForm;
+  initials(student: Student): string {
+    return `${student.firstName.charAt(0)}${student.lastName.charAt(0)}`.toUpperCase();
+  }
+
+  openRegister() {
     this.editingStudent.set(null);
     this.lastCreatedId.set('');
     this.lastInvoiceInfo.set('');
-    if (this.showForm) {
-      this.resetForm();
-      this.api.get<{ studentId: string }>('/students/next-student-id').subscribe({
-        next: (r) => this.nextStudentId.set(r.studentId),
-        error: () => this.nextStudentId.set('SP000001'),
-      });
-    }
+    this.resetForm();
+    this.registerDrawerOpen.set(true);
+    this.api.get<{ studentId: string }>('/students/next-student-id').subscribe({
+      next: (r) => this.nextStudentId.set(r.studentId),
+      error: () => this.nextStudentId.set('SP000001'),
+    });
   }
 
-  load() {
-    const params: Record<string, string> = {};
-    if (this.search) params['search'] = this.search;
-    this.api.get<Student[]>('/students', params).subscribe((s) => this.students.set(s));
+  closeRegister() {
+    this.registerDrawerOpen.set(false);
+    this.resetForm();
+  }
+
+  load(refresh = false) {
+    if (refresh) this.refreshing.set(true);
+    else this.loading.set(true);
+
+    this.api.get<Student[]>('/students').subscribe({
+      next: (s) => {
+        this.students.set(s);
+        this.loading.set(false);
+        this.refreshing.set(false);
+      },
+      error: () => {
+        this.students.set([]);
+        this.loading.set(false);
+        this.refreshing.set(false);
+        this.showToast('error', 'Failed to load students');
+      },
+    });
+  }
+
+  clearFilters() {
+    this.search.set('');
+    this.enrollmentFilter.set('all');
+    this.typeFilter.set('all');
+    this.formFilter.set('all');
+    this.sortOrder.set('name-asc');
   }
 
   openEdit(student: Student) {
-    this.showForm = false;
+    this.registerDrawerOpen.set(false);
     this.editingStudent.set(student);
     this.form = {
       firstName: student.firstName,
@@ -142,7 +236,8 @@ export class AdminStudentsComponent implements OnInit {
     this.resetForm();
   }
 
-  confirmDelete(student: Student) {
+  confirmDelete(student: Student, event?: Event) {
+    event?.stopPropagation();
     this.deleteTarget.set(student);
   }
 
@@ -160,7 +255,7 @@ export class AdminStudentsComponent implements OnInit {
         this.deleteTarget.set(null);
         this.showToast('success', `${student.admissionNumber} removed.`);
         if (this.editingStudent()?.id === student.id) this.closeEdit();
-        this.load();
+        this.load(true);
       },
       error: () => {
         this.saving.set(false);
@@ -176,7 +271,7 @@ export class AdminStudentsComponent implements OnInit {
     this.api.post<RegisterStudentResponse>('/students', body).subscribe({
       next: (student) => {
         this.saving.set(false);
-        this.showForm = false;
+        this.registerDrawerOpen.set(false);
         this.lastCreatedId.set(student.admissionNumber);
         if (student.registrationInvoice) {
           const amt = student.registrationInvoice.totalAmount;
@@ -196,7 +291,7 @@ export class AdminStudentsComponent implements OnInit {
         } else {
           this.showToast('success', `Student ${student.admissionNumber} registered.`);
         }
-        this.load();
+        this.load(true);
         this.resetForm();
       },
       error: (err) => {
@@ -216,7 +311,7 @@ export class AdminStudentsComponent implements OnInit {
         this.saving.set(false);
         this.showToast('success', `${student.admissionNumber} updated successfully.`);
         this.closeEdit();
-        this.load();
+        this.load(true);
       },
       error: (err) => {
         this.saving.set(false);

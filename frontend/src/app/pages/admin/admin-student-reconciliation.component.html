@@ -1,296 +1,524 @@
-<app-portal-layout portalTitle="Admin Portal" pageTitle="Student Reconcilliation" [navSections]="adminNav">
+<app-portal-layout portalTitle="Admin Portal" pageTitle="Student Reconciliation" [navSections]="adminNav">
   <div class="recon-page">
     @if (toast(); as t) {
-      <div class="toast no-print" [class.error]="t.type === 'error'">{{ t.msg }}</div>
+      <div class="toast no-print" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>
     }
 
-    <section class="card intro no-print">
-      <h3>Student Reconciliation Report</h3>
-      <p class="sub">
-        Data matching and verification — compare student account balances between the student information module
-        and the general ledger. Flags discrepancies between amounts billed, collected, and recorded.
-      </p>
-    </section>
-
-    <section class="card filters no-print">
-      <div class="filter-grid">
-        <div class="field">
-          <label>Term / Semester</label>
-          <select [(ngModel)]="selectedTermId" name="reconTerm" (ngModelChange)="onTermChange()">
-            <option value="">— Custom dates —</option>
-            @for (t of terms(); track t.id) {
-              <option [value]="t.id">{{ t.name }}</option>
-            }
-          </select>
-        </div>
-        <div class="field">
-          <label>Date from</label>
-          <input type="date" [(ngModel)]="dateFrom" name="reconFrom" />
-        </div>
-        <div class="field">
-          <label>Date to</label>
-          <input type="date" [(ngModel)]="dateTo" name="reconTo" />
-        </div>
-        <div class="field">
-          <label>Grade / Form</label>
-          <select [(ngModel)]="selectedFormId" name="reconForm" (ngModelChange)="selectedClassId = ''">
-            <option value="">All forms</option>
-            @for (f of forms(); track f.id) {
-              <option [value]="f.id">{{ f.name }}</option>
-            }
-          </select>
-        </div>
-        <div class="field">
-          <label>Class</label>
-          <select [(ngModel)]="selectedClassId" name="reconClass">
-            <option value="">All classes</option>
-            @for (c of filteredClasses(); track c.id) {
-              <option [value]="c.id">{{ c.form?.name || '' }} {{ c.name }}</option>
-            }
-          </select>
-        </div>
-        <div class="field">
-          <label>Transaction type</label>
-          <select [(ngModel)]="selectedFeeType" name="reconFee">
-            @for (ft of feeTypes; track ft.value) {
-              <option [value]="ft.value">{{ ft.label }}</option>
-            }
-          </select>
-        </div>
-        <div class="field span-2">
-          <label>Student (ID / first / last name)</label>
-          <input
-            type="text"
-            [(ngModel)]="query"
-            name="reconQuery"
-            placeholder="Optional — leave blank for all students in filters"
-            (input)="selectedStudentId = ''"
-            (keyup.enter)="getReport()"
-          />
-        </div>
-        <div class="field">
-          <label>Report view</label>
-          <select [(ngModel)]="viewMode" name="reconView">
-            <option value="summary">Summary</option>
-            <option value="detailed">Detailed</option>
-          </select>
-        </div>
+    <header class="hero no-print">
+      <div class="hero-copy">
+        <p class="eyebrow">Finance reports</p>
+        <h2>Student reconciliation</h2>
+        <p class="hero-sub">
+          Compare student account balances between the student module and general ledger. Flag billing,
+          collection, and ledger mismatches. Cross-check individual accounts on the
+          <a routerLink="/admin/fin-reports/student-ledger">Student Ledger</a> page.
+        </p>
       </div>
-
-      <div class="toolbar">
-        <button type="button" class="btn-primary" (click)="getReport()" [disabled]="loading()">
-          {{ loading() ? 'Loading…' : 'Get Report' }}
-        </button>
-        @if (report()) {
-          <button type="button" class="btn-outline" (click)="printReport('summary')" [disabled]="exporting()">Print Summary</button>
-          <button type="button" class="btn-outline" (click)="printReport('detailed')" [disabled]="exporting()">Print Detailed</button>
-          <button type="button" class="btn-outline btn-pdf-preview" (click)="previewPdf()" [disabled]="exporting()">
-            {{ exporting() ? 'Generating…' : 'Preview PDF' }}
-          </button>
-          <button type="button" class="btn-outline btn-pdf-download" (click)="downloadPdf()" [disabled]="exporting()">
-            {{ exporting() ? 'Generating…' : 'Download PDF' }}
-          </button>
-          <button type="button" class="btn-outline" (click)="exportFile('xlsx', 'summary')" [disabled]="exporting()">Excel Summary</button>
-          <button type="button" class="btn-outline" (click)="exportFile('xlsx', 'detailed')" [disabled]="exporting()">Excel Detailed</button>
-        }
+      <div class="kpi-grid">
+        <article class="kpi">
+          <span class="kpi-icon">👥</span>
+          <div>
+            <strong>{{ report() ? report()!.summary.studentCount : '—' }}</strong>
+            <span>Students</span>
+          </div>
+        </article>
+        <article class="kpi ok">
+          <span class="kpi-icon">✓</span>
+          <div>
+            <strong>{{ report() ? report()!.summary.reconciled : '—' }}</strong>
+            <span>Reconciled</span>
+          </div>
+        </article>
+        <article class="kpi warn">
+          <span class="kpi-icon">⏳</span>
+          <div>
+            <strong>{{ report() ? report()!.summary.pending : '—' }}</strong>
+            <span>Pending</span>
+          </div>
+        </article>
+        <article class="kpi bad">
+          <span class="kpi-icon">⚠</span>
+          <div>
+            <strong>{{ report() ? report()!.summary.unreconciled : '—' }}</strong>
+            <span>Unreconciled</span>
+          </div>
+        </article>
+        <article class="kpi accent">
+          <span class="kpi-icon">📊</span>
+          <div>
+            <strong>{{ report() ? (reconciliationRate() | number:'1.0-0') + '%' : '—' }}</strong>
+            <span>Match rate</span>
+          </div>
+        </article>
+        <article class="kpi highlight">
+          <span class="kpi-icon">⚖</span>
+          <div>
+            <strong>{{ report() ? ('$' + (report()!.summary.totalVariance | number:'1.0-0')) : '—' }}</strong>
+            <span>Total variance</span>
+          </div>
+        </article>
       </div>
-    </section>
+    </header>
 
-    @if (matches().length) {
-      <section class="card no-print">
-        <h3>Select student</h3>
-        <div class="match-list">
-          @for (m of matches(); track m.id) {
-            <button type="button" class="match-btn" (click)="pickStudent(m)">
-              <strong>{{ m.firstName }} {{ m.lastName }}</strong>
-              <span>{{ m.admissionNumber }} · {{ m.formName || '—' }} {{ m.className || '' }}</span>
+    <section class="list-shell no-print">
+      <div class="list-toolbar">
+        <h3>Report filters</h3>
+        <p>Select a term or date range, then narrow by form, class, fee type, or student.</p>
+
+        <div class="term-chips">
+          @for (t of sortedTerms(); track t.id) {
+            <button type="button" class="term-chip" [class.active]="selectedTermId === t.id" (click)="selectTerm(t.id)">
+              {{ t.name }}
+              @if (t.isCurrent) {
+                <span class="current-dot">Current</span>
+              }
             </button>
           }
         </div>
-      </section>
-    }
 
-    @if (report(); as r) {
-      <section class="card print-header">
-        <h3>Reconciliation Summary</h3>
-        <p class="period">
-          Period: <strong>{{ r.filters.dateFrom }}</strong> → <strong>{{ r.filters.dateTo }}</strong>
-          @if (r.filters.termName) { · Term: <strong>{{ r.filters.termName }}</strong> }
-        </p>
+        <div class="filter-grid">
+          <div class="field">
+            <label for="reconTerm">Term</label>
+            <select id="reconTerm" [(ngModel)]="selectedTermId" name="reconTerm" (ngModelChange)="onTermChange()">
+              <option value="">Custom dates</option>
+              @for (t of sortedTerms(); track t.id) {
+                <option [value]="t.id">{{ t.name }}</option>
+              }
+            </select>
+          </div>
+          <div class="field">
+            <label for="reconFrom">Date from</label>
+            <input id="reconFrom" type="date" [(ngModel)]="dateFrom" name="reconFrom" />
+          </div>
+          <div class="field">
+            <label for="reconTo">Date to</label>
+            <input id="reconTo" type="date" [(ngModel)]="dateTo" name="reconTo" />
+          </div>
+          <div class="field">
+            <label for="reconForm">Grade / form</label>
+            <select id="reconForm" [(ngModel)]="selectedFormId" name="reconForm" (ngModelChange)="selectedClassId = ''">
+              <option value="">All forms</option>
+              @for (f of forms(); track f.id) {
+                <option [value]="f.id">{{ f.name }}</option>
+              }
+            </select>
+          </div>
+          <div class="field">
+            <label for="reconClass">Class</label>
+            <select id="reconClass" [(ngModel)]="selectedClassId" name="reconClass">
+              <option value="">All classes</option>
+              @for (c of filteredClasses(); track c.id) {
+                <option [value]="c.id">{{ c.form?.name || '' }} {{ c.name }}</option>
+              }
+            </select>
+          </div>
+          <div class="field">
+            <label for="reconFee">Transaction type</label>
+            <select id="reconFee" [(ngModel)]="selectedFeeType" name="reconFee">
+              @for (ft of feeTypes; track ft.value) {
+                <option [value]="ft.value">{{ ft.label }}</option>
+              }
+            </select>
+          </div>
+          <div class="field span-2">
+            <label for="reconQuery">Student</label>
+            <div class="search-wrap compact">
+              <span class="search-icon" aria-hidden="true">🔍</span>
+              <input
+                id="reconQuery"
+                type="search"
+                class="search-input"
+                [(ngModel)]="query"
+                name="reconQuery"
+                placeholder="Student ID, first name, or last name (optional)"
+                (input)="selectedStudentId = ''"
+                (keyup.enter)="getReport()"
+              />
+            </div>
+          </div>
+          <div class="field">
+            <label for="reconView">Export view</label>
+            <select id="reconView" [(ngModel)]="viewMode" name="reconView">
+              <option value="summary">Summary</option>
+              <option value="detailed">Detailed</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="action-row">
+          <button type="button" class="btn-primary" (click)="getReport()" [disabled]="loading()">
+            {{ loading() ? 'Loading…' : 'Generate report' }}
+          </button>
+          @if (report()) {
+            <button type="button" class="btn-outline" (click)="printReport('summary')" [disabled]="exporting()">Print summary</button>
+            <button type="button" class="btn-outline" (click)="printReport('detailed')" [disabled]="exporting()">Print detailed</button>
+            <button type="button" class="btn-outline" (click)="previewPdf()" [disabled]="exporting()">
+              {{ exporting() ? 'Generating…' : 'Preview PDF' }}
+            </button>
+            <button type="button" class="btn-outline" (click)="downloadPdf()" [disabled]="exporting()">
+              {{ exporting() ? 'Generating…' : 'Download PDF' }}
+            </button>
+            <button type="button" class="btn-ghost" (click)="exportFile('xlsx', 'summary')" [disabled]="exporting()">Excel summary</button>
+            <button type="button" class="btn-ghost" (click)="exportFile('xlsx', 'detailed')" [disabled]="exporting()">Excel detailed</button>
+          }
+          @if (selectedStudentId || report()) {
+            <button type="button" class="btn-ghost" (click)="clearSelection()">Clear</button>
+          }
+        </div>
+      </div>
+
+      @if (loading()) {
+        <div class="loading-panel">
+          <div class="spinner"></div>
+          <p>Generating reconciliation report…</p>
+        </div>
+      } @else if (matches().length) {
+        <div class="match-panel">
+          <h4>Select student</h4>
+          <p>{{ matches().length }} students matched your search.</p>
+          <div class="match-grid">
+            @for (m of matches(); track m.id) {
+              <button type="button" class="match-card" (click)="pickStudent(m)">
+                <span class="avatar">{{ initials(m) }}</span>
+                <div>
+                  <strong>{{ m.firstName }} {{ m.lastName }}</strong>
+                  <code class="sid">{{ m.admissionNumber }}</code>
+                  <span class="class-meta">{{ m.formName || '—' }} {{ m.className || '' }}</span>
+                </div>
+              </button>
+            }
+          </div>
+        </div>
+      }
+    </section>
+
+    @if (report()) {
+      <section class="summary-shell print-header">
+        <div class="summary-head">
+          <div>
+            <h3>Reconciliation summary</h3>
+            <p class="period">
+              {{ report()!.filters.dateFrom }} → {{ report()!.filters.dateTo }}
+              @if (report()!.filters.termName) {
+                · {{ report()!.filters.termName }}
+              }
+              · Generated {{ report()!.generatedAt | date:'medium' }}
+            </p>
+          </div>
+        </div>
         <div class="summary-grid">
-          <article class="summary-box">
-            <span class="lbl">Students</span>
-            <strong>{{ r.summary.studentCount }}</strong>
+          <article class="summary-card">
+            <span>Expected revenue</span>
+            <strong>${{ report()!.summary.totalExpectedRevenue | number:'1.2-2' }}</strong>
           </article>
-          <article class="summary-box ok">
-            <span class="lbl">Reconciled</span>
-            <strong>{{ r.summary.reconciled }}</strong>
+          <article class="summary-card credit">
+            <span>Total collected</span>
+            <strong>${{ report()!.summary.totalCollected | number:'1.2-2' }}</strong>
           </article>
-          <article class="summary-box warn">
-            <span class="lbl">Pending</span>
-            <strong>{{ r.summary.pending }}</strong>
+          <article class="summary-card warn">
+            <span>Outstanding</span>
+            <strong>${{ report()!.summary.totalOutstanding | number:'1.2-2' }}</strong>
           </article>
-          <article class="summary-box bad">
-            <span class="lbl">Unreconciled</span>
-            <strong>{{ r.summary.unreconciled }}</strong>
+          <article class="summary-card bad">
+            <span>Total variance</span>
+            <strong>${{ report()!.summary.totalVariance | number:'1.2-2' }}</strong>
           </article>
-          <article class="summary-box">
-            <span class="lbl">Expected revenue</span>
-            <strong>{{ r.summary.totalExpectedRevenue | number:'1.2-2' }}</strong>
-          </article>
-          <article class="summary-box">
-            <span class="lbl">Total collected</span>
-            <strong>{{ r.summary.totalCollected | number:'1.2-2' }}</strong>
-          </article>
-          <article class="summary-box bad">
-            <span class="lbl">Total variance</span>
-            <strong>{{ r.summary.totalVariance | number:'1.2-2' }}</strong>
-          </article>
-          <article class="summary-box warn">
-            <span class="lbl">Outstanding</span>
-            <strong>{{ r.summary.totalOutstanding | number:'1.2-2' }}</strong>
+          <article class="summary-card">
+            <span>Unapplied payments</span>
+            <strong>${{ report()!.summary.totalUnappliedPayments | number:'1.2-2' }}</strong>
           </article>
         </div>
       </section>
 
-      <section class="card">
-        <div class="table-head">
-          <h3>Student Accounts</h3>
-          <span class="hint no-print">Click a row in detailed view to expand transactions</span>
-        </div>
-        <div class="table-wrap">
-          <table class="recon-table">
-            <thead>
-              <tr>
-                <th>Student</th>
-                <th>Class</th>
-                <th>Status</th>
-                <th class="num">Opening</th>
-                <th class="num">Billed</th>
-                <th class="num">Collected</th>
-                <th class="num">Closing</th>
-                <th class="num">Outstanding</th>
-                <th class="num">Variance</th>
+      <section class="list-shell results-shell">
+        <div class="list-toolbar no-print">
+          <div class="toolbar-head">
+            <div>
+              <h3>Student accounts</h3>
+              <p>
                 @if (viewMode === 'detailed') {
-                  <th class="no-print"></th>
+                  Click a row to expand module comparison and transactions.
+                } @else {
+                  Switch to detailed export view to inspect transaction-level matches.
                 }
-              </tr>
-            </thead>
-            <tbody>
-              @for (row of r.students; track row.student.id) {
-                <tr
-                  [class.row-unreconciled]="row.status === 'unreconciled'"
-                  [class.row-pending]="row.status === 'pending'"
-                  [class.clickable]="viewMode === 'detailed'"
-                  (click)="viewMode === 'detailed' ? toggleExpand(row.student.id) : null"
-                >
-                  <td>
+              </p>
+            </div>
+            <div class="view-tabs">
+              <button type="button" [class.active]="displayMode() === 'table'" (click)="displayMode.set('table')">Table</button>
+              <button type="button" [class.active]="displayMode() === 'cards'" (click)="displayMode.set('cards')">Cards</button>
+            </div>
+          </div>
+
+          <div class="search-wrap">
+            <span class="search-icon" aria-hidden="true">🔍</span>
+            <input
+              type="search"
+              class="search-input"
+              placeholder="Filter loaded students…"
+              [ngModel]="studentSearch()"
+              (ngModelChange)="studentSearch.set($event)"
+              name="studentSearch"
+            />
+            @if (studentSearch()) {
+              <button type="button" class="clear-search" (click)="studentSearch.set('')" aria-label="Clear filter">×</button>
+            }
+          </div>
+
+          <div class="toolbar-row">
+            <div class="filter-chips">
+              <button type="button" class="chip-filter" [class.active]="statusFilter() === 'all'" (click)="statusFilter.set('all')">All</button>
+              <button type="button" class="chip-filter ok" [class.active]="statusFilter() === 'reconciled'" (click)="statusFilter.set('reconciled')">Reconciled</button>
+              <button type="button" class="chip-filter warn" [class.active]="statusFilter() === 'pending'" (click)="statusFilter.set('pending')">Pending</button>
+              <button type="button" class="chip-filter bad" [class.active]="statusFilter() === 'unreconciled'" (click)="statusFilter.set('unreconciled')">Unreconciled</button>
+              <button type="button" class="chip-filter issues" [class.active]="issuesOnly()" (click)="issuesOnly.set(!issuesOnly())">Issues only</button>
+            </div>
+            <select class="sort-select" [ngModel]="sortOrder()" (ngModelChange)="sortOrder.set($event)" name="sortOrder">
+              <option value="variance-desc">Variance high → low</option>
+              <option value="outstanding-desc">Outstanding high → low</option>
+              <option value="status">Status priority</option>
+              <option value="name-asc">Name A–Z</option>
+            </select>
+          </div>
+
+          @if (hasActiveFilters()) {
+            <div class="results-meta">
+              <span>
+                Showing <strong>{{ filteredSummary().count }}</strong> of
+                <strong>{{ report()!.students.length }}</strong> students
+                @if (filteredSummary().unreconciled) {
+                  · <strong class="bad-text">{{ filteredSummary().unreconciled }} unreconciled</strong>
+                }
+              </span>
+              <button type="button" class="clear-filters" (click)="clearFilters()">Clear filters</button>
+            </div>
+          }
+
+          @if (viewMode === 'detailed' && report()!.summary.unreconciled) {
+            <button type="button" class="link-btn no-print" (click)="expandFirstIssue()">Jump to first issue</button>
+          }
+        </div>
+
+        @if (!visibleStudents().length) {
+          <div class="empty-state">
+            <span class="empty-icon">🔍</span>
+            <h3>No students match</h3>
+            <p>Adjust your filters or generate a new report.</p>
+            @if (hasActiveFilters()) {
+              <button type="button" class="btn-ghost" (click)="clearFilters()">Clear filters</button>
+            }
+          </div>
+        } @else if (displayMode() === 'cards') {
+          <div class="card-grid">
+            @for (row of visibleStudents(); track row.student.id) {
+              <article class="student-card" [attr.data-status]="row.status">
+                <div class="card-head">
+                  <span class="avatar">{{ initials(row.student) }}</span>
+                  <div>
                     <strong>{{ row.student.firstName }} {{ row.student.lastName }}</strong>
-                    <div class="sub-id">{{ row.student.admissionNumber }}</div>
-                  </td>
-                  <td>{{ classLabel(row) }}</td>
-                  <td><span class="status-pill" [class]="statusClass(row.status)">{{ row.status }}</span></td>
-                  <td class="num">{{ row.studentModule.openingBalance | number:'1.2-2' }}</td>
-                  <td class="num">{{ row.studentModule.totalBilled | number:'1.2-2' }}</td>
-                  <td class="num">{{ row.studentModule.totalCollected | number:'1.2-2' }}</td>
-                  <td class="num">{{ row.studentModule.closingBalance | number:'1.2-2' }}</td>
-                  <td class="num">{{ row.studentModule.outstandingBalance | number:'1.2-2' }}</td>
-                  <td class="num" [class.has-variance]="row.variance.closingBalanceVariance !== 0">
-                    {{ row.variance.closingBalanceVariance | number:'1.2-2' }}
-                  </td>
+                    <code class="sid">{{ row.student.admissionNumber }}</code>
+                    <span class="class-meta">{{ classLabel(row) }}</span>
+                  </div>
+                  <span class="status-pill" [class]="statusClass(row.status)">{{ statusLabel(row.status) }}</span>
+                </div>
+                <div class="metric-grid">
+                  <div><span>Billed</span><strong>${{ row.studentModule.totalBilled | number:'1.2-2' }}</strong></div>
+                  <div><span>Collected</span><strong>${{ row.studentModule.totalCollected | number:'1.2-2' }}</strong></div>
+                  <div><span>Outstanding</span><strong>${{ row.studentModule.outstandingBalance | number:'1.2-2' }}</strong></div>
+                  <div [class.has-variance]="row.variance.closingBalanceVariance !== 0">
+                    <span>Variance</span>
+                    <strong>${{ row.variance.closingBalanceVariance | number:'1.2-2' }}</strong>
+                  </div>
+                </div>
+                @if (row.discrepancies.length) {
+                  <div class="discrepancy-box compact">
+                    <strong>{{ row.discrepancies.length }} discrepancy{{ row.discrepancies.length === 1 ? '' : 'ies' }}</strong>
+                    <ul>
+                      @for (d of row.discrepancies.slice(0, 2); track d) {
+                        <li>{{ d }}</li>
+                      }
+                    </ul>
+                  </div>
+                }
+                @if (viewMode === 'detailed') {
+                  <button type="button" class="card-expand" (click)="toggleExpand(row.student.id)">
+                    {{ expandedStudentId() === row.student.id ? 'Hide details' : 'View details' }}
+                  </button>
+                }
+                @if (viewMode === 'detailed' && expandedStudentId() === row.student.id) {
+                  <div class="inline-detail">
+                    <ng-container *ngTemplateOutlet="detailPanel; context: { row: row }"></ng-container>
+                  </div>
+                }
+              </article>
+            }
+          </div>
+        } @else {
+          <div class="table-wrap">
+            <table class="recon-table">
+              <thead>
+                <tr>
+                  <th>Student</th>
+                  <th>Class</th>
+                  <th>Status</th>
+                  <th class="num">Opening</th>
+                  <th class="num">Billed</th>
+                  <th class="num">Collected</th>
+                  <th class="num">Closing</th>
+                  <th class="num">Outstanding</th>
+                  <th class="num">Variance</th>
                   @if (viewMode === 'detailed') {
-                    <td class="no-print expand-cell">{{ expandedStudentId() === row.student.id ? '▼' : '▶' }}</td>
+                    <th class="no-print"></th>
                   }
                 </tr>
-
-                @if (viewMode === 'detailed' && expandedStudentId() === row.student.id) {
-                  <tr class="detail-row">
-                    <td [attr.colspan]="viewMode === 'detailed' ? 10 : 9">
-                      <div class="detail-panel">
-                        <div class="detail-cols">
-                          <div>
-                            <h4>Student module</h4>
-                            <ul>
-                              <li>Opening: {{ row.studentModule.openingBalance | number:'1.2-2' }}</li>
-                              <li>Adjustments: {{ row.studentModule.adjustments | number:'1.2-2' }}</li>
-                              <li>Unapplied payments: {{ row.studentModule.unappliedPayments | number:'1.2-2' }}</li>
-                            </ul>
-                          </div>
-                          <div>
-                            <h4>General ledger</h4>
-                            <ul>
-                              <li>Opening: {{ row.ledgerModule.openingBalance | number:'1.2-2' }}</li>
-                              <li>Debits: {{ row.ledgerModule.totalDebits | number:'1.2-2' }}</li>
-                              <li>Credits: {{ row.ledgerModule.totalCredits | number:'1.2-2' }}</li>
-                              <li>Closing: {{ row.ledgerModule.closingBalance | number:'1.2-2' }}</li>
-                            </ul>
-                          </div>
-                          <div>
-                            <h4>Financial aid / scholarship</h4>
-                            <ul>
-                              <li>Disbursed: {{ row.financialAid.disbursed | number:'1.2-2' }}</li>
-                              <li>Applied: {{ row.financialAid.applied | number:'1.2-2' }}</li>
-                            </ul>
-                          </div>
+              </thead>
+              <tbody>
+                @for (row of visibleStudents(); track row.student.id) {
+                  <tr
+                    [attr.data-status]="row.status"
+                    [class.clickable]="viewMode === 'detailed'"
+                    (click)="viewMode === 'detailed' ? toggleExpand(row.student.id) : null"
+                  >
+                    <td>
+                      <div class="name-cell">
+                        <span class="avatar sm">{{ initials(row.student) }}</span>
+                        <div>
+                          <strong>{{ row.student.firstName }} {{ row.student.lastName }}</strong>
+                          <code class="sid">{{ row.student.admissionNumber }}</code>
                         </div>
-
-                        @if (row.discrepancies.length) {
-                          <div class="discrepancy-box">
-                            <strong>Discrepancies</strong>
-                            <ul>
-                              @for (d of row.discrepancies; track d) {
-                                <li>{{ d }}</li>
-                              }
-                            </ul>
-                          </div>
-                        }
-
-                        @if (row.transactions.length) {
-                          <h4>Transactions</h4>
-                          <table class="txn-table">
-                            <thead>
-                              <tr>
-                                <th>Date</th>
-                                <th>Type</th>
-                                <th>Fee type</th>
-                                <th>Reference</th>
-                                <th>Description</th>
-                                <th class="num">Amount</th>
-                                <th>Student</th>
-                                <th>Ledger</th>
-                                <th>Matched</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              @for (t of row.transactions; track t.id + t.date) {
-                                <tr [class.unmatched]="!t.matched">
-                                  <td>{{ t.date }}</td>
-                                  <td>{{ t.type }}</td>
-                                  <td>{{ t.feeType }}</td>
-                                  <td>{{ t.reference }}</td>
-                                  <td>{{ t.description }}</td>
-                                  <td class="num">{{ t.amount | number:'1.2-2' }}</td>
-                                  <td>{{ t.inStudentModule ? 'Yes' : 'No' }}</td>
-                                  <td>{{ t.inLedger ? 'Yes' : 'No' }}</td>
-                                  <td>{{ t.matched ? 'Yes' : 'No' }}</td>
-                                </tr>
-                              }
-                            </tbody>
-                          </table>
-                        }
                       </div>
                     </td>
+                    <td>{{ classLabel(row) }}</td>
+                    <td><span class="status-pill" [class]="statusClass(row.status)">{{ statusLabel(row.status) }}</span></td>
+                    <td class="num">${{ row.studentModule.openingBalance | number:'1.2-2' }}</td>
+                    <td class="num">${{ row.studentModule.totalBilled | number:'1.2-2' }}</td>
+                    <td class="num paid">${{ row.studentModule.totalCollected | number:'1.2-2' }}</td>
+                    <td class="num">${{ row.studentModule.closingBalance | number:'1.2-2' }}</td>
+                    <td class="num">${{ row.studentModule.outstandingBalance | number:'1.2-2' }}</td>
+                    <td class="num" [class.has-variance]="row.variance.closingBalanceVariance !== 0">
+                      <strong>${{ row.variance.closingBalanceVariance | number:'1.2-2' }}</strong>
+                    </td>
+                    @if (viewMode === 'detailed') {
+                      <td class="no-print expand-cell">{{ expandedStudentId() === row.student.id ? '▾' : '▸' }}</td>
+                    }
                   </tr>
+
+                  @if (viewMode === 'detailed' && expandedStudentId() === row.student.id) {
+                    <tr class="detail-row">
+                      <td [attr.colspan]="10">
+                        <ng-container *ngTemplateOutlet="detailPanel; context: { row: row }"></ng-container>
+                      </td>
+                    </tr>
+                  }
                 }
-              } @empty {
-                <tr>
-                  <td colspan="10" class="empty">No students in this report.</td>
-                </tr>
-              }
-            </tbody>
-          </table>
-        </div>
+              </tbody>
+            </table>
+          </div>
+        }
       </section>
+    } @else if (!loading() && !matches().length) {
+      <div class="empty-state standalone no-print">
+        <span class="empty-icon">⚖</span>
+        <h3>No report loaded</h3>
+        <p>Select filters and generate a reconciliation report.</p>
+      </div>
     }
   </div>
 </app-portal-layout>
+
+<ng-template #detailPanel let-row="row">
+  <div class="detail-panel">
+    <div class="detail-cols">
+      <article class="detail-card">
+        <h4>Student module</h4>
+        <ul>
+          <li>Opening: <strong>${{ row.studentModule.openingBalance | number:'1.2-2' }}</strong></li>
+          <li>Billed: <strong>${{ row.studentModule.totalBilled | number:'1.2-2' }}</strong></li>
+          <li>Collected: <strong>${{ row.studentModule.totalCollected | number:'1.2-2' }}</strong></li>
+          <li>Adjustments: <strong>${{ row.studentModule.adjustments | number:'1.2-2' }}</strong></li>
+          <li>Closing: <strong>${{ row.studentModule.closingBalance | number:'1.2-2' }}</strong></li>
+          <li>Unapplied: <strong>${{ row.studentModule.unappliedPayments | number:'1.2-2' }}</strong></li>
+        </ul>
+      </article>
+      <article class="detail-card">
+        <h4>General ledger</h4>
+        <ul>
+          <li>Opening: <strong>${{ row.ledgerModule.openingBalance | number:'1.2-2' }}</strong></li>
+          <li>Debits: <strong>${{ row.ledgerModule.totalDebits | number:'1.2-2' }}</strong></li>
+          <li>Credits: <strong>${{ row.ledgerModule.totalCredits | number:'1.2-2' }}</strong></li>
+          <li>Closing: <strong>${{ row.ledgerModule.closingBalance | number:'1.2-2' }}</strong></li>
+        </ul>
+      </article>
+      <article class="detail-card">
+        <h4>Variance</h4>
+        <ul>
+          <li>Billed vs debits: <strong>${{ row.variance.billedVsLedgerDebits | number:'1.2-2' }}</strong></li>
+          <li>Collected vs credits: <strong>${{ row.variance.collectedVsLedgerCredits | number:'1.2-2' }}</strong></li>
+          <li>Closing variance: <strong>${{ row.variance.closingBalanceVariance | number:'1.2-2' }}</strong></li>
+        </ul>
+      </article>
+      <article class="detail-card">
+        <h4>Financial aid</h4>
+        <ul>
+          <li>Disbursed: <strong>${{ row.financialAid.disbursed | number:'1.2-2' }}</strong></li>
+          <li>Applied: <strong>${{ row.financialAid.applied | number:'1.2-2' }}</strong></li>
+        </ul>
+      </article>
+    </div>
+
+    @if (row.discrepancies.length) {
+      <div class="discrepancy-box">
+        <strong>Discrepancies</strong>
+        <ul>
+          @for (d of row.discrepancies; track d) {
+            <li>{{ d }}</li>
+          }
+        </ul>
+      </div>
+    }
+
+    @if (row.transactions.length) {
+      <div class="txn-head">
+        <h4>Transactions</h4>
+        <button type="button" class="link-btn no-print" (click)="toggleTxnUnmatchedOnly(row.student.id)">
+          {{ isTxnUnmatchedOnly(row.student.id) ? 'Show all' : 'Unmatched only' }}
+        </button>
+      </div>
+      <div class="table-wrap txn-wrap">
+        <table class="txn-table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Type</th>
+              <th>Fee type</th>
+              <th>Reference</th>
+              <th>Description</th>
+              <th class="num">Amount</th>
+              <th class="flag">Student</th>
+              <th class="flag">Ledger</th>
+              <th class="flag">Matched</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (t of visibleTransactions(row); track t.id + t.date) {
+              <tr [class.unmatched]="!t.matched">
+                <td>{{ t.date }}</td>
+                <td>{{ typeLabel(t.type) }}</td>
+                <td>{{ typeLabel(t.feeType) }}</td>
+                <td><code class="ref">{{ t.reference }}</code></td>
+                <td>{{ t.description }}</td>
+                <td class="num">${{ t.amount | number:'1.2-2' }}</td>
+                <td class="flag"><span class="yn" [attr.data-yes]="t.inStudentModule">{{ t.inStudentModule ? 'Yes' : 'No' }}</span></td>
+                <td class="flag"><span class="yn" [attr.data-yes]="t.inLedger">{{ t.inLedger ? 'Yes' : 'No' }}</span></td>
+                <td class="flag"><span class="yn" [attr.data-yes]="t.matched">{{ t.matched ? 'Yes' : 'No' }}</span></td>
+              </tr>
+            } @empty {
+              <tr>
+                <td colspan="9" class="empty">No unmatched transactions.</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </div>
+</ng-template>

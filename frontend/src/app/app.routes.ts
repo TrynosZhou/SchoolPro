@@ -45,6 +45,8 @@ import { AdminTimetableGenerateComponent } from './pages/admin/admin-timetable-g
 import { AdminTimetableViewComponent } from './pages/admin/admin-timetable-view.component';
 import { AdminSendMessageComponent } from './pages/admin/admin-send-message.component';
 import { AdminInboxComponent } from './pages/admin/admin-inbox.component';
+import { AdminParentsComponent } from './pages/admin/admin-parents.component';
+import { AdminParentDetailComponent } from './pages/admin/admin-parent-detail.component';
 
 export const routes: Routes = [
   { path: '', redirectTo: 'login', pathMatch: 'full' },
@@ -88,6 +90,8 @@ export const routes: Routes = [
     children: [
       { path: '', component: AdminDashboardComponent },
       { path: 'students', component: AdminStudentsComponent },
+      { path: 'parents', component: AdminParentsComponent },
+      { path: 'parents/:id', component: AdminParentDetailComponent },
       { path: 'enrollment', component: AdminEnrollmentComponent },
       { path: 'class-list', component: ClassListComponent },
       { path: 'class-promotion', component: AdminClassPromotionComponent },

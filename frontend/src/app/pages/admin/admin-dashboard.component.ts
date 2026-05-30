@@ -97,6 +97,7 @@ export class AdminDashboardComponent implements OnInit {
       links: [
         { label: 'Register Student', path: '/admin/students', icon: '📝' },
         { label: 'Class Enrollment', path: '/admin/enrollment', icon: '🎓' },
+        { label: 'All Parents', path: '/admin/parents', icon: '👨‍👩‍👧' },
         { label: 'Staff Management', path: '/admin/staff', icon: '👩‍🏫' },
       ],
     },

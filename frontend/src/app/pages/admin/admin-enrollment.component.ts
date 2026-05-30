@@ -1,4 +1,5 @@
 import { Component, inject, OnInit, signal, computed } from '@angular/core';
+import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
@@ -12,14 +13,19 @@ interface ClassOption {
   id: string;
   name: string;
   capacity: number;
-  form?: { name: string };
+  formId?: string;
+  form?: { id?: string; name: string };
   students?: { id: string }[];
 }
+
+type EnrollmentView = 'pending' | 'enrolled';
+type SortOrder = 'name-asc' | 'name-desc' | 'id-asc' | 'class-asc';
+type EnrolledViewMode = 'table' | 'cards';
 
 @Component({
   selector: 'app-admin-enrollment',
   standalone: true,
-  imports: [PortalLayoutComponent, FormsModule, RouterLink],
+  imports: [PortalLayoutComponent, FormsModule, RouterLink, DatePipe],
   templateUrl: './admin-enrollment.component.html',
   styleUrl: './admin-enrollment.component.scss',
 })
@@ -33,33 +39,50 @@ export class AdminEnrollmentComponent implements OnInit {
 
   readonly adminNav = ADMIN_NAV_SECTIONS;
   readonly teacherNav = TEACHER_NAV_SECTIONS;
+  readonly classSelectLabel = classSelectLabel;
 
-  view = signal<'pending' | 'enrolled'>('pending');
+  view = signal<EnrollmentView>('pending');
   pending = signal<Student[]>([]);
   enrolled = signal<Student[]>([]);
   classes = signal<ClassOption[]>([]);
   search = signal('');
+  formFilter = signal('all');
+  sortOrder = signal<SortOrder>('name-asc');
+  enrolledViewMode = signal<EnrolledViewMode>('table');
   selectedClassId = signal<Record<string, string>>({});
   submitting = signal<string | null>(null);
+  loading = signal(true);
+  refreshing = signal(false);
   toast = signal<{ type: 'success' | 'error'; msg: string } | null>(null);
 
-  filteredPending = computed(() => {
-    const q = this.search().toLowerCase();
-    if (!q) return this.pending();
-    return this.pending().filter((s) =>
-      `${s.firstName} ${s.lastName} ${s.admissionNumber}`.toLowerCase().includes(q)
-    );
+  stats = computed(() => {
+    const classRows = this.classes();
+    const fullClasses = classRows.filter((c) => this.classUsage(c).isFull).length;
+    return {
+      pending: this.pending().length,
+      enrolled: this.enrolled().length,
+      total: this.pending().length + this.enrolled().length,
+      classes: classRows.length,
+      fullClasses,
+      openSeats: classRows.reduce((sum, c) => sum + Math.max(0, c.capacity - (c.students?.length ?? 0)), 0),
+    };
   });
 
-  filteredEnrolled = computed(() => {
-    const q = this.search().toLowerCase();
-    if (!q) return this.enrolled();
-    return this.enrolled().filter((s) =>
-      `${s.firstName} ${s.lastName} ${s.admissionNumber} ${s.schoolClass?.name}`.toLowerCase().includes(q)
-    );
+  formOptions = computed(() => {
+    const names = new Set<string>();
+    for (const s of [...this.pending(), ...this.enrolled()]) {
+      const name = s.form?.name || s.schoolClass?.form?.name;
+      if (name) names.add(name);
+    }
+    return [...names].sort();
   });
 
-  pendingCount = computed(() => this.pending().length);
+  visiblePending = computed(() => this.filterAndSortStudents(this.pending()));
+  visibleEnrolled = computed(() => this.filterAndSortStudents(this.enrolled(), true));
+
+  hasActiveFilters = computed(
+    () => Boolean(this.search().trim()) || this.formFilter() !== 'all' || this.sortOrder() !== 'name-asc',
+  );
 
   ngOnInit() {
     if (this.router.url.startsWith('/teacher')) {
@@ -70,18 +93,85 @@ export class AdminEnrollmentComponent implements OnInit {
     this.api.get<ClassOption[]>('/admin/classes').subscribe((c) => this.classes.set(c));
   }
 
-  setView(v: 'pending' | 'enrolled') {
+  setView(v: EnrollmentView) {
     this.view.set(v);
   }
 
-  load() {
-    this.api.get<Student[]>('/students', { unenrolled: 'true' }).subscribe((s) => this.pending.set(s));
-    this.api.get<Student[]>('/students', { enrolled: 'true' }).subscribe((s) => this.enrolled.set(s));
+  load(refresh = false) {
+    if (refresh) this.refreshing.set(true);
+    else this.loading.set(true);
+
+    let pendingDone = false;
+    let enrolledDone = false;
+
+    const finish = () => {
+      if (pendingDone && enrolledDone) {
+        this.loading.set(false);
+        this.refreshing.set(false);
+      }
+    };
+
+    this.api.get<Student[]>('/students', { unenrolled: 'true' }).subscribe({
+      next: (s) => {
+        this.pending.set(s);
+        pendingDone = true;
+        finish();
+      },
+      error: () => {
+        this.pending.set([]);
+        pendingDone = true;
+        finish();
+        this.showToast('error', 'Failed to load pending students');
+      },
+    });
+
+    this.api.get<Student[]>('/students', { enrolled: 'true' }).subscribe({
+      next: (s) => {
+        this.enrolled.set(s);
+        enrolledDone = true;
+        finish();
+      },
+      error: () => {
+        this.enrolled.set([]);
+        enrolledDone = true;
+        finish();
+        this.showToast('error', 'Failed to load enrolled students');
+      },
+    });
+  }
+
+  clearFilters() {
+    this.search.set('');
+    this.formFilter.set('all');
+    this.sortOrder.set('name-asc');
   }
 
   classLabel(c: ClassOption): string {
+    const usage = this.classUsage(c);
+    return `${classSelectLabel(c)}${c.form?.name ? ` · ${c.form.name}` : ''} — ${usage.count}/${c.capacity}`;
+  }
+
+  classUsage(c: ClassOption) {
     const count = c.students?.length ?? 0;
-    return `${classSelectLabel(c)} — ${count}/${c.capacity}`;
+    const capacity = c.capacity || 0;
+    const pct = capacity ? Math.min(100, Math.round((count / capacity) * 100)) : 0;
+    return { count, capacity, pct, isFull: capacity > 0 && count >= capacity };
+  }
+
+  classesForStudent(student: Student): ClassOption[] {
+    const all = this.classes();
+    const formName = student.form?.name || student.schoolClass?.form?.name;
+    if (!formName) return all;
+    const matched = all.filter((c) => c.form?.name === formName);
+    return matched.length ? matched : all;
+  }
+
+  formLabel(student: Student): string {
+    return student.form?.name || student.schoolClass?.form?.name || '—';
+  }
+
+  initials(student: Student): string {
+    return `${student.firstName.charAt(0)}${student.lastName.charAt(0)}`.toUpperCase();
   }
 
   enroll(student: Student) {
@@ -90,15 +180,23 @@ export class AdminEnrollmentComponent implements OnInit {
       this.showToast('error', 'Select a class first');
       return;
     }
+
+    const selected = this.classes().find((c) => c.id === classId);
+    if (selected && this.classUsage(selected).isFull) {
+      this.showToast('error', `${selected.name} is at full capacity`);
+      return;
+    }
+
     this.submitting.set(student.id);
     this.api.patch<Student>(`/students/${student.id}/enroll`, { classId }).subscribe({
       next: () => {
         this.submitting.set(null);
         this.showToast('success', `${student.firstName} enrolled successfully`);
-        this.load();
+        this.load(true);
         const map = { ...this.selectedClassId() };
         delete map[student.id];
         this.selectedClassId.set(map);
+        this.api.get<ClassOption[]>('/admin/classes').subscribe((c) => this.classes.set(c));
       },
       error: (e) => {
         this.submitting.set(null);
@@ -108,13 +206,21 @@ export class AdminEnrollmentComponent implements OnInit {
   }
 
   changeClass(student: Student, classId: string) {
-    if (!classId) return;
+    if (!classId || classId === student.classId) return;
+
+    const selected = this.classes().find((c) => c.id === classId);
+    if (selected && this.classUsage(selected).isFull) {
+      this.showToast('error', `${selected.name} is at full capacity`);
+      return;
+    }
+
     this.submitting.set(student.id);
     this.api.patch<Student>(`/students/${student.id}/enroll`, { classId }).subscribe({
       next: () => {
         this.submitting.set(null);
         this.showToast('success', 'Class updated');
-        this.load();
+        this.load(true);
+        this.api.get<ClassOption[]>('/admin/classes').subscribe((c) => this.classes.set(c));
       },
       error: () => {
         this.submitting.set(null);
@@ -130,7 +236,8 @@ export class AdminEnrollmentComponent implements OnInit {
       next: () => {
         this.submitting.set(null);
         this.showToast('success', 'Student moved to pending enrollment');
-        this.load();
+        this.load(true);
+        this.api.get<ClassOption[]>('/admin/classes').subscribe((c) => this.classes.set(c));
       },
       error: () => {
         this.submitting.set(null);
@@ -141,6 +248,40 @@ export class AdminEnrollmentComponent implements OnInit {
 
   onClassPick(studentId: string, classId: string) {
     this.selectedClassId.set({ ...this.selectedClassId(), [studentId]: classId });
+  }
+
+  private filterAndSortStudents(rows: Student[], includeClass = false): Student[] {
+    let list = [...rows];
+    const q = this.search().trim().toLowerCase();
+
+    if (q) {
+      list = list.filter((s) =>
+        `${s.firstName} ${s.lastName} ${s.admissionNumber} ${s.schoolClass?.name ?? ''} ${s.form?.name ?? ''}`
+          .toLowerCase()
+          .includes(q),
+      );
+    }
+
+    const form = this.formFilter();
+    if (form !== 'all') {
+      list = list.filter((s) => (s.form?.name || s.schoolClass?.form?.name) === form);
+    }
+
+    const sort = this.sortOrder();
+    list.sort((a, b) => {
+      if (sort === 'class-asc' && includeClass) {
+        const classA = a.schoolClass?.name || '';
+        const classB = b.schoolClass?.name || '';
+        return classA.localeCompare(classB);
+      }
+      if (sort === 'id-asc') return a.admissionNumber.localeCompare(b.admissionNumber);
+      const nameA = `${a.lastName} ${a.firstName}`.toLowerCase();
+      const nameB = `${b.lastName} ${b.firstName}`.toLowerCase();
+      if (sort === 'name-desc') return nameB.localeCompare(nameA);
+      return nameA.localeCompare(nameB);
+    });
+
+    return list;
   }
 
   private showToast(type: 'success' | 'error', msg: string) {

@@ -1,68 +1,274 @@
 <app-portal-layout portalTitle="Admin Portal" pageTitle="Announcements" [navSections]="adminNav">
-  <div class="comm-page">
+  <div class="send-page">
     @if (toast(); as t) {
       <div class="toast" [class.error]="t.type === 'error'">{{ t.msg }}</div>
     }
 
-    <section class="card intro">
-      <h3>Announcements</h3>
-      <p class="sub">Send announcements to all registered parents, or direct messages to individual parents, teachers, and staff.</p>
-      <a routerLink="/admin/communication/inbox" class="link-btn">Go to Messages →</a>
-    </section>
-
-    <section class="card form-card">
-      <div class="field">
-        <label>Recipient *</label>
-        <select [(ngModel)]="recipientId" name="recipient">
-          <option value="">Select recipient</option>
-          <option [ngValue]="allRegisteredParents">
-            All registered parents ({{ registeredParentCount() }})
-          </option>
-          @for (r of recipients(); track r.id) {
-            <option [value]="r.id">{{ recipientLabel(r) }}</option>
-          }
-        </select>
-        @if (isAllParentsBroadcast()) {
-          <p class="field-hint">
-            This announcement will be delivered to every active parent account registered on the portal
-            ({{ registeredParentCount() }} recipient{{ registeredParentCount() === 1 ? '' : 's' }}).
-          </p>
-        }
+    <header class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">Communication</p>
+        <h2>Send announcements</h2>
+        <p class="hero-sub">
+          Reach all registered parents with a broadcast, or send a targeted message to teachers, staff, or individual parents.
+        </p>
+        <a routerLink="/admin/communication/inbox" class="inbox-link">
+          <span class="inbox-icon">📥</span>
+          Open message inbox
+          <span aria-hidden="true">→</span>
+        </a>
       </div>
+      <div class="kpi-grid">
+        <article class="kpi tone-blue">
+          <span class="kpi-icon">👨‍👩‍👧</span>
+          <div>
+            <strong>{{ registeredParentCount() }}</strong>
+            <span>Registered parents</span>
+          </div>
+        </article>
+        <article class="kpi tone-teal">
+          <span class="kpi-icon">👩‍🏫</span>
+          <div>
+            <strong>{{ teacherCount() }}</strong>
+            <span>Teachers</span>
+          </div>
+        </article>
+        <article class="kpi tone-purple">
+          <span class="kpi-icon">⚙️</span>
+          <div>
+            <strong>{{ staffCount() }}</strong>
+            <span>Leadership & admin</span>
+          </div>
+        </article>
+        <article class="kpi tone-slate">
+          <span class="kpi-icon">📬</span>
+          <div>
+            <strong>{{ recipients().length }}</strong>
+            <span>Total contacts</span>
+          </div>
+        </article>
+      </div>
+    </header>
 
-      @if (!isAllParentsBroadcast()) {
-        <div class="field">
-          <label>Related student (optional)</label>
-          <select [(ngModel)]="studentId" name="student">
-            <option value="">None</option>
-            @for (s of students(); track s.id) {
-              <option [value]="s.id">{{ studentLabel(s) }}</option>
-            }
-          </select>
+    <div class="workspace">
+      <section class="panel compose-panel">
+        <div class="panel-head">
+          <h3>Compose message</h3>
+          <button type="button" class="btn-ghost" (click)="clearForm()">Clear</button>
         </div>
-      }
 
-      <div class="field">
-        <label>Subject *</label>
-        <input type="text" [(ngModel)]="subject" name="subject" placeholder="Message subject" />
-      </div>
+        <div class="audience-picker">
+          <p class="section-label">Audience</p>
+          <div class="audience-cards">
+            <button
+              type="button"
+              class="audience-card"
+              [class.active]="audienceMode() === 'broadcast'"
+              (click)="setAudienceMode('broadcast')"
+            >
+              <span class="card-icon">📢</span>
+              <strong>All parents</strong>
+              <span>Broadcast to every registered parent account</span>
+              <em>{{ registeredParentCount() }} recipients</em>
+            </button>
+            <button
+              type="button"
+              class="audience-card"
+              [class.active]="audienceMode() === 'individual'"
+              (click)="setAudienceMode('individual')"
+            >
+              <span class="card-icon">✉️</span>
+              <strong>Individual</strong>
+              <span>Send to one parent, teacher, or staff member</span>
+              <em>Direct message</em>
+            </button>
+          </div>
+        </div>
 
-      <div class="field">
-        <label>Message *</label>
-        <textarea [(ngModel)]="body" name="body" rows="8" placeholder="Write your message here…"></textarea>
-      </div>
+        @if (audienceMode() === 'individual') {
+          <div class="recipient-block">
+            <p class="section-label">Recipient</p>
+            <div class="role-chips">
+              @for (chip of roleFilters; track chip.value) {
+                <button
+                  type="button"
+                  class="chip"
+                  [class.active]="roleFilter() === chip.value"
+                  (click)="roleFilter.set(chip.value)"
+                >
+                  {{ chip.label }}
+                </button>
+              }
+            </div>
+            <input
+              type="search"
+              class="search-input"
+              placeholder="Search by name or email…"
+              [ngModel]="recipientSearch()"
+              (ngModelChange)="recipientSearch.set($event)"
+              name="recipientSearch"
+            />
+            <div class="recipient-list">
+              @for (r of filteredRecipients(); track r.id) {
+                <button
+                  type="button"
+                  class="recipient-row"
+                  [class.selected]="recipientId === r.id"
+                  (click)="selectRecipient(r.id)"
+                >
+                  <span class="avatar">{{ roleIcon(r.role) }}</span>
+                  <span class="recipient-meta">
+                    <strong>{{ recipientLabel(r) }}</strong>
+                    <small>{{ roleLabel(r.role) }} · {{ r.email }}</small>
+                  </span>
+                  @if (recipientId === r.id) {
+                    <span class="check">✓</span>
+                  }
+                </button>
+              } @empty {
+                <p class="empty-hint">No contacts match your search.</p>
+              }
+            </div>
+          </div>
 
-      <div class="actions">
-        <button type="button" class="btn-primary" (click)="send()" [disabled]="sending()">
-          @if (sending()) {
-            Sending…
-          } @else if (isAllParentsBroadcast()) {
-            Send announcement to all parents
+          <div class="field">
+            <label>Related student <span class="optional">(optional)</span></label>
+            <input
+              type="search"
+              class="search-input"
+              placeholder="Search student by name or ID…"
+              [ngModel]="studentSearch()"
+              (ngModelChange)="studentSearch.set($event)"
+              name="studentSearch"
+            />
+            <select
+              [(ngModel)]="studentId"
+              (ngModelChange)="onFieldChange()"
+              name="student"
+              class="student-select"
+            >
+              <option value="">None — general message</option>
+              @for (s of filteredStudents(); track s.id) {
+                <option [value]="s.id">{{ studentLabel(s) }}</option>
+              }
+            </select>
+          </div>
+        } @else {
+          <div class="broadcast-note">
+            <span class="note-icon">ℹ️</span>
+            <p>
+              This announcement will be delivered to <strong>{{ registeredParentCount() }}</strong>
+              active parent portal account{{ registeredParentCount() === 1 ? '' : 's' }}.
+            </p>
+          </div>
+        }
+
+        <div class="templates">
+          <p class="section-label">Quick templates</p>
+          <div class="template-row">
+            @for (tpl of templates; track tpl.id) {
+              <button type="button" class="template-btn" (click)="applyTemplate(tpl)">
+                <span>{{ tpl.icon }}</span>
+                {{ tpl.label }}
+              </button>
+            }
+          </div>
+        </div>
+
+        <div class="field">
+          <div class="field-head">
+            <label>Subject *</label>
+            <span class="char-count">{{ subjectCharCount() }}/120</span>
+          </div>
+          <input
+            type="text"
+            [(ngModel)]="subject"
+            (ngModelChange)="onFieldChange()"
+            name="subject"
+            maxlength="120"
+            placeholder="e.g. Term 2 fee reminder"
+          />
+        </div>
+
+        <div class="field">
+          <div class="field-head">
+            <label>Message *</label>
+            <span class="char-count">{{ bodyCharCount() }} characters</span>
+          </div>
+          <textarea
+            [(ngModel)]="body"
+            (ngModelChange)="onFieldChange()"
+            name="body"
+            rows="10"
+            placeholder="Write your announcement here…"
+          ></textarea>
+        </div>
+
+        <div class="compose-actions">
+          <button type="button" class="btn-primary" (click)="send()" [disabled]="sending() || !canSend()">
+            @if (sending()) {
+              Sending…
+            } @else if (isAllParentsBroadcast()) {
+              Send to all parents
+            } @else {
+              Send message
+            }
+          </button>
+          <p class="draft-hint">Draft saved automatically while you compose.</p>
+        </div>
+      </section>
+
+      <aside class="side-stack">
+        <section class="panel preview-panel">
+          <div class="panel-head">
+            <h3>Live preview</h3>
+          </div>
+          <article class="preview-card">
+            <header class="preview-header">
+              <span class="preview-badge">
+                @if (isAllParentsBroadcast()) {
+                  Broadcast
+                } @else {
+                  Direct
+                }
+              </span>
+              <time>Just now</time>
+            </header>
+            <h4>{{ subject.trim() || 'Subject line preview' }}</h4>
+            <p class="preview-to">To: {{ previewRecipientLine() }}</p>
+            @if (selectedStudent(); as st) {
+              <p class="preview-student">Re: {{ st.firstName }} {{ st.lastName }} ({{ st.admissionNumber }})</p>
+            }
+            <div class="preview-body">{{ body.trim() || 'Your message will appear here as you type…' }}</div>
+          </article>
+        </section>
+
+        <section class="panel recent-panel">
+          <div class="panel-head">
+            <h3>Recent sent</h3>
+            <a routerLink="/admin/communication/inbox" class="mini-link">View all</a>
+          </div>
+          @if (recentSent().length) {
+            <div class="recent-list">
+              @for (msg of recentSent(); track msg.id) {
+                <button type="button" class="recent-item" (click)="reuseMessage(msg)">
+                  <div class="recent-top">
+                    <strong>{{ msg.subject }}</strong>
+                    <time>{{ msg.sentAt | date:'MMM d, y' }}</time>
+                  </div>
+                  <span class="recent-meta">
+                    To {{ msg.recipient.firstName }} {{ msg.recipient.lastName }}
+                    · {{ roleLabel(msg.recipient.role) }}
+                  </span>
+                  <span class="recent-snippet">{{ msg.body }}</span>
+                  <span class="reuse-tag">Click to reuse</span>
+                </button>
+              }
+            </div>
           } @else {
-            Send message
+            <p class="empty-hint">No sent messages yet. Your recent announcements will appear here.</p>
           }
-        </button>
-      </div>
-    </section>
+        </section>
+      </aside>
+    </div>
   </div>
 </app-portal-layout>

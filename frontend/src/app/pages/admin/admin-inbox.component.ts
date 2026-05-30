@@ -1,7 +1,7 @@
 import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
 import { ApiService } from '../../core/services/api.service';
@@ -25,31 +25,79 @@ interface MessageRow {
   student?: { id: string; firstName: string; lastName: string; admissionNumber: string };
 }
 
+type InboxTab = 'inbox' | 'sent';
+type InboxFilter = 'all' | 'unread' | 'student';
+type SortOrder = 'newest' | 'oldest';
+
 @Component({
   selector: 'app-admin-inbox',
   standalone: true,
   imports: [PortalLayoutComponent, FormsModule, RouterLink, DatePipe],
   templateUrl: './admin-inbox.component.html',
-  styleUrl: './admin-communication.component.scss',
+  styleUrl: './admin-inbox.component.scss',
 })
 export class AdminInboxComponent implements OnInit {
   private api = inject(ApiService);
+  private router = inject(Router);
   readonly adminNav = ADMIN_NAV_SECTIONS;
 
   inbox = signal<MessageRow[]>([]);
   sent = signal<MessageRow[]>([]);
   loading = signal(true);
+  refreshing = signal(false);
+  deleting = signal(false);
   selected = signal<MessageRow | null>(null);
-  tab: 'inbox' | 'sent' = 'inbox';
-  filterUnreadOnly = false;
+  toast = signal<{ type: 'success' | 'error'; msg: string } | null>(null);
+
+  tab = signal<InboxTab>('inbox');
+  filter = signal<InboxFilter>('all');
+  sortOrder = signal<SortOrder>('newest');
+  search = signal('');
 
   unreadCount = computed(() => this.inbox().filter((m) => !m.isRead).length);
+  studentLinkedCount = computed(() => {
+    const list = this.tab() === 'inbox' ? this.inbox() : this.sent();
+    return list.filter((m) => Boolean(m.student)).length;
+  });
 
   visibleMessages = computed(() => {
-    const list = this.tab === 'inbox' ? this.inbox() : this.sent();
-    if (this.tab === 'inbox' && this.filterUnreadOnly) {
-      return list.filter((m) => !m.isRead);
+    let list = this.tab() === 'inbox' ? [...this.inbox()] : [...this.sent()];
+    const q = this.search().trim().toLowerCase();
+    const f = this.filter();
+
+    if (f === 'unread' && this.tab() === 'inbox') {
+      list = list.filter((m) => !m.isRead);
+    } else if (f === 'student') {
+      list = list.filter((m) => Boolean(m.student));
     }
+
+    if (q) {
+      list = list.filter((m) => {
+        const person = this.tab() === 'inbox' ? m.sender : m.recipient;
+        const haystack = [
+          m.subject,
+          m.body,
+          person.firstName,
+          person.lastName,
+          person.email,
+          person.role,
+          m.student?.firstName,
+          m.student?.lastName,
+          m.student?.admissionNumber,
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+        return haystack.includes(q);
+      });
+    }
+
+    list.sort((a, b) => {
+      const at = new Date(a.sentAt).getTime();
+      const bt = new Date(b.sentAt).getTime();
+      return this.sortOrder() === 'newest' ? bt - at : at - bt;
+    });
+
     return list;
   });
 
@@ -57,24 +105,62 @@ export class AdminInboxComponent implements OnInit {
     this.loadMessages();
   }
 
-  loadMessages() {
-    this.loading.set(true);
+  loadMessages(silent = false) {
+    if (silent) this.refreshing.set(true);
+    else this.loading.set(true);
+
+    let inboxDone = false;
+    let sentDone = false;
+    const finish = () => {
+      if (inboxDone && sentDone) {
+        this.loading.set(false);
+        this.refreshing.set(false);
+      }
+    };
+
     this.api.get<MessageRow[]>('/academics/messages/inbox').subscribe({
-      next: (rows) => this.inbox.set(rows),
-      error: () => this.inbox.set([]),
+      next: (rows) => {
+        this.inbox.set(rows);
+        inboxDone = true;
+        finish();
+      },
+      error: () => {
+        this.inbox.set([]);
+        inboxDone = true;
+        finish();
+      },
     });
+
     this.api.get<MessageRow[]>('/academics/messages/sent').subscribe({
       next: (rows) => {
         this.sent.set(rows);
-        this.loading.set(false);
+        sentDone = true;
+        finish();
       },
-      error: () => this.loading.set(false),
+      error: () => {
+        sentDone = true;
+        finish();
+      },
     });
+  }
+
+  setTab(next: InboxTab) {
+    this.tab.set(next);
+    this.filter.set('all');
+    this.selected.set(null);
+  }
+
+  setFilter(next: InboxFilter) {
+    this.filter.set(next);
+  }
+
+  toggleSort() {
+    this.sortOrder.update((v) => (v === 'newest' ? 'oldest' : 'newest'));
   }
 
   openMessage(msg: MessageRow) {
     this.selected.set(msg);
-    if (this.tab === 'inbox' && !msg.isRead) {
+    if (this.tab() === 'inbox' && !msg.isRead) {
       this.api.patch<MessageRow>(`/academics/messages/${msg.id}/read`, {}).subscribe({
         next: (updated) => {
           this.inbox.update((rows) => rows.map((m) => (m.id === updated.id ? updated : m)));
@@ -88,7 +174,93 @@ export class AdminInboxComponent implements OnInit {
     this.selected.set(null);
   }
 
+  replyTo(msg: MessageRow) {
+    const target = this.tab() === 'inbox' ? msg.sender : msg.recipient;
+    const subject = msg.subject.startsWith('Re:') ? msg.subject : `Re: ${msg.subject}`;
+    this.router.navigate(['/admin/communication/send'], {
+      queryParams: {
+        mode: 'individual',
+        recipientId: target.id,
+        subject,
+        studentId: msg.student?.id || undefined,
+      },
+    });
+  }
+
+  deleteMessage(msg: MessageRow) {
+    if (!confirm('Delete this message permanently?')) return;
+    this.deleting.set(true);
+    this.api.delete(`/academics/messages/${msg.id}`).subscribe({
+      next: () => {
+        this.deleting.set(false);
+        if (this.tab() === 'inbox') {
+          this.inbox.update((rows) => rows.filter((m) => m.id !== msg.id));
+        } else {
+          this.sent.update((rows) => rows.filter((m) => m.id !== msg.id));
+        }
+        if (this.selected()?.id === msg.id) this.selected.set(null);
+        this.showToast('success', 'Message deleted.');
+      },
+      error: (e) => {
+        this.deleting.set(false);
+        this.showToast('error', e.error?.message || 'Failed to delete message');
+      },
+    });
+  }
+
   personName(u?: MessageUser): string {
     return u ? `${u.firstName} ${u.lastName}` : '—';
+  }
+
+  roleLabel(role?: string): string {
+    const map: Record<string, string> = {
+      parent: 'Parent',
+      teacher: 'Teacher',
+      admin: 'Admin',
+      director: 'Director',
+      principal: 'Principal',
+      student: 'Student',
+    };
+    return role ? map[role] || role : 'User';
+  }
+
+  roleIcon(role?: string): string {
+    const map: Record<string, string> = {
+      parent: '👨‍👩‍👧',
+      teacher: '👩‍🏫',
+      admin: '⚙️',
+      director: '🎯',
+      principal: '🏛️',
+      student: '🎓',
+    };
+    return role ? map[role] || '👤' : '👤';
+  }
+
+  snippet(body: string, max = 96): string {
+    const flat = body.replace(/\s+/g, ' ').trim();
+    return flat.length <= max ? flat : `${flat.slice(0, max)}…`;
+  }
+
+  relativeDate(value: string): string {
+    const date = new Date(value);
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startOfDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const diffDays = Math.round((startOfToday.getTime() - startOfDate.getTime()) / 86_400_000);
+    if (diffDays === 0) {
+      return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    }
+    if (diffDays === 1) return 'Yesterday';
+    if (diffDays < 7) return date.toLocaleDateString([], { weekday: 'short' });
+    return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  }
+
+  counterparty(msg: MessageRow): MessageUser {
+    return this.tab() === 'inbox' ? msg.sender : msg.recipient;
+  }
+
+  private showToast(type: 'success' | 'error', msg: string) {
+    this.toast.set({ type, msg });
+    setTimeout(() => this.toast.set(null), 4500);
   }
 }

@@ -3,106 +3,255 @@
   [pageTitle]="pageTitle"
   [navSections]="isTeacherPortal ? teacherNav : adminNav"
 >
-  @if (toast(); as t) {
-    <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>
-  }
-
-  <header class="page-intro">
-    <p>Select a class and date, load the register, mark each student, then save.</p>
-  </header>
-
-  <section class="card filter-card">
-    <div class="filter-row">
-      <div class="field">
-        <label for="classSelect">Class</label>
-        <select id="classSelect" [(ngModel)]="selectedClassId" name="classId" [disabled]="loadingClasses()">
-          <option value="">— Select class —</option>
-          @for (c of classes(); track c.id) {
-            <option [value]="c.id">{{ c.name }}</option>
-          }
-        </select>
-      </div>
-      <div class="field field-date">
-        <label for="attDate">Date</label>
-        <input id="attDate" type="date" [(ngModel)]="selectedDate" name="attDate" />
-      </div>
-      <div class="field field-actions">
-        <label class="sr-only">Actions</label>
-        <button type="button" class="btn-secondary" [disabled]="loadingRegister() || !selectedClassId" (click)="loadRegister()">
-          {{ loadingRegister() ? 'Loading…' : 'Load Register' }}
-        </button>
-      </div>
-    </div>
-  </section>
-
-  @if (hasLoaded()) {
-    <section class="card toolbar-card">
-      <div class="toolbar-top">
-        <div>
-          <h2>{{ selectedClassLabel() }}</h2>
-          <p class="meta">{{ selectedDate }} · {{ summary().total }} students</p>
-        </div>
-        <div class="summary-chips">
-          <span class="chip present">{{ summary().present }} present</span>
-          <span class="chip late">{{ summary().late }} late</span>
-          <span class="chip absent">{{ summary().absent }} absent</span>
-          <span class="chip excused">{{ summary().excused }} excused</span>
-        </div>
-      </div>
-      <div class="toolbar-row">
-        <input type="search" class="search" placeholder="Search student…" [ngModel]="search()" (ngModelChange)="search.set($event)" name="q" />
-        <div class="bulk-btns">
-          <button type="button" class="btn-ghost" (click)="markAll('present')">All present</button>
-        </div>
-        <button type="button" class="btn-primary" [disabled]="submitting() || !students().length" (click)="saveRegister()">
-          {{ submitting() ? 'Saving…' : 'Save Attendance' }}
-        </button>
-      </div>
-    </section>
-
-    @if (filteredStudents().length) {
-      <section class="card table-wrap">
-        <div class="table-scroll">
-          <table class="register-table">
-            <thead>
-              <tr>
-                <th class="col-id">Student ID</th>
-                <th class="col-name">Last Name</th>
-                <th class="col-name">First Name</th>
-                <th class="col-gender">Gender</th>
-                <th class="col-status">Attendance</th>
-              </tr>
-            </thead>
-            <tbody>
-              @for (s of filteredStudents(); track s.id) {
-                <tr>
-                  <td class="col-id"><code>{{ s.admissionNumber }}</code></td>
-                  <td class="col-name">{{ s.lastName }}</td>
-                  <td class="col-name">{{ s.firstName }}</td>
-                  <td class="col-gender">{{ s.gender || '—' }}</td>
-                  <td class="col-status">
-                    <div class="status-btns" role="group" [attr.aria-label]="'Attendance for ' + s.firstName + ' ' + s.lastName">
-                      @for (st of statusOptions; track st) {
-                        <button
-                          type="button"
-                          class="status-chip"
-                          [attr.data-status]="st"
-                          [class.active]="marks()[s.id] === st"
-                          (click)="setStatus(s.id, st)"
-                        >
-                          {{ st }}
-                        </button>
-                      }
-                    </div>
-                  </td>
-                </tr>
-              }
-            </tbody>
-          </table>
-        </div>
-      </section>
-    } @else {
-      <p class="empty card">No students match your search.</p>
+  <div class="register-page">
+    @if (toast(); as t) {
+      <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>
     }
-  }
+
+    <header class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">Attendance</p>
+        <h2>Mark register</h2>
+        <p class="hero-sub">
+          Select a class and date, mark each student's attendance, then save the register.
+          @if (!isTeacherPortal) {
+            View reports on the <a routerLink="/admin/attendance/report">Attendance Report</a> page.
+          }
+        </p>
+        <div class="hero-actions">
+          <button type="button" class="refresh-action" (click)="loadRegister(true)" [disabled]="!selectedClassId || loadingRegister() || refreshing()">
+            {{ refreshing() ? 'Refreshing…' : 'Reload register' }}
+          </button>
+        </div>
+      </div>
+      <div class="kpi-grid">
+        <article class="kpi">
+          <span class="kpi-icon">🏫</span>
+          <div>
+            <strong>{{ classes().length }}</strong>
+            <span>Classes</span>
+          </div>
+        </article>
+        <article class="kpi accent">
+          <span class="kpi-icon">✅</span>
+          <div>
+            <strong>{{ hasLoaded() ? summary().present : '—' }}</strong>
+            <span>Present</span>
+          </div>
+        </article>
+        <article class="kpi warn">
+          <span class="kpi-icon">❌</span>
+          <div>
+            <strong>{{ hasLoaded() ? summary().absent : '—' }}</strong>
+            <span>Absent</span>
+          </div>
+        </article>
+        <article class="kpi">
+          <span class="kpi-icon">📊</span>
+          <div>
+            <strong>{{ hasLoaded() ? summary().rate + '%' : '—' }}</strong>
+            <span>Present rate</span>
+          </div>
+        </article>
+      </div>
+    </header>
+
+    <section class="list-shell">
+      <div class="list-toolbar">
+        <h3>Register setup</h3>
+        <p>Choose a class and date. The register loads automatically when both are selected.</p>
+
+        <div class="setup-row">
+          <div class="field">
+            <label for="attDate">Date</label>
+            <input id="attDate" type="date" [(ngModel)]="selectedDate" (ngModelChange)="onDateChange()" name="attDate" />
+            <div class="date-quick">
+              <button type="button" class="date-chip" [class.active]="isToday()" (click)="setToday()">Today</button>
+              <button type="button" class="date-chip" (click)="setYesterday()">Yesterday</button>
+            </div>
+          </div>
+          <div class="field">
+            <label for="classSelect">Class</label>
+            <select id="classSelect" [(ngModel)]="selectedClassId" (ngModelChange)="selectClass($event)" name="classId" [disabled]="loadingClasses()">
+              <option value="">— Select class —</option>
+              @for (c of visibleClasses(); track c.id) {
+                <option [value]="c.id">{{ c.name }}@if (c.form?.name) { · {{ c.form?.name }} }</option>
+              }
+            </select>
+          </div>
+          <button type="button" class="btn-load" [disabled]="loadingRegister() || !selectedClassId" (click)="loadRegister()">
+            {{ loadingRegister() ? 'Loading…' : 'Load register' }}
+          </button>
+        </div>
+
+        @if (classes().length > 1) {
+          <div class="quick-class-wrap">
+            <div class="quick-class-head">
+              <span>Quick select class</span>
+              @if (classFormOptions().length) {
+                <select class="form-filter" [ngModel]="formFilter()" (ngModelChange)="formFilter.set($event)" name="formFilter">
+                  <option value="all">All forms</option>
+                  @for (f of classFormOptions(); track f) {
+                    <option [value]="f">{{ f }}</option>
+                  }
+                </select>
+              }
+            </div>
+            <div class="search-wrap compact">
+              <span class="search-icon" aria-hidden="true">🔍</span>
+              <input type="search" class="search-input" placeholder="Search classes…" [ngModel]="classSearch()" (ngModelChange)="classSearch.set($event)" name="classSearch" />
+            </div>
+            <div class="quick-class-grid">
+              @for (c of visibleClasses(); track c.id) {
+                <button type="button" class="class-chip" [class.active]="selectedClassId === c.id" (click)="selectClass(c.id)">
+                  <strong>{{ c.name }}</strong>
+                  <span>{{ c.form?.name || 'Class' }} · {{ classStudentCount(c) }} students</span>
+                </button>
+              }
+            </div>
+          </div>
+        }
+      </div>
+
+      @if (loadingRegister()) {
+        <div class="loading-panel">
+          <div class="spinner"></div>
+          <p>Loading register…</p>
+        </div>
+      } @else if (hasLoaded()) {
+        <div class="register-toolbar">
+          <div class="register-head">
+            <div>
+              <h3>{{ selectedClassLabel() }}</h3>
+              <p>{{ selectedDate }} · {{ summary().total }} students · {{ summary().rate }}% present</p>
+            </div>
+            <div class="summary-chips">
+              <span class="chip present">{{ summary().present }} present</span>
+              <span class="chip late">{{ summary().late }} late</span>
+              <span class="chip absent">{{ summary().absent }} absent</span>
+              <span class="chip excused">{{ summary().excused }} excused</span>
+            </div>
+          </div>
+
+          <div class="search-wrap">
+            <span class="search-icon" aria-hidden="true">🔍</span>
+            <input type="search" class="search-input" placeholder="Search student…" [ngModel]="search()" (ngModelChange)="search.set($event)" name="q" />
+            @if (search()) {
+              <button type="button" class="clear-search" (click)="search.set('')" aria-label="Clear search">×</button>
+            }
+          </div>
+
+          <div class="toolbar-row">
+            <div class="filter-chips">
+              <button type="button" class="chip-filter" [class.active]="statusFilter() === 'all'" (click)="statusFilter.set('all')">All</button>
+              @for (st of statusOptions; track st) {
+                <button type="button" class="chip-filter" [class.active]="statusFilter() === st" [attr.data-status]="st" (click)="statusFilter.set(st)">
+                  {{ statusLabel(st) }}
+                </button>
+              }
+            </div>
+
+            <div class="toolbar-actions">
+              <div class="bulk-btns">
+                <button type="button" class="bulk-btn" data-status="present" (click)="markAll('present')">All present</button>
+                <button type="button" class="bulk-btn" data-status="late" (click)="markAll('late')">All late</button>
+                <button type="button" class="bulk-btn" data-status="absent" (click)="markAll('absent')">All absent</button>
+                <button type="button" class="bulk-btn" data-status="excused" (click)="markAll('excused')">All excused</button>
+              </div>
+              <div class="view-toggle" role="group" aria-label="View mode">
+                <button type="button" class="view-btn" [class.active]="viewMode() === 'table'" (click)="viewMode.set('table')" title="Table view">☰</button>
+                <button type="button" class="view-btn" [class.active]="viewMode() === 'cards'" (click)="viewMode.set('cards')" title="Card view">▦</button>
+              </div>
+              <button type="button" class="btn-primary" [disabled]="submitting() || !students().length" (click)="saveRegister()">
+                {{ submitting() ? 'Saving…' : 'Save attendance' }}
+              </button>
+            </div>
+          </div>
+
+          @if (hasActiveFilters()) {
+            <div class="results-meta">
+              <span>Showing <strong>{{ filteredStudents().length }}</strong> of <strong>{{ students().length }}</strong></span>
+              <button type="button" class="clear-filters" (click)="clearFilters()">Clear filters</button>
+            </div>
+          }
+        </div>
+
+        @if (filteredStudents().length) {
+          @if (viewMode() === 'cards') {
+            <div class="card-grid">
+              @for (s of filteredStudents(); track s.id) {
+                <article class="student-card" [attr.data-status]="rowStatus(s.id)">
+                  <div class="card-head">
+                    <span class="avatar">{{ initials(s) }}</span>
+                    <div>
+                      <strong>{{ s.lastName }}, {{ s.firstName }}</strong>
+                      <code class="sid">{{ s.admissionNumber }}</code>
+                    </div>
+                  </div>
+                  <div class="status-btns" role="group" [attr.aria-label]="'Attendance for ' + s.firstName + ' ' + s.lastName">
+                    @for (st of statusOptions; track st) {
+                      <button type="button" class="status-chip" [attr.data-status]="st" [class.active]="marks()[s.id] === st" (click)="setStatus(s.id, st)">
+                        {{ statusLabel(st) }}
+                      </button>
+                    }
+                  </div>
+                </article>
+              }
+            </div>
+          } @else {
+            <div class="table-wrap">
+              <table class="register-table">
+                <thead>
+                  <tr>
+                    <th>Student ID</th>
+                    <th>Last Name</th>
+                    <th>First Name</th>
+                    <th>Gender</th>
+                    <th>Attendance</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (s of filteredStudents(); track s.id) {
+                    <tr [attr.data-status]="rowStatus(s.id)">
+                      <td class="col-id"><code class="sid">{{ s.admissionNumber }}</code></td>
+                      <td>{{ s.lastName }}</td>
+                      <td>
+                        <div class="name-cell">
+                          <span class="avatar sm">{{ initials(s) }}</span>
+                          {{ s.firstName }}
+                        </div>
+                      </td>
+                      <td class="col-gender">{{ s.gender || '—' }}</td>
+                      <td class="col-status">
+                        <div class="status-btns" role="group" [attr.aria-label]="'Attendance for ' + s.firstName + ' ' + s.lastName">
+                          @for (st of statusOptions; track st) {
+                            <button type="button" class="status-chip" [attr.data-status]="st" [class.active]="marks()[s.id] === st" (click)="setStatus(s.id, st)">
+                              {{ statusLabel(st) }}
+                            </button>
+                          }
+                        </div>
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
+        } @else {
+          <div class="empty-state">
+            <span class="empty-icon">🔍</span>
+            <h3>No students match</h3>
+            <p>Try adjusting your search or status filter.</p>
+            <button type="button" class="btn-outline" (click)="clearFilters()">Clear filters</button>
+          </div>
+        }
+      } @else {
+        <div class="empty-state initial">
+          <span class="empty-icon">☑</span>
+          <h3>Select a class and date</h3>
+          <p>Choose a class and date above to load the attendance register.</p>
+        </div>
+      }
+    </section>
+  </div>
 </app-portal-layout>

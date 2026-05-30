@@ -1,6 +1,7 @@
 import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { DecimalPipe, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
 import { ApiService } from '../../core/services/api.service';
@@ -13,13 +14,30 @@ interface ClassRow { id: string; name: string; formId: string; form?: { name: st
 interface StudentMatch { id: string; admissionNumber: string; firstName: string; lastName: string; className?: string; formName?: string; }
 interface ChartPoint { label: string; value: number; value2?: number; }
 
+type ReportTab =
+  | 'overview'
+  | 'daily'
+  | 'weekly'
+  | 'monthly'
+  | 'category'
+  | 'grade'
+  | 'methods'
+  | 'exceptions'
+  | 'projections'
+  | 'charts';
+
 interface FeeCollectionReport {
   generatedAt: string;
   accessLevel?: 'full' | 'summary';
   filters: Record<string, string | undefined>;
   overview: {
-    totalExpected: number; totalCollected: number; totalOutstanding: number; collectionRatePct: number;
-    studentsPaidInFull: number; studentsPartial: number; studentsUnpaid: number;
+    totalExpected: number;
+    totalCollected: number;
+    totalOutstanding: number;
+    collectionRatePct: number;
+    studentsPaidInFull: number;
+    studentsPartial: number;
+    studentsUnpaid: number;
   };
   compareOverview?: FeeCollectionReport['overview'];
   daily: { date: string; payments: Record<string, unknown>[]; dayTotal: number; reversedCount: number }[];
@@ -68,10 +86,23 @@ const COLLECTION_STATUS = [
   { value: 'unpaid', label: 'Unpaid' },
 ];
 
+const ALL_TABS: { id: ReportTab; label: string; summaryOnly?: boolean }[] = [
+  { id: 'overview', label: 'Overview' },
+  { id: 'charts', label: 'Charts' },
+  { id: 'daily', label: 'Daily', summaryOnly: true },
+  { id: 'weekly', label: 'Weekly', summaryOnly: true },
+  { id: 'monthly', label: 'Monthly' },
+  { id: 'category', label: 'By category' },
+  { id: 'grade', label: 'By grade/class' },
+  { id: 'methods', label: 'Payment methods' },
+  { id: 'exceptions', label: 'Exceptions', summaryOnly: true },
+  { id: 'projections', label: 'Projections' },
+];
+
 @Component({
   selector: 'app-admin-fee-collection-revenue',
   standalone: true,
-  imports: [PortalLayoutComponent, FormsModule, DecimalPipe, DatePipe],
+  imports: [PortalLayoutComponent, FormsModule, DecimalPipe, DatePipe, RouterLink],
   templateUrl: './admin-fee-collection-revenue.component.html',
   styleUrl: './admin-fee-collection-revenue.component.scss',
 })
@@ -82,14 +113,18 @@ export class AdminFeeCollectionRevenueComponent implements OnInit {
   readonly feeTypes = FEE_TYPES;
   readonly paymentMethods = PAYMENT_METHODS;
   readonly collectionStatuses = COLLECTION_STATUS;
-  readonly isSummaryOnly = computed(() => this.auth.hasRole('principal') && !this.auth.hasRole('admin', 'director'));
+
+  readonly isSummaryOnly = computed(
+    () => this.auth.hasRole('principal') && !this.auth.hasRole('admin', 'director'),
+  );
 
   loading = signal(false);
   exporting = signal(false);
   toast = signal<{ type: 'success' | 'error'; msg: string } | null>(null);
   report = signal<FeeCollectionReport | null>(null);
   matches = signal<StudentMatch[]>([]);
-  activeTab = signal<'overview' | 'daily' | 'weekly' | 'monthly' | 'category' | 'grade' | 'methods' | 'exceptions' | 'projections' | 'charts'>('overview');
+  activeTab = signal<ReportTab>('overview');
+  tableSearch = signal('');
 
   terms = signal<TermRow[]>([]);
   forms = signal<FormRow[]>([]);
@@ -111,9 +146,18 @@ export class AdminFeeCollectionRevenueComponent implements OnInit {
   scheduleMode: 'summary' | 'detailed' = 'summary';
   viewMode: 'summary' | 'detailed' = 'detailed';
 
+  sortedTerms = computed(() =>
+    [...this.terms()].sort((a, b) => (a.startDate || '').localeCompare(b.startDate || '')),
+  );
+
   filteredClasses = computed(() =>
     this.formId ? this.classes().filter((c) => c.formId === this.formId) : this.classes(),
   );
+
+  visibleTabs = computed(() => {
+    if (this.isSummaryOnly()) return ALL_TABS.filter((t) => !t.summaryOnly);
+    return ALL_TABS;
+  });
 
   chartMaxDaily = computed(() => {
     const pts = this.report()?.charts.dailyCollections || [];
@@ -130,6 +174,27 @@ export class AdminFeeCollectionRevenueComponent implements OnInit {
     return pts.reduce((s, p) => s + p.value, 0) || 1;
   });
 
+  filteredExceptions = computed(() => {
+    const list = this.report()?.exceptions || [];
+    const q = this.tableSearch().trim().toLowerCase();
+    if (!q) return list;
+    return list.filter((e) =>
+      `${e.studentName} ${e.admissionNumber} ${e.className || ''} ${e.description} ${e.type}`
+        .toLowerCase()
+        .includes(q),
+    );
+  });
+
+  filteredGradeRows = computed(() => {
+    const list = this.report()?.byGradeClass || [];
+    const q = this.tableSearch().trim().toLowerCase();
+    if (!q) return list;
+    return list.filter((g) => {
+      const row = g as Record<string, unknown>;
+      return `${row['gradeLabel'] || ''} ${row['classLabel'] || ''}`.toLowerCase().includes(q);
+    });
+  });
+
   ngOnInit() {
     this.api.get<SchoolYearRow[]>('/admin/school-years').subscribe({
       next: (years) => {
@@ -141,6 +206,7 @@ export class AdminFeeCollectionRevenueComponent implements OnInit {
           this.termId = current.id;
           this.dateFrom = current.startDate;
           this.dateTo = current.endDate;
+          this.getReport();
         } else {
           this.dateTo = new Date().toISOString().slice(0, 10);
         }
@@ -150,12 +216,23 @@ export class AdminFeeCollectionRevenueComponent implements OnInit {
     this.api.get<ClassRow[]>('/admin/classes').subscribe({ next: (rows) => this.classes.set(rows) });
   }
 
+  selectTerm(id: string) {
+    this.termId = id;
+    this.onTermChange();
+    this.getReport();
+  }
+
   onTermChange() {
     const t = this.terms().find((x) => x.id === this.termId);
     if (t) {
       this.dateFrom = t.startDate;
       this.dateTo = t.endDate;
     }
+  }
+
+  setTab(tab: ReportTab) {
+    this.activeTab.set(tab);
+    this.tableSearch.set('');
   }
 
   private params(extra: Record<string, string> = {}): Record<string, string> {
@@ -180,18 +257,24 @@ export class AdminFeeCollectionRevenueComponent implements OnInit {
       return;
     }
     this.loading.set(true);
+    this.matches.set([]);
+    this.report.set(null);
+    this.tableSearch.set('');
+
     this.api.get<ApiResponse>('/billing/reports/fee-collection-revenue', this.params()).subscribe({
       next: (res) => {
         this.loading.set(false);
         if (res.needsSelection && res.matches?.length) {
           this.matches.set(res.matches);
-          this.report.set(null);
-          this.showToast('error', `${res.matches.length} students found. Select one.`);
+          this.showToast('error', `${res.matches.length} students found — select one below.`);
           return;
         }
         this.matches.set([]);
         this.report.set(res);
         this.activeTab.set('overview');
+        if (this.isSummaryOnly() && !this.visibleTabs().some((t) => t.id === this.activeTab())) {
+          this.activeTab.set('overview');
+        }
         this.showToast('success', 'Fee collection report loaded.');
       },
       error: (e) => {
@@ -205,6 +288,17 @@ export class AdminFeeCollectionRevenueComponent implements OnInit {
     this.studentId = m.id;
     this.query = `${m.firstName} ${m.lastName} (${m.admissionNumber})`;
     this.getReport();
+  }
+
+  clearSelection() {
+    this.studentId = '';
+    this.query = '';
+    this.matches.set([]);
+    this.report.set(null);
+  }
+
+  initials(student: { firstName: string; lastName: string }): string {
+    return `${student.firstName.charAt(0)}${student.lastName.charAt(0)}`.toUpperCase();
   }
 
   exportFile(format: 'pdf' | 'xlsx', mode: 'summary' | 'detailed') {
@@ -222,6 +316,7 @@ export class AdminFeeCollectionRevenueComponent implements OnInit {
         a.click();
         URL.revokeObjectURL(url);
         this.exporting.set(false);
+        this.showToast('success', `${format.toUpperCase()} exported.`);
       },
       error: () => {
         this.exporting.set(false);
@@ -278,37 +373,48 @@ export class AdminFeeCollectionRevenueComponent implements OnInit {
     return `${Math.max(4, (value / max) * 100)}%`;
   }
 
+  collectionRateWidth(pct: number): string {
+    return `${Math.min(100, Math.max(0, pct))}%`;
+  }
+
   private exportPdf(preview: boolean) {
     if (!this.report()) {
       this.showToast('error', 'Load report first.');
       return;
     }
     this.exporting.set(true);
-    const mode: 'summary' | 'detailed' = this.isSummaryOnly() ? 'summary' : (this.viewMode === 'summary' ? 'summary' : 'detailed');
-    this.api.getBlob('/billing/reports/fee-collection-revenue/export.pdf', this.params({ mode, ...(preview ? { preview: 'true' } : {}) })).subscribe({
-      next: (blob) => {
-        this.exporting.set(false);
-        if (blob.type && !blob.type.includes('pdf')) {
-          this.showToast('error', 'Server did not return a PDF file');
-          return;
-        }
-        const url = URL.createObjectURL(blob);
-        if (preview) {
-          window.open(url, '_blank', 'noopener,noreferrer');
-          setTimeout(() => URL.revokeObjectURL(url), 90_000);
-          return;
-        }
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `fee-collection-revenue-${mode}.pdf`;
-        a.click();
-        URL.revokeObjectURL(url);
-      },
-      error: (e) => {
-        this.exporting.set(false);
-        this.showToast('error', e.error?.message || 'Failed to generate PDF');
-      },
-    });
+    const mode: 'summary' | 'detailed' = this.isSummaryOnly()
+      ? 'summary'
+      : this.viewMode === 'summary'
+        ? 'summary'
+        : 'detailed';
+    this.api
+      .getBlob('/billing/reports/fee-collection-revenue/export.pdf', this.params({ mode, ...(preview ? { preview: 'true' } : {}) }))
+      .subscribe({
+        next: (blob) => {
+          this.exporting.set(false);
+          if (blob.type && !blob.type.includes('pdf')) {
+            this.showToast('error', 'Server did not return a PDF file');
+            return;
+          }
+          const url = URL.createObjectURL(blob);
+          if (preview) {
+            window.open(url, '_blank', 'noopener,noreferrer');
+            setTimeout(() => URL.revokeObjectURL(url), 90_000);
+            return;
+          }
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `fee-collection-revenue-${mode}.pdf`;
+          a.click();
+          URL.revokeObjectURL(url);
+          this.showToast('success', 'PDF downloaded.');
+        },
+        error: (e) => {
+          this.exporting.set(false);
+          this.showToast('error', e.error?.message || 'Failed to generate PDF');
+        },
+      });
   }
 
   private showToast(type: 'success' | 'error', msg: string) {

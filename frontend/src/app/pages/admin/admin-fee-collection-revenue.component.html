@@ -1,466 +1,652 @@
 <app-portal-layout portalTitle="Admin Portal" pageTitle="Fee Collection & Revenue" [navSections]="adminNav">
   <div class="revenue-page">
     @if (toast(); as t) {
-      <div class="toast no-print" [class.error]="t.type === 'error'">{{ t.msg }}</div>
+      <div class="toast no-print" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>
     }
 
-    <section class="card no-print">
-      <h3>Fee Collection & Revenue Report</h3>
-      <p class="sub">
-        Comprehensive view of fees collected vs expected across daily, weekly, and monthly periods.
-        @if (isSummaryOnly()) {
-          <span class="access-badge">Read-only summary view</span>
-        }
-      </p>
-    </section>
-
-    <section class="card no-print">
-      <div class="filter-grid">
-        <div class="field">
-          <label>Term</label>
-          <select [(ngModel)]="termId" name="revTerm" (ngModelChange)="onTermChange()">
-            <option value="">Custom dates</option>
-            @for (t of terms(); track t.id) {
-              <option [value]="t.id">{{ t.name }}</option>
-            }
-          </select>
-        </div>
-        <div class="field"><label>Date from</label><input type="date" [(ngModel)]="dateFrom" name="revFrom" /></div>
-        <div class="field"><label>Date to *</label><input type="date" [(ngModel)]="dateTo" name="revTo" /></div>
-        <div class="field">
-          <label>Compare term</label>
-          <select [(ngModel)]="compareTermId" name="revCompare">
-            <option value="">None</option>
-            @for (t of terms(); track t.id) {
-              <option [value]="t.id">{{ t.name }}</option>
-            }
-          </select>
-        </div>
-        <div class="field">
-          <label>Grade / Form</label>
-          <select [(ngModel)]="formId" name="revForm" (ngModelChange)="classId = ''">
-            <option value="">All forms</option>
-            @for (f of forms(); track f.id) { <option [value]="f.id">{{ f.name }}</option> }
-          </select>
-        </div>
-        <div class="field">
-          <label>Class</label>
-          <select [(ngModel)]="classId" name="revClass">
-            <option value="">All classes</option>
-            @for (c of filteredClasses(); track c.id) {
-              <option [value]="c.id">{{ c.form?.name || '' }} {{ c.name }}</option>
-            }
-          </select>
-        </div>
-        <div class="field">
-          <label>Fee type</label>
-          <select [(ngModel)]="feeType" name="revFee">
-            @for (ft of feeTypes; track ft.value) { <option [value]="ft.value">{{ ft.label }}</option> }
-          </select>
-        </div>
-        <div class="field">
-          <label>Payment method</label>
-          <select [(ngModel)]="paymentMethod" name="revMethod">
-            @for (m of paymentMethods; track m.value) { <option [value]="m.value">{{ m.label }}</option> }
-          </select>
-        </div>
-        <div class="field">
-          <label>Collection status</label>
-          <select [(ngModel)]="collectionStatus" name="revStatus">
-            @for (s of collectionStatuses; track s.value) { <option [value]="s.value">{{ s.label }}</option> }
-          </select>
-        </div>
-        <div class="field span-2">
-          <label>Student (ID / name)</label>
-          <input type="text" [(ngModel)]="query" name="revQuery" placeholder="Optional" (input)="studentId=''" />
-        </div>
-      </div>
-
-      <div class="toolbar">
-        <button type="button" class="btn-primary" (click)="getReport()" [disabled]="loading()">
-          {{ loading() ? 'Loading…' : 'Generate Report' }}
-        </button>
-        @if (report()) {
-          <button type="button" class="btn-outline" (click)="print('summary')">Print Summary</button>
-          <button type="button" class="btn-outline btn-pdf-preview" (click)="previewPdf()" [disabled]="exporting()">
+    <header class="hero no-print">
+      <div class="hero-copy">
+        <p class="eyebrow">Finance reports</p>
+        <h2>Fee collection & revenue</h2>
+        <p class="hero-sub">
+          Comprehensive view of fees collected vs expected across daily, weekly, and monthly periods.
+          @if (isSummaryOnly()) {
+            <span class="access-badge">Read-only summary view</span>
+          }
+          Track aging on
+          <a routerLink="/admin/fin-reports/debtor-aging">Debtor Aging</a>
+          or open balances on
+          <a routerLink="/admin/fin-reports/outstanding-invoices">Outstanding Invoices</a>.
+        </p>
+        <div class="hero-actions">
+          <button type="button" class="btn-outline" (click)="previewPdf()" [disabled]="exporting() || loading() || !report()">
             {{ exporting() ? 'Generating…' : 'Preview PDF' }}
           </button>
-          <button type="button" class="btn-outline btn-pdf-download" (click)="downloadPdf()" [disabled]="exporting()">
+          <button type="button" class="btn-primary" (click)="downloadPdf()" [disabled]="exporting() || loading() || !report()">
             {{ exporting() ? 'Generating…' : 'Download PDF' }}
           </button>
-          @if (!isSummaryOnly()) {
-            <button type="button" class="btn-outline" (click)="print('detailed')">Print Detailed</button>
-            <button type="button" class="btn-outline" (click)="exportFile('xlsx','summary')" [disabled]="exporting()">Excel Summary</button>
-            <button type="button" class="btn-outline" (click)="exportFile('xlsx','detailed')" [disabled]="exporting()">Excel Detailed</button>
-          }
-        }
+          <button type="button" class="btn-ghost" (click)="getReport()" [disabled]="loading() || exporting()">
+            {{ loading() ? 'Refreshing…' : 'Refresh' }}
+          </button>
+        </div>
       </div>
-    </section>
+      <div class="kpi-grid">
+        <article class="kpi">
+          <span class="kpi-icon">📋</span>
+          <div>
+            <strong>{{ report() ? ('$' + (report()!.overview.totalExpected | number:'1.0-0')) : '—' }}</strong>
+            <span>Expected</span>
+          </div>
+        </article>
+        <article class="kpi ok">
+          <span class="kpi-icon">💵</span>
+          <div>
+            <strong>{{ report() ? ('$' + (report()!.overview.totalCollected | number:'1.0-0')) : '—' }}</strong>
+            <span>Collected</span>
+          </div>
+        </article>
+        <article class="kpi warn">
+          <span class="kpi-icon">⏳</span>
+          <div>
+            <strong>{{ report() ? ('$' + (report()!.overview.totalOutstanding | number:'1.0-0')) : '—' }}</strong>
+            <span>Outstanding</span>
+          </div>
+        </article>
+        <article class="kpi accent">
+          <span class="kpi-icon">📊</span>
+          <div>
+            <strong>{{ report() ? (report()!.overview.collectionRatePct | number:'1.0-0') + '%' : '—' }}</strong>
+            <span>Collection rate</span>
+          </div>
+        </article>
+        <article class="kpi">
+          <span class="kpi-icon">✓</span>
+          <div>
+            <strong>{{ report() ? report()!.overview.studentsPaidInFull : '—' }}</strong>
+            <span>Paid in full</span>
+          </div>
+        </article>
+        <article class="kpi highlight">
+          <span class="kpi-icon">⚠</span>
+          <div>
+            <strong>{{ report() ? report()!.overview.studentsUnpaid : '—' }}</strong>
+            <span>Unpaid students</span>
+          </div>
+        </article>
+      </div>
+    </header>
 
-    @if (matches().length) {
-      <section class="card no-print">
-        <h3>Select student</h3>
-        <div class="match-list">
-          @for (m of matches(); track m.id) {
-            <button type="button" class="match-btn" (click)="pickStudent(m)">
-              <strong>{{ m.firstName }} {{ m.lastName }}</strong>
-              <span>{{ m.admissionNumber }} · {{ m.formName || '—' }} {{ m.className || '' }}</span>
+    <section class="list-shell no-print">
+      <div class="list-toolbar">
+        <h3>Report filters</h3>
+        <p>Select a term, compare period, and optional class or student filters.</p>
+
+        <div class="term-chips">
+          @for (t of sortedTerms(); track t.id) {
+            <button type="button" class="term-chip" [class.active]="termId === t.id" (click)="selectTerm(t.id)">
+              {{ t.name }}
+              @if (t.isCurrent) { <span class="current-dot">Current</span> }
             </button>
           }
         </div>
-      </section>
-    }
 
-    @if (report(); as r) {
-      <section class="card">
-        <div class="kpi-grid">
-          <article class="kpi"><span>Expected</span><strong>${{ r.overview.totalExpected | number:'1.2-2' }}</strong></article>
-          <article class="kpi green"><span>Collected</span><strong>${{ r.overview.totalCollected | number:'1.2-2' }}</strong></article>
-          <article class="kpi warn"><span>Outstanding</span><strong>${{ r.overview.totalOutstanding | number:'1.2-2' }}</strong></article>
-          <article class="kpi blue"><span>Collection rate</span><strong>{{ r.overview.collectionRatePct | number:'1.1-1' }}%</strong></article>
-          <article class="kpi"><span>Paid in full</span><strong>{{ r.overview.studentsPaidInFull }}</strong></article>
-          <article class="kpi"><span>Partial</span><strong>{{ r.overview.studentsPartial }}</strong></article>
-          <article class="kpi bad"><span>Unpaid</span><strong>{{ r.overview.studentsUnpaid }}</strong></article>
+        <div class="filter-grid">
+          <div class="field">
+            <label for="revTerm">Term</label>
+            <select id="revTerm" [(ngModel)]="termId" name="revTerm" (ngModelChange)="onTermChange()">
+              <option value="">Custom dates</option>
+              @for (t of sortedTerms(); track t.id) {
+                <option [value]="t.id">{{ t.name }}</option>
+              }
+            </select>
+          </div>
+          <div class="field">
+            <label for="revFrom">Date from</label>
+            <input id="revFrom" type="date" [(ngModel)]="dateFrom" name="revFrom" />
+          </div>
+          <div class="field">
+            <label for="revTo">Date to</label>
+            <input id="revTo" type="date" [(ngModel)]="dateTo" name="revTo" />
+          </div>
+          <div class="field">
+            <label for="revCompare">Compare term</label>
+            <select id="revCompare" [(ngModel)]="compareTermId" name="revCompare">
+              <option value="">None</option>
+              @for (t of sortedTerms(); track t.id) {
+                <option [value]="t.id">{{ t.name }}</option>
+              }
+            </select>
+          </div>
+          <div class="field">
+            <label for="revForm">Grade / form</label>
+            <select id="revForm" [(ngModel)]="formId" name="revForm" (ngModelChange)="classId = ''">
+              <option value="">All forms</option>
+              @for (f of forms(); track f.id) {
+                <option [value]="f.id">{{ f.name }}</option>
+              }
+            </select>
+          </div>
+          <div class="field">
+            <label for="revClass">Class</label>
+            <select id="revClass" [(ngModel)]="classId" name="revClass">
+              <option value="">All classes</option>
+              @for (c of filteredClasses(); track c.id) {
+                <option [value]="c.id">{{ c.form?.name || '' }} {{ c.name }}</option>
+              }
+            </select>
+          </div>
+          <div class="field">
+            <label for="revFee">Fee type</label>
+            <select id="revFee" [(ngModel)]="feeType" name="revFee">
+              @for (ft of feeTypes; track ft.value) {
+                <option [value]="ft.value">{{ ft.label }}</option>
+              }
+            </select>
+          </div>
+          <div class="field">
+            <label for="revMethod">Payment method</label>
+            <select id="revMethod" [(ngModel)]="paymentMethod" name="revMethod">
+              @for (m of paymentMethods; track m.value) {
+                <option [value]="m.value">{{ m.label }}</option>
+              }
+            </select>
+          </div>
+          <div class="field">
+            <label for="revStatus">Collection status</label>
+            <select id="revStatus" [(ngModel)]="collectionStatus" name="revStatus">
+              @for (s of collectionStatuses; track s.value) {
+                <option [value]="s.value">{{ s.label }}</option>
+              }
+            </select>
+          </div>
+          <div class="field span-2">
+            <label for="revQuery">Student</label>
+            <div class="search-wrap compact">
+              <span class="search-icon" aria-hidden="true">🔍</span>
+              <input
+                id="revQuery"
+                type="search"
+                class="search-input"
+                [(ngModel)]="query"
+                name="revQuery"
+                placeholder="Student ID or name (optional)"
+                (input)="studentId = ''"
+                (keyup.enter)="getReport()"
+              />
+            </div>
+          </div>
         </div>
-        @if (r.compareOverview) {
+
+        <div class="action-row">
+          <button type="button" class="btn-primary" (click)="getReport()" [disabled]="loading()">
+            {{ loading() ? 'Loading…' : 'Generate report' }}
+          </button>
+          @if (report()) {
+            <button type="button" class="btn-ghost" (click)="print('summary')" [disabled]="exporting()">Print summary</button>
+            @if (!isSummaryOnly()) {
+              <button type="button" class="btn-ghost" (click)="print('detailed')" [disabled]="exporting()">Print detailed</button>
+              <button type="button" class="btn-ghost" (click)="exportFile('xlsx','summary')" [disabled]="exporting()">Excel summary</button>
+              <button type="button" class="btn-ghost" (click)="exportFile('xlsx','detailed')" [disabled]="exporting()">Excel detailed</button>
+            }
+          }
+          @if (studentId || report()) {
+            <button type="button" class="btn-ghost" (click)="clearSelection()">Clear</button>
+          }
+        </div>
+      </div>
+
+      @if (loading()) {
+        <div class="loading-panel">
+          <div class="spinner"></div>
+          <p>Generating fee collection report…</p>
+        </div>
+      } @else if (matches().length) {
+        <div class="match-panel">
+          <h4>Select student</h4>
+          <p>{{ matches().length }} students matched your search.</p>
+          <div class="match-grid">
+            @for (m of matches(); track m.id) {
+              <button type="button" class="match-card" (click)="pickStudent(m)">
+                <span class="avatar">{{ initials(m) }}</span>
+                <div>
+                  <strong>{{ m.firstName }} {{ m.lastName }}</strong>
+                  <code class="sid">{{ m.admissionNumber }}</code>
+                  <span class="class-meta">{{ m.formName || '—' }} {{ m.className || '' }}</span>
+                </div>
+              </button>
+            }
+          </div>
+        </div>
+      }
+    </section>
+
+    @if (report()) {
+      <section class="summary-shell print-header">
+        <div class="summary-head">
+          <div>
+            <h3>Collection overview</h3>
+            <p class="period">
+              {{ report()!.filters['dateFrom'] || '—' }} → {{ report()!.filters['dateTo'] }}
+              · Generated {{ report()!.generatedAt | date:'medium' }}
+            </p>
+          </div>
+        </div>
+
+        <div class="rate-track-wrap">
+          <div class="rate-label">
+            <span>Collection progress</span>
+            <strong>{{ report()!.overview.collectionRatePct | number:'1.1-1' }}%</strong>
+          </div>
+          <div class="rate-track">
+            <div class="rate-fill" [style.width]="collectionRateWidth(report()!.overview.collectionRatePct)"></div>
+          </div>
+        </div>
+
+        <div class="student-chips">
+          <article class="chip-stat ok">
+            <strong>{{ report()!.overview.studentsPaidInFull }}</strong>
+            <span>Paid in full</span>
+          </article>
+          <article class="chip-stat warn">
+            <strong>{{ report()!.overview.studentsPartial }}</strong>
+            <span>Partial</span>
+          </article>
+          <article class="chip-stat bad">
+            <strong>{{ report()!.overview.studentsUnpaid }}</strong>
+            <span>Unpaid</span>
+          </article>
+        </div>
+
+        @if (report()!.compareOverview) {
           <div class="compare-row">
-            <strong>Compare period{{ r.filters['compareTermName'] ? ': ' + r.filters['compareTermName'] : '' }}</strong>
-            <span>Expected ${{ r.compareOverview.totalExpected | number:'1.2-2' }}</span>
-            <span>Collected ${{ r.compareOverview.totalCollected | number:'1.2-2' }}</span>
-            <span>Rate {{ r.compareOverview.collectionRatePct | number:'1.1-1' }}%</span>
+            <strong>Compare{{ report()!.filters['compareTermName'] ? ': ' + report()!.filters['compareTermName'] : '' }}</strong>
+            <span>Expected ${{ report()!.compareOverview!.totalExpected | number:'1.2-2' }}</span>
+            <span>Collected ${{ report()!.compareOverview!.totalCollected | number:'1.2-2' }}</span>
+            <span>Rate {{ report()!.compareOverview!.collectionRatePct | number:'1.1-1' }}%</span>
           </div>
         }
       </section>
 
-      <nav class="tab-nav no-print">
-        @for (tab of [
-          { id: 'overview', label: 'Overview' },
-          { id: 'daily', label: 'Daily' },
-          { id: 'weekly', label: 'Weekly' },
-          { id: 'monthly', label: 'Monthly' },
-          { id: 'category', label: 'By Category' },
-          { id: 'grade', label: 'By Grade/Class' },
-          { id: 'methods', label: 'Payment Methods' },
-          { id: 'exceptions', label: 'Exceptions' },
-          { id: 'projections', label: 'Projections' },
-          { id: 'charts', label: 'Charts' }
-        ]; track tab.id) {
-          <button type="button" [class.active]="activeTab() === tab.id" (click)="activeTab.set($any(tab.id))">{{ tab.label }}</button>
-        }
-      </nav>
-
-      @if (activeTab() === 'overview' || viewMode === 'summary') {
-        <section class="card">
-          <h3>Revenue overview</h3>
-          <p class="meta">Generated {{ r.generatedAt | date:'medium' }} · Period {{ r.filters['dateFrom'] }} — {{ r.filters['dateTo'] }}</p>
-          <p class="audit">{{ r.auditNote }}</p>
-        </section>
-      }
-
-      @if (activeTab() === 'daily' && !isSummaryOnly()) {
-        <section class="card">
-          <h3>Daily collection summary</h3>
-          @for (day of r.daily; track day.date) {
-            <div class="day-block">
-              <div class="day-head">
-                <strong>{{ day.date }}</strong>
-                <span>Total: ${{ day.dayTotal | number:'1.2-2' }}</span>
-                @if (day.reversedCount) {
-                  <span class="flag">{{ day.reversedCount }} reversed</span>
-                }
-              </div>
-              <div class="table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Student</th><th>Class</th><th>Fee type</th><th class="num">Expected</th><th class="num">Paid</th>
-                      <th>Method</th><th>Receipt</th><th>Cashier</th><th class="num">Balance</th><th>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    @for (p of day.payments; track $index) {
-                      <tr [class.reversed]="$any(p).reversed">
-                        <td>{{ $any(p).studentName }}<div class="sub-id">{{ $any(p).admissionNumber }}</div></td>
-                        <td>{{ $any(p).formName }} {{ $any(p).className }}</td>
-                        <td>{{ $any(p).feeTypeLabel }}</td>
-                        <td class="num">${{ $any(p).amountExpected | number:'1.2-2' }}</td>
-                        <td class="num">${{ $any(p).amountPaid | number:'1.2-2' }}</td>
-                        <td>{{ $any(p).paymentMethod }}</td>
-                        <td>{{ $any(p).receiptNumber || '—' }}</td>
-                        <td>{{ $any(p).cashierName || '—' }}</td>
-                        <td class="num">${{ $any(p).outstandingAfter | number:'1.2-2' }}</td>
-                        <td>@if ($any(p).reversed) { <span class="flag">Reversed</span> } @else { OK }</td>
-                      </tr>
-                    }
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          } @empty {
-            <p class="empty">No payments in the selected period.</p>
+      <section class="list-shell results-shell">
+        <nav class="tab-nav no-print">
+          @for (tab of visibleTabs(); track tab.id) {
+            <button type="button" [class.active]="activeTab() === tab.id" (click)="setTab(tab.id)">{{ tab.label }}</button>
           }
-        </section>
-      }
+        </nav>
 
-      @if (activeTab() === 'weekly' && !isSummaryOnly()) {
-        <section class="card">
-          <h3>Weekly collection summary</h3>
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Week</th><th class="num">Expected</th><th class="num">Collected</th><th class="num">Outstanding</th>
-                  <th class="num">Rate %</th><th class="num">Cumulative</th><th class="num">WoW %</th>
-                </tr>
-              </thead>
-              <tbody>
-                @for (w of r.weekly; track $any(w).weekKey) {
-                  <tr>
-                    <td>{{ $any(w).weekLabel }}</td>
-                    <td class="num">${{ $any(w).totalExpected | number:'1.2-2' }}</td>
-                    <td class="num">${{ $any(w).totalCollected | number:'1.2-2' }}</td>
-                    <td class="num">${{ $any(w).totalOutstanding | number:'1.2-2' }}</td>
-                    <td class="num">{{ $any(w).collectionRatePct | number:'1.1-1' }}%</td>
-                    <td class="num">${{ $any(w).cumulativeCollected | number:'1.2-2' }}</td>
-                    <td class="num">
-                      @if ($any(w).weekOverWeekChangePct != null) {
-                        {{ $any(w).weekOverWeekChangePct | number:'1.1-1' }}%
-                      } @else { — }
-                    </td>
-                  </tr>
-                }
-              </tbody>
-            </table>
+        @if (activeTab() === 'exceptions' || activeTab() === 'grade') {
+          <div class="tab-search no-print">
+            <div class="search-wrap">
+              <span class="search-icon" aria-hidden="true">🔍</span>
+              <input
+                type="search"
+                class="search-input"
+                placeholder="Filter this tab…"
+                [ngModel]="tableSearch()"
+                (ngModelChange)="tableSearch.set($event)"
+                name="tableSearch"
+              />
+              @if (tableSearch()) {
+                <button type="button" class="clear-search" (click)="tableSearch.set('')" aria-label="Clear">×</button>
+              }
+            </div>
           </div>
-        </section>
-      }
+        }
 
-      @if (activeTab() === 'monthly') {
-        <section class="card">
-          <h3>Monthly collection summary</h3>
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Month</th><th class="num">Expected</th><th class="num">Collected</th><th class="num">Outstanding</th>
-                  <th class="num">Rate %</th><th class="num">Variance</th><th class="num">Prev rate %</th>
-                </tr>
-              </thead>
-              <tbody>
-                @for (m of r.monthly; track $any(m).monthKey) {
-                  <tr>
-                    <td>{{ $any(m).monthLabel }}</td>
-                    <td class="num">${{ $any(m).totalExpected | number:'1.2-2' }}</td>
-                    <td class="num">${{ $any(m).totalCollected | number:'1.2-2' }}</td>
-                    <td class="num">${{ $any(m).totalOutstanding | number:'1.2-2' }}</td>
-                    <td class="num">{{ $any(m).collectionRatePct | number:'1.1-1' }}%</td>
-                    <td class="num">${{ $any(m).variance | number:'1.2-2' }}</td>
-                    <td class="num">{{ $any(m).previousMonthRatePct | number:'1.1-1' }}%</td>
-                  </tr>
-                }
-              </tbody>
-            </table>
-          </div>
-        </section>
-      }
-
-      @if (activeTab() === 'category') {
-        <section class="card">
-          <h3>Collection by fee category</h3>
-          <div class="table-wrap">
-            <table>
-              <thead><tr><th>Category</th><th class="num">Expected</th><th class="num">Collected</th><th class="num">Outstanding</th><th class="num">Rate %</th></tr></thead>
-              <tbody>
-                @for (c of r.byCategory; track $any(c).feeType) {
-                  <tr>
-                    <td>{{ $any(c).label }}</td>
-                    <td class="num">${{ $any(c).expected | number:'1.2-2' }}</td>
-                    <td class="num">${{ $any(c).collected | number:'1.2-2' }}</td>
-                    <td class="num">${{ $any(c).outstanding | number:'1.2-2' }}</td>
-                    <td class="num">{{ $any(c).collectionRatePct | number:'1.1-1' }}%</td>
-                  </tr>
-                }
-              </tbody>
-            </table>
-          </div>
-        </section>
-      }
-
-      @if (activeTab() === 'grade') {
-        <section class="card">
-          <h3>Collection by grade & class</h3>
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr><th>Grade</th><th>Class</th><th class="num">Students</th><th class="num">Expected</th><th class="num">Collected</th><th class="num">Outstanding</th><th class="num">Rate %</th></tr>
-              </thead>
-              <tbody>
-                @for (g of r.byGradeClass; track $any(g).gradeKey + $any(g).classKey) {
-                  <tr [class.low]="$any(g).lowCollection">
-                    <td>{{ $any(g).gradeLabel }}</td>
-                    <td>{{ $any(g).classLabel }}</td>
-                    <td class="num">{{ $any(g).studentCount }}</td>
-                    <td class="num">${{ $any(g).totalExpected | number:'1.2-2' }}</td>
-                    <td class="num">${{ $any(g).totalCollected | number:'1.2-2' }}</td>
-                    <td class="num">${{ $any(g).outstanding | number:'1.2-2' }}</td>
-                    <td class="num">{{ $any(g).collectionRatePct | number:'1.1-1' }}%</td>
-                  </tr>
-                }
-              </tbody>
-            </table>
-          </div>
-        </section>
-      }
-
-      @if (activeTab() === 'methods') {
-        <section class="card">
-          <h3>Payment method analysis</h3>
-          <div class="method-grid">
-            @for (pm of r.paymentMethods; track pm.key) {
-              <article class="method-card">
-                <span>{{ pm.label }}</span>
-                <strong>${{ pm.amount | number:'1.2-2' }}</strong>
-                <small>{{ pm.percentage | number:'1.1-1' }}% · {{ pm.transactionCount }} txns</small>
+        @if (activeTab() === 'overview') {
+          <div class="panel-shell">
+            <h3>Revenue summary</h3>
+            <div class="summary-grid">
+              <article class="summary-card">
+                <span>Expected</span>
+                <strong>${{ report()!.overview.totalExpected | number:'1.2-2' }}</strong>
               </article>
-            }
+              <article class="summary-card credit">
+                <span>Collected</span>
+                <strong>${{ report()!.overview.totalCollected | number:'1.2-2' }}</strong>
+              </article>
+              <article class="summary-card warn">
+                <span>Outstanding</span>
+                <strong>${{ report()!.overview.totalOutstanding | number:'1.2-2' }}</strong>
+              </article>
+            </div>
+            <p class="audit">{{ report()!.auditNote }}</p>
           </div>
-        </section>
-      }
+        }
 
-      @if (activeTab() === 'exceptions' && !isSummaryOnly()) {
-        <section class="card">
-          <h3>Variance & exceptions</h3>
-          <div class="table-wrap">
-            <table>
-              <thead><tr><th>Type</th><th>Student</th><th>Class</th><th>Description</th><th class="num">Amount</th><th>Date</th></tr></thead>
-              <tbody>
-                @for (e of r.exceptions; track $index) {
-                  <tr>
-                    <td><span class="flag">{{ exceptionLabel(e.type) }}</span></td>
-                    <td>{{ e.studentName }}<div class="sub-id">{{ e.admissionNumber }}</div></td>
-                    <td>{{ e.className || '—' }}</td>
-                    <td>{{ e.description }}</td>
-                    <td class="num">@if (e.amount != null) { ${{ e.amount | number:'1.2-2' }} } @else { — }</td>
-                    <td>{{ e.date || '—' }}</td>
-                  </tr>
-                }
-              </tbody>
-            </table>
-          </div>
-        </section>
-      }
-
-      @if (activeTab() === 'projections') {
-        <section class="card">
-          <h3>Projections & forecasting</h3>
-          <div class="proj-grid">
-            <article><span>Projected end-of-term</span><strong>${{ r.projections['projectedEndOfTermCollection'] | number:'1.2-2' }}</strong></article>
-            <article><span>Budgeted expected</span><strong>${{ r.projections['budgetedExpected'] | number:'1.2-2' }}</strong></article>
-            <article class="warn"><span>Projected shortfall</span><strong>${{ r.projections['projectedShortfall'] | number:'1.2-2' }}</strong></article>
-            <article class="green"><span>Projected surplus</span><strong>${{ r.projections['projectedSurplus'] | number:'1.2-2' }}</strong></article>
-            <article><span>Est. remaining cash flow</span><strong>${{ r.projections['estimatedRemainingCashFlow'] | number:'1.2-2' }}</strong></article>
-            <article><span>Daily run rate</span><strong>${{ r.projections['dailyRunRate'] | number:'1.2-2' }}</strong></article>
-            <article><span>Days elapsed / remaining</span><strong>{{ r.projections['daysElapsed'] }} / {{ r.projections['daysRemaining'] }}</strong></article>
-          </div>
-        </section>
-      }
-
-      @if (activeTab() === 'charts') {
-        <section class="card">
-          <h3>Daily / weekly collections</h3>
-          <div class="chart-bars">
-            @for (pt of r.charts.dailyCollections.slice(-21); track pt.label) {
-              <div class="bar-row">
-                <span class="bar-label">{{ pt.label }}</span>
-                <div class="bar-track"><div class="bar-fill blue" [style.width]="barWidth(pt.value, chartMaxDaily())"></div></div>
-                <span class="bar-val">${{ pt.value | number:'1.0-0' }}</span>
-              </div>
-            }
-          </div>
-        </section>
-
-        <section class="card">
-          <h3>Cumulative trend vs target</h3>
-          <div class="chart-bars">
-            @for (pt of r.charts.cumulativeTrend.slice(-21); track pt.label) {
-              <div class="bar-row dual">
-                <span class="bar-label">{{ pt.label }}</span>
-                <div class="bar-track stacked">
-                  <div class="bar-fill green" [style.width]="barWidth(pt.value, chartMaxCumulative())"></div>
-                  <div class="bar-fill muted" [style.width]="barWidth(pt.value2 || 0, chartMaxCumulative())"></div>
+        @if (activeTab() === 'daily' && !isSummaryOnly()) {
+          <div class="panel-shell">
+            <h3>Daily collection</h3>
+            @for (day of report()!.daily; track day.date) {
+              <div class="day-block">
+                <div class="day-head">
+                  <strong>{{ day.date }}</strong>
+                  <span>Total: ${{ day.dayTotal | number:'1.2-2' }}</span>
+                  @if (day.reversedCount) {
+                    <span class="flag">{{ day.reversedCount }} reversed</span>
+                  }
                 </div>
-                <span class="bar-val">${{ pt.value | number:'1.0-0' }}</span>
+                <div class="table-wrap">
+                  <table class="data-table">
+                    <thead>
+                      <tr>
+                        <th>Student</th><th>Class</th><th>Fee type</th>
+                        <th class="num">Expected</th><th class="num">Paid</th>
+                        <th>Method</th><th>Receipt</th><th>Cashier</th>
+                        <th class="num">Balance</th><th>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (p of day.payments; track $index) {
+                        <tr [class.reversed]="$any(p).reversed">
+                          <td>{{ $any(p).studentName }}<div class="sub-id">{{ $any(p).admissionNumber }}</div></td>
+                          <td>{{ $any(p).formName }} {{ $any(p).className }}</td>
+                          <td>{{ $any(p).feeTypeLabel }}</td>
+                          <td class="num">${{ $any(p).amountExpected | number:'1.2-2' }}</td>
+                          <td class="num paid">${{ $any(p).amountPaid | number:'1.2-2' }}</td>
+                          <td>{{ $any(p).paymentMethod }}</td>
+                          <td>{{ $any(p).receiptNumber || '—' }}</td>
+                          <td>{{ $any(p).cashierName || '—' }}</td>
+                          <td class="num">${{ $any(p).outstandingAfter | number:'1.2-2' }}</td>
+                          <td>@if ($any(p).reversed) { <span class="flag">Reversed</span> } @else { OK }</td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                </div>
               </div>
+            } @empty {
+              <p class="empty">No payments in the selected period.</p>
             }
           </div>
-          <p class="legend"><span class="dot green"></span> Collected <span class="dot muted"></span> Target pace</p>
-        </section>
+        }
 
-        <section class="card chart-split">
-          <div>
-            <h3>By fee type</h3>
-            @for (pt of r.charts.feeTypeBreakdown; track pt.label) {
-              <div class="pie-row">
-                <span>{{ pt.label }}</span>
-                <div class="bar-track"><div class="bar-fill purple" [style.width]="barWidth(pt.value, pieTotal())"></div></div>
-                <span>${{ pt.value | number:'1.0-0' }}</span>
-              </div>
-            }
-          </div>
-          <div>
-            <h3>Collection rate by class</h3>
-            @for (pt of r.charts.gradeClassRates; track pt.label) {
-              <div class="pie-row">
-                <span>{{ pt.label }}</span>
-                <div class="bar-track"><div class="bar-fill orange" [style.width]="pt.value + '%'"></div></div>
-                <span>{{ pt.value | number:'1.0-0' }}%</span>
-              </div>
-            }
-          </div>
-        </section>
-
-        <section class="card">
-          <h3>Monthly collection rate trend</h3>
-          <div class="chart-bars">
-            @for (pt of r.charts.monthlyTrend; track pt.label) {
-              <div class="bar-row">
-                <span class="bar-label">{{ pt.label }}</span>
-                <div class="bar-track"><div class="bar-fill blue" [style.width]="pt.value + '%'"></div></div>
-                <span class="bar-val">{{ pt.value | number:'1.1-1' }}%</span>
-              </div>
-            }
-          </div>
-        </section>
-      }
-
-      @if (!isSummaryOnly()) {
-        <section class="card no-print schedule-card">
-          <h3>Schedule automatic delivery</h3>
-          <p class="sub">Email this report to finance staff on a recurring basis (requires SMTP in school settings).</p>
-          <div class="schedule-grid">
-            <div class="field">
-              <label>Frequency</label>
-              <select [(ngModel)]="scheduleFrequency" name="schedFreq">
-                <option value="daily">Daily</option>
-                <option value="weekly">Weekly</option>
-                <option value="monthly">Monthly</option>
-              </select>
-            </div>
-            <div class="field">
-              <label>Report mode</label>
-              <select [(ngModel)]="scheduleMode" name="schedMode">
-                <option value="summary">Summary</option>
-                <option value="detailed">Detailed</option>
-              </select>
-            </div>
-            <div class="field span-2">
-              <label>Email recipients (comma-separated)</label>
-              <input type="text" [(ngModel)]="scheduleEmails" name="schedEmails" placeholder="bursar@school.com, admin@school.com" />
+        @if (activeTab() === 'weekly' && !isSummaryOnly()) {
+          <div class="panel-shell">
+            <h3>Weekly collection</h3>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Week</th><th class="num">Expected</th><th class="num">Collected</th>
+                    <th class="num">Outstanding</th><th class="num">Rate %</th>
+                    <th class="num">Cumulative</th><th class="num">WoW %</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (w of report()!.weekly; track $any(w).weekKey) {
+                    <tr>
+                      <td>{{ $any(w).weekLabel }}</td>
+                      <td class="num">${{ $any(w).totalExpected | number:'1.2-2' }}</td>
+                      <td class="num paid">${{ $any(w).totalCollected | number:'1.2-2' }}</td>
+                      <td class="num">${{ $any(w).totalOutstanding | number:'1.2-2' }}</td>
+                      <td class="num">{{ $any(w).collectionRatePct | number:'1.1-1' }}%</td>
+                      <td class="num">${{ $any(w).cumulativeCollected | number:'1.2-2' }}</td>
+                      <td class="num">
+                        @if ($any(w).weekOverWeekChangePct != null) {
+                          {{ $any(w).weekOverWeekChangePct | number:'1.1-1' }}%
+                        } @else { — }
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
             </div>
           </div>
-          <button type="button" class="btn-primary" (click)="saveSchedule()">Save schedule</button>
-        </section>
-      }
+        }
+
+        @if (activeTab() === 'monthly') {
+          <div class="panel-shell">
+            <h3>Monthly collection</h3>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Month</th><th class="num">Expected</th><th class="num">Collected</th>
+                    <th class="num">Outstanding</th><th class="num">Rate %</th>
+                    <th class="num">Variance</th><th class="num">Prev rate %</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (m of report()!.monthly; track $any(m).monthKey) {
+                    <tr>
+                      <td>{{ $any(m).monthLabel }}</td>
+                      <td class="num">${{ $any(m).totalExpected | number:'1.2-2' }}</td>
+                      <td class="num paid">${{ $any(m).totalCollected | number:'1.2-2' }}</td>
+                      <td class="num">${{ $any(m).totalOutstanding | number:'1.2-2' }}</td>
+                      <td class="num">{{ $any(m).collectionRatePct | number:'1.1-1' }}%</td>
+                      <td class="num">${{ $any(m).variance | number:'1.2-2' }}</td>
+                      <td class="num">{{ $any(m).previousMonthRatePct | number:'1.1-1' }}%</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          </div>
+        }
+
+        @if (activeTab() === 'category') {
+          <div class="panel-shell">
+            <h3>By fee category</h3>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Category</th><th class="num">Expected</th><th class="num">Collected</th>
+                    <th class="num">Outstanding</th><th class="num">Rate %</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (c of report()!.byCategory; track $any(c).feeType) {
+                    <tr>
+                      <td>{{ $any(c).label }}</td>
+                      <td class="num">${{ $any(c).expected | number:'1.2-2' }}</td>
+                      <td class="num paid">${{ $any(c).collected | number:'1.2-2' }}</td>
+                      <td class="num">${{ $any(c).outstanding | number:'1.2-2' }}</td>
+                      <td class="num">{{ $any(c).collectionRatePct | number:'1.1-1' }}%</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          </div>
+        }
+
+        @if (activeTab() === 'grade') {
+          <div class="panel-shell">
+            <h3>By grade & class</h3>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Grade</th><th>Class</th><th class="num">Students</th>
+                    <th class="num">Expected</th><th class="num">Collected</th>
+                    <th class="num">Outstanding</th><th class="num">Rate %</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (g of filteredGradeRows(); track $any(g).gradeKey + $any(g).classKey) {
+                    <tr [class.low]="$any(g).lowCollection">
+                      <td>{{ $any(g).gradeLabel }}</td>
+                      <td>{{ $any(g).classLabel }}</td>
+                      <td class="num">{{ $any(g).studentCount }}</td>
+                      <td class="num">${{ $any(g).totalExpected | number:'1.2-2' }}</td>
+                      <td class="num paid">${{ $any(g).totalCollected | number:'1.2-2' }}</td>
+                      <td class="num">${{ $any(g).outstanding | number:'1.2-2' }}</td>
+                      <td class="num">{{ $any(g).collectionRatePct | number:'1.1-1' }}%</td>
+                    </tr>
+                  } @empty {
+                    <tr><td colspan="7" class="empty">No rows match your filter.</td></tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          </div>
+        }
+
+        @if (activeTab() === 'methods') {
+          <div class="panel-shell">
+            <h3>Payment methods</h3>
+            <div class="method-grid">
+              @for (pm of report()!.paymentMethods; track pm.key) {
+                <article class="method-card">
+                  <span>{{ pm.label }}</span>
+                  <strong>${{ pm.amount | number:'1.2-2' }}</strong>
+                  <small>{{ pm.percentage | number:'1.1-1' }}% · {{ pm.transactionCount }} txns</small>
+                  <div class="method-bar">
+                    <div class="method-fill" [style.width]="pm.percentage + '%'"></div>
+                  </div>
+                </article>
+              }
+            </div>
+          </div>
+        }
+
+        @if (activeTab() === 'exceptions' && !isSummaryOnly()) {
+          <div class="panel-shell">
+            <h3>Variance & exceptions</h3>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Type</th><th>Student</th><th>Class</th>
+                    <th>Description</th><th class="num">Amount</th><th>Date</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (e of filteredExceptions(); track $index) {
+                    <tr>
+                      <td><span class="flag">{{ exceptionLabel(e.type) }}</span></td>
+                      <td>{{ e.studentName }}<div class="sub-id">{{ e.admissionNumber }}</div></td>
+                      <td>{{ e.className || '—' }}</td>
+                      <td>{{ e.description }}</td>
+                      <td class="num">@if (e.amount != null) { ${{ e.amount | number:'1.2-2' }} } @else { — }</td>
+                      <td>{{ e.date || '—' }}</td>
+                    </tr>
+                  } @empty {
+                    <tr><td colspan="6" class="empty">No exceptions match your filter.</td></tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          </div>
+        }
+
+        @if (activeTab() === 'projections') {
+          <div class="panel-shell">
+            <h3>Projections & forecasting</h3>
+            <div class="proj-grid">
+              <article><span>Projected end-of-term</span><strong>${{ report()!.projections['projectedEndOfTermCollection'] | number:'1.2-2' }}</strong></article>
+              <article><span>Budgeted expected</span><strong>${{ report()!.projections['budgetedExpected'] | number:'1.2-2' }}</strong></article>
+              <article class="warn"><span>Projected shortfall</span><strong>${{ report()!.projections['projectedShortfall'] | number:'1.2-2' }}</strong></article>
+              <article class="ok"><span>Projected surplus</span><strong>${{ report()!.projections['projectedSurplus'] | number:'1.2-2' }}</strong></article>
+              <article><span>Est. remaining cash flow</span><strong>${{ report()!.projections['estimatedRemainingCashFlow'] | number:'1.2-2' }}</strong></article>
+              <article><span>Daily run rate</span><strong>${{ report()!.projections['dailyRunRate'] | number:'1.2-2' }}</strong></article>
+              <article><span>Days elapsed / remaining</span><strong>{{ report()!.projections['daysElapsed'] }} / {{ report()!.projections['daysRemaining'] }}</strong></article>
+            </div>
+          </div>
+        }
+
+        @if (activeTab() === 'charts') {
+          <div class="panel-shell">
+            <h3>Daily collections (last 21 days)</h3>
+            <div class="chart-bars">
+              @for (pt of report()!.charts.dailyCollections.slice(-21); track pt.label) {
+                <div class="bar-row">
+                  <span class="bar-label">{{ pt.label }}</span>
+                  <div class="bar-track"><div class="bar-fill blue" [style.width]="barWidth(pt.value, chartMaxDaily())"></div></div>
+                  <span class="bar-val">${{ pt.value | number:'1.0-0' }}</span>
+                </div>
+              }
+            </div>
+          </div>
+          <div class="panel-shell">
+            <h3>Cumulative trend vs target</h3>
+            <div class="chart-bars">
+              @for (pt of report()!.charts.cumulativeTrend.slice(-21); track pt.label) {
+                <div class="bar-row dual">
+                  <span class="bar-label">{{ pt.label }}</span>
+                  <div class="bar-track stacked">
+                    <div class="bar-fill green" [style.width]="barWidth(pt.value, chartMaxCumulative())"></div>
+                    <div class="bar-fill muted" [style.width]="barWidth(pt.value2 || 0, chartMaxCumulative())"></div>
+                  </div>
+                  <span class="bar-val">${{ pt.value | number:'1.0-0' }}</span>
+                </div>
+              }
+            </div>
+            <p class="legend"><span class="dot green"></span> Collected <span class="dot muted"></span> Target pace</p>
+          </div>
+          <div class="panel-shell chart-split">
+            <div>
+              <h3>By fee type</h3>
+              @for (pt of report()!.charts.feeTypeBreakdown; track pt.label) {
+                <div class="pie-row">
+                  <span>{{ pt.label }}</span>
+                  <div class="bar-track"><div class="bar-fill purple" [style.width]="barWidth(pt.value, pieTotal())"></div></div>
+                  <span>${{ pt.value | number:'1.0-0' }}</span>
+                </div>
+              }
+            </div>
+            <div>
+              <h3>Collection rate by class</h3>
+              @for (pt of report()!.charts.gradeClassRates; track pt.label) {
+                <div class="pie-row">
+                  <span>{{ pt.label }}</span>
+                  <div class="bar-track"><div class="bar-fill orange" [style.width]="pt.value + '%'"></div></div>
+                  <span>{{ pt.value | number:'1.0-0' }}%</span>
+                </div>
+              }
+            </div>
+          </div>
+          <div class="panel-shell">
+            <h3>Monthly collection rate</h3>
+            <div class="chart-bars">
+              @for (pt of report()!.charts.monthlyTrend; track pt.label) {
+                <div class="bar-row">
+                  <span class="bar-label">{{ pt.label }}</span>
+                  <div class="bar-track"><div class="bar-fill blue" [style.width]="pt.value + '%'"></div></div>
+                  <span class="bar-val">{{ pt.value | number:'1.1-1' }}%</span>
+                </div>
+              }
+            </div>
+          </div>
+        }
+
+        @if (!isSummaryOnly()) {
+          <div class="panel-shell schedule-card no-print">
+            <h3>Schedule automatic delivery</h3>
+            <p class="sub">Email this report to finance staff on a recurring basis (requires SMTP in school settings).</p>
+            <div class="schedule-grid">
+              <div class="field">
+                <label>Frequency</label>
+                <select [(ngModel)]="scheduleFrequency" name="schedFreq">
+                  <option value="daily">Daily</option>
+                  <option value="weekly">Weekly</option>
+                  <option value="monthly">Monthly</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>Report mode</label>
+                <select [(ngModel)]="scheduleMode" name="schedMode">
+                  <option value="summary">Summary</option>
+                  <option value="detailed">Detailed</option>
+                </select>
+              </div>
+              <div class="field span-2">
+                <label>Email recipients (comma-separated)</label>
+                <input type="text" [(ngModel)]="scheduleEmails" name="schedEmails" placeholder="bursar@school.com, admin@school.com" />
+              </div>
+            </div>
+            <button type="button" class="btn-primary" (click)="saveSchedule()">Save schedule</button>
+          </div>
+        }
+      </section>
+    } @else if (!loading() && !matches().length) {
+      <div class="empty-state standalone no-print">
+        <span class="empty-icon">💵</span>
+        <h3>No report loaded</h3>
+        <p>Select filters and generate a fee collection report.</p>
+      </div>
     }
   </div>
 </app-portal-layout>

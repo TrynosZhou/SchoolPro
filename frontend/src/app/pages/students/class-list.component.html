@@ -3,140 +3,302 @@
   [pageTitle]="pageTitle"
   [navSections]="portalTitle === 'Admin Portal' ? adminNav : teacherNav"
 >
-
-  @if (toast(); as t) {
-    <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>
-  }
-
-  <header class="page-intro">
-    <p>Select term and class, then click <strong>Load Students</strong> to view enrolled learners for that class.</p>
-  </header>
-
-  <section class="filter-bar card">
-    <div class="filter-row">
-      <div class="field">
-        <label for="termSelect">Term</label>
-        <select
-          id="termSelect"
-          [(ngModel)]="selectedTermId"
-          (ngModelChange)="onTermChange()"
-          name="termId"
-          [disabled]="loadingTerms()"
-        >
-          <option value="">— Select term —</option>
-          @for (t of terms(); track t.id) {
-            <option [value]="t.id">{{ t.name }}</option>
-          }
-        </select>
-      </div>
-      <div class="field">
-        <label for="classSelect">Class</label>
-        <select
-          id="classSelect"
-          [(ngModel)]="selectedClassId"
-          (ngModelChange)="onClassChange()"
-          name="classId"
-          [disabled]="loadingClasses()"
-        >
-          <option value="">— Select class —</option>
-          @for (c of classes(); track c.id) {
-            <option [value]="c.id">{{ c.name }}</option>
-          }
-        </select>
-      </div>
-      <button
-        type="button"
-        class="btn-fetch"
-        (click)="fetchStudents()"
-        [disabled]="!selectedTermId || !selectedClassId || loadingStudents()"
-      >
-        {{ loadingStudents() ? 'Loading…' : 'Load Students' }}
-      </button>
-    </div>
-    @if (loadingTerms() || loadingClasses()) {
-      <p class="hint">Loading terms and classes…</p>
-    } @else if (!terms().length) {
-      <p class="hint warn">No terms available.</p>
-    } @else if (!classes().length) {
-      <p class="hint warn">No classes available.</p>
-    } @else {
-      <p class="hint">Selected: {{ selectedTermLabel() || '—' }} · {{ selectedClassLabel() || '—' }}</p>
+  <div class="class-list-page">
+    @if (toast(); as t) {
+      <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>
     }
-  </section>
 
-  @if (hasFetched()) {
-    <section class="results card">
-      <div class="results-head">
-        <div>
-          <h2>{{ selectedClassLabel() || 'Class roster' }}</h2>
-          <p>{{ filteredStudents().length }} student(s)</p>
-        </div>
-        <div class="results-actions">
-          <input
-            type="search"
-            class="search"
-            placeholder="Search by ID, name, or gender…"
-            [ngModel]="search()"
-            (ngModelChange)="search.set($event)"
-            name="search"
-          />
-          <div class="pdf-btns">
-            <button
-              type="button"
-              class="btn-pdf btn-preview"
-              (click)="previewPdf()"
-              [disabled]="!canExportPdf() || pdfLoading()"
-            >
-              {{ pdfLoading() ? 'Generating…' : 'Preview PDF' }}
-            </button>
-            <button
-              type="button"
-              class="btn-pdf btn-download"
-              (click)="downloadPdf()"
-              [disabled]="!canExportPdf() || pdfLoading()"
-            >
-              {{ pdfLoading() ? 'Generating…' : 'Download PDF' }}
-            </button>
-          </div>
+    <header class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">Class roster</p>
+        <h2>Class list</h2>
+        <p class="hero-sub">
+          View enrolled learners by term and class, search the roster, and export an official PDF class list.
+        </p>
+        <div class="hero-actions">
+          @if (!isTeacherPortal) {
+            <a routerLink="/admin/enrollment" class="secondary-action">Class enrollment</a>
+          }
+          <button
+            type="button"
+            class="refresh-action"
+            (click)="fetchStudents()"
+            [disabled]="!selectedTermId || !selectedClassId || loadingStudents()"
+          >
+            {{ loadingStudents() ? 'Loading…' : 'Reload roster' }}
+          </button>
         </div>
       </div>
+      <div class="kpi-grid">
+        <article class="kpi">
+          <span class="kpi-icon">🏫</span>
+          <div>
+            <strong>{{ classes().length }}</strong>
+            <span>Classes</span>
+          </div>
+        </article>
+        <article class="kpi">
+          <span class="kpi-icon">📅</span>
+          <div>
+            <strong>{{ terms().length }}</strong>
+            <span>Terms</span>
+          </div>
+        </article>
+        <article class="kpi accent">
+          <span class="kpi-icon">👥</span>
+          <div>
+            <strong>{{ hasFetched() ? rosterStats().total : '—' }}</strong>
+            <span>In roster</span>
+          </div>
+        </article>
+        <article class="kpi">
+          <span class="kpi-icon">📄</span>
+          <div>
+            <strong>{{ canExportPdf() ? 'Ready' : '—' }}</strong>
+            <span>PDF export</span>
+          </div>
+        </article>
+      </div>
+    </header>
 
-      @if (filteredStudents().length) {
-        <div class="table-wrap">
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th>Student ID</th>
-                <th>Last Name</th>
-                <th>First Name</th>
-                <th>Gender</th>
-              </tr>
-            </thead>
-            <tbody>
-              @for (s of filteredStudents(); track s.id) {
-                <tr>
-                  <td class="mono">{{ s.admissionNumber }}</td>
-                  <td>{{ s.lastName }}</td>
-                  <td>{{ s.firstName }}</td>
-                  <td>{{ s.gender || '—' }}</td>
-                </tr>
+    <section class="list-shell">
+      <div class="list-toolbar">
+        <div class="selector-row">
+          <div class="field">
+            <label for="termSelect">Term</label>
+            <select
+              id="termSelect"
+              [(ngModel)]="selectedTermId"
+              (ngModelChange)="onTermChange()"
+              name="termId"
+              [disabled]="loadingTerms()"
+            >
+              <option value="">— Select term —</option>
+              @for (t of terms(); track t.id) {
+                <option [value]="t.id">{{ t.name }}@if (t.isCurrent) { (current) }</option>
               }
-            </tbody>
-          </table>
+            </select>
+          </div>
+          <div class="field">
+            <label for="classSelect">Class</label>
+            <select
+              id="classSelect"
+              [(ngModel)]="selectedClassId"
+              (ngModelChange)="selectClass($event)"
+              name="classId"
+              [disabled]="loadingClasses()"
+            >
+              <option value="">— Select class —</option>
+              @for (c of visibleClasses(); track c.id) {
+                <option [value]="c.id">
+                  {{ c.name }}@if (c.form?.name) { · {{ c.form?.name }} } — {{ classEnrollmentCount(c) }} enrolled
+                </option>
+              }
+            </select>
+          </div>
+          <button
+            type="button"
+            class="btn-fetch"
+            (click)="fetchStudents()"
+            [disabled]="!selectedTermId || !selectedClassId || loadingStudents()"
+          >
+            {{ loadingStudents() ? 'Loading…' : 'Load roster' }}
+          </button>
         </div>
-      } @else if (!loadingStudents()) {
-        <p class="empty">No students match your search.</p>
+
+        @if (loadingTerms() || loadingClasses()) {
+          <p class="hint">Loading terms and classes…</p>
+        } @else if (!terms().length) {
+          <p class="hint warn">No terms available.</p>
+        } @else if (!classes().length) {
+          <p class="hint warn">No classes available.</p>
+        } @else {
+          <div class="selection-summary">
+            <span>Selected: <strong>{{ selectedTermLabel() || '—' }}</strong> · <strong>{{ selectedClassLabel() || '—' }}</strong></span>
+            @if (selectedClassMeta()?.form?.name) {
+              <span class="summary-tag">{{ selectedClassMeta()?.form?.name }}</span>
+            }
+          </div>
+        }
+
+        @if (classes().length > 1) {
+          <div class="quick-class-wrap">
+            <div class="quick-class-head">
+              <span>Quick select class</span>
+              @if (classFormOptions().length) {
+                <select class="form-filter" [ngModel]="classFormFilter()" (ngModelChange)="classFormFilter.set($event)" name="classFormFilter">
+                  <option value="all">All forms</option>
+                  @for (f of classFormOptions(); track f) {
+                    <option [value]="f">{{ f }}</option>
+                  }
+                </select>
+              }
+            </div>
+            <div class="quick-class-grid">
+              @for (c of visibleClasses(); track c.id) {
+                <button
+                  type="button"
+                  class="class-chip"
+                  [class.active]="selectedClassId === c.id"
+                  (click)="selectClass(c.id)"
+                >
+                  <strong>{{ c.name }}</strong>
+                  <span>{{ classEnrollmentCount(c) }} enrolled</span>
+                </button>
+              }
+            </div>
+          </div>
+        }
+      </div>
+
+      @if (loadingStudents()) {
+        <div class="loading-panel">
+          <div class="spinner"></div>
+          <p>Loading class roster…</p>
+        </div>
+      } @else if (hasFetched()) {
+        <div class="results-toolbar">
+          <div class="results-head">
+            <div>
+              <h3>{{ selectedClassLabel() || 'Class roster' }}</h3>
+              <p>{{ selectedTermLabel() }} · {{ filteredStudents().length }} of {{ rosterStats().total }} student(s)</p>
+            </div>
+            <div class="roster-stats">
+              <span class="stat-chip">Male {{ rosterStats().male }}</span>
+              <span class="stat-chip">Female {{ rosterStats().female }}</span>
+            </div>
+          </div>
+
+          <div class="search-wrap">
+            <span class="search-icon" aria-hidden="true">🔍</span>
+            <input
+              type="search"
+              class="search-input"
+              placeholder="Search by ID, name, or gender…"
+              [ngModel]="search()"
+              (ngModelChange)="search.set($event)"
+              name="search"
+            />
+            @if (search()) {
+              <button type="button" class="clear-search" (click)="search.set('')" aria-label="Clear search">×</button>
+            }
+          </div>
+
+          <div class="toolbar-row">
+            <div class="filter-chips">
+              <button type="button" class="chip" [class.active]="genderFilter() === 'all'" (click)="genderFilter.set('all')">All</button>
+              <button type="button" class="chip" [class.active]="genderFilter() === 'Male'" (click)="genderFilter.set('Male')">Male</button>
+              <button type="button" class="chip" [class.active]="genderFilter() === 'Female'" (click)="genderFilter.set('Female')">Female</button>
+            </div>
+
+            <div class="toolbar-actions">
+              <select [ngModel]="sortOrder()" (ngModelChange)="sortOrder.set($event)" name="sortOrder" class="sort-select">
+                <option value="name-asc">Name A–Z</option>
+                <option value="name-desc">Name Z–A</option>
+                <option value="id-asc">Student ID A–Z</option>
+              </select>
+              <div class="view-toggle" role="group" aria-label="View mode">
+                <button type="button" class="view-btn" [class.active]="viewMode() === 'table'" (click)="viewMode.set('table')" title="Table view">☰</button>
+                <button type="button" class="view-btn" [class.active]="viewMode() === 'cards'" (click)="viewMode.set('cards')" title="Card view">▦</button>
+              </div>
+              <div class="pdf-btns">
+                <button type="button" class="btn-pdf btn-preview" (click)="previewPdf()" [disabled]="!canExportPdf() || pdfLoading()">
+                  {{ pdfLoading() ? 'Generating…' : 'Preview PDF' }}
+                </button>
+                <button type="button" class="btn-pdf btn-download" (click)="downloadPdf()" [disabled]="!canExportPdf() || pdfLoading()">
+                  {{ pdfLoading() ? 'Generating…' : 'Download PDF' }}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          @if (hasActiveFilters()) {
+            <div class="results-meta">
+              <span>Filtered roster</span>
+              <button type="button" class="clear-filters" (click)="clearFilters()">Clear filters</button>
+            </div>
+          }
+        </div>
+
+        @if (filteredStudents().length) {
+          @if (viewMode() === 'cards') {
+            <div class="card-grid">
+              @for (s of filteredStudents(); track s.id) {
+                <article class="student-card">
+                  <span class="avatar">{{ initials(s) }}</span>
+                  <div class="card-body">
+                    <div class="name-split">
+                      <span class="name-label">Last name</span>
+                      <strong>{{ s.lastName }}</strong>
+                      <span class="name-label">First name</span>
+                      <strong>{{ s.firstName }}</strong>
+                    </div>
+                    <code class="sid">{{ s.admissionNumber }}</code>
+                    @if (s.gender) {
+                      <span class="gender-tag">{{ s.gender }}</span>
+                    }
+                  </div>
+                </article>
+              }
+            </div>
+          } @else {
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Student ID</th>
+                    <th>Last Name</th>
+                    <th>First Name</th>
+                    <th>Gender</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (s of filteredStudents(); track s.id) {
+                    <tr>
+                      <td><code class="sid">{{ s.admissionNumber }}</code></td>
+                      <td>{{ s.lastName }}</td>
+                      <td>{{ s.firstName }}</td>
+                      <td>{{ s.gender || '—' }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
+        } @else {
+          <div class="empty-state">
+            @if (rosterStats().total === 0) {
+              <span class="empty-icon">🎓</span>
+              <h3>No students enrolled</h3>
+              <p>This class has no enrolled students for the selected term.</p>
+              @if (!isTeacherPortal) {
+                <a routerLink="/admin/enrollment" class="btn-outline">Go to enrollment</a>
+              }
+            } @else {
+              <span class="empty-icon">🔍</span>
+              <h3>No students match</h3>
+              <p>Try adjusting your search or gender filter.</p>
+              <button type="button" class="btn-outline" (click)="clearFilters()">Clear filters</button>
+            }
+          </div>
+        }
+      } @else {
+        <div class="empty-state initial">
+          <span class="empty-icon">📋</span>
+          <h3>Select a term and class</h3>
+          <p>Choose a term and class above, then load the roster to view students or export a PDF.</p>
+        </div>
       }
     </section>
-  }
+  </div>
 </app-portal-layout>
 
 @if (pdfPreviewOpen() && pdfPreviewUrl()) {
   <div class="pdf-overlay maximized" role="dialog" aria-modal="true" aria-label="Class list PDF preview">
     <header class="pdf-toolbar">
       <div class="pdf-toolbar-title">
-        <strong>Class List Preview</strong>
-        <span>{{ selectedClassLabel() }}</span>
+        <strong>Class list preview</strong>
+        <span>{{ selectedClassLabel() }} · {{ selectedTermLabel() }}</span>
       </div>
       <div class="pdf-toolbar-actions">
         <button type="button" class="btn-pdf btn-download" (click)="downloadPdf()" [disabled]="pdfLoading()">

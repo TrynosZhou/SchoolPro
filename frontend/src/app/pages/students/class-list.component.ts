@@ -1,7 +1,7 @@
 import { Component, computed, inject, OnDestroy, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
 import { TEACHER_NAV_SECTIONS } from '../../core/config/teacher-nav';
@@ -12,7 +12,9 @@ import { Student } from '../../core/models';
 interface ClassOption {
   id: string;
   name: string;
-  form?: { name: string };
+  capacity?: number;
+  form?: { id?: string; name: string };
+  students?: { id: string }[];
 }
 
 interface TermOption {
@@ -21,10 +23,14 @@ interface TermOption {
   isCurrent?: boolean;
 }
 
+type GenderFilter = 'all' | 'Male' | 'Female';
+type SortOrder = 'name-asc' | 'name-desc' | 'id-asc';
+type ViewMode = 'table' | 'cards';
+
 @Component({
   selector: 'app-class-list',
   standalone: true,
-  imports: [PortalLayoutComponent, FormsModule],
+  imports: [PortalLayoutComponent, FormsModule, RouterLink],
   templateUrl: './class-list.component.html',
   styleUrl: './class-list.component.scss',
 })
@@ -50,6 +56,10 @@ export class ClassListComponent implements OnInit, OnDestroy {
   loadingStudents = signal(false);
   hasFetched = signal(false);
   search = signal('');
+  classFormFilter = signal('all');
+  genderFilter = signal<GenderFilter>('all');
+  sortOrder = signal<SortOrder>('name-asc');
+  viewMode = signal<ViewMode>('table');
   toast = signal<{ type: 'success' | 'error'; msg: string } | null>(null);
 
   pdfLoading = signal(false);
@@ -57,12 +67,36 @@ export class ClassListComponent implements OnInit, OnDestroy {
   pdfPreviewUrl = signal<SafeResourceUrl | null>(null);
   private pdfObjectUrl: string | null = null;
 
-  selectedClassLabel = computed(() =>
-    classDisplayName(this.classes(), this.selectedClassId),
-  );
+  selectedClassLabel = computed(() => classDisplayName(this.classes(), this.selectedClassId));
+
   selectedTermLabel = computed(
     () => this.terms().find((t) => t.id === this.selectedTermId)?.name || '',
   );
+
+  selectedClassMeta = computed(() => this.classes().find((c) => c.id === this.selectedClassId));
+
+  classFormOptions = computed(() => {
+    const names = new Set<string>();
+    for (const c of this.classes()) {
+      if (c.form?.name) names.add(c.form.name);
+    }
+    return [...names].sort();
+  });
+
+  visibleClasses = computed(() => {
+    const form = this.classFormFilter();
+    if (form === 'all') return this.classes();
+    return this.classes().filter((c) => c.form?.name === form);
+  });
+
+  rosterStats = computed(() => {
+    const rows = this.students();
+    return {
+      total: rows.length,
+      male: rows.filter((s) => s.gender === 'Male').length,
+      female: rows.filter((s) => s.gender === 'Female').length,
+    };
+  });
 
   pdfFilename = computed(() => {
     const label = this.selectedClassLabel() || 'class';
@@ -71,15 +105,36 @@ export class ClassListComponent implements OnInit, OnDestroy {
 
   canExportPdf = computed(() => this.hasFetched() && this.students().length > 0 && !!this.selectedClassId);
 
+  hasActiveFilters = computed(
+    () =>
+      Boolean(this.search().trim()) ||
+      this.genderFilter() !== 'all' ||
+      this.sortOrder() !== 'name-asc',
+  );
+
   filteredStudents = computed(() => {
+    let rows = [...this.students()];
     const q = this.search().trim().toLowerCase();
-    const rows = [...this.students()].sort((a, b) =>
-      a.lastName.localeCompare(b.lastName) || a.firstName.localeCompare(b.firstName),
-    );
-    if (!q) return rows;
-    return rows.filter((s) =>
-      `${s.admissionNumber} ${s.lastName} ${s.firstName} ${s.gender || ''}`.toLowerCase().includes(q),
-    );
+
+    if (q) {
+      rows = rows.filter((s) =>
+        `${s.admissionNumber} ${s.lastName} ${s.firstName} ${s.gender || ''}`.toLowerCase().includes(q),
+      );
+    }
+
+    const gender = this.genderFilter();
+    if (gender !== 'all') rows = rows.filter((s) => s.gender === gender);
+
+    const sort = this.sortOrder();
+    rows.sort((a, b) => {
+      if (sort === 'id-asc') return a.admissionNumber.localeCompare(b.admissionNumber);
+      const nameA = `${a.lastName} ${a.firstName}`.toLowerCase();
+      const nameB = `${b.lastName} ${b.firstName}`.toLowerCase();
+      if (sort === 'name-desc') return nameB.localeCompare(nameA);
+      return nameA.localeCompare(nameB);
+    });
+
+    return rows;
   });
 
   ngOnInit(): void {
@@ -90,6 +145,7 @@ export class ClassListComponent implements OnInit, OnDestroy {
         const current = ordered.find((t) => t.isCurrent);
         if (current) this.selectedTermId = current.id;
         this.loadingTerms.set(false);
+        this.tryAutoFetch();
       },
       error: () => {
         this.loadingTerms.set(false);
@@ -102,6 +158,7 @@ export class ClassListComponent implements OnInit, OnDestroy {
         next: (d) => {
           this.classes.set(d.assignedClasses || []);
           this.loadingClasses.set(false);
+          this.tryAutoFetch();
         },
         error: () => {
           this.loadingClasses.set(false);
@@ -115,6 +172,7 @@ export class ClassListComponent implements OnInit, OnDestroy {
       next: (c) => {
         this.classes.set(c);
         this.loadingClasses.set(false);
+        this.tryAutoFetch();
       },
       error: () => {
         this.loadingClasses.set(false);
@@ -125,6 +183,19 @@ export class ClassListComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.revokePdfUrl();
+  }
+
+  classEnrollmentCount(c: ClassOption): number {
+    return c.students?.length ?? 0;
+  }
+
+  selectClass(classId: string): void {
+    this.selectedClassId = classId;
+    this.students.set([]);
+    this.hasFetched.set(false);
+    this.search.set('');
+    this.closePdfPreview();
+    this.tryAutoFetch();
   }
 
   fetchStudents(): void {
@@ -160,6 +231,16 @@ export class ClassListComponent implements OnInit, OnDestroy {
       });
   }
 
+  clearFilters(): void {
+    this.search.set('');
+    this.genderFilter.set('all');
+    this.sortOrder.set('name-asc');
+  }
+
+  initials(student: Student): string {
+    return `${student.firstName.charAt(0)}${student.lastName.charAt(0)}`.toUpperCase();
+  }
+
   previewPdf(): void {
     this.fetchPdfBlob(true).then((blob) => {
       if (!blob) return;
@@ -188,18 +269,18 @@ export class ClassListComponent implements OnInit, OnDestroy {
     this.revokePdfUrl();
   }
 
-  onClassChange(): void {
-    this.students.set([]);
-    this.hasFetched.set(false);
-    this.search.set('');
-    this.closePdfPreview();
-  }
-
   onTermChange(): void {
     this.students.set([]);
     this.hasFetched.set(false);
     this.search.set('');
     this.closePdfPreview();
+    this.tryAutoFetch();
+  }
+
+  private tryAutoFetch(): void {
+    if (this.selectedTermId && this.selectedClassId && !this.loadingStudents()) {
+      this.fetchStudents();
+    }
   }
 
   private fetchPdfBlob(preview: boolean): Promise<Blob | null> {

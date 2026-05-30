@@ -1,0 +1,402 @@
+<app-portal-layout portalTitle="Admin Portal" pageTitle="All Parents" [navSections]="adminNav">
+  <div class="parents-page">
+    @if (toast(); as t) {
+      <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>
+    }
+
+    <header class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">Parents</p>
+        <h2>Parent portal accounts</h2>
+        <p class="hero-sub">
+          Register guardians, keep contact details current, and link children to the right parent accounts.
+        </p>
+        <div class="hero-actions">
+          <button type="button" class="primary-action" (click)="openCreate()">
+            <span>+</span>
+            Add parent
+          </button>
+          <button type="button" class="refresh-action" (click)="loadParents(true)" [disabled]="refreshing() || loading()">
+            {{ refreshing() ? 'Refreshing…' : 'Refresh list' }}
+          </button>
+        </div>
+      </div>
+      <div class="kpi-grid">
+        <article class="kpi">
+          <span class="kpi-icon">👨‍👩‍👧</span>
+          <div>
+            <strong>{{ stats().total }}</strong>
+            <span>Total</span>
+          </div>
+        </article>
+        <article class="kpi accent">
+          <span class="kpi-icon">✅</span>
+          <div>
+            <strong>{{ stats().active }}</strong>
+            <span>Active</span>
+          </div>
+        </article>
+        <article class="kpi">
+          <span class="kpi-icon">🎓</span>
+          <div>
+            <strong>{{ stats().linked }}</strong>
+            <span>Linked</span>
+          </div>
+        </article>
+        <article class="kpi">
+          <span class="kpi-icon">💬</span>
+          <div>
+            <strong>{{ stats().whatsapp }}</strong>
+            <span>WhatsApp</span>
+          </div>
+        </article>
+      </div>
+    </header>
+
+    <section class="list-shell">
+      <div class="list-toolbar">
+        <div class="search-wrap">
+          <span class="search-icon" aria-hidden="true">🔍</span>
+          <input
+            type="search"
+            class="search-input"
+            placeholder="Search name, email, phone, student ID…"
+            [ngModel]="search()"
+            (ngModelChange)="search.set($event)"
+            name="parentSearch"
+          />
+          @if (search()) {
+            <button type="button" class="clear-search" (click)="search.set('')" aria-label="Clear search">×</button>
+          }
+        </div>
+
+        <div class="toolbar-row">
+          <div class="filter-chips">
+            <button
+              type="button"
+              class="chip"
+              [class.active]="statusFilter() === 'active'"
+              (click)="setStatusFilter('active')"
+            >
+              Active
+            </button>
+            <button
+              type="button"
+              class="chip"
+              [class.active]="statusFilter() === 'inactive'"
+              (click)="setStatusFilter('inactive')"
+            >
+              Inactive
+            </button>
+            <button
+              type="button"
+              class="chip"
+              [class.active]="statusFilter() === 'all'"
+              (click)="setStatusFilter('all')"
+            >
+              All
+            </button>
+            <span class="chip-divider"></span>
+            <button
+              type="button"
+              class="chip"
+              [class.active]="linkFilter() === 'linked'"
+              (click)="setLinkFilter('linked')"
+            >
+              Has students
+            </button>
+            <button
+              type="button"
+              class="chip"
+              [class.active]="linkFilter() === 'unlinked'"
+              (click)="setLinkFilter('unlinked')"
+            >
+              No students
+            </button>
+            <button
+              type="button"
+              class="chip"
+              [class.active]="whatsappOnly()"
+              (click)="whatsappOnly.set(!whatsappOnly())"
+            >
+              WhatsApp only
+            </button>
+          </div>
+
+          <div class="toolbar-actions">
+            <select [ngModel]="sortOrder()" (ngModelChange)="sortOrder.set($event)" name="sortOrder" class="sort-select">
+              <option value="name-asc">Name A–Z</option>
+              <option value="name-desc">Name Z–A</option>
+              <option value="newest">Newest first</option>
+              <option value="oldest">Oldest first</option>
+            </select>
+            <div class="view-toggle" role="group" aria-label="View mode">
+              <button
+                type="button"
+                class="view-btn"
+                [class.active]="viewMode() === 'table'"
+                (click)="viewMode.set('table')"
+                title="Table view"
+              >
+                ☰
+              </button>
+              <button
+                type="button"
+                class="view-btn"
+                [class.active]="viewMode() === 'cards'"
+                (click)="viewMode.set('cards')"
+                title="Card view"
+              >
+                ▦
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="results-meta">
+          <span>
+            Showing <strong>{{ visibleParents().length }}</strong> of <strong>{{ parents().length }}</strong> parents
+          </span>
+          @if (hasActiveFilters()) {
+            <button type="button" class="clear-filters" (click)="clearFilters()">Clear filters</button>
+          }
+        </div>
+      </div>
+
+      @if (loading()) {
+        <div class="loading-panel">
+          <div class="spinner"></div>
+          <p>Loading parents…</p>
+        </div>
+      } @else if (!visibleParents().length) {
+        <div class="empty-state">
+          <span class="empty-icon">👨‍👩‍👧</span>
+          <h3>No parents found</h3>
+          @if (hasActiveFilters()) {
+            <p>Try adjusting your search or filters.</p>
+            <button type="button" class="btn-ghost" (click)="clearFilters()">Clear filters</button>
+          } @else {
+            <p>Create the first parent portal account to get started.</p>
+            <button type="button" class="btn-primary" (click)="openCreate()">+ Add parent</button>
+          }
+        </div>
+      } @else if (viewMode() === 'cards') {
+        <div class="card-grid">
+          @for (p of visibleParents(); track p.id) {
+            <article class="parent-card" [class.inactive-card]="!p.isActive" (click)="openParent(p)">
+              <div class="card-head">
+                <span class="avatar">{{ initials(p) }}</span>
+                <div class="card-title">
+                  <strong>{{ p.firstName }} {{ p.lastName }}</strong>
+                  @if (p.occupation) {
+                    <span class="muted">{{ p.occupation }}</span>
+                  }
+                </div>
+                <span class="status-pill" [class.active]="p.isActive" [class.inactive]="!p.isActive">
+                  {{ p.isActive ? 'Active' : 'Inactive' }}
+                </span>
+              </div>
+
+              <div class="card-meta">
+                <div><span>Email</span><strong>{{ p.email }}</strong></div>
+                <div><span>Phone</span><strong>{{ p.phone || '—' }}</strong></div>
+                <div><span>Registered</span><strong>{{ p.createdAt | date:'mediumDate' }}</strong></div>
+              </div>
+
+              <div class="card-students">
+                <span class="label">Linked students</span>
+                @if (p.linkedStudents.length) {
+                  <div class="student-chips">
+                    @for (s of p.linkedStudents; track s.studentId) {
+                      <span class="student-chip">{{ s.firstName }} {{ s.lastName }} · {{ s.admissionNumber }}</span>
+                    }
+                  </div>
+                } @else {
+                  <span class="no-students">No students linked</span>
+                }
+              </div>
+
+              <div class="card-badges">
+                @if (p.receivesWhatsApp) {
+                  <span class="badge whatsapp">WhatsApp</span>
+                }
+                <span class="badge count">{{ p.linkedStudents.length }} student{{ p.linkedStudents.length === 1 ? '' : 's' }}</span>
+              </div>
+
+              <div class="card-actions" (click)="$event.stopPropagation()">
+                <a [routerLink]="['/admin/parents', p.id]" class="btn-link">Manage students</a>
+                <button type="button" class="btn-icon" (click)="openEdit(p, $event)">Edit</button>
+                <button type="button" class="btn-icon danger" (click)="deleteParent(p, $event)">Delete</button>
+              </div>
+            </article>
+          }
+        </div>
+      } @else {
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Parent</th>
+                <th>Contact</th>
+                <th>Linked students</th>
+                <th>Status</th>
+                <th>Registered</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (p of visibleParents(); track p.id) {
+                <tr class="clickable-row" [class.inactive-row]="!p.isActive" (click)="openParent(p)">
+                  <td>
+                    <div class="user-cell">
+                      <span class="avatar">{{ initials(p) }}</span>
+                      <div>
+                        <strong>{{ p.firstName }} {{ p.lastName }}</strong>
+                        @if (p.occupation) {
+                          <span class="muted">{{ p.occupation }}</span>
+                        }
+                      </div>
+                    </div>
+                  </td>
+                  <td>
+                    <div class="contact-cell">
+                      <span>{{ p.email }}</span>
+                      <span class="muted">{{ p.phone || 'No phone' }}</span>
+                      @if (p.receivesWhatsApp) {
+                        <span class="badge whatsapp inline">WhatsApp</span>
+                      }
+                    </div>
+                  </td>
+                  <td>
+                    @if (p.linkedStudents.length) {
+                      <div class="student-chips compact">
+                        @for (s of p.linkedStudents; track s.studentId) {
+                          <span class="student-chip">{{ s.firstName }} {{ s.lastName }} · {{ s.admissionNumber }}</span>
+                        }
+                      </div>
+                    } @else {
+                      <span class="no-students">—</span>
+                    }
+                  </td>
+                  <td>
+                    <span class="status-pill" [class.active]="p.isActive" [class.inactive]="!p.isActive">
+                      {{ p.isActive ? 'Active' : 'Inactive' }}
+                    </span>
+                  </td>
+                  <td>{{ p.createdAt | date:'mediumDate' }}</td>
+                  <td class="actions-cell" (click)="$event.stopPropagation()">
+                    <a [routerLink]="['/admin/parents', p.id]" class="btn-link">Students</a>
+                    <button type="button" class="btn-icon" (click)="openEdit(p, $event)">Edit</button>
+                    <button type="button" class="btn-icon danger" (click)="deleteParent(p, $event)">Delete</button>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </section>
+  </div>
+
+  @if (drawerOpen()) {
+    <div class="drawer-backdrop" (click)="closeDrawer()"></div>
+    <aside class="drawer" role="dialog" aria-labelledby="parentDrawerTitle">
+      <div class="drawer-head">
+        <div>
+          <p class="eyebrow">{{ drawerMode() === 'create' ? 'New parent' : 'Edit parent' }}</p>
+          <h3 id="parentDrawerTitle">
+            @if (drawerMode() === 'create') {
+              Add parent account
+            } @else {
+              {{ editingParent()?.firstName }} {{ editingParent()?.lastName }}
+            }
+          </h3>
+        </div>
+        <button type="button" class="close-btn" (click)="closeDrawer()">×</button>
+      </div>
+
+      <div class="drawer-body">
+        <div class="form-grid">
+          <label class="field">
+            <span>First name *</span>
+            <input [(ngModel)]="form.firstName" name="firstName" />
+          </label>
+          <label class="field">
+            <span>Last name *</span>
+            <input [(ngModel)]="form.lastName" name="lastName" />
+          </label>
+          <label class="field span-2">
+            <span>Email *</span>
+            <input type="email" [(ngModel)]="form.email" name="email" />
+          </label>
+          <label class="field">
+            <span>Phone</span>
+            <input [(ngModel)]="form.phone" name="phone" />
+          </label>
+          <label class="field">
+            <span>Occupation</span>
+            <input [(ngModel)]="form.occupation" name="occupation" />
+          </label>
+          <label class="field span-2">
+            <span>Address</span>
+            <input [(ngModel)]="form.address" name="address" />
+          </label>
+
+          @if (drawerMode() === 'create') {
+            <label class="field span-2">
+              <span>Password</span>
+              <div class="password-row">
+                <input [type]="showPassword() ? 'text' : 'password'" [(ngModel)]="form.password" name="password" placeholder="Leave blank for default" />
+                <button type="button" class="btn-ghost" (click)="showPassword.set(!showPassword())">
+                  {{ showPassword() ? 'Hide' : 'Show' }}
+                </button>
+              </div>
+            </label>
+          } @else {
+            <label class="field span-2">
+              <span>New password</span>
+              <div class="password-row">
+                <input [type]="showPassword() ? 'text' : 'password'" [(ngModel)]="form.password" name="password" placeholder="Leave blank to keep current" />
+                <button type="button" class="btn-ghost" (click)="showPassword.set(!showPassword())">
+                  {{ showPassword() ? 'Hide' : 'Show' }}
+                </button>
+              </div>
+            </label>
+            <label class="checkbox span-2">
+              <input type="checkbox" [(ngModel)]="form.isActive" name="isActive" />
+              Active account
+            </label>
+          }
+
+          <label class="checkbox span-2">
+            <input type="checkbox" [(ngModel)]="form.receivesWhatsApp" name="receivesWhatsApp" />
+            Receives WhatsApp notifications
+          </label>
+
+          <div class="section-divider span-2">
+            <strong>Link student (optional)</strong>
+            <p>Enter a student admission number to link this parent to a child.</p>
+          </div>
+          <label class="field">
+            <span>Student ID</span>
+            <input [(ngModel)]="form.linkAdmissionNumber" name="linkAdmissionNumber" placeholder="e.g. SP000014" />
+          </label>
+          <label class="field">
+            <span>Relationship</span>
+            <select [(ngModel)]="form.relationship" name="relationship">
+              <option value="Parent">Parent</option>
+              <option value="Guardian">Guardian</option>
+            </select>
+          </label>
+        </div>
+      </div>
+
+      <div class="drawer-foot">
+        <button type="button" class="btn-ghost" (click)="closeDrawer()">Cancel</button>
+        <button type="button" class="btn-primary" (click)="saveParent()" [disabled]="submitting()">
+          {{ submitting() ? 'Saving…' : (drawerMode() === 'create' ? 'Create parent' : 'Save changes') }}
+        </button>
+      </div>
+    </aside>
+  }
+</app-portal-layout>

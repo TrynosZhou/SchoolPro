@@ -1,94 +1,240 @@
 <app-portal-layout portalTitle="Admin Portal" pageTitle="Messages" [navSections]="adminNav">
-  <div class="comm-page">
-    <section class="card intro">
-      <h3>Messages</h3>
-      <p class="sub">View received messages and your sent items.</p>
-      <div class="intro-row">
-        <a routerLink="/admin/communication/send" class="link-btn">Announcements →</a>
-        @if (unreadCount() > 0) {
-          <span class="badge-unread">{{ unreadCount() }} unread</span>
-        }
-      </div>
-    </section>
+  <div class="inbox-page">
+    @if (toast(); as t) {
+      <div class="toast" [class.error]="t.type === 'error'">{{ t.msg }}</div>
+    }
 
-    <section class="card inbox-layout">
-      <div class="inbox-list-pane">
-        <div class="tabs">
-          <button type="button" [class.active]="tab === 'inbox'" (click)="tab = 'inbox'; selected.set(null)">
-            Inbox ({{ inbox().length }})
-          </button>
-          <button type="button" [class.active]="tab === 'sent'" (click)="tab = 'sent'; selected.set(null)">
-            Sent ({{ sent().length }})
+    <header class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">Communication</p>
+        <h2>Message inbox</h2>
+        <p class="hero-sub">
+          Read incoming messages, review what you have sent, and reply or compose new announcements.
+        </p>
+        <div class="hero-actions">
+          <a routerLink="/admin/communication/send" class="compose-link">
+            <span>✉️</span>
+            Compose announcement
+          </a>
+          <button type="button" class="refresh-link" (click)="loadMessages(true)" [disabled]="refreshing()">
+            {{ refreshing() ? 'Refreshing…' : 'Refresh' }}
           </button>
         </div>
+      </div>
+      <div class="kpi-grid">
+        <article class="kpi">
+          <span class="kpi-icon">📥</span>
+          <div>
+            <strong>{{ inbox().length }}</strong>
+            <span>Inbox</span>
+          </div>
+        </article>
+        <article class="kpi accent">
+          <span class="kpi-icon">🔵</span>
+          <div>
+            <strong>{{ unreadCount() }}</strong>
+            <span>Unread</span>
+          </div>
+        </article>
+        <article class="kpi">
+          <span class="kpi-icon">📤</span>
+          <div>
+            <strong>{{ sent().length }}</strong>
+            <span>Sent</span>
+          </div>
+        </article>
+        <article class="kpi">
+          <span class="kpi-icon">🎓</span>
+          <div>
+            <strong>{{ studentLinkedCount() }}</strong>
+            <span>Student-linked</span>
+          </div>
+        </article>
+      </div>
+    </header>
 
-        @if (tab === 'inbox') {
-          <label class="toggle">
-            <input type="checkbox" [(ngModel)]="filterUnreadOnly" name="unreadOnly" />
-            Unread only
-          </label>
-        }
+    <section class="mail-shell">
+      <aside class="list-panel" [class.detail-open]="selected()">
+        <div class="list-toolbar">
+          <div class="folder-tabs">
+            <button
+              type="button"
+              class="folder-tab"
+              [class.active]="tab() === 'inbox'"
+              (click)="setTab('inbox')"
+            >
+              Inbox
+              <span class="count">{{ inbox().length }}</span>
+              @if (unreadCount() > 0) {
+                <span class="unread-dot">{{ unreadCount() }}</span>
+              }
+            </button>
+            <button
+              type="button"
+              class="folder-tab"
+              [class.active]="tab() === 'sent'"
+              (click)="setTab('sent')"
+            >
+              Sent
+              <span class="count">{{ sent().length }}</span>
+            </button>
+          </div>
+
+          <div class="search-row">
+            <input
+              type="search"
+              class="search-input"
+              placeholder="Search subject, sender, or student…"
+              [ngModel]="search()"
+              (ngModelChange)="search.set($event)"
+              name="search"
+            />
+          </div>
+
+          <div class="filter-row">
+            <button type="button" class="chip" [class.active]="filter() === 'all'" (click)="setFilter('all')">
+              All
+            </button>
+            @if (tab() === 'inbox') {
+              <button type="button" class="chip" [class.active]="filter() === 'unread'" (click)="setFilter('unread')">
+                Unread
+              </button>
+            }
+            <button type="button" class="chip" [class.active]="filter() === 'student'" (click)="setFilter('student')">
+              Student-linked
+            </button>
+            <button type="button" class="sort-btn" (click)="toggleSort()">
+              {{ sortOrder() === 'newest' ? '↓ Newest' : '↑ Oldest' }}
+            </button>
+          </div>
+        </div>
 
         @if (loading()) {
-          <p class="empty">Loading messages…</p>
-        } @else {
+          <div class="state-box">
+            <span class="state-icon">⏳</span>
+            <p>Loading messages…</p>
+          </div>
+        } @else if (visibleMessages().length) {
           <div class="message-list">
             @for (m of visibleMessages(); track m.id) {
               <button
                 type="button"
-                class="message-item"
-                [class.unread]="!m.isRead && tab === 'inbox'"
+                class="message-card"
+                [class.unread]="!m.isRead && tab() === 'inbox'"
                 [class.active]="selected()?.id === m.id"
                 (click)="openMessage(m)"
               >
-                <div class="message-top">
-                  <strong>{{ m.subject }}</strong>
-                  <span class="date">{{ m.sentAt | date:'short' }}</span>
-                </div>
-                <span class="preview">
-                  @if (tab === 'inbox') {
-                    From {{ personName(m.sender) }}
-                  } @else {
-                    To {{ personName(m.recipient) }}
+                <span class="avatar">{{ roleIcon(counterparty(m).role) }}</span>
+                <span class="card-body">
+                  <span class="card-top">
+                    <strong>{{ m.subject }}</strong>
+                    <time>{{ relativeDate(m.sentAt) }}</time>
+                  </span>
+                  <span class="card-meta">
+                    @if (tab() === 'inbox') {
+                      From {{ personName(m.sender) }}
+                    } @else {
+                      To {{ personName(m.recipient) }}
+                    }
+                    · {{ roleLabel(counterparty(m).role) }}
+                  </span>
+                  <span class="card-snippet">{{ snippet(m.body) }}</span>
+                  @if (m.student) {
+                    <span class="student-tag">
+                      Re: {{ m.student.firstName }} {{ m.student.lastName }} ({{ m.student.admissionNumber }})
+                    </span>
                   }
                 </span>
+                @if (!m.isRead && tab() === 'inbox') {
+                  <span class="unread-pill">New</span>
+                }
               </button>
-            } @empty {
-              <p class="empty">No messages in this folder.</p>
             }
           </div>
-        }
-      </div>
-
-      <div class="inbox-detail-pane">
-        @if (selected(); as msg) {
-          <div class="detail-head">
-            <div>
-              <h4>{{ msg.subject }}</h4>
-              <p class="meta">
-                @if (tab === 'inbox') {
-                  From <strong>{{ personName(msg.sender) }}</strong>
-                } @else {
-                  To <strong>{{ personName(msg.recipient) }}</strong>
-                }
-                · {{ msg.sentAt | date:'medium' }}
-              </p>
-              @if (msg.student) {
-                <p class="meta student-ref">
-                  Re: {{ msg.student.firstName }} {{ msg.student.lastName }} ({{ msg.student.admissionNumber }})
-                </p>
+        } @else {
+          <div class="state-box">
+            <span class="state-icon">📭</span>
+            <p>
+              @if (search() || filter() !== 'all') {
+                No messages match your filters.
+              } @else if (tab() === 'inbox') {
+                Your inbox is empty.
+              } @else {
+                You have not sent any messages yet.
               }
-            </div>
-            <button type="button" class="btn-outline" (click)="closeDetail()">Close</button>
+            </p>
+            <a routerLink="/admin/communication/send" class="state-cta">Compose announcement</a>
           </div>
-          <div class="detail-body">{{ msg.body }}</div>
+        }
+      </aside>
+
+      <main class="detail-panel">
+        @if (selected(); as msg) {
+          <div class="detail-card">
+            <div class="detail-toolbar">
+              <button type="button" class="back-btn mobile-only" (click)="closeDetail()">← Back</button>
+              <div class="detail-actions">
+                @if (tab() === 'inbox') {
+                  <button type="button" class="btn-outline" (click)="replyTo(msg)">Reply</button>
+                }
+                <button type="button" class="btn-danger" (click)="deleteMessage(msg)" [disabled]="deleting()">
+                  {{ deleting() ? 'Deleting…' : 'Delete' }}
+                </button>
+              </div>
+            </div>
+
+            <header class="detail-header">
+              <div class="detail-person">
+                <span class="detail-avatar">{{ roleIcon(counterparty(msg).role) }}</span>
+                <div>
+                  <p class="detail-direction">
+                    @if (tab() === 'inbox') {
+                      From
+                    } @else {
+                      To
+                    }
+                  </p>
+                  <h3>{{ personName(counterparty(msg)) }}</h3>
+                  <p class="detail-email">
+                    {{ counterparty(msg).email }} · {{ roleLabel(counterparty(msg).role) }}
+                  </p>
+                </div>
+              </div>
+              <div class="detail-meta-block">
+                @if (!msg.isRead && tab() === 'inbox') {
+                  <span class="status-pill unread">Unread</span>
+                } @else if (tab() === 'inbox') {
+                  <span class="status-pill read">Read</span>
+                } @else {
+                  <span class="status-pill sent">Sent</span>
+                }
+                <time>{{ msg.sentAt | date:'full' }}</time>
+              </div>
+            </header>
+
+            <h2 class="detail-subject">{{ msg.subject }}</h2>
+
+            @if (msg.student) {
+              <div class="student-banner">
+                <span>🎓</span>
+                <div>
+                  <strong>Related student</strong>
+                  <p>{{ msg.student.firstName }} {{ msg.student.lastName }} · {{ msg.student.admissionNumber }}</p>
+                </div>
+              </div>
+            }
+
+            <article class="detail-content">{{ msg.body }}</article>
+          </div>
         } @else {
           <div class="detail-empty">
             <span class="empty-icon">📬</span>
-            <p>Select a message to read</p>
+            <h3>Select a message</h3>
+            <p>Choose a message from the list to read the full content, reply, or delete it.</p>
+            <a routerLink="/admin/communication/send" class="empty-cta">Compose announcement</a>
           </div>
         }
-      </div>
+      </main>
     </section>
   </div>
 </app-portal-layout>

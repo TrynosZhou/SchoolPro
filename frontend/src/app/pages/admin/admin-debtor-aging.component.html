@@ -1,165 +1,553 @@
 <app-portal-layout portalTitle="Admin Portal" pageTitle="Debtor Aging" [navSections]="adminNav">
   <div class="aging-page">
     @if (toast(); as t) {
-      <div class="toast no-print" [class.error]="t.type === 'error'">{{ t.msg }}</div>
+      <div class="toast no-print" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>
     }
 
-    <section class="card no-print">
-      <h3>Debtor Aging Report</h3>
-      <p class="sub">Track outstanding balances by aging bucket, recover fees, and manage write-offs with audit trail.</p>
-    </section>
-
-    <section class="card no-print">
-      <div class="filter-grid">
-        <div class="field">
-          <label>Term / Semester</label>
-          <select [(ngModel)]="termId" name="agingTerm" (ngModelChange)="onTermChange()">
-            <option value="">Custom dates</option>
-            @for (t of terms(); track t.id) { <option [value]="t.id">{{ t.name }}</option> }
-          </select>
-        </div>
-        <div class="field"><label>Date from</label><input type="date" [(ngModel)]="dateFrom" name="agingFrom" /></div>
-        <div class="field"><label>Date to *</label><input type="date" [(ngModel)]="dateTo" name="agingTo" /></div>
-        <div class="field">
-          <label>Grade / Form</label>
-          <select [(ngModel)]="formId" name="agingForm" (ngModelChange)="classId = ''">
-            <option value="">All forms</option>
-            @for (f of forms(); track f.id) { <option [value]="f.id">{{ f.name }}</option> }
-          </select>
-        </div>
-        <div class="field">
-          <label>Class</label>
-          <select [(ngModel)]="classId" name="agingClass">
-            <option value="">All classes</option>
-            @for (c of filteredClasses(); track c.id) { <option [value]="c.id">{{ c.form?.name || '' }} {{ c.name }}</option> }
-          </select>
-        </div>
-        <div class="field">
-          <label>Fee type</label>
-          <select [(ngModel)]="feeType" name="agingFee">
-            @for (ft of feeTypes; track ft.value) { <option [value]="ft.value">{{ ft.label }}</option> }
-          </select>
-        </div>
-        <div class="field">
-          <label>Aging bucket</label>
-          <select [(ngModel)]="agingBucket" name="agingBucket">
-            @for (b of buckets; track b.value) { <option [value]="b.value">{{ b.label }}</option> }
-          </select>
-        </div>
-        <div class="field span-2">
-          <label>Student (ID / first / last)</label>
-          <input type="text" [(ngModel)]="query" name="agingQuery" placeholder="Optional — leave blank for all" (input)="studentId=''" />
-        </div>
-        <div class="field"><label>Escalation threshold days</label><input type="number" min="1" [(ngModel)]="escalationDays" name="escalationDays" /></div>
-      </div>
-
-      <div class="toolbar">
-        <label class="toggle"><input type="checkbox" [(ngModel)]="excludeZeroBalances" name="excludeZero" /> Exclude zero balances</label>
-        <button type="button" class="btn-primary" (click)="getReport()" [disabled]="loading()">{{ loading() ? 'Loading…' : 'Get Report' }}</button>
-        @if (report()) {
-          <button type="button" class="btn-outline" (click)="sendBulkReminders()">Send reminders (selected)</button>
-          <button type="button" class="btn-outline" (click)="print('summary')">Print Summary</button>
-          <button type="button" class="btn-outline" (click)="print('detailed')">Print Detailed</button>
-          <button type="button" class="btn-outline btn-pdf-preview" (click)="previewPdf()" [disabled]="exporting()">
+    <header class="hero no-print">
+      <div class="hero-copy">
+        <p class="eyebrow">Finance reports</p>
+        <h2>Debtor aging</h2>
+        <p class="hero-sub">
+          Track outstanding balances by aging bucket, send reminders, and manage write-offs with audit trail.
+          Review open invoices on
+          <a routerLink="/admin/fin-reports/outstanding-invoices">Outstanding Invoices</a>
+          or reconcile accounts on
+          <a routerLink="/admin/fin-reports/student-reconciliation">Student Reconciliation</a>.
+        </p>
+        <div class="hero-actions">
+          <button type="button" class="btn-outline" (click)="previewPdf()" [disabled]="exporting() || loading() || !report()">
             {{ exporting() ? 'Generating…' : 'Preview PDF' }}
           </button>
-          <button type="button" class="btn-outline btn-pdf-download" (click)="downloadPdf()" [disabled]="exporting()">
+          <button type="button" class="btn-primary" (click)="downloadPdf()" [disabled]="exporting() || loading() || !report()">
             {{ exporting() ? 'Generating…' : 'Download PDF' }}
           </button>
-          <button type="button" class="btn-outline" (click)="exportFile('xlsx','summary')" [disabled]="exporting()">Excel Summary</button>
-          <button type="button" class="btn-outline" (click)="exportFile('xlsx','detailed')" [disabled]="exporting()">Excel Detailed</button>
-        }
-      </div>
-    </section>
-
-    @if (matches().length) {
-      <section class="card no-print">
-        <h3>Select student</h3>
-        <div class="match-list">
-          @for (m of matches(); track m.id) {
-            <button type="button" class="match-btn" (click)="pickStudent(m)">
-              <strong>{{ m.firstName }} {{ m.lastName }}</strong>
-              <span>{{ m.admissionNumber }} · {{ m.formName || '—' }} {{ m.className || '' }}</span>
+          <button type="button" class="btn-ghost" (click)="getReport()" [disabled]="loading() || exporting()">
+            {{ loading() ? 'Refreshing…' : 'Refresh' }}
+          </button>
+          @if (report() && selectedStudentIds().length) {
+            <button type="button" class="btn-outline" (click)="sendBulkReminders()">
+              Send reminders ({{ selectedStudentIds().length }})
             </button>
           }
         </div>
-      </section>
+      </div>
+      <div class="kpi-grid">
+        <article class="kpi">
+          <span class="kpi-icon">👥</span>
+          <div>
+            <strong>{{ report() ? report()!.summary.totalDebtors : '—' }}</strong>
+            <span>Debtors</span>
+          </div>
+        </article>
+        <article class="kpi warn">
+          <span class="kpi-icon">💰</span>
+          <div>
+            <strong>{{ report() ? ('$' + (report()!.summary.totalOutstanding | number:'1.0-0')) : '—' }}</strong>
+            <span>Outstanding</span>
+          </div>
+        </article>
+        <article class="kpi ok">
+          <span class="kpi-icon">📈</span>
+          <div>
+            <strong>{{ report() ? (report()!.summary.collectedPct | number:'1.0-0') + '%' : '—' }}</strong>
+            <span>Collected</span>
+          </div>
+        </article>
+        <article class="kpi bad">
+          <span class="kpi-icon">⚠</span>
+          <div>
+            <strong>{{ report() ? badDebtCount() : '—' }}</strong>
+            <span>Bad debt risk</span>
+          </div>
+        </article>
+        <article class="kpi accent">
+          <span class="kpi-icon">⏳</span>
+          <div>
+            <strong>{{ report() ? escalationCount() : '—' }}</strong>
+            <span>Escalated</span>
+          </div>
+        </article>
+        <article class="kpi highlight">
+          <span class="kpi-icon">📊</span>
+          <div>
+            <strong>{{ report() ? (report()!.summary.outstandingPct | number:'1.0-0') + '%' : '—' }}</strong>
+            <span>Still outstanding</span>
+          </div>
+        </article>
+      </div>
+    </header>
+
+    @if (report() && (escalationCount() || badDebtCount())) {
+      <div class="alert-banner no-print">
+        @if (escalationCount()) {
+          <span>{{ escalationCount() }} debtor{{ escalationCount() === 1 ? '' : 's' }} past the {{ escalationDays }}-day escalation threshold.</span>
+        }
+        @if (badDebtCount()) {
+          <span>{{ badDebtCount() }} at bad debt risk (120+ days).</span>
+        }
+        <div class="alert-actions">
+          @if (escalationCount()) {
+            <button type="button" class="link-btn" (click)="selectEscalatedOnly()">View escalated</button>
+            <button type="button" class="link-btn" (click)="selectEscalatedRows()">Select escalated</button>
+          }
+          @if (badDebtCount()) {
+            <button type="button" class="link-btn" (click)="selectBadDebtOnly()">View 120+</button>
+          }
+        </div>
+      </div>
     }
 
-    @if (report(); as r) {
-      <section class="card">
-        <h3>Summary</h3>
-        <div class="summary-grid">
-          <article class="summary-box"><span>Total debtors</span><strong>{{ r.summary.totalDebtors }}</strong></article>
-          <article class="summary-box warn"><span>Total outstanding</span><strong>{{ r.summary.totalOutstanding | number:'1.2-2' }}</strong></article>
-          <article class="summary-box"><span>Collected %</span><strong>{{ r.summary.collectedPct | number:'1.0-2' }}%</strong></article>
-          <article class="summary-box"><span>Outstanding %</span><strong>{{ r.summary.outstandingPct | number:'1.0-2' }}%</strong></article>
-          <article class="summary-box"><span>Current</span><strong>{{ r.summary.byBucket.current | number:'1.2-2' }}</strong></article>
-          <article class="summary-box"><span>31-60</span><strong>{{ r.summary.byBucket['31_60'] | number:'1.2-2' }}</strong></article>
-          <article class="summary-box"><span>61-90</span><strong>{{ r.summary.byBucket['61_90'] | number:'1.2-2' }}</strong></article>
-          <article class="summary-box"><span>91-120</span><strong>{{ r.summary.byBucket['91_120'] | number:'1.2-2' }}</strong></article>
-          <article class="summary-box bad"><span>120+ (bad debt risk)</span><strong>{{ r.summary.byBucket['120_plus'] | number:'1.2-2' }}</strong></article>
-        </div>
-      </section>
+    <section class="list-shell no-print">
+      <div class="list-toolbar">
+        <h3>Report filters</h3>
+        <p>Select a term or date range, then narrow by form, class, fee type, aging bucket, or student.</p>
 
-      <section class="card">
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th class="no-print">Sel</th>
-                <th>Student</th><th>Class</th><th>Guardian</th>
-                <th class="num">Charged</th><th class="num">Paid</th><th class="num">Outstanding</th>
-                <th class="num">0-30</th><th class="num">31-60</th><th class="num">61-90</th><th class="num">91-120</th><th class="num">120+</th>
-                <th>Last Payment</th><th>Status</th><th class="no-print">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              @for (s of r.students; track s.studentId) {
-                <tr [class.escalate]="s.escalationFlag" [class.bad-debt]="s.potentialBadDebt">
-                  <td class="no-print"><input type="checkbox" [checked]="selectedRows()[s.studentId] || false" (change)="toggleRow(s.studentId, $any($event.target).checked)" /></td>
-                  <td><strong>{{ s.firstName }} {{ s.lastName }}</strong><div class="sub-id">{{ s.admissionNumber }}</div></td>
-                  <td>{{ classLabel(s) }}</td>
-                  <td>{{ s.guardianName || '—' }}<div class="sub-id">{{ s.guardianPhone || s.guardianEmail || '' }}</div></td>
-                  <td class="num">{{ s.originalCharged | number:'1.2-2' }}</td>
-                  <td class="num">{{ s.amountPaid | number:'1.2-2' }}</td>
-                  <td class="num"><strong>{{ s.outstandingBalance | number:'1.2-2' }}</strong></td>
-                  <td class="num">{{ s.aging.current | number:'1.2-2' }}</td>
-                  <td class="num">{{ s.aging['31_60'] | number:'1.2-2' }}</td>
-                  <td class="num">{{ s.aging['61_90'] | number:'1.2-2' }}</td>
-                  <td class="num">{{ s.aging['91_120'] | number:'1.2-2' }}</td>
-                  <td class="num">{{ s.aging['120_plus'] | number:'1.2-2' }}</td>
-                  <td>{{ s.lastPaymentDate || '—' }}</td>
-                  <td><span class="status-pill" [class]="'status-' + s.accountStatus">{{ s.accountStatus }}</span></td>
-                  <td class="no-print">
-                    <button type="button" class="micro-btn" (click)="sendReminderLetter(s.studentId)">Letter</button>
-                    <button type="button" class="micro-btn" (click)="loadNotes(s.studentId)">Notes</button>
-                    <button type="button" class="micro-btn danger" (click)="writeOff(s.studentId)">Write-off</button>
-                  </td>
-                </tr>
-              } @empty {
-                <tr><td colspan="15" class="empty">No debtors found for selected filters.</td></tr>
+        <div class="term-chips">
+          @for (t of sortedTerms(); track t.id) {
+            <button type="button" class="term-chip" [class.active]="termId === t.id" (click)="selectTerm(t.id)">
+              {{ t.name }}
+              @if (t.isCurrent) {
+                <span class="current-dot">Current</span>
               }
-            </tbody>
-          </table>
+            </button>
+          }
+        </div>
+
+        <div class="filter-grid">
+          <div class="field">
+            <label for="agingTerm">Term</label>
+            <select id="agingTerm" [(ngModel)]="termId" name="agingTerm" (ngModelChange)="onTermChange()">
+              <option value="">Custom dates</option>
+              @for (t of sortedTerms(); track t.id) {
+                <option [value]="t.id">{{ t.name }}</option>
+              }
+            </select>
+          </div>
+          <div class="field">
+            <label for="agingFrom">Date from</label>
+            <input id="agingFrom" type="date" [(ngModel)]="dateFrom" name="agingFrom" />
+          </div>
+          <div class="field">
+            <label for="agingTo">Date to</label>
+            <input id="agingTo" type="date" [(ngModel)]="dateTo" name="agingTo" />
+          </div>
+          <div class="field">
+            <label for="agingForm">Grade / form</label>
+            <select id="agingForm" [(ngModel)]="formId" name="agingForm" (ngModelChange)="classId = ''">
+              <option value="">All forms</option>
+              @for (f of forms(); track f.id) {
+                <option [value]="f.id">{{ f.name }}</option>
+              }
+            </select>
+          </div>
+          <div class="field">
+            <label for="agingClass">Class</label>
+            <select id="agingClass" [(ngModel)]="classId" name="agingClass">
+              <option value="">All classes</option>
+              @for (c of filteredClasses(); track c.id) {
+                <option [value]="c.id">{{ c.form?.name || '' }} {{ c.name }}</option>
+              }
+            </select>
+          </div>
+          <div class="field">
+            <label for="agingFee">Fee type</label>
+            <select id="agingFee" [(ngModel)]="feeType" name="agingFee">
+              @for (ft of feeTypes; track ft.value) {
+                <option [value]="ft.value">{{ ft.label }}</option>
+              }
+            </select>
+          </div>
+          <div class="field">
+            <label for="agingBucket">Aging bucket</label>
+            <select id="agingBucket" [(ngModel)]="agingBucket" name="agingBucket">
+              @for (b of buckets; track b.value) {
+                <option [value]="b.value">{{ b.label }}</option>
+              }
+            </select>
+          </div>
+          <div class="field span-2">
+            <label for="agingQuery">Student</label>
+            <div class="search-wrap compact">
+              <span class="search-icon" aria-hidden="true">🔍</span>
+              <input
+                id="agingQuery"
+                type="search"
+                class="search-input"
+                [(ngModel)]="query"
+                name="agingQuery"
+                placeholder="Student ID, first name, or last name (optional)"
+                (input)="studentId = ''"
+                (keyup.enter)="getReport()"
+              />
+            </div>
+          </div>
+          <div class="field">
+            <label for="escalationDays">Escalation days</label>
+            <input id="escalationDays" type="number" min="1" [(ngModel)]="escalationDays" name="escalationDays" />
+          </div>
+          <div class="field">
+            <label for="reconView">Export view</label>
+            <select id="reconView" [(ngModel)]="viewMode" name="reconView">
+              <option value="summary">Summary</option>
+              <option value="detailed">Detailed</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="action-row">
+          <label class="toggle">
+            <input type="checkbox" [(ngModel)]="excludeZeroBalances" name="excludeZero" />
+            Exclude zero balances
+          </label>
+          <button type="button" class="btn-primary" (click)="getReport()" [disabled]="loading()">
+            {{ loading() ? 'Loading…' : 'Generate report' }}
+          </button>
+          @if (report()) {
+            <button type="button" class="btn-ghost" (click)="print('summary')" [disabled]="exporting()">Print summary</button>
+            <button type="button" class="btn-ghost" (click)="print('detailed')" [disabled]="exporting()">Print detailed</button>
+            <button type="button" class="btn-ghost" (click)="exportFile('xlsx', 'summary')" [disabled]="exporting()">Excel summary</button>
+            <button type="button" class="btn-ghost" (click)="exportFile('xlsx', 'detailed')" [disabled]="exporting()">Excel detailed</button>
+          }
+          @if (studentId || report()) {
+            <button type="button" class="btn-ghost" (click)="clearSelection()">Clear</button>
+          }
+        </div>
+      </div>
+
+      @if (loading()) {
+        <div class="loading-panel">
+          <div class="spinner"></div>
+          <p>Generating debtor aging report…</p>
+        </div>
+      } @else if (matches().length) {
+        <div class="match-panel">
+          <h4>Select student</h4>
+          <p>{{ matches().length }} students matched your search.</p>
+          <div class="match-grid">
+            @for (m of matches(); track m.id) {
+              <button type="button" class="match-card" (click)="pickStudent(m)">
+                <span class="avatar">{{ initials(m) }}</span>
+                <div>
+                  <strong>{{ m.firstName }} {{ m.lastName }}</strong>
+                  <code class="sid">{{ m.admissionNumber }}</code>
+                  <span class="class-meta">{{ m.formName || '—' }} {{ m.className || '' }}</span>
+                </div>
+              </button>
+            }
+          </div>
+        </div>
+      }
+    </section>
+
+    @if (report()) {
+      <section class="summary-shell print-header">
+        <div class="summary-head">
+          <div>
+            <h3>Aging summary</h3>
+            <p class="period">
+              {{ report()!.filters.dateFrom || '—' }} → {{ report()!.filters.dateTo }}
+              @if (report()!.filters.termName) {
+                · {{ report()!.filters.termName }}
+              }
+              @if (report()!.generatedAt) {
+                · Generated {{ report()!.generatedAt | date:'medium' }}
+              }
+            </p>
+          </div>
+        </div>
+
+        <div class="summary-grid">
+          <article class="summary-card">
+            <span>Total charged</span>
+            <strong>${{ report()!.summary.totalCharged | number:'1.2-2' }}</strong>
+          </article>
+          <article class="summary-card credit">
+            <span>Total paid</span>
+            <strong>${{ report()!.summary.totalPaid | number:'1.2-2' }}</strong>
+          </article>
+          <article class="summary-card warn">
+            <span>Total outstanding</span>
+            <strong>${{ report()!.summary.totalOutstanding | number:'1.2-2' }}</strong>
+          </article>
+        </div>
+
+        <div class="bucket-chart">
+          @for (b of bucketVisual; track b.key) {
+            <button type="button" class="bucket-row clickable" [attr.data-tone]="b.tone" [class.active]="bucketFilter() === b.key" (click)="selectBucketFilter(b.key)">
+              <span class="bucket-label">{{ b.label }}</span>
+              <div class="bucket-track">
+                <div class="bucket-fill" [style.width]="bucketBarWidth(report()!.summary.byBucket[b.key])"></div>
+              </div>
+              <strong>${{ report()!.summary.byBucket[b.key] | number:'1.0-0' }}</strong>
+            </button>
+          }
+          <button type="button" class="bucket-row clickable" data-tone="bad" [class.active]="bucketFilter() === '90_plus'" (click)="selectBucketFilter('90_plus')">
+            <span class="bucket-label">90+ days (combined)</span>
+            <div class="bucket-track">
+              <div class="bucket-fill" [style.width]="bucketBarWidth((report()!.summary.byBucket['91_120'] || 0) + (report()!.summary.byBucket['120_plus'] || 0))"></div>
+            </div>
+            <strong>${{ (report()!.summary.byBucket['91_120'] + report()!.summary.byBucket['120_plus']) | number:'1.0-0' }}</strong>
+          </button>
         </div>
       </section>
 
-      <section class="card no-print">
-        <h3>Follow-up Notes & Write-off Approval</h3>
-        <div class="notes-grid">
-          <textarea [(ngModel)]="followupNote" name="followupNote" placeholder="Add note then use Notes action on a student row"></textarea>
-          <input type="text" [(ngModel)]="approvedBy" name="approvedBy" placeholder="Approved By (required for write-off)" />
-          <input type="text" [(ngModel)]="writeoffReason" name="writeoffReason" placeholder="Write-off reason (required)" />
+      <section class="list-shell results-shell">
+        <div class="list-toolbar no-print">
+          <div class="toolbar-head">
+            <div>
+              <h3>Debtor accounts</h3>
+              <p>Select rows for bulk reminders. Expand a row for notes, letters, and write-offs.</p>
+            </div>
+            <div class="view-tabs">
+              <button type="button" [class.active]="displayMode() === 'table'" (click)="displayMode.set('table')">Table</button>
+              <button type="button" [class.active]="displayMode() === 'cards'" (click)="displayMode.set('cards')">Cards</button>
+            </div>
+          </div>
+
+          <div class="search-wrap">
+            <span class="search-icon" aria-hidden="true">🔍</span>
+            <input
+              type="search"
+              class="search-input"
+              placeholder="Filter loaded debtors…"
+              [ngModel]="studentSearch()"
+              (ngModelChange)="studentSearch.set($event)"
+              name="studentSearch"
+            />
+            @if (studentSearch()) {
+              <button type="button" class="clear-search" (click)="studentSearch.set('')" aria-label="Clear filter">×</button>
+            }
+          </div>
+
+          <div class="toolbar-row">
+            <div class="filter-chips">
+              <button type="button" class="chip-filter" [class.active]="statusFilter() === 'all'" (click)="statusFilter.set('all')">All</button>
+              <button type="button" class="chip-filter ok" [class.active]="statusFilter() === 'reconciled'" (click)="statusFilter.set('reconciled')">Reconciled</button>
+              <button type="button" class="chip-filter warn" [class.active]="statusFilter() === 'pending'" (click)="statusFilter.set('pending')">Pending</button>
+              <button type="button" class="chip-filter bad" [class.active]="statusFilter() === 'unreconciled'" (click)="statusFilter.set('unreconciled')">Unreconciled</button>
+              <button type="button" class="chip-filter issues" [class.active]="issuesOnly()" (click)="issuesOnly.set(!issuesOnly())">Issues only</button>
+            </div>
+            <select class="sort-select" [ngModel]="sortOrder()" (ngModelChange)="sortOrder.set($event)" name="sortOrder">
+              <option value="outstanding-desc">Outstanding high → low</option>
+              <option value="days-desc">Overdue days</option>
+              <option value="bucket-desc">Oldest bucket first</option>
+              <option value="name-asc">Name A–Z</option>
+            </select>
+          </div>
+
+          <div class="bucket-chips no-print">
+            <button type="button" class="bucket-chip" [class.active]="!bucketFilter()" (click)="selectBucketFilter('')">All buckets</button>
+            @for (b of bucketVisual; track b.key) {
+              <button type="button" class="bucket-chip" [attr.data-tone]="b.tone" [class.active]="bucketFilter() === b.key" (click)="selectBucketFilter(b.key)">
+                {{ b.label }}
+              </button>
+            }
+            <button type="button" class="bucket-chip" data-tone="bad" [class.active]="bucketFilter() === '90_plus'" (click)="selectBucketFilter('90_plus')">90+</button>
+          </div>
+
+          @if (hasActiveFilters()) {
+            <div class="results-meta">
+              <span>
+                Showing <strong>{{ filteredSummary().count }}</strong> of
+                <strong>{{ report()!.students.length }}</strong> debtors ·
+                <strong>${{ filteredSummary().outstanding | number:'1.2-2' }}</strong> outstanding
+              </span>
+              <button type="button" class="clear-filters" (click)="clearFilters()">Clear filters</button>
+            </div>
+          }
+        </div>
+
+        @if (!visibleStudents().length) {
+          <div class="empty-state">
+            <span class="empty-icon">🔍</span>
+            <h3>No debtors match</h3>
+            <p>Adjust filters or generate a new report.</p>
+          </div>
+        } @else if (displayMode() === 'cards') {
+          <div class="card-grid">
+            @for (s of visibleStudents(); track s.studentId) {
+              <article class="debtor-card" [class.escalate]="s.escalationFlag" [class.bad-debt]="s.potentialBadDebt">
+                <div class="card-head">
+                  <label class="select-check no-print">
+                    <input type="checkbox" [checked]="selectedRows()[s.studentId] || false" (change)="toggleRow(s.studentId, $any($event.target).checked)" />
+                  </label>
+                  <span class="avatar">{{ initials(s) }}</span>
+                  <div>
+                    <strong>{{ s.firstName }} {{ s.lastName }}</strong>
+                    <code class="sid">{{ s.admissionNumber }}</code>
+                    <span class="class-meta">{{ classLabel(s) }}</span>
+                  </div>
+                  <span class="status-pill" [class]="'status-' + s.accountStatus">{{ statusLabel(s.accountStatus) }}</span>
+                </div>
+                <div class="metric-grid">
+                  <div><span>Outstanding</span><strong>${{ s.outstandingBalance | number:'1.2-2' }}</strong></div>
+                  <div><span>Paid</span><strong>${{ s.amountPaid | number:'1.2-2' }}</strong></div>
+                  <div><span>Overdue days</span><strong>{{ s.maxOverdueDays }}</strong></div>
+                  <div><span>Last payment</span><strong>{{ s.lastPaymentDate || '—' }}</strong></div>
+                </div>
+                <div class="aging-stack">
+                  @for (b of bucketVisual; track b.key) {
+                    @if (s.aging[b.key] > 0) {
+                      <div class="aging-seg" [attr.data-tone]="b.tone" [style.flex]="s.aging[b.key]"></div>
+                    }
+                  }
+                </div>
+                <div class="card-actions no-print">
+                  <button type="button" class="micro-btn" (click)="openStudentPanel(s)">Manage</button>
+                  <button type="button" class="micro-btn" (click)="sendReminderLetter(s.studentId)">Letter</button>
+                </div>
+                @if (expandedStudentId() === s.studentId) {
+                  <div class="inline-detail">
+                    <ng-container *ngTemplateOutlet="studentPanel; context: { s: s }"></ng-container>
+                  </div>
+                }
+              </article>
+            }
+          </div>
+        } @else {
+          <div class="table-wrap">
+            <table class="aging-table">
+              <thead>
+                <tr>
+                  <th class="no-print sel-col">
+                    <input type="checkbox" [checked]="allVisibleSelected()" (change)="toggleSelectAllVisible($any($event.target).checked)" aria-label="Select all visible" />
+                  </th>
+                  <th>Student</th>
+                  <th>Class</th>
+                  <th>Guardian</th>
+                  <th class="num">Charged</th>
+                  <th class="num">Paid</th>
+                  <th class="num">Outstanding</th>
+                  <th>Aging mix</th>
+                  <th>Last payment</th>
+                  <th>Status</th>
+                  <th class="no-print"></th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (s of visibleStudents(); track s.studentId) {
+                  <tr
+                    [class.escalate]="s.escalationFlag"
+                    [class.bad-debt]="s.potentialBadDebt"
+                    [class.clickable]="true"
+                    (click)="toggleExpand(s.studentId)"
+                  >
+                    <td class="no-print sel-col" (click)="$event.stopPropagation()">
+                      <input type="checkbox" [checked]="selectedRows()[s.studentId] || false" (change)="toggleRow(s.studentId, $any($event.target).checked)" />
+                    </td>
+                    <td>
+                      <div class="name-cell">
+                        <span class="avatar sm">{{ initials(s) }}</span>
+                        <div>
+                          <strong>{{ s.firstName }} {{ s.lastName }}</strong>
+                          <code class="sid">{{ s.admissionNumber }}</code>
+                        </div>
+                      </div>
+                    </td>
+                    <td>{{ classLabel(s) }}</td>
+                    <td>
+                      {{ s.guardianName || '—' }}
+                      <div class="sub-meta">{{ s.guardianPhone || s.guardianEmail || '' }}</div>
+                    </td>
+                    <td class="num">${{ s.originalCharged | number:'1.2-2' }}</td>
+                    <td class="num paid">${{ s.amountPaid | number:'1.2-2' }}</td>
+                    <td class="num balance"><strong>${{ s.outstandingBalance | number:'1.2-2' }}</strong></td>
+                    <td>
+                      <div class="aging-stack compact">
+                        @for (b of bucketVisual; track b.key) {
+                          @if (s.aging[b.key] > 0) {
+                            <div class="aging-seg" [attr.data-tone]="b.tone" [style.flex]="s.aging[b.key]" [title]="b.label + ': $' + (s.aging[b.key] | number:'1.2-2')"></div>
+                          }
+                        }
+                      </div>
+                      <div class="bucket-nums">
+                        @for (b of bucketVisual; track b.key) {
+                          @if (s.aging[b.key] > 0) {
+                            <span [attr.data-tone]="b.tone">{{ bucketShortLabel(b.key) }}: ${{ s.aging[b.key] | number:'1.0-0' }}</span>
+                          }
+                        }
+                      </div>
+                    </td>
+                    <td>{{ s.lastPaymentDate || '—' }}</td>
+                    <td><span class="status-pill" [class]="'status-' + s.accountStatus">{{ statusLabel(s.accountStatus) }}</span></td>
+                    <td class="no-print expand-cell">{{ expandedStudentId() === s.studentId ? '▾' : '▸' }}</td>
+                  </tr>
+                  @if (expandedStudentId() === s.studentId) {
+                    <tr class="detail-row">
+                      <td colspan="11">
+                        <ng-container *ngTemplateOutlet="studentPanel; context: { s: s }"></ng-container>
+                      </td>
+                    </tr>
+                  }
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </section>
+    } @else if (!loading() && !matches().length) {
+      <div class="empty-state standalone no-print">
+        <span class="empty-icon">⏳</span>
+        <h3>No report loaded</h3>
+        <p>Select filters and generate a debtor aging report.</p>
+      </div>
+    }
+  </div>
+</app-portal-layout>
+
+<ng-template #studentPanel let-s="s">
+  <div class="detail-panel">
+    <div class="detail-grid">
+      @for (b of bucketVisual; track b.key) {
+        <article class="bucket-card" [attr.data-tone]="b.tone">
+          <span>{{ b.label }}</span>
+          <strong>${{ s.aging[b.key] | number:'1.2-2' }}</strong>
+        </article>
+      }
+    </div>
+
+    @if (s.guardianName || s.guardianPhone || s.guardianEmail) {
+      <div class="guardian-strip">
+        <strong>Guardian:</strong> {{ s.guardianName || '—' }}
+        @if (s.guardianPhone) { · {{ s.guardianPhone }} }
+        @if (s.guardianEmail) { · {{ s.guardianEmail }} }
+      </div>
+    }
+
+    <div class="detail-actions no-print">
+      <button type="button" class="micro-btn" (click)="openStudentPanel(s); $event.stopPropagation()">Notes & write-off</button>
+      <button type="button" class="micro-btn" (click)="sendReminderLetter(s.studentId); $event.stopPropagation()">Reminder letter</button>
+      @if (s.potentialBadDebt) {
+        <span class="flag bad">Bad debt risk</span>
+      }
+      @if (s.escalationFlag) {
+        <span class="flag warn">Escalated ({{ s.maxOverdueDays }} days)</span>
+      }
+    </div>
+
+    @if (activeStudentId() === s.studentId) {
+      <div class="inline-notes no-print">
+        <div class="notes-grid compact">
+          <textarea [(ngModel)]="followupNote" name="followupNote-{{ s.studentId }}" placeholder="Add a follow-up note…"></textarea>
+          <input type="text" [(ngModel)]="approvedBy" name="approvedBy-{{ s.studentId }}" placeholder="Approved by (write-off)" />
+          <input type="text" [(ngModel)]="writeoffReason" name="writeoffReason-{{ s.studentId }}" placeholder="Write-off reason" />
+        </div>
+        <div class="notes-actions">
+          <button type="button" class="btn-primary" (click)="addNote(s.studentId); $event.stopPropagation()">Save note</button>
+          <button type="button" class="btn-danger" (click)="writeOff(s.studentId); $event.stopPropagation()">Post write-off</button>
         </div>
         @if (notes().length) {
           <div class="note-list">
             @for (n of notes(); track n.id) {
-              <div class="note-item">{{ n.message }} <small>{{ n.createdAt }}</small></div>
+              <article class="note-item">
+                <p>{{ n.message }}</p>
+                <small>{{ n.createdAt | date:'medium' }}</small>
+              </article>
             }
           </div>
         }
-      </section>
+      </div>
     }
   </div>
-</app-portal-layout>
+</ng-template>

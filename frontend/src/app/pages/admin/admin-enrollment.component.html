@@ -3,141 +3,352 @@
   [pageTitle]="pageTitle"
   [navSections]="portalTitle === 'Admin Portal' ? adminNav : teacherNav"
 >
+  <div class="enrollment-page">
+    @if (toast(); as t) {
+      <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>
+    }
 
-  @if (toast(); as t) {
-    <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>
-  }
+    <header class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">Enrollment</p>
+        <h2>Class enrollment</h2>
+        <p class="hero-sub">
+          Assign registered students to classes and manage class changes.
+          @if (studentsLink === '/admin/students') {
+            New learners are registered on the <a [routerLink]="studentsLink">Students</a> page first.
+          } @else {
+            Students must be registered by an administrator before you can enroll them.
+          }
+        </p>
+        <div class="hero-actions">
+          @if (studentsLink === '/admin/students') {
+            <a [routerLink]="studentsLink" class="secondary-action">Register student</a>
+          }
+          <button type="button" class="refresh-action" (click)="load(true)" [disabled]="refreshing() || loading()">
+            {{ refreshing() ? 'Refreshing…' : 'Refresh data' }}
+          </button>
+        </div>
+      </div>
+      <div class="kpi-grid">
+        <article class="kpi warn">
+          <span class="kpi-icon">⏳</span>
+          <div>
+            <strong>{{ stats().pending }}</strong>
+            <span>Awaiting class</span>
+          </div>
+        </article>
+        <article class="kpi accent">
+          <span class="kpi-icon">✅</span>
+          <div>
+            <strong>{{ stats().enrolled }}</strong>
+            <span>Enrolled</span>
+          </div>
+        </article>
+        <article class="kpi">
+          <span class="kpi-icon">🏫</span>
+          <div>
+            <strong>{{ stats().classes }}</strong>
+            <span>Classes</span>
+          </div>
+        </article>
+        <article class="kpi">
+          <span class="kpi-icon">💺</span>
+          <div>
+            <strong>{{ stats().openSeats }}</strong>
+            <span>Open seats</span>
+          </div>
+        </article>
+      </div>
+    </header>
 
-  <header class="page-intro">
-    <div>
-      <p class="intro-text">
-        Assign registered students to classes.
-        @if (studentsLink === '/admin/students') {
-          Registration happens on the <a [routerLink]="studentsLink">Register Students</a> page first.
-        } @else {
-          Students must be registered by an administrator before you can enroll them.
-        }
-      </p>
-    </div>
-    <div class="intro-stats">
-      <span class="stat-pill warn">{{ pendingCount() }} awaiting class</span>
-      <span class="stat-pill">{{ enrolled().length }} enrolled</span>
-    </div>
-  </header>
+    @if (stats().fullClasses) {
+      <div class="alert-banner">
+        {{ stats().fullClasses }} class{{ stats().fullClasses === 1 ? '' : 'es' }} at full capacity.
+        Choose another class or increase capacity before enrolling more students.
+      </div>
+    }
 
-  <div class="toolbar">
-    <div class="view-tabs">
-      <button type="button" [class.active]="view() === 'pending'" (click)="setView('pending')">
-        Pending Enrollment
-        @if (pendingCount()) {
-          <span class="count">{{ pendingCount() }}</span>
-        }
-      </button>
-      <button type="button" [class.active]="view() === 'enrolled'" (click)="setView('enrolled')">
-        Enrolled Students
-      </button>
-    </div>
-    <input type="search" class="search" placeholder="Search students…"
-      [ngModel]="search()" (ngModelChange)="search.set($event)" name="q" />
-  </div>
+    <section class="list-shell">
+      <div class="list-toolbar">
+        <div class="view-tabs">
+          <button type="button" [class.active]="view() === 'pending'" (click)="setView('pending')">
+            Pending enrollment
+            @if (stats().pending) {
+              <span class="count">{{ stats().pending }}</span>
+            }
+          </button>
+          <button type="button" [class.active]="view() === 'enrolled'" (click)="setView('enrolled')">
+            Enrolled students
+            <span class="count muted">{{ stats().enrolled }}</span>
+          </button>
+        </div>
 
-  @if (view() === 'pending') {
-    <section class="panel">
-      @if (filteredPending().length) {
-        <div class="student-list">
-          @for (s of filteredPending(); track s.id) {
-            <article class="enroll-card">
-              <div class="student-meta">
-                <code class="sid">{{ s.admissionNumber }}</code>
-                <strong>{{ s.firstName }} {{ s.lastName }}</strong>
-                @if (s.guardians?.[0]) {
-                  <small>{{ s.guardians![0].fullName }} · {{ s.guardians![0].phone || 'No phone' }}</small>
+        <div class="search-wrap">
+          <span class="search-icon" aria-hidden="true">🔍</span>
+          <input
+            type="search"
+            class="search-input"
+            placeholder="Search name, student ID, class, form…"
+            [ngModel]="search()"
+            (ngModelChange)="search.set($event)"
+            name="q"
+          />
+          @if (search()) {
+            <button type="button" class="clear-search" (click)="search.set('')" aria-label="Clear search">×</button>
+          }
+        </div>
+
+        <div class="toolbar-row">
+          <div class="filter-chips">
+            @if (formOptions().length) {
+              <select class="form-filter" [ngModel]="formFilter()" (ngModelChange)="formFilter.set($event)" name="formFilter">
+                <option value="all">All forms</option>
+                @for (f of formOptions(); track f) {
+                  <option [value]="f">{{ f }}</option>
                 }
+              </select>
+            }
+          </div>
+
+          <div class="toolbar-actions">
+            <select [ngModel]="sortOrder()" (ngModelChange)="sortOrder.set($event)" name="sortOrder" class="sort-select">
+              <option value="name-asc">Name A–Z</option>
+              <option value="name-desc">Name Z–A</option>
+              <option value="id-asc">Student ID A–Z</option>
+              @if (view() === 'enrolled') {
+                <option value="class-asc">Class A–Z</option>
+              }
+            </select>
+            @if (view() === 'enrolled') {
+              <div class="view-toggle" role="group" aria-label="View mode">
+                <button type="button" class="view-btn" [class.active]="enrolledViewMode() === 'table'" (click)="enrolledViewMode.set('table')" title="Table view">☰</button>
+                <button type="button" class="view-btn" [class.active]="enrolledViewMode() === 'cards'" (click)="enrolledViewMode.set('cards')" title="Card view">▦</button>
               </div>
-              <div class="enroll-actions">
+            }
+          </div>
+        </div>
+
+        <div class="results-meta">
+          <span>
+            @if (view() === 'pending') {
+              Showing <strong>{{ visiblePending().length }}</strong> of <strong>{{ pending().length }}</strong> pending
+            } @else {
+              Showing <strong>{{ visibleEnrolled().length }}</strong> of <strong>{{ enrolled().length }}</strong> enrolled
+            }
+          </span>
+          @if (hasActiveFilters()) {
+            <button type="button" class="clear-filters" (click)="clearFilters()">Clear filters</button>
+          }
+        </div>
+      </div>
+
+      @if (loading()) {
+        <div class="loading-panel">
+          <div class="spinner"></div>
+          <p>Loading enrollment data…</p>
+        </div>
+      } @else if (view() === 'pending') {
+        @if (visiblePending().length) {
+          <div class="student-list">
+            @for (s of visiblePending(); track s.id) {
+              <article class="enroll-card">
+                <div class="student-main">
+                  <span class="avatar">{{ initials(s) }}</span>
+                  <div class="student-meta">
+                    <div class="name-row">
+                      <strong>{{ s.firstName }} {{ s.lastName }}</strong>
+                      <code class="sid">{{ s.admissionNumber }}</code>
+                    </div>
+                    <div class="meta-tags">
+                      <span class="form-tag">{{ formLabel(s) }}</span>
+                      @if (s.gender) {
+                        <span class="meta-tag">{{ s.gender }}</span>
+                      }
+                      @if (s.studentType === 'boarder') {
+                        <span class="meta-tag boarder">Boarder</span>
+                      }
+                    </div>
+                    @if (s.guardians?.[0]) {
+                      <small>{{ s.guardians![0].fullName }} · {{ s.guardians![0].phone || 'No phone' }}</small>
+                    }
+                  </div>
+                </div>
+
+                <div class="enroll-actions">
+                  <select
+                    [ngModel]="selectedClassId()[s.id] || ''"
+                    (ngModelChange)="onClassPick(s.id, $event)"
+                    [name]="'cls' + s.id"
+                  >
+                    <option value="">Select class…</option>
+                    @for (c of classesForStudent(s); track c.id) {
+                      <option [value]="c.id" [disabled]="classUsage(c).isFull">{{ classLabel(c) }}</option>
+                    }
+                  </select>
+                  <button
+                    type="button"
+                    class="btn-primary"
+                    [disabled]="submitting() === s.id || !selectedClassId()[s.id]"
+                    (click)="enroll(s)"
+                  >
+                    {{ submitting() === s.id ? 'Enrolling…' : 'Enroll' }}
+                  </button>
+                </div>
+              </article>
+            }
+          </div>
+        } @else {
+          <div class="empty-state">
+            <span class="empty-icon">✓</span>
+            <h3>@if (hasActiveFilters()) { No matching students } @else { All students are enrolled }</h3>
+            <p>
+              @if (hasActiveFilters()) {
+                Try adjusting your search or filters.
+              } @else {
+                No registered students are waiting for a class assignment.
+              }
+            </p>
+            @if (hasActiveFilters()) {
+              <button type="button" class="btn-outline" (click)="clearFilters()">Clear filters</button>
+            } @else if (studentsLink === '/admin/students') {
+              <a [routerLink]="studentsLink" class="btn-outline">Register new student</a>
+            }
+          </div>
+        }
+      } @else if (!visibleEnrolled().length) {
+        <div class="empty-state">
+          <span class="empty-icon">🎓</span>
+          <h3>@if (hasActiveFilters()) { No matching students } @else { No enrolled students yet }</h3>
+          <p>
+            @if (hasActiveFilters()) {
+              Try adjusting your search or filters.
+            } @else {
+              Use Pending enrollment to assign classes to registered students.
+            }
+          </p>
+          @if (hasActiveFilters()) {
+            <button type="button" class="btn-outline" (click)="clearFilters()">Clear filters</button>
+          } @else {
+            <button type="button" class="btn-outline" (click)="setView('pending')">Go to pending</button>
+          }
+        </div>
+      } @else if (enrolledViewMode() === 'cards') {
+        <div class="card-grid">
+          @for (s of visibleEnrolled(); track s.id) {
+            <article class="enrolled-card">
+              <div class="card-head">
+                <span class="avatar">{{ initials(s) }}</span>
+                <div class="card-title">
+                  <strong>{{ s.firstName }} {{ s.lastName }}</strong>
+                  <code class="sid">{{ s.admissionNumber }}</code>
+                </div>
+                <span class="class-pill">{{ s.schoolClass?.name || '—' }}</span>
+              </div>
+
+              <div class="card-meta">
+                <div><span>Form</span><strong>{{ formLabel(s) }}</strong></div>
+                <div><span>Enrolled</span><strong>{{ s.enrollmentDate ? (s.enrollmentDate | date:'mediumDate') : '—' }}</strong></div>
+              </div>
+
+              <div class="card-actions">
                 <select
-                  [ngModel]="selectedClassId()[s.id] || ''"
-                  (ngModelChange)="onClassPick(s.id, $event)"
-                  [name]="'cls' + s.id">
-                  <option value="">Select class…</option>
+                  class="select-sm"
+                  [ngModel]="s.classId || ''"
+                  (ngModelChange)="changeClass(s, $event)"
+                  [disabled]="submitting() === s.id"
+                  [name]="'chg-card' + s.id"
+                >
                   @for (c of classes(); track c.id) {
-                    <option [value]="c.id">{{ classLabel(c) }}</option>
+                    <option [value]="c.id" [disabled]="classUsage(c).isFull && c.id !== s.classId">{{ classLabel(c) }}</option>
                   }
                 </select>
-                <button type="button" class="btn-primary"
-                  [disabled]="submitting() === s.id"
-                  (click)="enroll(s)">
-                  {{ submitting() === s.id ? 'Enrolling…' : 'Enroll' }}
+                <button type="button" class="btn-ghost" [disabled]="submitting() === s.id" (click)="unenroll(s)">
+                  {{ submitting() === s.id ? 'Removing…' : 'Remove' }}
                 </button>
               </div>
             </article>
           }
         </div>
       } @else {
-        <div class="empty-state">
-          <span class="empty-icon">✓</span>
-          <h3>All students are enrolled</h3>
-          <p>No registered students are waiting for a class assignment.</p>
-          @if (studentsLink === '/admin/students') {
-            <a [routerLink]="studentsLink" class="btn-outline">Register new student</a>
-          }
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Student</th>
+                <th>Class</th>
+                <th>Form</th>
+                <th>Enrolled</th>
+                <th>Change class</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (s of visibleEnrolled(); track s.id) {
+                <tr>
+                  <td>
+                    <div class="user-cell">
+                      <span class="avatar sm">{{ initials(s) }}</span>
+                      <div>
+                        <strong>{{ s.firstName }} {{ s.lastName }}</strong>
+                        <code class="sid">{{ s.admissionNumber }}</code>
+                      </div>
+                    </div>
+                  </td>
+                  <td>
+                    <span class="class-pill">{{ s.schoolClass?.name || '—' }}</span>
+                    <small class="form-hint">{{ s.schoolClass?.form?.name }}</small>
+                  </td>
+                  <td>{{ formLabel(s) }}</td>
+                  <td>{{ s.enrollmentDate ? (s.enrollmentDate | date:'mediumDate') : '—' }}</td>
+                  <td>
+                    <select
+                      class="select-sm"
+                      [ngModel]="s.classId || ''"
+                      (ngModelChange)="changeClass(s, $event)"
+                      [disabled]="submitting() === s.id"
+                      [name]="'chg' + s.id"
+                    >
+                      @for (c of classes(); track c.id) {
+                        <option [value]="c.id" [disabled]="classUsage(c).isFull && c.id !== s.classId">{{ classLabel(c) }}</option>
+                      }
+                    </select>
+                  </td>
+                  <td>
+                    <button type="button" class="btn-ghost" [disabled]="submitting() === s.id" (click)="unenroll(s)">
+                      {{ submitting() === s.id ? 'Removing…' : 'Remove' }}
+                    </button>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
         </div>
       }
     </section>
-  }
 
-  @if (view() === 'enrolled') {
-    <section class="panel">
-      <div class="table-wrap">
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>Student ID</th>
-              <th>Name</th>
-              <th>Current Class</th>
-              <th>Enrolled</th>
-              <th>Change Class</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            @for (s of filteredEnrolled(); track s.id) {
-              <tr>
-                <td><code class="sid">{{ s.admissionNumber }}</code></td>
-                <td><strong>{{ s.firstName }} {{ s.lastName }}</strong></td>
-                <td>
-                  <span class="class-pill">{{ s.schoolClass?.name || '—' }}</span>
-                  <small class="form-hint">{{ s.schoolClass?.form?.name }}</small>
-                </td>
-                <td>{{ s.enrollmentDate || '—' }}</td>
-                <td>
-                  <select class="select-sm"
-                    [ngModel]="s.classId || ''"
-                    (ngModelChange)="changeClass(s, $event)"
-                    [name]="'chg' + s.id">
-                    @for (c of classes(); track c.id) {
-                      <option [value]="c.id">{{ c.name }}</option>
-                    }
-                  </select>
-                </td>
-                <td>
-                  <button type="button" class="btn-ghost" [disabled]="submitting() === s.id"
-                    (click)="unenroll(s)">Remove</button>
-                </td>
-              </tr>
-            } @empty {
-              <tr>
-                <td colspan="6">
-                  <div class="empty-state compact">
-                    <p>No enrolled students yet. Use Pending Enrollment to assign classes.</p>
-                  </div>
-                </td>
-              </tr>
-            }
-          </tbody>
-        </table>
-      </div>
-    </section>
-  }
-
+    @if (!loading() && classes().length) {
+      <section class="capacity-panel">
+        <div class="capacity-head">
+          <h3>Class capacity</h3>
+          <p>Live seat usage across all classes.</p>
+        </div>
+        <div class="capacity-grid">
+          @for (c of classes(); track c.id) {
+            <article class="capacity-card" [class.full]="classUsage(c).isFull">
+              <div class="capacity-top">
+                <strong>{{ classSelectLabel(c) }}</strong>
+                <span>{{ classUsage(c).count }}/{{ c.capacity }}</span>
+              </div>
+              @if (c.form?.name) {
+                <span class="capacity-form">{{ c.form?.name }}</span>
+              }
+              <div class="capacity-track">
+                <div class="capacity-fill" [style.width.%]="classUsage(c).pct"></div>
+              </div>
+            </article>
+          }
+        </div>
+      </section>
+    }
+  </div>
 </app-portal-layout>

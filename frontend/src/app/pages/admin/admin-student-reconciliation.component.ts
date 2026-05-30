@@ -1,6 +1,7 @@
 import { Component, computed, inject, OnInit, signal } from '@angular/core';
-import { DecimalPipe } from '@angular/common';
+import { DatePipe, DecimalPipe, NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
 import { ApiService } from '../../core/services/api.service';
@@ -54,9 +55,11 @@ interface ReconciliationTransaction {
   matched: boolean;
 }
 
+type ReconciliationStatus = 'reconciled' | 'unreconciled' | 'pending';
+
 interface StudentReconciliationRow {
   student: StudentMatch;
-  status: 'reconciled' | 'unreconciled' | 'pending';
+  status: ReconciliationStatus;
   studentModule: {
     openingBalance: number;
     totalBilled: number;
@@ -113,6 +116,10 @@ interface ReconciliationApiResponse extends ReconciliationReport {
   matches?: StudentMatch[];
 }
 
+type StatusFilter = 'all' | ReconciliationStatus;
+type SortOrder = 'variance-desc' | 'outstanding-desc' | 'name-asc' | 'status';
+type DisplayMode = 'table' | 'cards';
+
 const FEE_TYPES = [
   { value: '', label: 'All transaction types' },
   { value: 'tuition', label: 'Tuition fees' },
@@ -132,7 +139,7 @@ const FEE_TYPES = [
 @Component({
   selector: 'app-admin-student-reconciliation',
   standalone: true,
-  imports: [PortalLayoutComponent, FormsModule, DecimalPipe],
+  imports: [PortalLayoutComponent, FormsModule, DecimalPipe, DatePipe, RouterLink, NgTemplateOutlet],
   templateUrl: './admin-student-reconciliation.component.html',
   styleUrl: './admin-student-reconciliation.component.scss',
 })
@@ -164,12 +171,116 @@ export class AdminStudentReconciliationComponent implements OnInit {
   report = signal<ReconciliationReport | null>(null);
   expandedStudentId = signal<string | null>(null);
 
+  studentSearch = signal('');
+  statusFilter = signal<StatusFilter>('all');
+  issuesOnly = signal(false);
+  sortOrder = signal<SortOrder>('variance-desc');
+  displayMode = signal<DisplayMode>('table');
+  txnUnmatchedOnly = signal<Record<string, boolean>>({});
+
+  sortedTerms = computed(() =>
+    [...this.terms()].sort((a, b) => (a.startDate || '').localeCompare(b.startDate || '')),
+  );
+
   filteredClasses = computed(() => {
     const formId = this.selectedFormId;
     const list = this.classes();
     if (!formId) return list;
     return list.filter((c) => c.formId === formId);
   });
+
+  reconciliationRate = computed(() => {
+    const summary = this.report()?.summary;
+    if (!summary?.studentCount) return 0;
+    return (summary.reconciled / summary.studentCount) * 100;
+  });
+
+  visibleStudents = computed(() => {
+    const report = this.report();
+    if (!report) return [];
+
+    let rows = [...report.students];
+    const q = this.studentSearch().trim().toLowerCase();
+
+    if (q) {
+      rows = rows.filter((row) =>
+        `${row.student.admissionNumber} ${row.student.firstName} ${row.student.lastName} ${this.classLabel(row)}`
+          .toLowerCase()
+          .includes(q),
+      );
+    }
+
+    const status = this.statusFilter();
+    if (status !== 'all') rows = rows.filter((row) => row.status === status);
+
+    if (this.issuesOnly()) {
+      rows = rows.filter(
+        (row) =>
+          row.status !== 'reconciled' ||
+          row.discrepancies.length > 0 ||
+          Math.abs(row.variance.closingBalanceVariance) > 0.005,
+      );
+    }
+
+    const sort = this.sortOrder();
+    if (sort === 'name-asc') {
+      rows.sort((a, b) =>
+        `${a.student.lastName} ${a.student.firstName}`.localeCompare(
+          `${b.student.lastName} ${b.student.firstName}`,
+        ),
+      );
+    } else if (sort === 'outstanding-desc') {
+      rows.sort((a, b) => b.studentModule.outstandingBalance - a.studentModule.outstandingBalance);
+    } else if (sort === 'status') {
+      const rank: Record<ReconciliationStatus, number> = {
+        unreconciled: 0,
+        pending: 1,
+        reconciled: 2,
+      };
+      rows.sort((a, b) => rank[a.status] - rank[b.status]);
+    } else {
+      rows.sort(
+        (a, b) =>
+          Math.abs(b.variance.closingBalanceVariance) - Math.abs(a.variance.closingBalanceVariance),
+      );
+    }
+
+    return rows;
+  });
+
+  filteredSummary = computed(() => {
+    const rows = this.visibleStudents();
+    let variance = 0;
+    let outstanding = 0;
+    let unreconciled = 0;
+    let pending = 0;
+    let reconciled = 0;
+
+    for (const row of rows) {
+      variance += Math.abs(row.variance.closingBalanceVariance);
+      outstanding += row.studentModule.outstandingBalance;
+      if (row.status === 'unreconciled') unreconciled += 1;
+      else if (row.status === 'pending') pending += 1;
+      else reconciled += 1;
+    }
+
+    return {
+      count: rows.length,
+      variance,
+      outstanding,
+      unreconciled,
+      pending,
+      reconciled,
+    };
+  });
+
+  hasActiveFilters = computed(
+    () =>
+      Boolean(this.studentSearch().trim()) ||
+      this.statusFilter() !== 'all' ||
+      this.issuesOnly() ||
+      this.sortOrder() !== 'variance-desc',
+  );
 
   ngOnInit() {
     this.api.get<SchoolYearRow[]>('/admin/school-years').subscribe({
@@ -187,6 +298,11 @@ export class AdminStudentReconciliationComponent implements OnInit {
     });
     this.api.get<FormRow[]>('/admin/forms').subscribe({ next: (f) => this.forms.set(f) });
     this.api.get<ClassRow[]>('/admin/classes').subscribe({ next: (c) => this.classes.set(c) });
+  }
+
+  selectTerm(termId: string) {
+    this.selectedTermId = termId;
+    this.onTermChange();
   }
 
   onTermChange() {
@@ -221,13 +337,18 @@ export class AdminStudentReconciliationComponent implements OnInit {
     this.matches.set([]);
     this.report.set(null);
     this.expandedStudentId.set(null);
+    this.studentSearch.set('');
+    this.statusFilter.set('all');
+    this.issuesOnly.set(false);
+    this.sortOrder.set('variance-desc');
+    this.txnUnmatchedOnly.set({});
 
     this.api.get<ReconciliationApiResponse>('/billing/reports/student-reconciliation', this.buildParams()).subscribe({
       next: (res) => {
         this.loading.set(false);
         if (res.needsSelection && res.matches?.length) {
           this.matches.set(res.matches);
-          this.showToast('error', `${res.matches.length} students found — select one.`);
+          this.showToast('error', `${res.matches.length} students found — select one below.`);
           return;
         }
         this.report.set(res);
@@ -246,8 +367,43 @@ export class AdminStudentReconciliationComponent implements OnInit {
     this.getReport();
   }
 
+  clearSelection() {
+    this.selectedStudentId = '';
+    this.query = '';
+    this.matches.set([]);
+    this.report.set(null);
+    this.expandedStudentId.set(null);
+  }
+
+  clearFilters() {
+    this.studentSearch.set('');
+    this.statusFilter.set('all');
+    this.issuesOnly.set(false);
+    this.sortOrder.set('variance-desc');
+  }
+
   toggleExpand(id: string) {
     this.expandedStudentId.update((cur) => (cur === id ? null : id));
+  }
+
+  expandFirstIssue() {
+    const row = this.visibleStudents().find((r) => r.status !== 'reconciled');
+    if (row) this.expandedStudentId.set(row.student.id);
+  }
+
+  isTxnUnmatchedOnly(studentId: string): boolean {
+    return this.txnUnmatchedOnly()[studentId] === true;
+  }
+
+  toggleTxnUnmatchedOnly(studentId: string) {
+    const next = { ...this.txnUnmatchedOnly() };
+    next[studentId] = !next[studentId];
+    this.txnUnmatchedOnly.set(next);
+  }
+
+  visibleTransactions(row: StudentReconciliationRow): ReconciliationTransaction[] {
+    if (!this.isTxnUnmatchedOnly(row.student.id)) return row.transactions;
+    return row.transactions.filter((t) => !t.matched);
   }
 
   printReport(mode: 'summary' | 'detailed') {
@@ -289,6 +445,28 @@ export class AdminStudentReconciliationComponent implements OnInit {
     this.exportPdf(false);
   }
 
+  statusClass(status: string): string {
+    return `status-${status}`;
+  }
+
+  statusLabel(status: ReconciliationStatus): string {
+    if (status === 'reconciled') return 'Reconciled';
+    if (status === 'pending') return 'Pending';
+    return 'Unreconciled';
+  }
+
+  initials(student: { firstName: string; lastName: string }): string {
+    return `${student.firstName.charAt(0)}${student.lastName.charAt(0)}`.toUpperCase();
+  }
+
+  classLabel(row: StudentReconciliationRow): string {
+    return `${row.student.formName || ''} ${row.student.className || ''}`.trim() || '—';
+  }
+
+  typeLabel(type: string): string {
+    return type.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+  }
+
   private exportPdf(preview: boolean) {
     if (!this.report()) {
       this.showToast('error', 'Load the report before exporting PDF.');
@@ -322,14 +500,6 @@ export class AdminStudentReconciliationComponent implements OnInit {
         this.showToast('error', e.error?.message || 'Failed to generate PDF');
       },
     });
-  }
-
-  statusClass(status: string): string {
-    return `status-${status}`;
-  }
-
-  classLabel(row: StudentReconciliationRow): string {
-    return `${row.student.formName || ''} ${row.student.className || ''}`.trim() || '—';
   }
 
   private showToast(type: 'success' | 'error', msg: string) {

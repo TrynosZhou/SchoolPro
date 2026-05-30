@@ -1,117 +1,244 @@
 <app-portal-layout portalTitle="Admin Portal" pageTitle="Student Ledger" [navSections]="adminNav">
-  @if (toast(); as t) {
-    <div class="toast" [class.error]="t.type === 'error'">{{ t.msg }}</div>
-  }
+  <div class="ledger-page">
+    @if (toast(); as t) {
+      <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>
+    }
 
-  <section class="card search-card">
-    <h3>Student Ledger Report</h3>
-    <p class="sub">Select a <strong>term</strong> and search by <strong>Student ID</strong>, <strong>First Name</strong>, or <strong>Last Name</strong>.</p>
+    <header class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">Finance reports</p>
+        <h2>Student ledger</h2>
+        <p class="hero-sub">
+          View term-level debits, credits, and running balance for a student. Export a PDF or reconcile on the
+          <a routerLink="/admin/fin-reports/student-reconciliation">Student Reconciliation</a> page.
+        </p>
+      </div>
+      <div class="kpi-grid">
+        <article class="kpi">
+          <span class="kpi-icon">📅</span>
+          <div>
+            <strong>{{ terms().length }}</strong>
+            <span>Terms</span>
+          </div>
+        </article>
+        <article class="kpi accent">
+          <span class="kpi-icon">📒</span>
+          <div>
+            <strong>{{ report() ? report()!.lines.length : '—' }}</strong>
+            <span>Transactions</span>
+          </div>
+        </article>
+        <article class="kpi">
+          <span class="kpi-icon">💳</span>
+          <div>
+            <strong>{{ report() ? (report()!.summary.totalCredits | number:'1.0-0') : '—' }}</strong>
+            <span>Credits</span>
+          </div>
+        </article>
+        <article class="kpi" [class.warn]="report() && report()!.summary.closingBalance > 0">
+          <span class="kpi-icon">⚖</span>
+          <div>
+            <strong>{{ report() ? ('$' + (report()!.summary.closingBalance | number:'1.2-2')) : '—' }}</strong>
+            <span>{{ report() ? balanceStatus().label : 'Closing balance' }}</span>
+          </div>
+        </article>
+      </div>
+    </header>
 
-    <div class="filters">
-      <div class="field">
-        <label>Term *</label>
-        <select [(ngModel)]="selectedTermId" name="ledgerTerm">
-          <option value="">— Select term —</option>
+    <section class="list-shell">
+      <div class="list-toolbar">
+        <h3>Find student ledger</h3>
+        <p>Select a term and search by student ID, first name, or last name.</p>
+
+        <div class="term-chips">
           @for (t of sortedTerms(); track t.id) {
-            <option [value]="t.id">{{ t.name }}</option>
+            <button type="button" class="term-chip" [class.active]="selectedTermId === t.id" (click)="selectTerm(t.id)">
+              {{ t.name }}
+              @if (t.isCurrent) {
+                <span class="current-dot">Current</span>
+              }
+            </button>
           }
-        </select>
-      </div>
+        </div>
 
-      <div class="field grow">
-        <label>Student *</label>
-        <input
-          type="text"
-          [(ngModel)]="query"
-          name="ledgerQuery"
-          placeholder="e.g. SP000005 / Tawanda / Ncube"
-          (keyup.enter)="getReport()"
-          (input)="selectedStudentId = ''"
-        />
-      </div>
+        <div class="search-row">
+          <div class="field grow">
+            <label for="ledgerQuery">Student</label>
+            <div class="search-wrap">
+              <span class="search-icon" aria-hidden="true">🔍</span>
+              <input
+                id="ledgerQuery"
+                type="search"
+                class="search-input"
+                [(ngModel)]="query"
+                name="ledgerQuery"
+                placeholder="e.g. SP000005 / Tawanda / Ncube"
+                (keyup.enter)="getReport()"
+                (input)="selectedStudentId = ''"
+              />
+            </div>
+          </div>
+          <div class="field">
+            <label for="ledgerTerm">Term</label>
+            <select id="ledgerTerm" [(ngModel)]="selectedTermId" name="ledgerTerm">
+              <option value="">— Select term —</option>
+              @for (t of sortedTerms(); track t.id) {
+                <option [value]="t.id">{{ t.name }}</option>
+              }
+            </select>
+          </div>
+        </div>
 
-      <div class="actions">
-        <button type="button" class="btn-primary" (click)="getReport()" [disabled]="loading()">
-          {{ loading() ? 'Loading…' : 'Get Report' }}
-        </button>
-        <button type="button" class="btn-outline" (click)="previewPdf()" [disabled]="pdfLoading() || loading()">
-          {{ pdfLoading() ? 'Generating…' : 'Preview PDF' }}
-        </button>
-        <button type="button" class="btn-outline" (click)="downloadPdf()" [disabled]="pdfLoading() || loading()">
-          {{ pdfLoading() ? 'Generating…' : 'Download PDF' }}
-        </button>
-        @if (selectedStudentId || report()) {
-          <button type="button" class="btn-ghost" (click)="clearSelection()">Clear</button>
-        }
-      </div>
-    </div>
-  </section>
-
-  @if (matches().length) {
-    <section class="card">
-      <h3>Select student</h3>
-      <div class="match-list">
-        @for (m of matches(); track m.id) {
-          <button type="button" class="match-btn" (click)="pickStudent(m)">
-            <strong>{{ m.firstName }} {{ m.lastName }}</strong>
-            <span>{{ m.admissionNumber }} · {{ m.formName || '—' }} {{ m.className || '' }}</span>
+        <div class="action-row">
+          <button type="button" class="btn-primary" (click)="getReport()" [disabled]="loading()">
+            {{ loading() ? 'Loading…' : 'Get report' }}
           </button>
-        }
-      </div>
-    </section>
-  }
-
-  @if (report(); as r) {
-    <section class="card report-card">
-      <div class="report-head">
-        <div>
-          <h3>{{ r.student.firstName }} {{ r.student.lastName }}</h3>
-          <p class="meta">
-            ID: <strong>{{ r.student.admissionNumber }}</strong>
-            · Class: <strong>{{ r.student.formName || '—' }} {{ r.student.className || '' }}</strong>
-            · Term: <strong>{{ r.term.name }}</strong> ({{ r.term.startDate }} → {{ r.term.endDate }})
-          </p>
-        </div>
-        <div class="summary-chips">
-          <span class="chip">Opening: {{ r.summary.openingBalance | number:'1.2-2' }}</span>
-          <span class="chip">Debits: {{ r.summary.totalDebits | number:'1.2-2' }}</span>
-          <span class="chip">Credits: {{ r.summary.totalCredits | number:'1.2-2' }}</span>
-          <span class="chip accent">Closing: {{ r.summary.closingBalance | number:'1.2-2' }}</span>
+          <button type="button" class="btn-outline" (click)="previewPdf()" [disabled]="pdfLoading() || loading() || !report()">
+            {{ pdfLoading() ? 'Generating…' : 'Preview PDF' }}
+          </button>
+          <button type="button" class="btn-outline" (click)="downloadPdf()" [disabled]="pdfLoading() || loading() || !report()">
+            {{ pdfLoading() ? 'Generating…' : 'Download PDF' }}
+          </button>
+          @if (selectedStudentId || report()) {
+            <button type="button" class="btn-ghost" (click)="clearSelection()">Clear</button>
+          }
         </div>
       </div>
 
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th>Type</th>
-              <th>Reference</th>
-              <th>Description</th>
-              <th class="num">Debit</th>
-              <th class="num">Credit</th>
-              <th class="num">Balance</th>
-            </tr>
-          </thead>
-          <tbody>
-            @for (line of r.lines; track line.reference + line.date + line.type + $index) {
-              <tr [class.row-opening]="line.type === 'opening'">
-                <td>{{ line.date }}</td>
-                <td><span class="type-pill" [attr.data-type]="line.type">{{ typeLabel(line.type) }}</span></td>
-                <td>{{ line.reference }}</td>
-                <td>{{ line.description }}</td>
-                <td class="num">{{ line.debit ? (line.debit | number:'1.2-2') : '—' }}</td>
-                <td class="num">{{ line.credit ? (line.credit | number:'1.2-2') : '—' }}</td>
-                <td class="num"><strong>{{ line.balance | number:'1.2-2' }}</strong></td>
-              </tr>
-            } @empty {
-              <tr>
-                <td colspan="7" class="empty">No transactions for this term.</td>
-              </tr>
+      @if (loading()) {
+        <div class="loading-panel">
+          <div class="spinner"></div>
+          <p>Loading ledger report…</p>
+        </div>
+      } @else if (matches().length) {
+        <div class="match-panel">
+          <h4>Select student</h4>
+          <p>{{ matches().length }} students matched your search.</p>
+          <div class="match-grid">
+            @for (m of matches(); track m.id) {
+              <button type="button" class="match-card" (click)="pickStudent(m)">
+                <span class="avatar">{{ initials(m) }}</span>
+                <div>
+                  <strong>{{ m.firstName }} {{ m.lastName }}</strong>
+                  <code class="sid">{{ m.admissionNumber }}</code>
+                  <span class="class-meta">{{ m.formName || '—' }} {{ m.className || '' }}</span>
+                </div>
+              </button>
             }
-          </tbody>
-        </table>
-      </div>
+          </div>
+        </div>
+      } @else if (report()) {
+        <div class="report-panel">
+          <div class="student-head">
+            <span class="avatar lg">{{ initials(report()!.student) }}</span>
+            <div>
+              <h3>{{ report()!.student.firstName }} {{ report()!.student.lastName }}</h3>
+              <p class="meta">
+                ID <strong>{{ report()!.student.admissionNumber }}</strong>
+                · {{ report()!.student.formName || '—' }} {{ report()!.student.className || '' }}
+                · {{ report()!.term.name }} ({{ report()!.term.startDate }} → {{ report()!.term.endDate }})
+              </p>
+            </div>
+            <span class="balance-badge" [attr.data-tone]="balanceStatus().tone">
+              {{ balanceStatus().label }}: ${{ report()!.summary.closingBalance | number:'1.2-2' }}
+            </span>
+          </div>
+
+          <div class="summary-grid">
+            <article class="summary-card">
+              <span>Opening balance</span>
+              <strong>${{ report()!.summary.openingBalance | number:'1.2-2' }}</strong>
+            </article>
+            <article class="summary-card debit">
+              <span>Total debits</span>
+              <strong>${{ report()!.summary.totalDebits | number:'1.2-2' }}</strong>
+            </article>
+            <article class="summary-card credit">
+              <span>Total credits</span>
+              <strong>${{ report()!.summary.totalCredits | number:'1.2-2' }}</strong>
+            </article>
+            <article class="summary-card closing" [attr.data-tone]="balanceStatus().tone">
+              <span>Closing balance</span>
+              <strong>${{ report()!.summary.closingBalance | number:'1.2-2' }}</strong>
+            </article>
+          </div>
+
+          <div class="lines-toolbar">
+            <div class="search-wrap compact">
+              <span class="search-icon" aria-hidden="true">🔍</span>
+              <input
+                type="search"
+                class="search-input"
+                placeholder="Filter transactions…"
+                [ngModel]="lineSearch()"
+                (ngModelChange)="lineSearch.set($event)"
+                name="lineSearch"
+              />
+              @if (lineSearch()) {
+                <button type="button" class="clear-search" (click)="lineSearch.set('')" aria-label="Clear filter">×</button>
+              }
+            </div>
+            <div class="filter-chips">
+              <button type="button" class="chip-filter" [class.active]="typeFilter() === 'all'" (click)="typeFilter.set('all')">All</button>
+              <button type="button" class="chip-filter" data-type="opening" [class.active]="typeFilter() === 'opening'" (click)="typeFilter.set('opening')">Opening</button>
+              <button type="button" class="chip-filter" data-type="invoice" [class.active]="typeFilter() === 'invoice'" (click)="typeFilter.set('invoice')">Invoices</button>
+              <button type="button" class="chip-filter" data-type="payment" [class.active]="typeFilter() === 'payment'" (click)="typeFilter.set('payment')">Payments</button>
+            </div>
+          </div>
+
+          @if (hasLineFilters()) {
+            <div class="results-meta">
+              <span>Showing <strong>{{ filteredLines().length }}</strong> of <strong>{{ report()!.lines.length }}</strong> lines</span>
+              <button type="button" class="clear-filters" (click)="clearLineFilters()">Clear filters</button>
+            </div>
+          }
+
+          <div class="table-wrap">
+            <table class="ledger-table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Type</th>
+                  <th>Reference</th>
+                  <th>Description</th>
+                  <th class="num">Debit</th>
+                  <th class="num">Credit</th>
+                  <th class="num">Balance</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (line of filteredLines(); track line.reference + line.date + line.type + $index) {
+                  <tr [attr.data-type]="line.type">
+                    <td>{{ line.date }}</td>
+                    <td><span class="type-pill" [attr.data-type]="line.type">{{ typeLabel(line.type) }}</span></td>
+                    <td><code class="ref">{{ line.reference }}</code></td>
+                    <td>{{ line.description }}</td>
+                    <td class="num debit">{{ line.debit ? ('$' + (line.debit | number:'1.2-2')) : '—' }}</td>
+                    <td class="num credit">{{ line.credit ? ('$' + (line.credit | number:'1.2-2')) : '—' }}</td>
+                    <td class="num"><strong>${{ line.balance | number:'1.2-2' }}</strong></td>
+                  </tr>
+                } @empty {
+                  <tr>
+                    <td colspan="7" class="empty">
+                      @if (hasLineFilters()) {
+                        No transactions match your filter.
+                      } @else {
+                        No transactions for this term.
+                      }
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </div>
+      } @else {
+        <div class="empty-state">
+          <span class="empty-icon">📒</span>
+          <h3>No ledger loaded</h3>
+          <p>Select a term and search for a student to view their ledger.</p>
+        </div>
+      }
     </section>
-  }
+  </div>
 </app-portal-layout>

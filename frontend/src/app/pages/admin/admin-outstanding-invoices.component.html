@@ -1,95 +1,318 @@
 <app-portal-layout portalTitle="Admin Portal" pageTitle="Outstanding Invoices" [navSections]="adminNav">
-  @if (toast(); as t) {
-    <div class="toast" [class.error]="t.type === 'error'">{{ t.msg }}</div>
-  }
-
-  <section class="card intro-card">
-    <div class="intro-head">
-      <div>
-        <h3>Outstanding Invoices Report</h3>
-        <p class="sub">Students with invoice balances greater than zero, sorted by balance (highest first) and grouped by class.</p>
-      </div>
-      <div class="intro-actions">
-        <button type="button" class="btn-outline" (click)="previewPdf()" [disabled]="pdfLoading()">
-          {{ pdfLoading() ? 'Generating…' : 'Preview PDF' }}
-        </button>
-        <button type="button" class="btn-primary" (click)="downloadPdf()" [disabled]="pdfLoading()">
-          {{ pdfLoading() ? 'Generating…' : 'Download PDF' }}
-        </button>
-        <button type="button" class="btn-primary" (click)="loadReport()" [disabled]="loading() || pdfLoading()">
-          {{ loading() ? 'Refreshing…' : 'Refresh Report' }}
-        </button>
-      </div>
-    </div>
-
-    @if (report(); as r) {
-      <div class="summary-row">
-        <span class="summary-chip">Classes: <strong>{{ r.groups.length }}</strong></span>
-        <span class="summary-chip">Students: <strong>{{ r.studentCount }}</strong></span>
-        <span class="summary-chip">Invoices: <strong>{{ r.invoiceCount }}</strong></span>
-        <span class="summary-chip accent">Grand total: <strong>{{ r.grandTotal | number:'1.2-2' }}</strong></span>
-      </div>
+  <div class="outstanding-page">
+    @if (toast(); as t) {
+      <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>
     }
-  </section>
 
-  @if (loading()) {
-    <section class="card loading-card">
-      <p>Generating report…</p>
-    </section>
-  } @else {
-    @if (report(); as r) {
-      @if (!r.groups.length) {
-        <section class="card empty-card">
-          <p>No outstanding invoice balances found.</p>
-        </section>
-      } @else {
-        @for (group of r.groups; track group.classId) {
-          <section class="card group-card">
-            <div class="group-head">
-              <h3>{{ classHeading(group) }}</h3>
-              <span class="group-total">{{ group.classTotal | number:'1.2-2' }} outstanding</span>
-            </div>
+    <header class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">Finance reports</p>
+        <h2>Outstanding invoices</h2>
+        <p class="hero-sub">
+          Students with unpaid invoice balances, grouped by class and sorted by amount owed. Export a PDF or review
+          collection progress on
+          <a routerLink="/admin/fin-reports/fee-collection-revenue">Fee Collection & Revenue</a>.
+        </p>
+        <div class="hero-actions">
+          <button type="button" class="btn-outline" (click)="previewPdf()" [disabled]="pdfLoading() || loading()">
+            {{ pdfLoading() ? 'Generating…' : 'Preview PDF' }}
+          </button>
+          <button type="button" class="btn-primary" (click)="downloadPdf()" [disabled]="pdfLoading() || loading()">
+            {{ pdfLoading() ? 'Generating…' : 'Download PDF' }}
+          </button>
+          <button type="button" class="btn-ghost" (click)="loadReport()" [disabled]="loading() || pdfLoading()">
+            {{ loading() ? 'Refreshing…' : 'Refresh' }}
+          </button>
+        </div>
+      </div>
+      <div class="kpi-grid">
+        <article class="kpi">
+          <span class="kpi-icon">🏫</span>
+          <div>
+            <strong>{{ report() ? report()!.groups.length : '—' }}</strong>
+            <span>Classes</span>
+          </div>
+        </article>
+        <article class="kpi accent">
+          <span class="kpi-icon">👥</span>
+          <div>
+            <strong>{{ report() ? report()!.studentCount : '—' }}</strong>
+            <span>Students</span>
+          </div>
+        </article>
+        <article class="kpi">
+          <span class="kpi-icon">🧾</span>
+          <div>
+            <strong>{{ report() ? report()!.invoiceCount : '—' }}</strong>
+            <span>Invoices</span>
+          </div>
+        </article>
+        <article class="kpi warn">
+          <span class="kpi-icon">⚠</span>
+          <div>
+            <strong>{{ report() ? overdueSummary().count : '—' }}</strong>
+            <span>Overdue</span>
+          </div>
+        </article>
+        <article class="kpi highlight">
+          <span class="kpi-icon">💰</span>
+          <div>
+            <strong>{{ report() ? ('$' + (report()!.grandTotal | number:'1.0-0')) : '—' }}</strong>
+            <span>Total outstanding</span>
+          </div>
+        </article>
+      </div>
+    </header>
 
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Student ID</th>
-                    <th>Student</th>
-                    <th>Invoice #</th>
-                    <th>Description</th>
-                    <th>Due</th>
-                    <th class="num">Invoiced</th>
-                    <th class="num">Paid</th>
-                    <th class="num">Balance</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  @for (student of group.students; track student.id) {
-                    @for (inv of student.invoices; track inv.invoiceId; let first = $first) {
-                      <tr>
-                        @if (first) {
-                          <td [attr.rowspan]="student.invoices.length">{{ student.admissionNumber }}</td>
-                          <td [attr.rowspan]="student.invoices.length">
-                            <strong>{{ student.firstName }} {{ student.lastName }}</strong>
-                            <div class="student-total">{{ student.invoiceBalance | number:'1.2-2' }} total</div>
-                          </td>
-                        }
-                        <td>{{ inv.invoiceNumber }}</td>
-                        <td>{{ inv.description }}</td>
-                        <td>{{ inv.dueDate }}</td>
-                        <td class="num">{{ inv.totalAmount | number:'1.2-2' }}</td>
-                        <td class="num">{{ inv.amountPaid | number:'1.2-2' }}</td>
-                        <td class="num"><strong>{{ inv.balance | number:'1.2-2' }}</strong></td>
-                      </tr>
-                    }
-                  }
-                </tbody>
-              </table>
-            </div>
-          </section>
+    <section class="list-shell">
+      <div class="list-toolbar">
+        <div class="toolbar-head">
+          <div>
+            <h3>Outstanding balances</h3>
+            <p>Filter by class, due date, or search student ID, name, invoice #, or description.</p>
+          </div>
+          <div class="view-tabs">
+            <button type="button" [class.active]="viewMode() === 'grouped'" (click)="viewMode.set('grouped')">By class</button>
+            <button type="button" [class.active]="viewMode() === 'flat'" (click)="viewMode.set('flat')">Flat list</button>
+            <button type="button" [class.active]="viewMode() === 'cards'" (click)="viewMode.set('cards')">Cards</button>
+          </div>
+        </div>
+
+        <div class="search-wrap">
+          <span class="search-icon" aria-hidden="true">🔍</span>
+          <input
+            type="search"
+            class="search-input"
+            placeholder="Search student, ID, invoice #, description…"
+            [ngModel]="search()"
+            (ngModelChange)="search.set($event)"
+            name="outstandingSearch"
+          />
+          @if (search()) {
+            <button type="button" class="clear-search" (click)="search.set('')" aria-label="Clear search">×</button>
+          }
+        </div>
+
+        <div class="toolbar-row">
+          <div class="filter-chips">
+            <button type="button" class="chip-filter" [class.active]="dueFilter() === 'all'" (click)="dueFilter.set('all')">All due dates</button>
+            <button type="button" class="chip-filter overdue" [class.active]="dueFilter() === 'overdue'" (click)="dueFilter.set('overdue')">Overdue</button>
+            <button type="button" class="chip-filter soon" [class.active]="dueFilter() === 'due_soon'" (click)="dueFilter.set('due_soon')">Due in 7 days</button>
+          </div>
+          <select class="sort-select" [ngModel]="sortOrder()" (ngModelChange)="sortOrder.set($event)" name="sortOrder">
+            <option value="balance-desc">Balance high → low</option>
+            <option value="balance-asc">Balance low → high</option>
+            <option value="student-name">Student name A–Z</option>
+            <option value="due-date">Due date earliest</option>
+            <option value="class-name">Class A–Z</option>
+          </select>
+        </div>
+
+        @if (formOptions().length) {
+          <div class="field-row">
+            <label for="formFilter">Form</label>
+            <select id="formFilter" [ngModel]="formFilter()" (ngModelChange)="formFilter.set($event)" name="formFilter">
+              <option value="all">All forms</option>
+              @for (f of formOptions(); track f) {
+                <option [value]="f">{{ f }}</option>
+              }
+            </select>
+          </div>
         }
+
+        @if (classOptions().length) {
+          <div class="class-chips">
+            <button type="button" class="class-chip" [class.active]="classFilter() === 'all'" (click)="classFilter.set('all')">All classes</button>
+            @for (g of classOptions(); track g.classId) {
+              <button
+                type="button"
+                class="class-chip"
+                [class.active]="classFilter() === g.classId"
+                (click)="selectClassChip(g.classId)"
+              >
+                {{ classHeading(g) }}
+                <span class="chip-amt">${{ g.classTotal | number:'1.0-0' }}</span>
+              </button>
+            }
+          </div>
+        }
+
+        @if (viewMode() === 'grouped' && filteredGroups().length > 1) {
+          <div class="expand-row">
+            <button type="button" class="link-btn" (click)="expandAll()">Expand all</button>
+            <button type="button" class="link-btn" (click)="collapseAll()">Collapse all</button>
+          </div>
+        }
+
+        @if (hasActiveFilters() && report()) {
+          <div class="results-meta">
+            <span>
+              Showing <strong>{{ filteredSummary().studentCount }}</strong> students,
+              <strong>{{ filteredSummary().invoiceCount }}</strong> invoices,
+              <strong>${{ filteredSummary().grandTotal | number:'1.2-2' }}</strong> outstanding
+              @if (filteredSummary().overdueCount) {
+                · <strong class="warn-text">{{ filteredSummary().overdueCount }} overdue</strong>
+              }
+            </span>
+            <button type="button" class="clear-filters" (click)="clearFilters()">Clear filters</button>
+          </div>
+        }
+      </div>
+
+      @if (loading()) {
+        <div class="loading-panel">
+          <div class="spinner"></div>
+          <p>Loading outstanding invoices…</p>
+        </div>
+      } @else if (!report() || !report()!.groups.length) {
+        <div class="empty-state">
+          <span class="empty-icon">✅</span>
+          <h3>All clear</h3>
+          <p>No outstanding invoice balances found.</p>
+        </div>
+      } @else if (!filteredGroups().length) {
+        <div class="empty-state">
+          <span class="empty-icon">🔍</span>
+          <h3>No matches</h3>
+          <p>No invoices match your current filters.</p>
+          <button type="button" class="btn-ghost" (click)="clearFilters()">Clear filters</button>
+        </div>
+      } @else if (viewMode() === 'cards') {
+        <div class="card-grid">
+          @for (s of cardStudents(); track s.id) {
+            <article class="student-card">
+              <div class="card-head">
+                <span class="avatar">{{ initials(s) }}</span>
+                <div>
+                  <strong>{{ s.firstName }} {{ s.lastName }}</strong>
+                  <code class="sid">{{ s.admissionNumber }}</code>
+                  <span class="class-meta">{{ s.classHeading }}</span>
+                </div>
+                <span class="balance-pill">${{ s.invoiceBalance | number:'1.2-2' }}</span>
+              </div>
+              <ul class="invoice-list">
+                @for (inv of s.invoices; track inv.invoiceId) {
+                  <li [attr.data-tone]="dueTone(inv.dueDate)">
+                    <div class="inv-top">
+                      <code class="ref">{{ inv.invoiceNumber }}</code>
+                      <strong>${{ inv.balance | number:'1.2-2' }}</strong>
+                    </div>
+                    <p>{{ inv.description }}</p>
+                    <div class="inv-meta">
+                      <span class="due" [attr.data-tone]="dueTone(inv.dueDate)">Due {{ inv.dueDate }}</span>
+                      <span class="status-pill">{{ statusLabel(inv.status) }}</span>
+                    </div>
+                  </li>
+                }
+              </ul>
+            </article>
+          }
+        </div>
+      } @else if (viewMode() === 'flat') {
+        <div class="table-wrap">
+          <table class="invoice-table">
+            <thead>
+              <tr>
+                <th>Student ID</th>
+                <th>Student</th>
+                <th>Class</th>
+                <th>Invoice #</th>
+                <th>Description</th>
+                <th>Due</th>
+                <th>Status</th>
+                <th class="num">Invoiced</th>
+                <th class="num">Paid</th>
+                <th class="num">Balance</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of flatRows(); track row.invoiceId) {
+                <tr [attr.data-due]="dueTone(row.dueDate)">
+                  <td><code class="sid">{{ row.admissionNumber }}</code></td>
+                  <td>
+                    <div class="name-cell">
+                      <span class="avatar sm">{{ initials(row) }}</span>
+                      <strong>{{ row.firstName }} {{ row.lastName }}</strong>
+                    </div>
+                  </td>
+                  <td>{{ row.formName || '—' }} {{ row.className }}</td>
+                  <td><code class="ref">{{ row.invoiceNumber }}</code></td>
+                  <td>{{ row.description }}</td>
+                  <td><span class="due" [attr.data-tone]="dueTone(row.dueDate)">{{ row.dueDate }}</span></td>
+                  <td><span class="status-pill">{{ statusLabel(row.status) }}</span></td>
+                  <td class="num">${{ row.totalAmount | number:'1.2-2' }}</td>
+                  <td class="num paid">${{ row.amountPaid | number:'1.2-2' }}</td>
+                  <td class="num balance"><strong>${{ row.balance | number:'1.2-2' }}</strong></td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      } @else {
+        <div class="group-list">
+          @for (group of filteredGroups(); track group.classId) {
+            <section class="group-panel">
+              <button type="button" class="group-toggle" (click)="toggleClass(group.classId)">
+                <span class="toggle-icon">{{ isClassExpanded(group.classId) ? '▾' : '▸' }}</span>
+                <div class="group-title">
+                  <h4>{{ classHeading(group) }}</h4>
+                  <span>{{ group.students.length }} student{{ group.students.length === 1 ? '' : 's' }}</span>
+                </div>
+                <span class="group-total">${{ group.classTotal | number:'1.2-2' }} outstanding</span>
+              </button>
+
+              @if (isClassExpanded(group.classId)) {
+                <div class="table-wrap">
+                  <table class="invoice-table grouped">
+                    <thead>
+                      <tr>
+                        <th>Student ID</th>
+                        <th>Student</th>
+                        <th>Invoice #</th>
+                        <th>Description</th>
+                        <th>Due</th>
+                        <th>Status</th>
+                        <th class="num">Invoiced</th>
+                        <th class="num">Paid</th>
+                        <th class="num">Balance</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (student of group.students; track student.id) {
+                        @for (inv of student.invoices; track inv.invoiceId; let first = $first) {
+                          <tr [attr.data-due]="dueTone(inv.dueDate)">
+                            @if (first) {
+                              <td [attr.rowspan]="student.invoices.length">
+                                <code class="sid">{{ student.admissionNumber }}</code>
+                              </td>
+                              <td [attr.rowspan]="student.invoices.length">
+                                <div class="name-cell">
+                                  <span class="avatar sm">{{ initials(student) }}</span>
+                                  <div>
+                                    <strong>{{ student.firstName }} {{ student.lastName }}</strong>
+                                    <div class="student-total">${{ student.invoiceBalance | number:'1.2-2' }} total</div>
+                                  </div>
+                                </div>
+                              </td>
+                            }
+                            <td><code class="ref">{{ inv.invoiceNumber }}</code></td>
+                            <td>{{ inv.description }}</td>
+                            <td><span class="due" [attr.data-tone]="dueTone(inv.dueDate)">Due {{ inv.dueDate }}</span></td>
+                            <td><span class="status-pill">{{ statusLabel(inv.status) }}</span></td>
+                            <td class="num">${{ inv.totalAmount | number:'1.2-2' }}</td>
+                            <td class="num paid">${{ inv.amountPaid | number:'1.2-2' }}</td>
+                            <td class="num balance"><strong>${{ inv.balance | number:'1.2-2' }}</strong></td>
+                          </tr>
+                        }
+                      }
+                    </tbody>
+                  </table>
+                </div>
+              }
+            </section>
+          }
+        </div>
       }
-    }
-  }
+    </section>
+  </div>
 </app-portal-layout>

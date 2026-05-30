@@ -1,6 +1,6 @@
 import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
 import { TEACHER_NAV_SECTIONS } from '../../core/config/teacher-nav';
@@ -9,11 +9,14 @@ import { classDisplayName } from '../../core/utils/class-display';
 import { Student } from '../../core/models';
 
 type AttendanceStatus = 'present' | 'absent' | 'late' | 'excused';
+type StatusFilter = 'all' | AttendanceStatus;
+type ViewMode = 'table' | 'cards';
 
 interface ClassOption {
   id: string;
   name: string;
   form?: { name: string };
+  students?: { id: string }[];
 }
 
 interface AttendanceRecord {
@@ -33,7 +36,7 @@ interface StudentRow {
 @Component({
   selector: 'app-attendance-mark-register',
   standalone: true,
-  imports: [PortalLayoutComponent, FormsModule],
+  imports: [PortalLayoutComponent, FormsModule, RouterLink],
   templateUrl: './attendance-mark-register.component.html',
   styleUrl: './attendance-mark-register.component.scss',
 })
@@ -57,26 +60,54 @@ export class AttendanceMarkRegisterComponent implements OnInit {
 
   loadingClasses = signal(true);
   loadingRegister = signal(false);
+  refreshing = signal(false);
   hasLoaded = signal(false);
   submitting = signal(false);
   search = signal('');
+  classSearch = signal('');
+  formFilter = signal('all');
+  statusFilter = signal<StatusFilter>('all');
+  viewMode = signal<ViewMode>('table');
   toast = signal<{ type: 'success' | 'error'; msg: string } | null>(null);
 
   readonly statusOptions: AttendanceStatus[] = ['present', 'late', 'absent', 'excused'];
 
-  selectedClassLabel = computed(() =>
-    classDisplayName(this.classes(), this.selectedClassId),
-  );
+  selectedClassLabel = computed(() => classDisplayName(this.classes(), this.selectedClassId));
+
+  classFormOptions = computed(() => {
+    const names = new Set<string>();
+    for (const c of this.classes()) {
+      if (c.form?.name) names.add(c.form.name);
+    }
+    return [...names].sort();
+  });
+
+  visibleClasses = computed(() => {
+    let rows = [...this.classes()].sort((a, b) => a.name.localeCompare(b.name));
+    const form = this.formFilter();
+    if (form !== 'all') rows = rows.filter((c) => c.form?.name === form);
+    const q = this.classSearch().trim().toLowerCase();
+    if (q) {
+      rows = rows.filter((c) => `${c.name} ${c.form?.name ?? ''}`.toLowerCase().includes(q));
+    }
+    return rows;
+  });
 
   filteredStudents = computed(() => {
     const q = this.search().trim().toLowerCase();
-    const rows = [...this.students()].sort(
+    let rows = [...this.students()].sort(
       (a, b) => a.lastName.localeCompare(b.lastName) || a.firstName.localeCompare(b.firstName),
     );
-    if (!q) return rows;
-    return rows.filter((s) =>
-      `${s.admissionNumber} ${s.lastName} ${s.firstName}`.toLowerCase().includes(q),
-    );
+    if (q) {
+      rows = rows.filter((s) =>
+        `${s.admissionNumber} ${s.lastName} ${s.firstName}`.toLowerCase().includes(q),
+      );
+    }
+    const filter = this.statusFilter();
+    if (filter !== 'all') {
+      rows = rows.filter((s) => (this.marks()[s.id] || 'present') === filter);
+    }
+    return rows;
   });
 
   summary = computed(() => {
@@ -92,8 +123,14 @@ export class AttendanceMarkRegisterComponent implements OnInit {
       else if (st === 'late') late++;
       else if (st === 'excused') excused++;
     }
-    return { total: this.students().length, present, absent, late, excused };
+    const total = this.students().length;
+    const rate = total ? Math.round((present / total) * 100) : 0;
+    return { total, present, absent, late, excused, rate };
   });
+
+  hasActiveFilters = computed(
+    () => Boolean(this.search().trim()) || this.statusFilter() !== 'all',
+  );
 
   ngOnInit(): void {
     if (this.isTeacherPortal) {
@@ -122,7 +159,40 @@ export class AttendanceMarkRegisterComponent implements OnInit {
     });
   }
 
-  loadRegister(): void {
+  classStudentCount(c: ClassOption): number {
+    return c.students?.length ?? 0;
+  }
+
+  selectClass(classId: string): void {
+    this.selectedClassId = classId;
+    this.hasLoaded.set(false);
+    this.students.set([]);
+    this.tryAutoLoad();
+  }
+
+  onDateChange(): void {
+    this.hasLoaded.set(false);
+    this.students.set([]);
+    this.tryAutoLoad();
+  }
+
+  setToday(): void {
+    this.selectedDate = new Date().toISOString().split('T')[0];
+    this.onDateChange();
+  }
+
+  setYesterday(): void {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    this.selectedDate = d.toISOString().split('T')[0];
+    this.onDateChange();
+  }
+
+  isToday(): boolean {
+    return this.selectedDate === new Date().toISOString().split('T')[0];
+  }
+
+  loadRegister(refresh = false): void {
     if (!this.selectedClassId) {
       this.showToast('error', 'Select a class first.');
       return;
@@ -132,6 +202,7 @@ export class AttendanceMarkRegisterComponent implements OnInit {
       return;
     }
 
+    if (refresh) this.refreshing.set(true);
     this.loadingRegister.set(true);
     this.hasLoaded.set(false);
 
@@ -169,11 +240,13 @@ export class AttendanceMarkRegisterComponent implements OnInit {
                 this.marks.set(marks);
                 this.remarks.set(rem);
                 this.loadingRegister.set(false);
+                this.refreshing.set(false);
                 this.hasLoaded.set(true);
                 if (!rows.length) this.showToast('error', 'No enrolled students in this class.');
               },
               error: () => {
                 this.loadingRegister.set(false);
+                this.refreshing.set(false);
                 this.hasLoaded.set(true);
                 this.showToast('error', 'Could not load existing attendance.');
               },
@@ -181,6 +254,7 @@ export class AttendanceMarkRegisterComponent implements OnInit {
         },
         error: (e) => {
           this.loadingRegister.set(false);
+          this.refreshing.set(false);
           this.showToast('error', e.error?.message || 'Could not load students.');
         },
       });
@@ -219,6 +293,29 @@ export class AttendanceMarkRegisterComponent implements OnInit {
     const marks: Record<string, AttendanceStatus> = {};
     for (const s of this.students()) marks[s.id] = status;
     this.marks.set(marks);
+  }
+
+  clearFilters(): void {
+    this.search.set('');
+    this.statusFilter.set('all');
+  }
+
+  initials(student: StudentRow): string {
+    return `${student.firstName.charAt(0)}${student.lastName.charAt(0)}`.toUpperCase();
+  }
+
+  statusLabel(status: AttendanceStatus): string {
+    return status.charAt(0).toUpperCase() + status.slice(1);
+  }
+
+  rowStatus(studentId: string): AttendanceStatus {
+    return this.marks()[studentId] || 'present';
+  }
+
+  private tryAutoLoad(): void {
+    if (this.selectedClassId && this.selectedDate && !this.loadingRegister()) {
+      this.loadRegister();
+    }
   }
 
   private showToast(type: 'success' | 'error', msg: string): void {
