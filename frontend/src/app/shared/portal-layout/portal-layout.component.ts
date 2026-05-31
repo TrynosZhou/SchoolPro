@@ -37,6 +37,7 @@ export class PortalLayoutComponent implements OnInit, OnDestroy {
   private routerSub?: Subscription;
   readonly userMenuOpen = signal(false);
   readonly logoutConfirmOpen = signal(false);
+  readonly sidebarOpen = signal(false);
 
   /** Section headings that are expanded in the sidebar. */
   readonly expandedSections = signal<Set<string>>(new Set());
@@ -49,11 +50,15 @@ export class PortalLayoutComponent implements OnInit, OnDestroy {
     this.initExpandedSections();
     this.routerSub = this.router.events
       .pipe(filter((e): e is NavigationEnd => e instanceof NavigationEnd))
-      .subscribe(() => this.ensureActiveSectionExpanded());
+      .subscribe(() => {
+        this.closeSidebar();
+        this.ensureActiveSectionExpanded();
+      });
   }
 
   ngOnDestroy(): void {
     this.routerSub?.unsubscribe();
+    document.body.style.overflow = '';
   }
 
   get fullName(): string {
@@ -78,8 +83,25 @@ export class PortalLayoutComponent implements OnInit, OnDestroy {
     return `${a}${b}` || 'SP';
   }
 
+  toggleSidebar(): void {
+    this.sidebarOpen.update((open) => !open);
+    this.syncBodyScroll();
+    if (this.sidebarOpen()) {
+      this.userMenuOpen.set(false);
+    }
+  }
+
+  closeSidebar(): void {
+    if (!this.sidebarOpen()) return;
+    this.sidebarOpen.set(false);
+    this.syncBodyScroll();
+  }
+
   toggleUserMenu(): void {
     this.userMenuOpen.update((open) => !open);
+    if (this.userMenuOpen()) {
+      this.closeSidebar();
+    }
   }
 
   requestLogout(): void {
@@ -103,6 +125,25 @@ export class PortalLayoutComponent implements OnInit, OnDestroy {
     if (target && !this.elementRef.nativeElement.contains(target)) {
       this.userMenuOpen.set(false);
     }
+  }
+
+  @HostListener('document:keydown.escape')
+  onEscapeKey(): void {
+    if (this.sidebarOpen()) {
+      this.closeSidebar();
+      return;
+    }
+    if (this.userMenuOpen()) {
+      this.userMenuOpen.set(false);
+      return;
+    }
+    if (this.logoutConfirmOpen()) {
+      this.cancelLogout();
+    }
+  }
+
+  private syncBodyScroll(): void {
+    document.body.style.overflow = this.sidebarOpen() ? 'hidden' : '';
   }
 
   isExpanded(heading: string): boolean {

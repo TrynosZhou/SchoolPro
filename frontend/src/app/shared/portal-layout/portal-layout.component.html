@@ -1,11 +1,22 @@
-<div class="layout">
-  <aside class="sidebar">
-    <div class="brand">
-      <span class="brand-icon">SP</span>
-      <div class="brand-text">
-        <strong>School Pro</strong>
-        <small>{{ portalTitle }}</small>
+<div class="layout" [class.sidebar-open]="sidebarOpen()">
+  @if (sidebarOpen()) {
+    <button type="button" class="sidebar-backdrop no-print" (click)="closeSidebar()" aria-label="Close navigation menu"></button>
+  }
+
+  <aside class="sidebar" [class.open]="sidebarOpen()" aria-label="Main navigation">
+    <div class="sidebar-header">
+      <div class="brand">
+        <span class="brand-icon">SP</span>
+        <div class="brand-text">
+          <strong>School Pro</strong>
+          <small>{{ portalTitle }}</small>
+        </div>
       </div>
+      <button type="button" class="sidebar-close" (click)="closeSidebar()" aria-label="Close navigation menu">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+        </svg>
+      </button>
     </div>
 
     <nav class="sidebar-nav">
@@ -89,6 +100,17 @@
 
   <main class="content">
     <header class="topbar">
+      <button
+        type="button"
+        class="nav-toggle"
+        (click)="toggleSidebar()"
+        aria-label="Open navigation menu"
+        [attr.aria-expanded]="sidebarOpen()"
+      >
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+        </svg>
+      </button>
       <h1>{{ pageTitle }}</h1>
       <div class="topbar-user">
         <span class="topbar-user-name">{{ fullName }}</span>
@@ -97,10 +119,11 @@
             type="button"
             class="user-icon-btn"
             (click)="toggleUserMenu()"
-            aria-label="User menu"
+            aria-label="User menu — online"
             [attr.aria-expanded]="userMenuOpen()"
           >
             <span class="user-icon" aria-hidden="true">👤</span>
+            <span class="online-dot" aria-hidden="true"></span>
           </button>
           @if (userMenuOpen()) {
             <div class="user-menu-dropdown">

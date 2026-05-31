@@ -1,7 +1,7 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, inject, signal, computed } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
 import { ApiService } from '../../core/services/api.service';
@@ -17,10 +17,14 @@ interface StudentBalanceRow {
   balance: number;
 }
 
+type ViewMode = 'table' | 'cards';
+type BalanceFilter = 'all' | 'owing' | 'clear';
+type SortOrder = 'name-asc' | 'name-desc' | 'balance-desc' | 'balance-asc';
+
 @Component({
   selector: 'app-admin-student-balance',
   standalone: true,
-  imports: [PortalLayoutComponent, FormsModule, DecimalPipe],
+  imports: [PortalLayoutComponent, FormsModule, DecimalPipe, RouterLink],
   templateUrl: './admin-student-balance.component.html',
   styleUrl: './admin-student-balance.component.scss',
 })
@@ -29,11 +33,51 @@ export class AdminStudentBalanceComponent {
   private router = inject(Router);
 
   readonly adminNav = ADMIN_NAV_SECTIONS;
+
   query = '';
   loading = signal(false);
   pdfLoading = signal(false);
   rows = signal<StudentBalanceRow[]>([]);
   toast = signal<{ type: 'success' | 'error'; msg: string } | null>(null);
+  hasSearched = signal(false);
+
+  balanceFilter = signal<BalanceFilter>('all');
+  sortOrder = signal<SortOrder>('balance-desc');
+  viewMode = signal<ViewMode>('table');
+
+  stats = computed(() => {
+    const list = this.rows();
+    return {
+      count: list.length,
+      owing: list.filter((r) => r.balance > 0).length,
+      clear: list.filter((r) => r.balance <= 0).length,
+      totalInvoiced: list.reduce((s, r) => s + Number(r.totalInvoiced), 0),
+      totalPaid: list.reduce((s, r) => s + Number(r.totalPaid), 0),
+      totalOwing: list.reduce((s, r) => s + Math.max(0, Number(r.balance)), 0),
+    };
+  });
+
+  visibleRows = computed(() => {
+    let list = [...this.rows()];
+    const filter = this.balanceFilter();
+
+    if (filter === 'owing') list = list.filter((r) => r.balance > 0);
+    if (filter === 'clear') list = list.filter((r) => r.balance <= 0);
+
+    const sort = this.sortOrder();
+    list.sort((a, b) => {
+      if (sort === 'balance-desc') return Number(b.balance) - Number(a.balance);
+      if (sort === 'balance-asc') return Number(a.balance) - Number(b.balance);
+      const nameA = `${a.lastName} ${a.firstName}`.toLowerCase();
+      const nameB = `${b.lastName} ${b.firstName}`.toLowerCase();
+      if (sort === 'name-desc') return nameB.localeCompare(nameA);
+      return nameA.localeCompare(nameB);
+    });
+
+    return list;
+  });
+
+  hasActiveFilters = computed(() => this.balanceFilter() !== 'all');
 
   getBalance() {
     const q = this.query.trim();
@@ -43,14 +87,15 @@ export class AdminStudentBalanceComponent {
     }
 
     this.loading.set(true);
+    this.hasSearched.set(true);
+    this.balanceFilter.set('all');
+
     this.api.get<StudentBalanceRow[]>('/billing/student-balance', { q }).subscribe({
       next: (rows) => {
         this.rows.set(rows);
         this.loading.set(false);
         if (!rows.length) {
           this.showToast('error', 'No matching student found.');
-        } else {
-          this.showToast('success', `Found ${rows.length} student(s).`);
         }
       },
       error: (e) => {
@@ -61,9 +106,33 @@ export class AdminStudentBalanceComponent {
     });
   }
 
-  private showToast(type: 'success' | 'error', msg: string) {
-    this.toast.set({ type, msg });
-    setTimeout(() => this.toast.set(null), 4000);
+  clearSearch() {
+    this.query = '';
+    this.rows.set([]);
+    this.hasSearched.set(false);
+    this.balanceFilter.set('all');
+  }
+
+  clearFilters() {
+    this.balanceFilter.set('all');
+  }
+
+  filterOwingOnly() {
+    this.balanceFilter.set('owing');
+  }
+
+  initials(row: StudentBalanceRow): string {
+    return `${row.firstName.charAt(0)}${row.lastName.charAt(0)}`.toUpperCase();
+  }
+
+  paidPct(row: StudentBalanceRow): number {
+    const invoiced = Number(row.totalInvoiced);
+    if (!invoiced) return row.totalPaid > 0 ? 100 : 0;
+    return Math.min(100, Math.round((Number(row.totalPaid) / invoiced) * 100));
+  }
+
+  collectionWidth(row: StudentBalanceRow): string {
+    return `${this.paidPct(row)}%`;
   }
 
   previewPdf() {
@@ -127,5 +196,9 @@ export class AdminStudentBalanceComponent {
       },
     });
   }
-}
 
+  private showToast(type: 'success' | 'error', msg: string) {
+    this.toast.set({ type, msg });
+    setTimeout(() => this.toast.set(null), 4500);
+  }
+}

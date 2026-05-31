@@ -10,6 +10,8 @@ import { AuthService } from '../../core/services/auth.service';
 type PortalRole = 'director' | 'principal' | 'admin' | 'teacher' | 'parent' | 'student';
 type StatusFilter = 'active' | 'inactive' | 'all';
 type DrawerMode = 'create' | 'edit' | null;
+type SortOrder = 'name-asc' | 'name-desc' | 'role-asc' | 'newest';
+type ViewMode = 'table' | 'cards';
 
 interface SchoolRoleOption {
   id: string;
@@ -78,6 +80,9 @@ export class AdminUserManagementComponent implements OnInit {
   search = signal('');
   roleFilter = signal('');
   statusFilter = signal<StatusFilter>('active');
+  lockedOnly = signal(false);
+  sortOrder = signal<SortOrder>('name-asc');
+  viewMode = signal<ViewMode>('table');
 
   drawerOpen = signal(false);
   drawerMode = signal<DrawerMode>(null);
@@ -110,16 +115,6 @@ export class AdminUserManagementComponent implements OnInit {
     { value: 'student', label: 'Student' },
   ];
 
-  filteredUsers = computed(() => {
-    const q = this.search().trim().toLowerCase();
-    if (!q) return this.users();
-    return this.users().filter((u) =>
-      `${u.firstName} ${u.lastName} ${u.email} ${u.roleLabel} ${u.staffProfile?.employeeNumber ?? ''} ${u.studentProfile?.admissionNumber ?? ''} ${u.schoolRole?.name ?? ''}`
-        .toLowerCase()
-        .includes(q),
-    );
-  });
-
   stats = computed(() => {
     const list = this.users();
     return {
@@ -131,6 +126,47 @@ export class AdminUserManagementComponent implements OnInit {
       students: list.filter((u) => u.role === 'student').length,
     };
   });
+
+  visibleUsers = computed(() => {
+    let rows = [...this.users()];
+    const q = this.search().trim().toLowerCase();
+
+    if (this.lockedOnly()) {
+      rows = rows.filter((u) => this.isLocked(u));
+    }
+
+    if (q) {
+      rows = rows.filter((u) =>
+        `${u.firstName} ${u.lastName} ${u.email} ${u.roleLabel} ${u.staffProfile?.employeeNumber ?? ''} ${u.studentProfile?.admissionNumber ?? ''} ${u.schoolRole?.name ?? ''}`
+          .toLowerCase()
+          .includes(q),
+      );
+    }
+
+    const sort = this.sortOrder();
+    rows.sort((a, b) => {
+      if (sort === 'newest') {
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      }
+      if (sort === 'role-asc') {
+        return a.roleLabel.localeCompare(b.roleLabel) || a.lastName.localeCompare(b.lastName);
+      }
+      const nameA = `${a.lastName} ${a.firstName}`.toLowerCase();
+      const nameB = `${b.lastName} ${b.firstName}`.toLowerCase();
+      if (sort === 'name-desc') return nameB.localeCompare(nameA);
+      return nameA.localeCompare(nameB);
+    });
+
+    return rows;
+  });
+
+  hasActiveFilters = computed(
+    () =>
+      Boolean(this.search().trim()) ||
+      this.roleFilter() !== '' ||
+      this.statusFilter() !== 'active' ||
+      this.lockedOnly(),
+  );
 
   isStaffRole = computed(() => ['director', 'principal', 'admin', 'teacher'].includes(this.form.role));
   isParentRole = computed(() => this.form.role === 'parent');
@@ -153,7 +189,6 @@ export class AdminUserManagementComponent implements OnInit {
     this.loading.set(true);
     const params: Record<string, string> = { status: this.statusFilter() };
     if (this.roleFilter()) params['role'] = this.roleFilter();
-    if (this.search().trim()) params['search'] = this.search().trim();
 
     this.api.get<ManagedUser[]>('/admin/users', params).subscribe({
       next: (rows) => {
@@ -169,6 +204,30 @@ export class AdminUserManagementComponent implements OnInit {
 
   applyFilters() {
     this.loadUsers();
+  }
+
+  setRoleFilter(role: string) {
+    this.roleFilter.set(role);
+    this.applyFilters();
+  }
+
+  setStatusFilter(status: StatusFilter) {
+    this.statusFilter.set(status);
+    this.applyFilters();
+  }
+
+  viewLockedOnly() {
+    this.lockedOnly.set(true);
+    this.statusFilter.set('all');
+    this.applyFilters();
+  }
+
+  clearFilters() {
+    this.search.set('');
+    this.roleFilter.set('');
+    this.statusFilter.set('active');
+    this.lockedOnly.set(false);
+    this.applyFilters();
   }
 
   openCreate() {

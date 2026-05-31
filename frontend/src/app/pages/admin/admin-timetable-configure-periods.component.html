@@ -1,134 +1,431 @@
 <app-portal-layout portalTitle="Admin Portal" pageTitle="Configure Periods" [navSections]="adminNav">
-  <div class="tt-page">
+  <div class="periods-page">
     @if (toast(); as t) {
-      <div class="toast" [class.error]="t.type === 'error'">{{ t.msg }}</div>
+      <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>
     }
 
-    <section class="card">
-      <h3>Configure Periods</h3>
-      <p class="sub">
-        Define lesson slots and breaks for the school day. Each day must have
-        <strong>{{ minBreaks }} to {{ maxBreaks }} breaks</strong> between lessons.
-      </p>
-      <div class="break-status" [class.valid]="breaksValid()" [class.invalid]="!breaksValid()">
-        Breaks configured: <strong>{{ breakCount() }}</strong> / {{ minBreaks }}–{{ maxBreaks }} required
+    <header class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">Timetable</p>
+        <h2>Configure periods &amp; breaks</h2>
+        <p class="hero-sub">
+          Define lesson slots and breaks for the school day. Each day must have
+          <strong>{{ minBreaks }} to {{ maxBreaks }} breaks</strong> between lessons.
+          After saving, generate class timetables or view existing schedules.
+        </p>
+        <div class="hero-actions">
+          <a routerLink="/admin/timetable/generate" class="primary-action">Generate Timetable →</a>
+          <a routerLink="/admin/timetable/view" class="secondary-action">View Timetable</a>
+          <button type="button" class="refresh-action" (click)="resetDefaults()">Reset defaults</button>
+        </div>
       </div>
-      <div class="links">
-        <a routerLink="/admin/timetable/generate" class="link-btn">Generate Timetable →</a>
-        <a routerLink="/admin/timetable/view" class="link-btn">View Timetable →</a>
+      <div class="kpi-grid">
+        <article class="kpi">
+          <span class="kpi-icon">📚</span>
+          <div>
+            <strong>{{ lessonCount() }}</strong>
+            <span>Lesson periods</span>
+          </div>
+        </article>
+        <article class="kpi" [class.ok]="breaksValid()" [class.warn]="!breaksValid()">
+          <span class="kpi-icon">☕</span>
+          <div>
+            <strong>{{ breakCount() }}/{{ maxBreaks }}</strong>
+            <span>Breaks ({{ minBreaks }}–{{ maxBreaks }} req.)</span>
+          </div>
+        </article>
+        <article class="kpi accent">
+          <span class="kpi-icon">🕐</span>
+          <div>
+            <strong>{{ dayStats().start }}–{{ dayStats().end }}</strong>
+            <span>School day span</span>
+          </div>
+        </article>
+        <article class="kpi">
+          <span class="kpi-icon">⏱</span>
+          <div>
+            <strong>{{ dayStats().spanLabel }}</strong>
+            <span>{{ dayStats().lessonMin }}m lessons · {{ dayStats().breakMin }}m breaks</span>
+          </div>
+        </article>
       </div>
-    </section>
+    </header>
 
-    <section class="card">
-      <h4>Add lesson period</h4>
-      <div class="form-row">
-        <div class="field">
-          <label>Name</label>
-          <input type="text" [(ngModel)]="lessonDraft.name" name="periodName" placeholder="e.g. Period 1" />
-        </div>
-        <div class="field">
-          <label>Start</label>
-          <input type="time" [(ngModel)]="lessonDraft.startTime" name="periodStart" />
-        </div>
-        <div class="field">
-          <label>End</label>
-          <input type="time" [(ngModel)]="lessonDraft.endTime" name="periodEnd" />
-        </div>
-        <button type="button" class="btn-primary" (click)="addLesson()">Add lesson</button>
+    @if (!breaksValid()) {
+      <div class="alert-banner">
+        <span>
+          Break count is outside the required range ({{ minBreaks }}–{{ maxBreaks }}).
+          Add or remove breaks before saving.
+        </span>
+        @if (breakCount() < minBreaks) {
+          <button type="button" class="link-btn" (click)="toggleAddPanel('break')">Add break</button>
+        }
       </div>
-    </section>
+    }
 
-    <section class="card break-card">
-      <h4>Add break between lessons</h4>
-      <p class="hint">Place breaks between lesson periods (e.g. morning tea, lunch). You can add up to {{ maxBreaks }} breaks.</p>
-      <div class="form-row">
-        <div class="field">
-          <label>Name</label>
-          <input type="text" [(ngModel)]="breakDraft.name" name="breakName" placeholder="e.g. Morning Break" />
+    <section class="list-shell">
+      <div class="list-toolbar">
+        <div class="toolbar-head">
+          <h3>Daily schedule</h3>
+          <p>{{ lessonCount() }} lessons · {{ breakCount() }} breaks · sorted by start time · edit break names/times inline or use Edit</p>
         </div>
-        <div class="field">
-          <label>Start</label>
-          <input type="time" [(ngModel)]="breakDraft.startTime" name="breakStart" />
+
+        <div class="toolbar-row">
+          <div class="search-wrap">
+            <span class="search-icon" aria-hidden="true">🔍</span>
+            <input
+              type="search"
+              class="search-input"
+              [ngModel]="scheduleSearch()"
+              (ngModelChange)="scheduleSearch.set($event)"
+              name="scheduleSearch"
+              placeholder="Search by name or time…"
+            />
+            @if (scheduleSearch()) {
+              <button type="button" class="clear-search" (click)="clearScheduleSearch()" aria-label="Clear search">×</button>
+            }
+          </div>
+          <div class="toolbar-actions">
+            <div class="filter-chips">
+              <button type="button" class="chip" [class.active]="scheduleFilter() === 'all'" (click)="scheduleFilter.set('all')">
+                All ({{ periods().length }})
+              </button>
+              <button type="button" class="chip" [class.active]="scheduleFilter() === 'lesson'" (click)="scheduleFilter.set('lesson')">
+                Lessons ({{ lessonCount() }})
+              </button>
+              <button type="button" class="chip break" [class.active]="scheduleFilter() === 'break'" (click)="scheduleFilter.set('break')">
+                Breaks ({{ breakCount() }})
+              </button>
+            </div>
+            <div class="view-toggle" role="group" aria-label="View mode">
+              <button type="button" class="view-btn" [class.active]="viewMode() === 'table'" (click)="viewMode.set('table')" title="Table view">☰</button>
+              <button type="button" class="view-btn" [class.active]="viewMode() === 'cards'" (click)="viewMode.set('cards')" title="Card view">▦</button>
+              <button type="button" class="view-btn" [class.active]="viewMode() === 'timeline'" (click)="viewMode.set('timeline')" title="Timeline view">▬</button>
+            </div>
+          </div>
         </div>
-        <div class="field">
-          <label>End</label>
-          <input type="time" [(ngModel)]="breakDraft.endTime" name="breakEnd" />
+
+        <div class="action-bar">
+          <button type="button" class="btn-outline" [class.active]="addPanel() === 'lesson'" (click)="toggleAddPanel('lesson')">
+            + Add lesson
+          </button>
+          <button type="button" class="btn-break" [class.active]="addPanel() === 'break'" (click)="toggleAddPanel('break')" [disabled]="!canAddBreak()">
+            + Add break
+          </button>
+          <div class="action-bar-right">
+            <button type="button" class="btn-ghost" (click)="resetDefaults()">Reset defaults</button>
+            <button type="button" class="btn-primary" (click)="saveAll()" [disabled]="saving() || !breaksValid()">
+              {{ saving() ? 'Saving…' : 'Save configuration' }}
+            </button>
+          </div>
         </div>
-        <button type="button" class="btn-break" (click)="addBreak()" [disabled]="!canAddBreak()">
-          Add break
-        </button>
       </div>
-      @if (!canAddBreak()) {
-        <p class="limit-note">Maximum of {{ maxBreaks }} breaks reached. Remove one to add another.</p>
+
+      @if (addPanel() === 'lesson') {
+        <div class="entry-form">
+          <h4>Add lesson period</h4>
+          <div class="form-row">
+            <div class="field grow">
+              <label>Name</label>
+              <input type="text" [(ngModel)]="lessonDraft.name" name="periodName" placeholder="e.g. Period 1" />
+            </div>
+            <div class="field">
+              <label>Start</label>
+              <input type="time" [(ngModel)]="lessonDraft.startTime" name="periodStart" />
+            </div>
+            <div class="field">
+              <label>End</label>
+              <input type="time" [(ngModel)]="lessonDraft.endTime" name="periodEnd" />
+            </div>
+            <div class="field actions">
+              <button type="button" class="btn-primary" (click)="addLesson()">Add lesson</button>
+              <button type="button" class="btn-ghost" (click)="addPanel.set(null)">Cancel</button>
+            </div>
+          </div>
+        </div>
       }
-    </section>
 
-    <section class="card">
-      <div class="head-row">
-        <h4>Daily schedule ({{ lessonCount() }} lessons · {{ breakCount() }} breaks)</h4>
-        <div class="actions">
-          <button type="button" class="btn-outline" (click)="resetDefaults()">Reset defaults</button>
-          <button type="button" class="btn-primary" (click)="saveAll()">Save</button>
+      @if (addPanel() === 'break') {
+        <div class="entry-form break-form">
+          <h4>Add break between lessons</h4>
+          <p class="form-hint">Place breaks between lesson periods (e.g. morning tea, lunch).</p>
+          <div class="form-row">
+            <div class="field grow">
+              <label>Name</label>
+              <input type="text" [(ngModel)]="breakDraft.name" name="breakName" placeholder="e.g. Morning Break" />
+            </div>
+            <div class="field">
+              <label>Start</label>
+              <input type="time" [(ngModel)]="breakDraft.startTime" name="breakStart" />
+            </div>
+            <div class="field">
+              <label>End</label>
+              <input type="time" [(ngModel)]="breakDraft.endTime" name="breakEnd" />
+            </div>
+            <div class="field actions">
+              <button type="button" class="btn-break solid" (click)="addBreak()" [disabled]="!canAddBreak()">Add break</button>
+              <button type="button" class="btn-ghost" (click)="addPanel.set(null)">Cancel</button>
+            </div>
+          </div>
+          @if (!canAddBreak()) {
+            <p class="limit-note">Maximum of {{ maxBreaks }} breaks reached. Remove one to add another.</p>
+          }
         </div>
-      </div>
-      <p class="hint">Adjust start and finish times for each lesson below, then click <strong>Save</strong>.</p>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr><th>Type</th><th>Name</th><th>Start</th><th>Finish</th><th></th></tr>
-          </thead>
-          <tbody>
-            @for (p of periods(); track p.id) {
-              <tr [class.break-row]="p.slotType === 'break'">
-                <td>
+      }
+
+      @if (editingId() && viewMode() === 'timeline') {
+        <div class="entry-form break-form edit-panel">
+          <h4>Edit break</h4>
+          <p class="form-hint">Update the break name and times, then save. Click <strong>Save configuration</strong> to persist all changes.</p>
+          <div class="form-row">
+            <div class="field grow">
+              <label>Name</label>
+              <input type="text" [(ngModel)]="editDraft.name" name="editBreakName" />
+            </div>
+            <div class="field">
+              <label>Start</label>
+              <input type="time" [(ngModel)]="editDraft.startTime" name="editBreakStart" />
+            </div>
+            <div class="field">
+              <label>End</label>
+              <input type="time" [(ngModel)]="editDraft.endTime" name="editBreakEnd" />
+            </div>
+            <div class="field actions">
+              <button type="button" class="btn-break solid" (click)="saveEdit()">Save changes</button>
+              <button type="button" class="btn-ghost" (click)="cancelEdit()">Cancel</button>
+            </div>
+          </div>
+        </div>
+      }
+
+      @if (!periods().length) {
+        <div class="empty-state">
+          <span class="empty-icon">⏱</span>
+          <h3>No periods configured</h3>
+          <p>Add lesson periods and breaks to build your school day schedule.</p>
+          <button type="button" class="btn-primary" (click)="toggleAddPanel('lesson')">Add first lesson</button>
+        </div>
+      } @else if (!filteredPeriods().length) {
+        <div class="empty-state">
+          <span class="empty-icon">🔍</span>
+          <h3>No matching slots</h3>
+          <p>Try a different search term or filter.</p>
+          <button type="button" class="btn-outline" (click)="scheduleSearch.set(''); scheduleFilter.set('all')">Clear filters</button>
+        </div>
+      } @else if (viewMode() === 'timeline') {
+        <div class="timeline-panel">
+          <div class="timeline-axis">
+            <span>{{ dayStats().start }}</span>
+            <span>{{ dayStats().end }}</span>
+          </div>
+          <div class="timeline-track">
+            @for (p of filteredPeriods(); track p.id) {
+              <div
+                class="timeline-block"
+                [class.break]="p.slotType === 'break'"
+                [style.left]="timelineStyle(p)['left']"
+                [style.width]="timelineStyle(p)['width']"
+                [title]="p.name + ' (' + p.startTime + '–' + p.endTime + ')'"
+              >
+                <span class="tl-name">{{ p.name }}</span>
+                <span class="tl-time">{{ p.startTime }}</span>
+              </div>
+            }
+          </div>
+          <ul class="timeline-legend">
+            @for (p of filteredPeriods(); track p.id) {
+              <li [class.break]="p.slotType === 'break'">
+                <span class="legend-dot"></span>
+                <strong>{{ p.name }}</strong>
+                <span>{{ p.startTime }}–{{ p.endTime }} · {{ slotDurationLabel(p) }}</span>
+                @if (p.slotType === 'break') {
+                  <button type="button" class="btn-edit-sm" (click)="startEdit(p)">Edit</button>
+                }
+              </li>
+            }
+          </ul>
+        </div>
+      } @else if (viewMode() === 'cards') {
+        <div class="card-grid">
+          @for (p of filteredPeriods(); track p.id) {
+            <article class="slot-card" [class.break]="p.slotType === 'break'" [class.editing]="isEditing(p.id)">
+              @if (isEditing(p.id)) {
+                <div class="slot-card-head">
+                  <span class="type-pill" [class.break]="p.slotType === 'break'">Editing {{ slotTypeLabel(p) }}</span>
+                </div>
+                <div class="edit-fields">
+                  <label>
+                    Name
+                    <input type="text" [(ngModel)]="editDraft.name" [name]="'edit-name-' + p.id" />
+                  </label>
+                  <div class="time-fields">
+                    <label>
+                      Start
+                      <input type="time" [(ngModel)]="editDraft.startTime" [name]="'edit-start-' + p.id" />
+                    </label>
+                    <label>
+                      End
+                      <input type="time" [(ngModel)]="editDraft.endTime" [name]="'edit-end-' + p.id" />
+                    </label>
+                  </div>
+                </div>
+                <div class="card-actions">
+                  <button type="button" class="btn-break solid" (click)="saveEdit()">Save</button>
+                  <button type="button" class="btn-ghost" (click)="cancelEdit()">Cancel</button>
+                </div>
+              } @else {
+                <div class="slot-card-head">
                   <span class="type-pill" [class.break]="p.slotType === 'break'">{{ slotTypeLabel(p) }}</span>
-                </td>
-                <td>{{ p.name }}</td>
-                <td>
-                  @if (p.slotType === 'lesson') {
+                  <span class="duration-badge">{{ slotDurationLabel(p) }}</span>
+                </div>
+                @if (p.slotType === 'break') {
+                  <label class="inline-name">
+                    Name
+                    <input
+                      type="text"
+                      class="name-input"
+                      [ngModel]="p.name"
+                      (ngModelChange)="updateSlotName(p.id, $event)"
+                      [name]="'break-name-' + p.id"
+                    />
+                  </label>
+                } @else {
+                  <strong class="slot-name">{{ p.name }}</strong>
+                }
+                <div class="time-fields">
+                  <label>
+                    Start
                     <input
                       type="time"
                       class="time-input"
                       [ngModel]="p.startTime"
-                      (ngModelChange)="updateLessonTime(p.id, 'startTime', $event)"
-                      [name]="'lesson-start-' + p.id"
+                      (ngModelChange)="updateSlotTime(p.id, 'startTime', $event)"
+                      [name]="'start-' + p.id"
                     />
-                  } @else {
-                    {{ p.startTime }}
-                  }
-                </td>
-                <td>
-                  @if (p.slotType === 'lesson') {
+                  </label>
+                  <label>
+                    End
                     <input
                       type="time"
                       class="time-input"
                       [ngModel]="p.endTime"
-                      (ngModelChange)="updateLessonTime(p.id, 'endTime', $event)"
-                      [name]="'lesson-end-' + p.id"
+                      (ngModelChange)="updateSlotTime(p.id, 'endTime', $event)"
+                      [name]="'end-' + p.id"
                     />
-                  } @else {
-                    {{ p.endTime }}
+                  </label>
+                </div>
+                <div class="card-actions">
+                  @if (p.slotType === 'break') {
+                    <button type="button" class="btn-break" (click)="startEdit(p)">Edit break</button>
                   }
-                </td>
-                <td>
                   <button
                     type="button"
                     class="btn-danger"
                     (click)="removeSlot(p.id)"
                     [disabled]="p.slotType === 'break' && !canRemoveBreak()"
-                    [title]="p.slotType === 'break' && !canRemoveBreak() ? 'Minimum ' + minBreaks + ' breaks required' : ''"
                   >
                     Remove
                   </button>
-                </td>
+                </div>
+              }
+            </article>
+          }
+        </div>
+      } @else {
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Type</th>
+                <th>Name</th>
+                <th>Start</th>
+                <th>Finish</th>
+                <th>Duration</th>
+                <th></th>
               </tr>
-            } @empty {
-              <tr><td colspan="5" class="empty">No periods configured.</td></tr>
-            }
-          </tbody>
-        </table>
-      </div>
-      @if (!breaksValid()) {
+            </thead>
+            <tbody>
+              @for (p of filteredPeriods(); track p.id) {
+                @if (isEditing(p.id)) {
+                  <tr class="edit-row" [class.break-row]="p.slotType === 'break'">
+                    <td>
+                      <span class="type-pill" [class.break]="p.slotType === 'break'">{{ slotTypeLabel(p) }}</span>
+                    </td>
+                    <td>
+                      <input type="text" class="name-input" [(ngModel)]="editDraft.name" [name]="'edit-name-' + p.id" />
+                    </td>
+                    <td>
+                      <input type="time" class="time-input" [(ngModel)]="editDraft.startTime" [name]="'edit-start-' + p.id" />
+                    </td>
+                    <td>
+                      <input type="time" class="time-input" [(ngModel)]="editDraft.endTime" [name]="'edit-end-' + p.id" />
+                    </td>
+                    <td class="duration-cell">—</td>
+                    <td class="actions">
+                      <button type="button" class="btn-break solid btn-sm" (click)="saveEdit()">Save</button>
+                      <button type="button" class="btn-ghost btn-sm" (click)="cancelEdit()">Cancel</button>
+                    </td>
+                  </tr>
+                } @else {
+                  <tr [class.break-row]="p.slotType === 'break'">
+                    <td>
+                      <span class="type-pill" [class.break]="p.slotType === 'break'">{{ slotTypeLabel(p) }}</span>
+                    </td>
+                    <td>
+                      @if (p.slotType === 'break') {
+                        <input
+                          type="text"
+                          class="name-input"
+                          [ngModel]="p.name"
+                          (ngModelChange)="updateSlotName(p.id, $event)"
+                          [name]="'break-name-' + p.id"
+                        />
+                      } @else {
+                        <strong>{{ p.name }}</strong>
+                      }
+                    </td>
+                    <td>
+                      <input
+                        type="time"
+                        class="time-input"
+                        [ngModel]="p.startTime"
+                        (ngModelChange)="updateSlotTime(p.id, 'startTime', $event)"
+                        [name]="'lesson-start-' + p.id"
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="time"
+                        class="time-input"
+                        [ngModel]="p.endTime"
+                        (ngModelChange)="updateSlotTime(p.id, 'endTime', $event)"
+                        [name]="'lesson-end-' + p.id"
+                      />
+                    </td>
+                    <td class="duration-cell">{{ slotDurationLabel(p) }}</td>
+                    <td class="actions">
+                      @if (p.slotType === 'break') {
+                        <button type="button" class="btn-break btn-sm" (click)="startEdit(p)">Edit</button>
+                      }
+                      <button
+                        type="button"
+                        class="btn-danger btn-sm"
+                        (click)="removeSlot(p.id)"
+                        [disabled]="p.slotType === 'break' && !canRemoveBreak()"
+                        [title]="p.slotType === 'break' && !canRemoveBreak() ? 'Minimum ' + minBreaks + ' breaks required' : ''"
+                      >
+                        Remove
+                      </button>
+                    </td>
+                  </tr>
+                }
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+
+      @if (periods().length && !breaksValid()) {
         <p class="validation-note">
           Save is blocked until you have between {{ minBreaks }} and {{ maxBreaks }} breaks in the schedule.
         </p>

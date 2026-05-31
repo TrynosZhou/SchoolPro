@@ -1,73 +1,299 @@
 <app-portal-layout portalTitle="Admin Portal" pageTitle="Generate Timetable" [navSections]="adminNav">
-  <div class="tt-page">
+  <div class="generate-page">
     @if (toast(); as t) {
-      <div class="toast" [class.error]="t.type === 'error'">{{ t.msg }}</div>
+      <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>
     }
 
-    <section class="card">
-      <h3>Generate Timetable</h3>
-      <p class="sub">Assign subjects and teachers to class periods. Configure bell times first if needed.</p>
-      <div class="links">
-        <a routerLink="/admin/timetable/configure-periods" class="link-btn">← Configure Periods</a>
-        <a routerLink="/admin/timetable/view" class="link-btn">View Timetable →</a>
+    <header class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">Timetable</p>
+        <h2>Generate class timetable</h2>
+        <p class="hero-sub">
+          Assign subjects and teachers to lesson periods for each class.
+          Configure bell times on
+          <a routerLink="/admin/timetable/configure-periods">Configure Periods</a>
+          first, then build the weekly schedule slot by slot.
+        </p>
+        <div class="hero-actions">
+          <a routerLink="/admin/timetable/configure-periods" class="secondary-action">← Configure Periods</a>
+          <a routerLink="/admin/timetable/view" class="primary-action">View Timetable →</a>
+        </div>
       </div>
-    </section>
+      <div class="kpi-grid">
+        <article class="kpi">
+          <span class="kpi-icon">⏱</span>
+          <div>
+            <strong>{{ periods().length || '—' }}</strong>
+            <span>Lesson periods</span>
+          </div>
+        </article>
+        <article class="kpi accent">
+          <span class="kpi-icon">🏫</span>
+          <div>
+            <strong>{{ loading() ? '…' : classes().length }}</strong>
+            <span>Classes</span>
+          </div>
+        </article>
+        <article class="kpi">
+          <span class="kpi-icon">📖</span>
+          <div>
+            <strong>{{ loading() ? '…' : subjects().length }}</strong>
+            <span>Subjects</span>
+          </div>
+        </article>
+        <article class="kpi" [class.ok]="classId && stats().slotCount > 0">
+          <span class="kpi-icon">📅</span>
+          <div>
+            <strong>{{ classId ? stats().slotCount : '—' }}</strong>
+            <span>{{ classId ? 'Slots for ' + selectedClassLabel() : 'Select a class' }}</span>
+          </div>
+        </article>
+      </div>
+    </header>
 
     @if (!periods().length) {
-      <section class="card warn-card">
-        <p>No periods configured. <a routerLink="/admin/timetable/configure-periods">Configure periods</a> before generating.</p>
-      </section>
+      <div class="alert-banner">
+        <span>No lesson periods configured. Set up your school day schedule before generating timetables.</span>
+        <a routerLink="/admin/timetable/configure-periods" class="link-btn">Configure periods</a>
+      </div>
     }
 
-    <section class="card">
-      <h4>Add timetable slot</h4>
-      <div class="form-grid">
-        <div class="field">
-          <label>Class *</label>
-          <select [(ngModel)]="classId" name="ttClass">
-            <option value="">Select class</option>
-            @for (c of classes(); track c.id) {
-              <option [value]="c.id">{{ c.form?.name || '' }} {{ c.name }}</option>
+    <section class="list-shell">
+      <div class="list-toolbar">
+        <div class="toolbar-head">
+          <h3>Add timetable slot</h3>
+          <p>Pick a class, day, period, and subject — teacher and room are optional.</p>
+        </div>
+
+        <div class="form-grid">
+          <div class="field">
+            <label>Class *</label>
+            <select [(ngModel)]="classId" name="ttClass" (ngModelChange)="onClassChange()">
+              <option value="">Select class</option>
+              @for (c of classes(); track c.id) {
+                <option [value]="c.id">{{ c.form?.name || '' }} {{ c.name }}</option>
+              }
+            </select>
+          </div>
+          <div class="field">
+            <label>Period *</label>
+            <select [(ngModel)]="periodId" name="ttPeriod" [disabled]="!periods().length">
+              <option value="">Select period</option>
+              @for (p of periods(); track p.id) {
+                <option [value]="p.id">{{ p.name }} ({{ p.startTime }}–{{ p.endTime }})</option>
+              }
+            </select>
+          </div>
+          <div class="field">
+            <label>Subject *</label>
+            <select [(ngModel)]="subjectId" name="ttSubject">
+              <option value="">Select subject</option>
+              @for (s of subjects(); track s.id) {
+                <option [value]="s.id">{{ s.name }}@if (s.code) { ({{ s.code }}) }</option>
+              }
+            </select>
+          </div>
+          <div class="field">
+            <label>Teacher</label>
+            <select [(ngModel)]="teacherId" name="ttTeacher">
+              <option value="">Optional</option>
+              @for (t of staff(); track t.id) {
+                <option [value]="t.id">{{ staffName(t) }}</option>
+              }
+            </select>
+          </div>
+          <div class="field">
+            <label>Room</label>
+            <input type="text" [(ngModel)]="room" name="ttRoom" placeholder="e.g. Lab 1" />
+          </div>
+        </div>
+
+        <div class="day-picker">
+          <span class="day-picker-label">Day *</span>
+          <div class="day-chips">
+            @for (d of days; track d.value) {
+              <button
+                type="button"
+                class="day-chip"
+                [class.active]="dayOfWeek === d.value"
+                (click)="setDay(d.value)"
+              >
+                <span class="day-short">{{ d.short }}</span>
+                <span class="day-full">{{ d.label }}</span>
+              </button>
             }
-          </select>
+          </div>
         </div>
-        <div class="field">
-          <label>Day *</label>
-          <select [(ngModel)]="dayOfWeek" name="ttDay">
-            @for (d of days; track d.value) { <option [value]="d.value">{{ d.label }}</option> }
-          </select>
-        </div>
-        <div class="field">
-          <label>Period *</label>
-          <select [(ngModel)]="periodId" name="ttPeriod">
-            <option value="">Select period</option>
-            @for (p of periods(); track p.id) {
-              <option [value]="p.id">{{ p.name }} ({{ p.startTime }}–{{ p.endTime }})</option>
-            }
-          </select>
-        </div>
-        <div class="field">
-          <label>Subject *</label>
-          <select [(ngModel)]="subjectId" name="ttSubject">
-            <option value="">Select subject</option>
-            @for (s of subjects(); track s.id) { <option [value]="s.id">{{ s.name }}</option> }
-          </select>
-        </div>
-        <div class="field">
-          <label>Teacher</label>
-          <select [(ngModel)]="teacherId" name="ttTeacher">
-            <option value="">Optional</option>
-            @for (t of staff(); track t.id) { <option [value]="t.id">{{ staffName(t) }}</option> }
-          </select>
-        </div>
-        <div class="field">
-          <label>Room</label>
-          <input type="text" [(ngModel)]="room" name="ttRoom" placeholder="e.g. Lab 1" />
+
+        @if (formReady()) {
+          <div class="preview-card" [class.conflict]="hasConflict()">
+            <div class="preview-head">
+              <strong>Slot preview</strong>
+              @if (hasConflict()) {
+                <span class="conflict-badge">Conflict — slot already exists</span>
+              }
+            </div>
+            <dl class="preview-grid">
+              <div><dt>Class</dt><dd>{{ selectedClassLabel() }}</dd></div>
+              <div><dt>Day</dt><dd>{{ slotPreview().day }}</dd></div>
+              <div><dt>Period</dt><dd>{{ slotPreview().period }}</dd></div>
+              <div><dt>Subject</dt><dd>{{ slotPreview().subject }}</dd></div>
+              <div><dt>Teacher</dt><dd>{{ slotPreview().teacher }}</dd></div>
+              <div><dt>Room</dt><dd>{{ slotPreview().room }}</dd></div>
+            </dl>
+          </div>
+        }
+
+        <div class="action-bar">
+          <button type="button" class="btn-ghost" (click)="resetForm()" [disabled]="saving()">Clear form</button>
+          <button
+            type="button"
+            class="btn-primary"
+            (click)="addSlot()"
+            [disabled]="saving() || !formReady() || hasConflict() || !periods().length"
+          >
+            {{ saving() ? 'Saving…' : 'Add to timetable' }}
+          </button>
         </div>
       </div>
-      <button type="button" class="btn-primary" (click)="addSlot()" [disabled]="saving()">
-        {{ saving() ? 'Saving…' : 'Add to timetable' }}
-      </button>
     </section>
+
+    @if (classId) {
+      <section class="list-shell">
+        <div class="list-toolbar">
+          <div class="toolbar-head">
+            <h3>{{ selectedClassLabel() }} schedule</h3>
+            <p>
+              {{ stats().slotCount }} slots · {{ stats().daysFilled }}/5 days ·
+              {{ stats().withTeacher }} with teacher · {{ stats().coverage }}% period coverage
+            </p>
+          </div>
+
+          <div class="toolbar-row">
+            <div class="search-wrap">
+              <span class="search-icon" aria-hidden="true">🔍</span>
+              <input
+                type="search"
+                class="search-input"
+                [ngModel]="entriesSearch()"
+                (ngModelChange)="entriesSearch.set($event)"
+                name="entriesSearch"
+                placeholder="Search subject, teacher, room…"
+              />
+              @if (entriesSearch()) {
+                <button type="button" class="clear-search" (click)="clearEntriesSearch()" aria-label="Clear search">×</button>
+              }
+            </div>
+            <div class="toolbar-actions">
+              <div class="filter-chips">
+                <button type="button" class="chip" [class.active]="dayFilter() === 'all'" (click)="dayFilter.set('all')">
+                  All days
+                </button>
+                @for (d of days; track d.value) {
+                  <button
+                    type="button"
+                    class="chip"
+                    [class.active]="dayFilter() === d.value"
+                    (click)="dayFilter.set(d.value)"
+                  >
+                    {{ d.short }}
+                  </button>
+                }
+              </div>
+              <div class="view-toggle" role="group" aria-label="View mode">
+                <button type="button" class="view-btn" [class.active]="viewMode() === 'table'" (click)="viewMode.set('table')" title="Table view">☰</button>
+                <button type="button" class="view-btn" [class.active]="viewMode() === 'cards'" (click)="viewMode.set('cards')" title="Card view">▦</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="action-bar compact">
+            <button type="button" class="btn-outline" (click)="loadEntries()" [disabled]="loadingEntries()">
+              {{ loadingEntries() ? 'Refreshing…' : 'Refresh' }}
+            </button>
+            <a [routerLink]="['/admin/timetable/view']" [queryParams]="{ class: classId }" class="btn-outline">
+              Open in View Timetable
+            </a>
+          </div>
+        </div>
+
+        @if (loadingEntries()) {
+          <div class="loading-panel">
+            <div class="spinner"></div>
+            <p>Loading schedule…</p>
+          </div>
+        } @else if (!entries().length) {
+          <div class="empty-state">
+            <span class="empty-icon">📅</span>
+            <h3>No slots yet</h3>
+            <p>Add your first lesson above to build this class timetable.</p>
+          </div>
+        } @else if (!filteredEntries().length) {
+          <div class="empty-state">
+            <span class="empty-icon">🔍</span>
+            <h3>No matching slots</h3>
+            <p>Try a different day filter or search term.</p>
+            <button type="button" class="btn-outline" (click)="entriesSearch.set(''); dayFilter.set('all')">Clear filters</button>
+          </div>
+        } @else if (viewMode() === 'cards') {
+          <div class="card-grid">
+            @for (e of filteredEntries(); track e.id) {
+              <article class="slot-card">
+                <div class="slot-card-head">
+                  <span class="day-badge">{{ dayShort(e.dayOfWeek) }}</span>
+                  <span class="time-badge">{{ e.startTime }}–{{ e.endTime }}</span>
+                </div>
+                <strong class="slot-subject">{{ e.subject?.name || 'Subject' }}</strong>
+                <div class="slot-meta">
+                  <span class="avatar sm">{{ initials(teacherName(e)) }}</span>
+                  <span>{{ teacherName(e) }}</span>
+                  @if (e.room) {
+                    <span class="room-pill">{{ e.room }}</span>
+                  }
+                </div>
+              </article>
+            }
+          </div>
+        } @else {
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Day</th>
+                  <th>Time</th>
+                  <th>Subject</th>
+                  <th>Teacher</th>
+                  <th>Room</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (e of filteredEntries(); track e.id) {
+                  <tr>
+                    <td><span class="day-badge inline">{{ dayShort(e.dayOfWeek) }}</span></td>
+                    <td class="time-cell">{{ e.startTime }}–{{ e.endTime }}</td>
+                    <td><strong>{{ e.subject?.name || '—' }}</strong></td>
+                    <td>
+                      <div class="user-cell">
+                        <span class="avatar sm">{{ initials(teacherName(e)) }}</span>
+                        {{ teacherName(e) }}
+                      </div>
+                    </td>
+                    <td>{{ e.room || '—' }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </section>
+    } @else if (!loading()) {
+      <section class="list-shell">
+        <div class="empty-state padded">
+          <span class="empty-icon">🏫</span>
+          <h3>Select a class to begin</h3>
+          <p>Choose a class in the form above to view its current schedule and add timetable slots.</p>
+        </div>
+      </section>
+    }
   </div>
 </app-portal-layout>

@@ -10,6 +10,7 @@ import { ApiService } from '../../core/services/api.service';
 import { Student } from '../../core/models';
 
 type Tab = 'overview' | 'cashbook' | 'debtors' | 'statements';
+type ViewMode = 'table' | 'cards';
 
 interface BalanceSheet {
   cashBalance: number;
@@ -87,6 +88,8 @@ export class AdminFinanceComponent implements OnInit, OnDestroy {
   cashbookFrom = '';
   cashbookTo = '';
   cashbookFilter = signal('');
+  viewMode = signal<ViewMode>('table');
+  statementStudentSearch = signal('');
   showAddEntry = signal(false);
   newEntry = {
     entryDate: new Date().toISOString().split('T')[0],
@@ -133,6 +136,27 @@ export class AdminFinanceComponent implements OnInit, OnDestroy {
     );
   });
 
+  cashbookStats = computed(() => {
+    const entries = this.filteredCashbook();
+    return {
+      count: entries.length,
+      moneyIn: entries.reduce((s, e) => s + Number(e.moneyIn || 0), 0),
+      moneyOut: entries.reduce((s, e) => s + Number(e.moneyOut || 0), 0),
+    };
+  });
+
+  filteredStudentsForStatement = computed(() => {
+    const q = this.statementStudentSearch().trim().toLowerCase();
+    if (!q) return this.students();
+    return this.students().filter((s) =>
+      `${s.firstName} ${s.lastName} ${s.admissionNumber}`.toLowerCase().includes(q),
+    );
+  });
+
+  selectedStudent = computed(() =>
+    this.students().find((s) => s.id === this.selectedStudentId) ?? null,
+  );
+
   ngOnInit() {
     this.loadAll();
     this.api.get<Student[]>('/students').subscribe((s) => this.students.set(s));
@@ -148,6 +172,24 @@ export class AdminFinanceComponent implements OnInit, OnDestroy {
       this.selectedStudentId = this.students()[0].id;
       this.loadStatement();
     }
+  }
+
+  initials(first: string, last: string): string {
+    return `${(first || '').charAt(0)}${(last || '').charAt(0)}`.toUpperCase() || '?';
+  }
+
+  statusLabel(status: string): string {
+    const map: Record<string, string> = {
+      sent: 'Sent',
+      partial: 'Partial',
+      paid: 'Paid',
+      overdue: 'Overdue',
+    };
+    return map[status] || status;
+  }
+
+  viewDebtorsOnly() {
+    this.setTab('debtors');
   }
 
   loadAll() {

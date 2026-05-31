@@ -1,51 +1,301 @@
 <app-portal-layout portalTitle="Admin Portal" pageTitle="View Timetable" [navSections]="adminNav">
-  <div class="tt-page">
-    <section class="card">
-      <h3>View Timetable</h3>
-      <p class="sub">Browse the weekly timetable for a class.</p>
-      <div class="links">
-        <a routerLink="/admin/timetable/configure-periods" class="link-btn">Configure Periods</a>
-        <a routerLink="/admin/timetable/generate" class="link-btn">Generate Timetable →</a>
-      </div>
-    </section>
-
-    <section class="card">
-      <div class="form-row">
-        <div class="field grow">
-          <label>Class</label>
-          <select [(ngModel)]="classId" name="viewClass" (ngModelChange)="loadTimetable()">
-            <option value="">Select class</option>
-            @for (c of classes(); track c.id) {
-              <option [value]="c.id">{{ c.form?.name || '' }} {{ c.name }}</option>
-            }
-          </select>
+  <div class="view-page">
+    <header class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">Timetable</p>
+        <h2>View class timetable</h2>
+        <p class="hero-sub">
+          Browse the weekly schedule for any class in grid, day, table, or card layout.
+          Add or edit slots on
+          <a routerLink="/admin/timetable/generate">Generate Timetable</a>.
+        </p>
+        <div class="hero-actions">
+          <a routerLink="/admin/timetable/configure-periods" class="secondary-action">Configure Periods</a>
+          <a
+            [routerLink]="['/admin/timetable/generate']"
+            [queryParams]="classId ? { class: classId } : null"
+            class="primary-action"
+          >
+            Generate Timetable →
+          </a>
         </div>
-        <button type="button" class="btn-primary" (click)="loadTimetable()" [disabled]="!classId || loading()">
-          {{ loading() ? 'Loading…' : 'Refresh' }}
-        </button>
       </div>
-    </section>
+      <div class="kpi-grid">
+        <article class="kpi accent">
+          <span class="kpi-icon">⏱</span>
+          <div>
+            <strong>{{ periods().length || '—' }}</strong>
+            <span>Lesson periods</span>
+          </div>
+        </article>
+        <article class="kpi">
+          <span class="kpi-icon">🏫</span>
+          <div>
+            <strong>{{ loadingClasses() ? '…' : classes().length }}</strong>
+            <span>Classes</span>
+          </div>
+        </article>
+        <article class="kpi" [class.ok]="classId && stats().slotCount > 0">
+          <span class="kpi-icon">📅</span>
+          <div>
+            <strong>{{ classId ? stats().slotCount : '—' }}</strong>
+            <span>{{ classId ? 'Scheduled slots' : 'Select a class' }}</span>
+          </div>
+        </article>
+        <article class="kpi" [class.warn]="classId && stats().coverage < 100">
+          <span class="kpi-icon">📊</span>
+          <div>
+            <strong>{{ classId ? stats().coverage + '%' : '—' }}</strong>
+            <span>{{ classId ? stats().daysFilled + '/5 days · ' + stats().subjectCount + ' subjects' : 'Coverage' }}</span>
+          </div>
+        </article>
+      </div>
+    </header>
 
-    @if (classId) {
-      <section class="card">
-        @for (day of [1, 2, 3, 4, 5]; track day) {
-          <div class="day-block">
-            <h4>{{ dayLabels[day] }}</h4>
-            @if (entriesForDay(day).length) {
-              <div class="slot-list">
-                @for (e of entriesForDay(day); track e.id) {
-                  <article class="slot">
-                    <span class="time">{{ e.startTime }} – {{ e.endTime }}</span>
-                    <strong>{{ e.subject?.name || 'Subject' }}</strong>
-                    <span class="meta">{{ teacherName(e) }}@if (e.room) { · {{ e.room }} }</span>
-                  </article>
-                }
-              </div>
-            } @else {
-              <p class="empty">No lessons scheduled.</p>
+    <section class="list-shell">
+      <div class="list-toolbar">
+        <div class="toolbar-head">
+          <h3>Select class</h3>
+          <p>Choose a class to load its weekly timetable.</p>
+        </div>
+
+        <div class="class-picker-row">
+          <div class="search-wrap">
+            <span class="search-icon" aria-hidden="true">🔍</span>
+            <input
+              type="search"
+              class="search-input"
+              [ngModel]="classSearch()"
+              (ngModelChange)="classSearch.set($event)"
+              name="classSearch"
+              placeholder="Filter classes…"
+            />
+            @if (classSearch()) {
+              <button type="button" class="clear-search" (click)="clearClassSearch()" aria-label="Clear class search">×</button>
             }
           </div>
+          <div class="field class-select">
+            <label>Class</label>
+            <select [(ngModel)]="classId" name="viewClass" (ngModelChange)="onClassChange()">
+              <option value="">Select class</option>
+              @for (c of filteredClasses(); track c.id) {
+                <option [value]="c.id">{{ classLabel(c) }}</option>
+              }
+            </select>
+          </div>
+          <button type="button" class="btn-primary" (click)="loadTimetable()" [disabled]="!classId || loading()">
+            {{ loading() ? 'Loading…' : 'Refresh' }}
+          </button>
+        </div>
+      </div>
+    </section>
+
+    @if (classId && !loading() && !entries().length) {
+      <div class="alert-banner">
+        <span>No timetable slots for {{ selectedClassLabel() }} yet.</span>
+        <a [routerLink]="['/admin/timetable/generate']" [queryParams]="{ class: classId }" class="link-btn">Add slots</a>
+      </div>
+    }
+
+    @if (classId) {
+      <section class="list-shell">
+        <div class="list-toolbar">
+          <div class="toolbar-head">
+            <h3>{{ selectedClassLabel() }}</h3>
+            <p>
+              {{ stats().slotCount }} slots · {{ stats().daysFilled }}/5 days ·
+              {{ stats().subjectCount }} subjects · {{ stats().withTeacher }} with teacher
+            </p>
+          </div>
+
+          <div class="toolbar-row">
+            <div class="search-wrap">
+              <span class="search-icon" aria-hidden="true">🔍</span>
+              <input
+                type="search"
+                class="search-input"
+                [ngModel]="entriesSearch()"
+                (ngModelChange)="entriesSearch.set($event)"
+                name="entriesSearch"
+                placeholder="Search subject, teacher, room…"
+              />
+              @if (entriesSearch()) {
+                <button type="button" class="clear-search" (click)="clearEntriesSearch()" aria-label="Clear search">×</button>
+              }
+            </div>
+            <div class="toolbar-actions">
+              <div class="filter-chips">
+                <button type="button" class="chip" [class.active]="dayFilter() === 'all'" (click)="dayFilter.set('all')">
+                  All days
+                </button>
+                @for (d of days; track d.value) {
+                  <button
+                    type="button"
+                    class="chip"
+                    [class.active]="dayFilter() === d.value"
+                    (click)="dayFilter.set(d.value)"
+                  >
+                    {{ d.short }}
+                  </button>
+                }
+              </div>
+              <div class="view-toggle" role="group" aria-label="View mode">
+                <button type="button" class="view-btn" [class.active]="viewMode() === 'grid'" (click)="viewMode.set('grid')" title="Grid view">▦</button>
+                <button type="button" class="view-btn" [class.active]="viewMode() === 'days'" (click)="viewMode.set('days')" title="By day">📅</button>
+                <button type="button" class="view-btn" [class.active]="viewMode() === 'table'" (click)="viewMode.set('table')" title="Table view">☰</button>
+                <button type="button" class="view-btn" [class.active]="viewMode() === 'cards'" (click)="viewMode.set('cards')" title="Card view">▣</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        @if (loading()) {
+          <div class="loading-panel">
+            <div class="spinner"></div>
+            <p>Loading timetable…</p>
+          </div>
+        } @else if (!entries().length) {
+          <div class="empty-state">
+            <span class="empty-icon">📅</span>
+            <h3>Empty timetable</h3>
+            <p>This class has no scheduled lessons yet.</p>
+            <a [routerLink]="['/admin/timetable/generate']" [queryParams]="{ class: classId }" class="btn-primary">Generate timetable</a>
+          </div>
+        } @else if (viewMode() === 'grid') {
+          <div class="grid-wrap">
+            <table class="timetable-grid">
+              <thead>
+                <tr>
+                  <th class="period-col">Period</th>
+                  @for (d of days; track d.value) {
+                    <th>{{ d.short }}</th>
+                  }
+                </tr>
+              </thead>
+              <tbody>
+                @for (p of periods(); track p.id) {
+                  <tr>
+                    <td class="period-col">
+                      <strong>{{ p.name }}</strong>
+                      <span>{{ p.startTime }}–{{ p.endTime }}</span>
+                    </td>
+                    @for (d of days; track d.value) {
+                      <td>
+                        @if (entryAt(d.value, p); as e) {
+                          <div class="grid-cell filled">
+                            <strong>{{ e.subject?.name || 'Subject' }}</strong>
+                            <span>{{ teacherName(e) }}</span>
+                            @if (e.room) {
+                              <span class="room-tag">{{ e.room }}</span>
+                            }
+                          </div>
+                        } @else {
+                          <div class="grid-cell empty-cell">—</div>
+                        }
+                      </td>
+                    }
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        } @else if (viewMode() === 'days') {
+          <div class="days-grid">
+            @for (d of days; track d.value) {
+              @if (dayFilter() === 'all' || dayFilter() === d.value) {
+                <article class="day-panel" [class.empty-day]="!entriesForDay(d.value).length">
+                  <header class="day-panel-head">
+                    <h4>{{ d.label }}</h4>
+                    <span class="slot-count">{{ entriesForDay(d.value).length }} slots</span>
+                  </header>
+                  @if (entriesForDay(d.value).length) {
+                    <div class="day-slots">
+                      @for (e of entriesForDay(d.value); track e.id) {
+                        <div class="day-slot">
+                          <span class="time-badge">{{ e.startTime }}–{{ e.endTime }}</span>
+                          <strong>{{ e.subject?.name || 'Subject' }}</strong>
+                          <div class="slot-meta">
+                            <span class="avatar sm">{{ initials(teacherName(e)) }}</span>
+                            <span>{{ teacherName(e) }}</span>
+                            @if (e.room) {
+                              <span class="room-pill">{{ e.room }}</span>
+                            }
+                          </div>
+                        </div>
+                      }
+                    </div>
+                  } @else {
+                    <p class="empty-inline">No lessons scheduled.</p>
+                  }
+                </article>
+              }
+            }
+          </div>
+        } @else if (!filteredEntries().length) {
+          <div class="empty-state">
+            <span class="empty-icon">🔍</span>
+            <h3>No matching slots</h3>
+            <p>Try a different day filter or search term.</p>
+            <button type="button" class="btn-outline" (click)="entriesSearch.set(''); dayFilter.set('all')">Clear filters</button>
+          </div>
+        } @else if (viewMode() === 'cards') {
+          <div class="card-grid">
+            @for (e of filteredEntries(); track e.id) {
+              <article class="slot-card">
+                <div class="slot-card-head">
+                  <span class="day-badge">{{ dayShort(e.dayOfWeek) }}</span>
+                  <span class="time-badge">{{ e.startTime }}–{{ e.endTime }}</span>
+                </div>
+                <strong class="slot-subject">{{ e.subject?.name || 'Subject' }}</strong>
+                <div class="slot-meta">
+                  <span class="avatar sm">{{ initials(teacherName(e)) }}</span>
+                  <span>{{ teacherName(e) }}</span>
+                  @if (e.room) {
+                    <span class="room-pill">{{ e.room }}</span>
+                  }
+                </div>
+              </article>
+            }
+          </div>
+        } @else {
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Day</th>
+                  <th>Time</th>
+                  <th>Subject</th>
+                  <th>Teacher</th>
+                  <th>Room</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (e of filteredEntries(); track e.id) {
+                  <tr>
+                    <td><span class="day-badge inline">{{ dayShort(e.dayOfWeek) }}</span></td>
+                    <td class="time-cell">{{ e.startTime }}–{{ e.endTime }}</td>
+                    <td><strong>{{ e.subject?.name || '—' }}</strong></td>
+                    <td>
+                      <div class="user-cell">
+                        <span class="avatar sm">{{ initials(teacherName(e)) }}</span>
+                        {{ teacherName(e) }}
+                      </div>
+                    </td>
+                    <td>{{ e.room || '—' }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
         }
+      </section>
+    } @else if (!loadingClasses()) {
+      <section class="list-shell">
+        <div class="empty-state padded">
+          <span class="empty-icon">🏫</span>
+          <h3>Select a class</h3>
+          <p>Choose a class above to view its weekly timetable.</p>
+        </div>
       </section>
     }
   </div>

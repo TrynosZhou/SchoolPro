@@ -19,6 +19,21 @@ export function classDisplayName(
   return classes.find((c) => c.id === classId)?.name ?? '';
 }
 
+/** Header / picker label — e.g. Class 1A (not Form 1 1A). */
+export function classHeaderLabel(c: ClassOptionLike | undefined | null): string {
+  const name = c?.name?.trim();
+  if (!name) return '';
+  return /^class\s+/i.test(name) ? name : `Class ${name}`;
+}
+
+export function classHeaderLabelById(
+  classes: ClassOptionLike[],
+  classId: string | undefined | null,
+): string {
+  if (!classId) return '';
+  return classHeaderLabel(classes.find((c) => c.id === classId));
+}
+
 /** Label for promotion rules — class name only (e.g. 1A, 4B). */
 export function promotionClassLabel(c: ClassOptionLike): string {
   return c.name?.trim() || '—';

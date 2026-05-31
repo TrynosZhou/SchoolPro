@@ -1,83 +1,262 @@
 <app-portal-layout portalTitle="Admin Portal" pageTitle="Student Balance" [navSections]="adminNav">
-  <section class="card search-card">
-    <h3>Find Student Invoice Balance</h3>
-    <p class="sub">Enter <strong>Student ID</strong>, <strong>First Name</strong>, or <strong>Last Name</strong>.</p>
+  <div class="balance-page">
+    @if (toast(); as t) {
+      <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>
+    }
 
-    <div class="search-bar">
-      <input
-        type="text"
-        [(ngModel)]="query"
-        name="studentBalanceQuery"
-        placeholder="e.g. STU-001 / Tawanda / Ncube"
-        (keyup.enter)="getBalance()"
-      />
-      <button type="button" class="btn-primary" (click)="getBalance()" [disabled]="loading() || pdfLoading()">
-        {{ loading() ? 'Loading...' : 'Get Balance' }}
-      </button>
-      @if (rows().length) {
-        <button type="button" class="btn-outline btn-pdf-preview" (click)="previewPdf()" [disabled]="pdfLoading() || loading()">
-          {{ pdfLoading() ? 'Generating…' : 'Preview PDF' }}
-        </button>
-        <button type="button" class="btn-outline btn-pdf-download" (click)="downloadPdf()" [disabled]="pdfLoading() || loading()">
-          {{ pdfLoading() ? 'Generating…' : 'Download PDF' }}
-        </button>
-      }
-    </div>
-  </section>
-
-  @if (toast(); as t) {
-    <div class="toast" [class.error]="t.type === 'error'">{{ t.msg }}</div>
-  }
-
-  <section class="card table-card">
-    <div class="table-head">
-      <h3>Results</h3>
-      <span class="count">{{ rows().length }}</span>
-    </div>
-
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>Student ID</th>
-            <th>Name</th>
-            <th>Class</th>
-            <th>Total Invoiced</th>
-            <th>Total Paid</th>
-            <th>Balance</th>
-            <th class="col-action">Pay</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (r of rows(); track r.id) {
-            <tr>
-              <td>{{ r.admissionNumber || r.id }}</td>
-              <td>{{ r.firstName }} {{ r.lastName }}</td>
-              <td>{{ r.className || '—' }}</td>
-              <td>{{ r.totalInvoiced | number:'1.2-2' }}</td>
-              <td>{{ r.totalPaid | number:'1.2-2' }}</td>
-              <td><strong [class.zero]="r.balance <= 0">{{ r.balance | number:'1.2-2' }}</strong></td>
-              <td class="col-action">
-                <button
-                  type="button"
-                  class="icon-pay"
-                  (click)="payBalance(r)"
-                  [disabled]="r.balance <= 0"
-                  title="Pay invoice balance"
-                  aria-label="Pay invoice balance"
-                >
-                  💳
-                </button>
-              </td>
-            </tr>
-          } @empty {
-            <tr>
-              <td colspan="7" class="empty">No data yet. Search for a student to view balance.</td>
-            </tr>
+    <header class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">Finance</p>
+        <h2>Student balance lookup</h2>
+        <p class="hero-sub">
+          Search by student ID, first name, or last name to view invoiced amounts, payments, and outstanding balance.
+          Record payments on
+          <a routerLink="/admin/billing">Billing</a>
+          or review the full ledger on
+          <a routerLink="/admin/fin-reports/student-ledger">Student Ledger</a>.
+        </p>
+        <div class="hero-actions">
+          @if (rows().length) {
+            <button type="button" class="secondary-action" (click)="previewPdf()" [disabled]="pdfLoading() || loading()">
+              {{ pdfLoading() ? 'Generating…' : 'Preview PDF' }}
+            </button>
+            <button type="button" class="refresh-action" (click)="downloadPdf()" [disabled]="pdfLoading() || loading()">
+              {{ pdfLoading() ? 'Generating…' : 'Download PDF' }}
+            </button>
           }
-        </tbody>
-      </table>
-    </div>
-  </section>
-</app-portal-layout>
+          <a routerLink="/admin/fin-reports/outstanding-invoices" class="secondary-action">Outstanding invoices</a>
+        </div>
+      </div>
+      <div class="kpi-grid">
+        <article class="kpi">
+          <span class="kpi-icon">👥</span>
+          <div>
+            <strong>{{ hasSearched() ? stats().count : '—' }}</strong>
+            <span>Students found</span>
+          </div>
+        </article>
+        <article class="kpi warn" [class.bad]="stats().owing > 0">
+          <span class="kpi-icon">⚠</span>
+          <div>
+            <strong>{{ hasSearched() ? stats().owing : '—' }}</strong>
+            <span>With balance</span>
+          </div>
+        </article>
+        <article class="kpi ok">
+          <span class="kpi-icon">✓</span>
+          <div>
+            <strong>{{ hasSearched() ? stats().clear : '—' }}</strong>
+            <span>Paid in full</span>
+          </div>
+        </article>
+        <article class="kpi accent">
+          <span class="kpi-icon">💵</span>
+          <div>
+            <strong>{{ hasSearched() ? ('$' + (stats().totalOwing | number:'1.0-0')) : '—' }}</strong>
+            <span>Total outstanding</span>
+          </div>
+        </article>
+      </div>
+    </header>
 
+    @if (hasSearched() && stats().owing > 0) {
+      <div class="alert-banner">
+        <span>{{ stats().owing }} student{{ stats().owing === 1 ? '' : 's' }} with {{ '$' + (stats().totalOwing | number:'1.2-2') }} outstanding.</span>
+        <button type="button" class="link-btn" (click)="filterOwingOnly()">Show owing only</button>
+      </div>
+    }
+
+    <section class="list-shell">
+      <div class="list-toolbar">
+        <h3>Find student balance</h3>
+        <p>Enter student ID, first name, or last name — press Enter or click Search.</p>
+
+        <div class="search-row">
+          <div class="search-wrap">
+            <span class="search-icon" aria-hidden="true">🔍</span>
+            <input
+              type="search"
+              class="search-input"
+              [(ngModel)]="query"
+              name="studentBalanceQuery"
+              placeholder="e.g. STU-001 / Tawanda / Ncube"
+              (keyup.enter)="getBalance()"
+            />
+            @if (query) {
+              <button type="button" class="clear-search" (click)="clearSearch()" aria-label="Clear search">×</button>
+            }
+          </div>
+          <button type="button" class="btn-primary" (click)="getBalance()" [disabled]="loading() || pdfLoading()">
+            {{ loading() ? 'Searching…' : 'Search' }}
+          </button>
+        </div>
+
+        @if (rows().length) {
+          <div class="toolbar-row">
+            <div class="filter-chips">
+              <button type="button" class="chip" [class.active]="balanceFilter() === 'all'" (click)="balanceFilter.set('all')">
+                All ({{ stats().count }})
+              </button>
+              <button type="button" class="chip warn" [class.active]="balanceFilter() === 'owing'" (click)="balanceFilter.set('owing')">
+                Has balance ({{ stats().owing }})
+              </button>
+              <button type="button" class="chip ok" [class.active]="balanceFilter() === 'clear'" (click)="balanceFilter.set('clear')">
+                Paid in full ({{ stats().clear }})
+              </button>
+            </div>
+            <div class="toolbar-actions">
+              <select [ngModel]="sortOrder()" (ngModelChange)="sortOrder.set($event)" name="sortOrder" class="sort-select">
+                <option value="balance-desc">Balance high → low</option>
+                <option value="balance-asc">Balance low → high</option>
+                <option value="name-asc">Name A–Z</option>
+                <option value="name-desc">Name Z–A</option>
+              </select>
+              <div class="view-toggle" role="group" aria-label="View mode">
+                <button type="button" class="view-btn" [class.active]="viewMode() === 'table'" (click)="viewMode.set('table')" title="Table view">☰</button>
+                <button type="button" class="view-btn" [class.active]="viewMode() === 'cards'" (click)="viewMode.set('cards')" title="Card view">▦</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="summary-strip">
+            <span>Invoiced <strong>${{ stats().totalInvoiced | number:'1.2-2' }}</strong></span>
+            <span>Paid <strong class="paid">${{ stats().totalPaid | number:'1.2-2' }}</strong></span>
+            <span>Outstanding <strong class="owed">${{ stats().totalOwing | number:'1.2-2' }}</strong></span>
+            @if (hasActiveFilters()) {
+              <button type="button" class="clear-filters" (click)="clearFilters()">Clear filters</button>
+            }
+          </div>
+        }
+      </div>
+
+      @if (loading()) {
+        <div class="loading-panel">
+          <div class="spinner"></div>
+          <p>Searching student balances…</p>
+        </div>
+      } @else if (!hasSearched()) {
+        <div class="empty-state">
+          <span class="empty-icon">🔍</span>
+          <h3>Search for a student</h3>
+          <p>Enter a student ID or name above to view invoice totals and outstanding balance.</p>
+        </div>
+      } @else if (!rows().length) {
+        <div class="empty-state">
+          <span class="empty-icon">👤</span>
+          <h3>No students found</h3>
+          <p>Try a different student ID, first name, or last name.</p>
+        </div>
+      } @else if (!visibleRows().length) {
+        <div class="empty-state">
+          <span class="empty-icon">📋</span>
+          <h3>No rows match your filter</h3>
+          <button type="button" class="btn-secondary" (click)="clearFilters()">Clear filters</button>
+        </div>
+      } @else if (viewMode() === 'cards') {
+        <div class="card-grid">
+          @for (r of visibleRows(); track r.id) {
+            <article class="balance-card" [class.owing]="r.balance > 0" [class.clear]="r.balance <= 0">
+              <div class="card-head">
+                <span class="avatar" [class.warn]="r.balance > 0" [class.ok]="r.balance <= 0">{{ initials(r) }}</span>
+                <div class="card-title">
+                  <strong>{{ r.firstName }} {{ r.lastName }}</strong>
+                  <code class="sid">{{ r.admissionNumber || r.id }}</code>
+                </div>
+                @if (r.balance > 0) {
+                  <span class="status-pill warn">Owing</span>
+                } @else {
+                  <span class="status-pill ok">Clear</span>
+                }
+              </div>
+
+              <div class="class-meta">{{ r.className || 'No class' }}</div>
+
+              <div class="amount-grid">
+                <div>
+                  <span>Invoiced</span>
+                  <strong>${{ r.totalInvoiced | number:'1.2-2' }}</strong>
+                </div>
+                <div>
+                  <span>Paid</span>
+                  <strong class="paid">${{ r.totalPaid | number:'1.2-2' }}</strong>
+                </div>
+                <div>
+                  <span>Balance</span>
+                  <strong [class.owed]="r.balance > 0" [class.clear-amt]="r.balance <= 0">${{ r.balance | number:'1.2-2' }}</strong>
+                </div>
+              </div>
+
+              <div class="rate-track-wrap">
+                <div class="rate-label">
+                  <span>Collection</span>
+                  <strong>{{ paidPct(r) }}%</strong>
+                </div>
+                <div class="rate-track">
+                  <div class="rate-fill" [style.width]="collectionWidth(r)"></div>
+                </div>
+              </div>
+
+              <div class="card-actions">
+                @if (r.balance > 0) {
+                  <button type="button" class="btn-primary btn-sm" (click)="payBalance(r)">Collect payment</button>
+                } @else {
+                  <span class="clear-note">No balance due</span>
+                }
+              </div>
+            </article>
+          }
+        </div>
+      } @else {
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Student</th>
+                <th>Class</th>
+                <th class="num">Invoiced</th>
+                <th class="num">Paid</th>
+                <th>Progress</th>
+                <th class="num">Balance</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (r of visibleRows(); track r.id) {
+                <tr [class.owing-row]="r.balance > 0">
+                  <td>
+                    <div class="user-cell">
+                      <span class="avatar sm" [class.warn]="r.balance > 0">{{ initials(r) }}</span>
+                      <div>
+                        <strong>{{ r.firstName }} {{ r.lastName }}</strong>
+                        <code class="sid">{{ r.admissionNumber || r.id }}</code>
+                      </div>
+                    </div>
+                  </td>
+                  <td><span class="pill">{{ r.className || '—' }}</span></td>
+                  <td class="num">${{ r.totalInvoiced | number:'1.2-2' }}</td>
+                  <td class="num paid">${{ r.totalPaid | number:'1.2-2' }}</td>
+                  <td>
+                    <div class="mini-bar">
+                      <div class="mini-fill" [style.width]="collectionWidth(r)"></div>
+                    </div>
+                    <small>{{ paidPct(r) }}%</small>
+                  </td>
+                  <td class="num">
+                    <strong [class.owed]="r.balance > 0" [class.clear-amt]="r.balance <= 0">${{ r.balance | number:'1.2-2' }}</strong>
+                  </td>
+                  <td class="actions">
+                    @if (r.balance > 0) {
+                      <button type="button" class="btn-primary btn-sm" (click)="payBalance(r)">Pay</button>
+                    } @else {
+                      <span class="clear-note">—</span>
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </section>
+  </div>
+</app-portal-layout>

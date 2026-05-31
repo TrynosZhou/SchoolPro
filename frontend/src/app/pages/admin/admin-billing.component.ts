@@ -11,6 +11,7 @@ import { environment } from '../../../environments/environment';
 import { Student } from '../../core/models';
 
 type Tab = 'payment' | 'invoice' | 'invoices' | 'receipts' | 'debtors';
+type ViewMode = 'table' | 'cards';
 
 interface BillingSummary {
   totalDebtors: number;
@@ -135,6 +136,8 @@ export class AdminBillingComponent implements OnInit {
 
   invoiceFilter = signal('all');
   invoiceSearch = signal('');
+  receiptSearch = signal('');
+  viewMode = signal<ViewMode>('table');
   filteredInvoices = computed(() => {
     let list = this.invoices();
     const status = this.invoiceFilter();
@@ -147,6 +150,35 @@ export class AdminBillingComponent implements OnInit {
     }
     return list;
   });
+
+  filteredPayments = computed(() => {
+    const q = this.receiptSearch().trim().toLowerCase();
+    if (!q) return this.payments();
+    return this.payments().filter((p) =>
+      `${p.receipt?.receiptNumber ?? ''} ${p.student?.firstName ?? ''} ${p.student?.lastName ?? ''} ${p.label} ${p.paymentReference}`
+        .toLowerCase()
+        .includes(q),
+    );
+  });
+
+  invoiceStatusCounts = computed(() => {
+    const list = this.invoices();
+    return {
+      all: list.length,
+      sent: list.filter((i) => i.status === 'sent').length,
+      partial: list.filter((i) => i.status === 'partial').length,
+      paid: list.filter((i) => i.status === 'paid').length,
+      overdue: list.filter((i) => i.status === 'overdue').length,
+    };
+  });
+
+  hasActiveInvoiceFilters = computed(
+    () => Boolean(this.invoiceSearch().trim()) || this.invoiceFilter() !== 'all',
+  );
+
+  sortedTerms = computed(() =>
+    [...this.terms()].sort((a, b) => (a.isCurrent === b.isCurrent ? 0 : a.isCurrent ? -1 : 1)),
+  );
 
   studentUnpaidInvoices = signal<InvoiceRow[]>([]);
 
@@ -196,6 +228,35 @@ export class AdminBillingComponent implements OnInit {
 
   setTab(tab: Tab) {
     this.activeTab.set(tab);
+  }
+
+  selectTermForInvoice(termId: string) {
+    this.newInvoice.termId = termId;
+  }
+
+  clearInvoiceFilters() {
+    this.invoiceSearch.set('');
+    this.invoiceFilter.set('all');
+  }
+
+  pickStudentForPayment(studentId: string) {
+    this.payment.studentId = studentId;
+    this.studentSearch.set('');
+    this.onStudentChange();
+  }
+
+  initials(first: string, last: string): string {
+    return `${(first || '').charAt(0)}${(last || '').charAt(0)}`.toUpperCase() || '?';
+  }
+
+  statusLabel(status: string): string {
+    const map: Record<string, string> = {
+      sent: 'Sent',
+      partial: 'Partial',
+      paid: 'Paid',
+      overdue: 'Overdue',
+    };
+    return map[status] || status;
   }
 
   loadData() {

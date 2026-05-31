@@ -10,12 +10,16 @@ import {
   TimetablePeriodsService,
 } from '../../core/services/timetable-periods.service';
 
+type ViewMode = 'table' | 'cards' | 'timeline';
+type ScheduleFilter = 'all' | 'lesson' | 'break';
+type AddPanel = 'lesson' | 'break' | null;
+
 @Component({
   selector: 'app-admin-timetable-configure-periods',
   standalone: true,
   imports: [PortalLayoutComponent, FormsModule, RouterLink],
   templateUrl: './admin-timetable-configure-periods.component.html',
-  styleUrl: './admin-timetable-periods.component.scss',
+  styleUrl: './admin-timetable-configure-periods.component.scss',
 })
 export class AdminTimetableConfigurePeriodsComponent implements OnInit {
   private periodsSvc = inject(TimetablePeriodsService);
@@ -25,9 +29,16 @@ export class AdminTimetableConfigurePeriodsComponent implements OnInit {
 
   periods = signal<TimetablePeriod[]>([]);
   toast = signal<{ type: 'success' | 'error'; msg: string } | null>(null);
+  saving = signal(false);
+  viewMode = signal<ViewMode>('table');
+  scheduleFilter = signal<ScheduleFilter>('all');
+  addPanel = signal<AddPanel>(null);
+  editingId = signal<string | null>(null);
+  scheduleSearch = signal('');
 
   lessonDraft = { name: '', startTime: '08:00', endTime: '08:40' };
   breakDraft = { name: '', startTime: '09:20', endTime: '09:35' };
+  editDraft = { name: '', startTime: '', endTime: '' };
 
   breakCount = computed(() => this.periodsSvc.countBreaks(this.periods()));
   lessonCount = computed(() => this.periods().filter((p) => p.slotType === 'lesson').length);
@@ -36,6 +47,53 @@ export class AdminTimetableConfigurePeriodsComponent implements OnInit {
   breaksValid = computed(() => {
     const n = this.breakCount();
     return n >= TIMETABLE_MIN_BREAKS && n <= TIMETABLE_MAX_BREAKS;
+  });
+
+  dayStats = computed(() => {
+    const list = this.periods();
+    if (!list.length) {
+      return { start: '—', end: '—', totalMin: 0, lessonMin: 0, breakMin: 0, spanLabel: '—' };
+    }
+    const starts = list.map((p) => this.timeToMinutes(p.startTime));
+    const ends = list.map((p) => this.timeToMinutes(p.endTime));
+    const startMin = Math.min(...starts);
+    const endMin = Math.max(...ends);
+    let lessonMin = 0;
+    let breakMin = 0;
+    for (const p of list) {
+      const dur = this.timeToMinutes(p.endTime) - this.timeToMinutes(p.startTime);
+      if (p.slotType === 'break') breakMin += dur;
+      else lessonMin += dur;
+    }
+    return {
+      start: this.minutesToTime(startMin),
+      end: this.minutesToTime(endMin),
+      totalMin: endMin - startMin,
+      lessonMin,
+      breakMin,
+      spanLabel: this.formatDuration(endMin - startMin),
+    };
+  });
+
+  filteredPeriods = computed(() => {
+    const q = this.scheduleSearch().trim().toLowerCase();
+    const filter = this.scheduleFilter();
+    return this.periods().filter((p) => {
+      if (filter === 'lesson' && p.slotType !== 'lesson') return false;
+      if (filter === 'break' && p.slotType !== 'break') return false;
+      if (!q) return true;
+      return `${p.name} ${p.startTime} ${p.endTime} ${p.slotType}`.toLowerCase().includes(q);
+    });
+  });
+
+  timelineMeta = computed(() => {
+    const list = this.periods();
+    if (!list.length) return { startMin: 0, endMin: 0, span: 1 };
+    const starts = list.map((p) => this.timeToMinutes(p.startTime));
+    const ends = list.map((p) => this.timeToMinutes(p.endTime));
+    const startMin = Math.min(...starts);
+    const endMin = Math.max(...ends);
+    return { startMin, endMin, span: Math.max(endMin - startMin, 1) };
   });
 
   ngOnInit() {
@@ -61,6 +119,7 @@ export class AdminTimetableConfigurePeriodsComponent implements OnInit {
     };
     this.periods.set(this.sortSlots([...this.periods(), next]));
     this.lessonDraft = { name: '', startTime: '08:00', endTime: '08:40' };
+    this.addPanel.set(null);
     this.showToast('success', 'Lesson period added.');
   }
 
@@ -83,6 +142,7 @@ export class AdminTimetableConfigurePeriodsComponent implements OnInit {
     };
     this.periods.set(this.sortSlots([...this.periods(), next]));
     this.breakDraft = { name: '', startTime: '09:20', endTime: '09:35' };
+    this.addPanel.set(null);
     this.showToast('success', 'Break added between lessons.');
   }
 
@@ -103,22 +163,105 @@ export class AdminTimetableConfigurePeriodsComponent implements OnInit {
       this.showToast('error', err);
       return;
     }
+    this.saving.set(true);
     this.periodsSvc.save(this.sortSlots(this.periods()));
-    this.showToast('success', 'Period and break configuration saved.');
+    setTimeout(() => {
+      this.saving.set(false);
+      this.showToast('success', 'Period and break configuration saved.');
+    }, 300);
   }
 
   resetDefaults() {
     this.periods.set(this.sortSlots(this.periodsSvc.resetDefaults()));
+    this.scheduleSearch.set('');
+    this.scheduleFilter.set('all');
     this.showToast('success', 'Restored default lessons and breaks.');
+  }
+
+  toggleAddPanel(panel: AddPanel) {
+    this.cancelEdit();
+    this.addPanel.set(this.addPanel() === panel ? null : panel);
+  }
+
+  isEditing(id: string): boolean {
+    return this.editingId() === id;
+  }
+
+  startEdit(p: TimetablePeriod) {
+    this.addPanel.set(null);
+    this.editingId.set(p.id);
+    this.editDraft = { name: p.name, startTime: p.startTime, endTime: p.endTime };
+  }
+
+  cancelEdit() {
+    this.editingId.set(null);
+    this.editDraft = { name: '', startTime: '', endTime: '' };
+  }
+
+  saveEdit() {
+    const id = this.editingId();
+    if (!id) return;
+
+    const current = this.periods().find((p) => p.id === id);
+    if (!current) return;
+
+    const name = this.editDraft.name.trim();
+    if (!name) {
+      this.showToast('error', `Enter a ${current.slotType === 'break' ? 'break' : 'lesson'} name.`);
+      return;
+    }
+    if (this.editDraft.startTime >= this.editDraft.endTime) {
+      this.showToast('error', 'End time must be after start time.');
+      return;
+    }
+
+    const updated: TimetablePeriod = {
+      ...current,
+      name,
+      startTime: this.editDraft.startTime,
+      endTime: this.editDraft.endTime,
+    };
+    this.periods.set(this.sortSlots(this.periods().map((p) => (p.id === id ? updated : p))));
+    this.cancelEdit();
+    this.showToast('success', current.slotType === 'break' ? 'Break updated.' : 'Lesson period updated.');
+  }
+
+  updateSlotName(id: string, name: string) {
+    const current = this.periods().find((p) => p.id === id);
+    if (!current) return;
+
+    const trimmed = name.trim();
+    if (!trimmed) {
+      this.showToast('error', 'Name cannot be empty.');
+      return;
+    }
+
+    const updated: TimetablePeriod = { ...current, name: trimmed };
+    this.periods.set(this.sortSlots(this.periods().map((p) => (p.id === id ? updated : p))));
   }
 
   slotTypeLabel(p: TimetablePeriod): string {
     return p.slotType === 'break' ? 'Break' : 'Lesson';
   }
 
-  updateLessonTime(id: string, field: 'startTime' | 'endTime', value: string) {
+  slotDurationLabel(p: TimetablePeriod): string {
+    const min = this.timeToMinutes(p.endTime) - this.timeToMinutes(p.startTime);
+    return this.formatDuration(min);
+  }
+
+  timelineStyle(p: TimetablePeriod): Record<string, string> {
+    const { startMin, span } = this.timelineMeta();
+    const left = ((this.timeToMinutes(p.startTime) - startMin) / span) * 100;
+    const width = ((this.timeToMinutes(p.endTime) - this.timeToMinutes(p.startTime)) / span) * 100;
+    return {
+      left: `${left}%`,
+      width: `${Math.max(width, 2)}%`,
+    };
+  }
+
+  updateSlotTime(id: string, field: 'startTime' | 'endTime', value: string) {
     const current = this.periods().find((p) => p.id === id);
-    if (!current || current.slotType !== 'lesson') return;
+    if (!current) return;
 
     const updated: TimetablePeriod = { ...current, [field]: value };
     if (updated.startTime >= updated.endTime) {
@@ -130,8 +273,30 @@ export class AdminTimetableConfigurePeriodsComponent implements OnInit {
     this.periods.set(this.sortSlots(list));
   }
 
+  clearScheduleSearch() {
+    this.scheduleSearch.set('');
+  }
+
   private sortSlots(list: TimetablePeriod[]): TimetablePeriod[] {
     return [...list].sort((a, b) => a.startTime.localeCompare(b.startTime));
+  }
+
+  private timeToMinutes(time: string): number {
+    const [h, m] = time.split(':').map(Number);
+    return h * 60 + m;
+  }
+
+  private minutesToTime(min: number): string {
+    const h = Math.floor(min / 60);
+    const m = min % 60;
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+  }
+
+  private formatDuration(min: number): string {
+    if (min < 60) return `${min}m`;
+    const h = Math.floor(min / 60);
+    const rem = min % 60;
+    return rem ? `${h}h ${rem}m` : `${h}h`;
   }
 
   private showToast(type: 'success' | 'error', msg: string) {

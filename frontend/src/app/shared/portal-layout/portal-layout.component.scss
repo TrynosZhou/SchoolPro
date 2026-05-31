@@ -20,8 +20,9 @@
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  padding: 0 0.35rem 1.35rem;
-  margin-bottom: 0.35rem;
+  padding: 0 0.35rem;
+  flex: 1;
+  min-width: 0;
 }
 
 .brand-text {
@@ -41,6 +42,59 @@
     color: #64748b;
     font-size: 0.78rem;
   }
+}
+
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding-bottom: 1.35rem;
+  margin-bottom: 0.35rem;
+}
+
+.sidebar-close {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border: 0;
+  border-radius: 10px;
+  background: rgba(30, 41, 59, 0.55);
+  color: #e2e8f0;
+  cursor: pointer;
+  flex-shrink: 0;
+
+  svg {
+    width: 1.25rem;
+    height: 1.25rem;
+  }
+}
+
+.nav-toggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  min-width: 44px;
+  min-height: 44px;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  background: #fff;
+  color: #334155;
+  cursor: pointer;
+  flex-shrink: 0;
+
+  svg {
+    width: 1.25rem;
+    height: 1.25rem;
+  }
+}
+
+.sidebar-backdrop {
+  display: none;
 }
 
 .brand-icon {
@@ -310,6 +364,19 @@
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 0.85rem 1rem;
+  margin-bottom: 1rem;
+
+  h1 {
+    margin: 0;
+    font-size: 1.2rem;
+    color: #0f172a;
+    flex: 1;
+    min-width: 0;
+  }
 }
 
 .topbar-user {
@@ -317,6 +384,7 @@
   align-items: center;
   gap: 0.6rem;
   margin-left: auto;
+  flex-shrink: 0;
 }
 
 .topbar-user-name {
@@ -330,6 +398,7 @@
 }
 
 .user-icon-btn {
+  position: relative;
   width: 2.1rem;
   height: 2.1rem;
   border-radius: 999px;
@@ -344,6 +413,18 @@
   &:hover {
     background: #f8fafc;
   }
+}
+
+.online-dot {
+  position: absolute;
+  bottom: -1px;
+  right: -1px;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 999px;
+  background: #22c55e;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.35);
 }
 
 .user-icon {
@@ -436,20 +517,6 @@
   padding: 1.1rem 1.25rem;
 }
 
-.topbar {
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 0.85rem 1rem;
-  margin-bottom: 1rem;
-
-  h1 {
-    margin: 0;
-    font-size: 1.2rem;
-    color: #0f172a;
-  }
-}
-
 .page-body {
   min-width: 0;
 }
@@ -459,8 +526,103 @@
     grid-template-columns: 1fr;
   }
 
-  .sidebar {
-    position: relative;
-    height: auto;
+  .nav-toggle,
+  .sidebar-close {
+    display: inline-flex;
   }
+
+  .sidebar-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 199;
+    border: 0;
+    padding: 0;
+    background: rgba(15, 23, 42, 0.55);
+    cursor: pointer;
+    animation: fade-in 0.2s ease;
+  }
+
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: min(288px, 88vw);
+    height: 100vh;
+    height: 100dvh;
+    z-index: 200;
+    transform: translateX(-105%);
+    transition: transform 0.25s ease;
+    box-shadow: none;
+    padding-top: max(1rem, env(safe-area-inset-top));
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  }
+
+  .layout.sidebar-open .sidebar {
+    transform: translateX(0);
+    box-shadow: 8px 0 32px rgba(0, 0, 0, 0.28);
+  }
+
+  .nav-section-toggle,
+  .nav-section-link,
+  .nav-flat-link {
+    min-height: 44px;
+  }
+
+  .nav-section-items a {
+    min-height: 40px;
+  }
+
+  .content {
+    padding:
+      max(0.75rem, env(safe-area-inset-top))
+      max(0.75rem, env(safe-area-inset-right))
+      max(0.75rem, env(safe-area-inset-bottom))
+      max(0.75rem, env(safe-area-inset-left));
+  }
+
+  .topbar {
+    position: sticky;
+    top: max(0px, env(safe-area-inset-top));
+    z-index: 50;
+    padding: 0.65rem 0.75rem;
+    gap: 0.65rem;
+
+    h1 {
+      font-size: 1rem;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
+
+  .topbar-user-name {
+    display: none;
+  }
+
+  .user-icon-btn {
+    width: 2.75rem;
+    height: 2.75rem;
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .user-menu-dropdown {
+    right: 0;
+    min-width: 10rem;
+  }
+
+  .logout-modal-backdrop {
+    padding:
+      max(1rem, env(safe-area-inset-top))
+      max(1rem, env(safe-area-inset-right))
+      max(1rem, env(safe-area-inset-bottom))
+      max(1rem, env(safe-area-inset-left));
+  }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
