@@ -14,7 +14,7 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
     for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ClassPromotionRule = exports.SchoolFee = exports.SchoolSettings = exports.UniformSale = exports.TuckshopSale = exports.TuckshopItem = exports.Notification = exports.Message = exports.WeeklyAssessment = exports.LearningSchedule = exports.Timetable = exports.CashbookEntry = exports.LedgerEntry = exports.Receipt = exports.Payment = exports.InvoiceLine = exports.Invoice = exports.HonourRoll = exports.ReportCard = exports.ExamMark = exports.ExamType = exports.StudentAttendance = exports.StaffAttendance = exports.Staff = exports.Guardian = exports.Student = exports.Parent = exports.ClassSubject = exports.Department = exports.Subject = exports.SchoolClass = exports.Form = exports.Term = exports.SchoolYear = exports.SchoolRole = exports.User = exports.entities = void 0;
+exports.StudentTermBalance = exports.ResultsPublication = exports.ClassPromotionRule = exports.SchoolFee = exports.SchoolSettings = exports.UniformSale = exports.TuckshopSale = exports.TuckshopItem = exports.Notification = exports.Message = exports.WeeklyAssessment = exports.LearningSchedule = exports.Timetable = exports.CashbookEntry = exports.LedgerEntry = exports.Receipt = exports.Payment = exports.InvoiceLine = exports.Invoice = exports.HonourRoll = exports.ReportCard = exports.ExamMark = exports.ExamType = exports.StudentAttendance = exports.StaffAttendance = exports.Staff = exports.Guardian = exports.Student = exports.Parent = exports.ClassSubject = exports.Department = exports.Subject = exports.SchoolClass = exports.Form = exports.Term = exports.SchoolYear = exports.SchoolRole = exports.User = exports.entities = void 0;
 const User_1 = require("./User");
 Object.defineProperty(exports, "User", { enumerable: true, get: function () { return User_1.User; } });
 const SchoolRole_1 = require("./SchoolRole");
@@ -87,12 +87,18 @@ const SchoolFee_1 = require("./SchoolFee");
 Object.defineProperty(exports, "SchoolFee", { enumerable: true, get: function () { return SchoolFee_1.SchoolFee; } });
 const ClassPromotionRule_1 = require("./ClassPromotionRule");
 Object.defineProperty(exports, "ClassPromotionRule", { enumerable: true, get: function () { return ClassPromotionRule_1.ClassPromotionRule; } });
+const ResultsPublication_1 = require("./ResultsPublication");
+Object.defineProperty(exports, "ResultsPublication", { enumerable: true, get: function () { return ResultsPublication_1.ResultsPublication; } });
+const StudentTermBalance_1 = require("./StudentTermBalance");
+Object.defineProperty(exports, "StudentTermBalance", { enumerable: true, get: function () { return StudentTermBalance_1.StudentTermBalance; } });
 exports.entities = [
     User_1.User,
     SchoolRole_1.SchoolRole,
     SchoolSettings_1.SchoolSettings,
     SchoolFee_1.SchoolFee,
     ClassPromotionRule_1.ClassPromotionRule,
+    ResultsPublication_1.ResultsPublication,
+    StudentTermBalance_1.StudentTermBalance,
     SchoolYear_1.SchoolYear,
     Term_1.Term,
     Form_1.Form,

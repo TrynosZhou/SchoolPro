@@ -3,6 +3,11 @@ import { Form, Invoice, LedgerEntry, SchoolFee, Student, Term } from '../entitie
 import { InvoiceStatus } from '../entities/enums';
 import { generateNumber, today } from '../utils/helpers';
 import { generateInvoicePdf } from '../utils/pdf';
+import {
+  applyAvailablePrepaidToInvoice,
+  ensureTermBalanceInitialized,
+  refreshTermClosingBalance,
+} from './term-balance.service';
 import { ensureDefaultSchoolFees } from './fee-catalog.service';
 import { loadSchoolBranding } from './school-branding.service';
 import { relations } from '../utils/typeorm-helpers';
@@ -77,6 +82,87 @@ export async function getCurrentTermId(): Promise<string | undefined> {
     where: { isCurrent: true },
   });
   return term?.id;
+}
+
+/** Resolve the tuition fee catalog row for a student's form level (O-Level vs A-Level). */
+export async function resolveTuitionFeeForFormLevel(level: number): Promise<SchoolFee | null> {
+  await ensureRegistrationSchoolFees();
+
+  const feeRepo = AppDataSource.getRepository(SchoolFee);
+  const fees = await feeRepo.find({ order: { sortOrder: 'ASC', name: 'ASC' } });
+  const activeFees = fees.filter((f) => f.isActive);
+
+  const norm = (v: string) => String(v || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const byCode = (pool: SchoolFee[], code: string) => pool.find((f) => norm(f.code) === norm(code));
+  const byNameHint = (pool: SchoolFee[], hints: string[]) =>
+    pool.find((f) => hints.some((h) => norm(f.name).includes(norm(h)) || norm(f.code).includes(norm(h))));
+
+  const resolveFee = (
+    preferredCode: string,
+    aliases: string[],
+    opts?: { preferNonZeroAmount?: boolean; rejectHints?: string[] },
+  ): SchoolFee | undefined => {
+    let candidates = [
+      byCode(activeFees, preferredCode),
+      byNameHint(activeFees, aliases),
+      byCode(fees, preferredCode),
+      byNameHint(fees, aliases),
+    ].filter(Boolean) as SchoolFee[];
+
+    if (!candidates.length) return undefined;
+    if (opts?.rejectHints?.length) {
+      const rejects = opts.rejectHints.map((h) => norm(h));
+      const filtered = candidates.filter((f) => {
+        const text = `${norm(f.code)} ${norm(f.name)}`;
+        return !rejects.some((r) => text.includes(r));
+      });
+      if (filtered.length) candidates = filtered;
+    }
+    if (opts?.preferNonZeroAmount) {
+      const nonZero = candidates.find((f) => Number(f.defaultAmount) > 0);
+      if (nonZero) return nonZero;
+    }
+    return candidates[0];
+  };
+
+  const tuitionCode = tuitionFeeCodeForFormLevel(level);
+  let tuitionFee = resolveFee(
+    tuitionCode,
+    level >= 5
+      ? ['advanced level tuition', 'a level tuition', 'advanced tuition', 'tuition fees', 'tuition']
+      : ['ordinary level tuition', 'o level tuition', 'ordinary tuition', 'tuition fees', 'tuition'],
+    {
+      preferNonZeroAmount: true,
+      rejectHints: level >= 5 ? ['ordinary', 'o level', 'olevel'] : ['advanced', 'a level', 'alevel'],
+    },
+  );
+  if (level < 5 && (!tuitionFee || Number(tuitionFee.defaultAmount) <= 0)) {
+    const ordinaryFallback = resolveFee(
+      'tuition',
+      ['ordinary level tuition fees', 'ordinary tuition', 'tuition fees', 'tuition'],
+      { preferNonZeroAmount: true, rejectHints: ['advanced', 'a level', 'alevel'] },
+    );
+    if (ordinaryFallback) tuitionFee = ordinaryFallback;
+  }
+
+  if (!tuitionFee) {
+    const def = REGISTRATION_FEE_DEFINITIONS.find((d) => d.code === tuitionCode);
+    if (def) {
+      tuitionFee = await feeRepo.save(
+        feeRepo.create({
+          ...def,
+          isActive: true,
+          defaultAmount: Number(def.defaultAmount || 0),
+        }),
+      );
+    }
+  }
+
+  return tuitionFee || null;
+}
+
+export function bulkTuitionInvoiceDescription(nextTermName: string): string {
+  return `Tuition fees for ${nextTermName}`;
 }
 
 export async function createRegistrationInvoiceForStudent(
@@ -306,6 +392,12 @@ export async function createRegistrationInvoiceForStudent(
   });
   invoice.pdfPath = pdfPath;
   await invoiceRepo.save(invoice);
+
+  if (termId) {
+    await ensureTermBalanceInitialized(student.id, termId);
+    await applyAvailablePrepaidToInvoice(invoice);
+    await refreshTermClosingBalance(student.id, termId);
+  }
 
   return invoiceRepo.findOne({
     where: { id: invoice.id },

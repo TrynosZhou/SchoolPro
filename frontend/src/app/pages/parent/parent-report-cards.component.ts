@@ -107,24 +107,43 @@ export class ParentReportCardsComponent implements OnInit {
         this.terms.set(sorted);
         const current = sorted.find((t) => t.isCurrent);
         this.selectedTermId = current?.id || sorted[0]?.id || '';
+        this.loadPublishedExamTypes(this.selectedTermId);
       },
       error: () => {
         this.terms.set([]);
         this.selectedTermId = '';
+        this.loading.set(false);
         this.showToast('error', 'Could not load school terms.');
       },
     });
-    this.api.get<{ id: string; name: string }[]>('/exams/types').subscribe({
+  }
+
+  onTermChange(termId: string) {
+    this.selectedTermId = termId;
+    this.loadPublishedExamTypes(termId);
+  }
+
+  private loadPublishedExamTypes(termId: string) {
+    if (!termId) {
+      this.examTypes.set([]);
+      this.selectedExamTypeId = '';
+      this.loading.set(false);
+      return;
+    }
+    this.api.get<{ id: string; name: string }[]>('/exams/types', { termId }).subscribe({
       next: (types) => {
         this.examTypes.set(types);
         this.selectedExamTypeId = types[0]?.id || '';
         this.loading.set(false);
+        if (!types.length) {
+          this.showToast('error', 'No published results for this term yet.');
+        }
       },
       error: () => {
         this.examTypes.set([]);
         this.selectedExamTypeId = '';
         this.loading.set(false);
-        this.showToast('error', 'Could not load exam types.');
+        this.showToast('error', 'Could not load published exam types.');
       },
     });
   }

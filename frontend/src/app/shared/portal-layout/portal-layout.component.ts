@@ -66,6 +66,12 @@ export class PortalLayoutComponent implements OnInit, OnDestroy {
     return `${u?.firstName ?? ''} ${u?.lastName ?? ''}`.trim() || 'User';
   }
 
+  get avatarUrl(): string | null {
+    const u = this.auth.user() as { avatarUrl?: string | null } | null;
+    const url = u?.avatarUrl?.trim();
+    return url || null;
+  }
+
   get userRoleLabel(): string {
     const role = (this.auth.user()?.role || 'user').toString().toLowerCase();
     return role

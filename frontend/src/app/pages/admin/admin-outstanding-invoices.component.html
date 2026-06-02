@@ -201,6 +201,19 @@
                     <div class="inv-meta">
                       <span class="due" [attr.data-tone]="dueTone(inv.dueDate)">Due {{ inv.dueDate }}</span>
                       <span class="status-pill">{{ statusLabel(inv.status) }}</span>
+                      <button
+                        type="button"
+                        class="pay-btn"
+                        title="Record payment"
+                        [attr.aria-label]="'Record payment for ' + s.firstName + ' ' + s.lastName"
+                        (click)="recordPayment(s.id, inv.invoiceId)"
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                          <rect x="2" y="5" width="20" height="14" rx="2" stroke="currentColor" stroke-width="1.75"/>
+                          <path d="M2 10h20" stroke="currentColor" stroke-width="1.75"/>
+                          <path d="M6 15h4" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>
+                        </svg>
+                      </button>
                     </div>
                   </li>
                 }
@@ -223,6 +236,7 @@
                 <th class="num">Invoiced</th>
                 <th class="num">Paid</th>
                 <th class="num">Balance</th>
+                <th class="actions-col">Pay</th>
               </tr>
             </thead>
             <tbody>
@@ -243,6 +257,21 @@
                   <td class="num">${{ row.totalAmount | number:'1.2-2' }}</td>
                   <td class="num paid">${{ row.amountPaid | number:'1.2-2' }}</td>
                   <td class="num balance"><strong>${{ row.balance | number:'1.2-2' }}</strong></td>
+                  <td class="actions-col">
+                    <button
+                      type="button"
+                      class="pay-btn"
+                      title="Record payment"
+                      [attr.aria-label]="'Record payment for ' + row.firstName + ' ' + row.lastName"
+                      (click)="recordPayment(row.studentId, row.invoiceId)"
+                    >
+                      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <rect x="2" y="5" width="20" height="14" rx="2" stroke="currentColor" stroke-width="1.75"/>
+                        <path d="M2 10h20" stroke="currentColor" stroke-width="1.75"/>
+                        <path d="M6 15h4" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>
+                      </svg>
+                    </button>
+                  </td>
                 </tr>
               }
             </tbody>
@@ -275,6 +304,7 @@
                         <th class="num">Invoiced</th>
                         <th class="num">Paid</th>
                         <th class="num">Balance</th>
+                        <th class="actions-col">Pay</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -302,6 +332,21 @@
                             <td class="num">${{ inv.totalAmount | number:'1.2-2' }}</td>
                             <td class="num paid">${{ inv.amountPaid | number:'1.2-2' }}</td>
                             <td class="num balance"><strong>${{ inv.balance | number:'1.2-2' }}</strong></td>
+                            <td class="actions-col">
+                              <button
+                                type="button"
+                                class="pay-btn"
+                                title="Record payment"
+                                [attr.aria-label]="'Record payment for ' + student.firstName + ' ' + student.lastName"
+                                (click)="recordPayment(student.id, inv.invoiceId)"
+                              >
+                                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                  <rect x="2" y="5" width="20" height="14" rx="2" stroke="currentColor" stroke-width="1.75"/>
+                                  <path d="M2 10h20" stroke="currentColor" stroke-width="1.75"/>
+                                  <path d="M6 15h4" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>
+                                </svg>
+                              </button>
+                            </td>
                           </tr>
                         }
                       }

@@ -48,23 +48,33 @@
             <span class="mobile-brand-name">School Pro</span>
           </div>
 
-          <nav class="mode-tabs" aria-label="Authentication mode">
-            <button type="button" class="mode-tab" [class.active]="mode() === 'signin'" (click)="setMode('signin')">
-              Sign in
-            </button>
-            <button type="button" class="mode-tab" [class.active]="mode() === 'signup'" (click)="setMode('signup')">
-              Sign up
-            </button>
-          </nav>
+          @if (mode() === 'signin' || mode() === 'signup') {
+            <nav class="mode-tabs" aria-label="Authentication mode">
+              <button type="button" class="mode-tab" [class.active]="mode() === 'signin'" (click)="setMode('signin')">
+                Sign in
+              </button>
+              <button type="button" class="mode-tab" [class.active]="mode() === 'signup'" (click)="setMode('signup')">
+                Sign up
+              </button>
+            </nav>
+          }
 
           @if (mode() === 'signin') {
             <span class="signin-badge">Secure sign in</span>
             <h2>Welcome back</h2>
             <p>Enter your credentials to access your portal</p>
-          } @else {
+          } @else if (mode() === 'signup') {
             <span class="signin-badge signup">Create account</span>
             <h2>Join School Pro</h2>
             <p>Parents and students can register to access the portal</p>
+          } @else if (mode() === 'forgot') {
+            <span class="signin-badge">Account recovery</span>
+            <h2>Forgot password?</h2>
+            <p>Enter your username or email and we will send reset instructions if an account exists</p>
+          } @else {
+            <span class="signin-badge">Account recovery</span>
+            <h2>Set a new password</h2>
+            <p>Choose a strong password for your account</p>
           }
         </header>
 
@@ -109,21 +119,43 @@
             </div>
           }
 
-          <div class="field" [class.has-error]="error()">
-            <label for="email">Email address</label>
-            <div class="input-wrap">
-              <span class="input-icon" aria-hidden="true">✉</span>
-              <input
-                id="email"
-                type="email"
-                [(ngModel)]="email"
-                name="email"
-                required
-                [autocomplete]="mode() === 'signup' ? 'email' : 'email'"
-                placeholder="you@schoolpro.ac.zw"
-              />
+          @if (mode() === 'signin' || mode() === 'forgot') {
+            <div class="field" [class.has-error]="error()">
+              <label for="username">{{ mode() === 'forgot' ? 'Username or email' : 'Username' }}</label>
+              <div class="input-wrap">
+                <span class="input-icon" aria-hidden="true">👤</span>
+                <input
+                  id="username"
+                  type="text"
+                  [(ngModel)]="username"
+                  name="username"
+                  required
+                  autocomplete="username"
+                  placeholder="e.g. admin"
+                  autocapitalize="none"
+                  spellcheck="false"
+                />
+              </div>
             </div>
-          </div>
+          }
+
+          @if (mode() === 'signup') {
+            <div class="field" [class.has-error]="error()">
+              <label for="signupEmail">Email address</label>
+              <div class="input-wrap">
+                <span class="input-icon" aria-hidden="true">✉</span>
+                <input
+                  id="signupEmail"
+                  type="email"
+                  [(ngModel)]="signupEmail"
+                  name="signupEmail"
+                  required
+                  autocomplete="email"
+                  placeholder="you@schoolpro.ac.zw"
+                />
+              </div>
+            </div>
+          }
 
           @if (mode() === 'signup') {
             <div class="field">
@@ -188,31 +220,38 @@
             }
           }
 
-          <div class="field">
-            <div class="label-row">
-              <label for="password">Password</label>
+          @if (mode() === 'signin' || mode() === 'signup' || mode() === 'reset') {
+            <div class="field">
+              <div class="label-row">
+                <label for="password">{{ mode() === 'reset' ? 'New password' : 'Password' }}</label>
+                @if (mode() === 'signin') {
+                  <button type="button" class="link-btn link-btn--inline" (click)="setMode('forgot')">
+                    Forgot password?
+                  </button>
+                }
+              </div>
+              <div class="input-wrap">
+                <span class="input-icon" aria-hidden="true">🔒</span>
+                <input
+                  id="password"
+                  [type]="showPassword() ? 'text' : 'password'"
+                  [(ngModel)]="password"
+                  name="password"
+                  [required]="mode() !== 'forgot'"
+                  [autocomplete]="mode() === 'signin' ? 'current-password' : 'new-password'"
+                  [placeholder]="mode() === 'reset' ? 'Enter new password' : 'Enter your password'"
+                />
+                <button
+                  type="button"
+                  class="toggle-pw"
+                  (click)="togglePassword()"
+                  [attr.aria-label]="showPassword() ? 'Hide password' : 'Show password'"
+                >
+                  {{ showPassword() ? '🙈' : '👁' }}
+                </button>
+              </div>
             </div>
-            <div class="input-wrap">
-              <span class="input-icon" aria-hidden="true">🔒</span>
-              <input
-                id="password"
-                [type]="showPassword() ? 'text' : 'password'"
-                [(ngModel)]="password"
-                name="password"
-                required
-                [autocomplete]="mode() === 'signup' ? 'new-password' : 'current-password'"
-                placeholder="Enter your password"
-              />
-              <button
-                type="button"
-                class="toggle-pw"
-                (click)="togglePassword()"
-                [attr.aria-label]="showPassword() ? 'Hide password' : 'Show password'"
-              >
-                {{ showPassword() ? '🙈' : '👁' }}
-              </button>
-            </div>
-          </div>
+          }
 
           @if (mode() === 'signup') {
             <div class="field">
@@ -238,11 +277,35 @@
             </ul>
           }
 
+          @if (mode() === 'reset') {
+            <div class="field">
+              <label for="resetConfirmPassword">Confirm new password</label>
+              <div class="input-wrap">
+                <span class="input-icon" aria-hidden="true">🔒</span>
+                <input
+                  id="resetConfirmPassword"
+                  [type]="showPassword() ? 'text' : 'password'"
+                  [(ngModel)]="resetConfirmPassword"
+                  name="resetConfirmPassword"
+                  required
+                  autocomplete="new-password"
+                  placeholder="Re-enter new password"
+                />
+              </div>
+            </div>
+
+            <ul class="password-rules">
+              @for (rule of passwordRules(); track rule) {
+                <li>{{ rule }}</li>
+              }
+            </ul>
+          }
+
           @if (mode() === 'signin') {
             <div class="form-options">
               <label class="checkbox-label">
                 <input type="checkbox" [(ngModel)]="rememberMe" name="remember" />
-                <span>Remember email</span>
+                <span>Remember username</span>
               </label>
             </div>
           }
@@ -261,45 +324,51 @@
             </div>
           }
 
+          @if (devResetUrl()) {
+            <p class="dev-reset-hint">
+              Development: <a [href]="devResetUrl()">Open reset link</a>
+            </p>
+          }
+
           <button type="submit" class="btn-signin" [disabled]="loading()">
             @if (loading()) {
               <span class="btn-spinner"></span>
-              {{ mode() === 'signup' ? 'Creating account…' : 'Signing in…' }}
+              @switch (mode()) {
+                @case ('signup') { Creating account… }
+                @case ('forgot') { Sending instructions… }
+                @case ('reset') { Updating password… }
+                @default { Signing in… }
+              }
             } @else {
-              {{ mode() === 'signup' ? 'Create account' : 'Sign in to portal' }}
+              @switch (mode()) {
+                @case ('signup') { Create account }
+                @case ('forgot') { Send reset instructions }
+                @case ('reset') { Update password }
+                @default { Sign in to portal }
+              }
             }
           </button>
         </form>
 
         <p class="mode-switch">
-          @if (mode() === 'signin') {
-            Don't have an account?
-            <button type="button" class="link-btn" (click)="setMode('signup')">Sign up</button>
-          } @else {
-            Already have an account?
-            <button type="button" class="link-btn" (click)="setMode('signin')">Sign in</button>
+          @switch (mode()) {
+            @case ('signin') {
+              Don't have an account?
+              <button type="button" class="link-btn" (click)="setMode('signup')">Sign up</button>
+            }
+            @case ('signup') {
+              Already have an account?
+              <button type="button" class="link-btn" (click)="setMode('signin')">Sign in</button>
+            }
+            @case ('forgot') {
+              Remember your password?
+              <button type="button" class="link-btn" (click)="setMode('signin')">Back to sign in</button>
+            }
+            @default {
+              <button type="button" class="link-btn" (click)="setMode('signin')">Back to sign in</button>
+            }
           }
         </p>
-
-        @if (mode() === 'signin') {
-          <section class="demo-section">
-            <div class="demo-head">
-              <span class="demo-title">Quick demo access</span>
-              <span class="demo-pw">Password: <code>{{ demoPassword }}</code></span>
-            </div>
-            <div class="demo-grid">
-              @for (d of demoAccounts; track d.email) {
-                <button type="button" class="demo-chip" (click)="fillDemo(d)">
-                  <span class="demo-chip-icon">{{ d.icon }}</span>
-                  <span class="demo-chip-body">
-                    <strong>{{ d.role }}</strong>
-                    <small>{{ d.desc }}</small>
-                  </span>
-                </button>
-              }
-            </div>
-          </section>
-        }
       </div>
     </main>
   </div>

@@ -16,6 +16,8 @@ const typeorm_helpers_1 = require("../utils/typeorm-helpers");
 const security_policy_service_1 = require("../services/security-policy.service");
 const security_policy_1 = require("../types/security-policy");
 const role_permissions_service_1 = require("../services/role-permissions.service");
+const password_reset_service_1 = require("../services/password-reset.service");
+const user_auth_1 = require("../utils/user-auth");
 const router = (0, express_1.Router)();
 function formatLockoutRemaining(until) {
     const mins = Math.max(1, Math.ceil((until.getTime() - Date.now()) / 60000));
@@ -28,16 +30,14 @@ function formatLockoutRemaining(until) {
 }
 router.post('/login', async (req, res) => {
     try {
-        const { email, password } = req.body;
-        if (!email || !password) {
-            return res.status(400).json({ message: 'Email and password required' });
+        const { username, email, password } = req.body;
+        const loginId = String(username || email || '').trim();
+        if (!loginId || !password) {
+            return res.status(400).json({ message: 'Username and password required' });
         }
         const policy = await (0, security_policy_service_1.getSecurityPolicy)();
         const userRepo = data_source_1.AppDataSource.getRepository(entities_1.User);
-        const user = await userRepo.findOne({
-            where: { email: email.toLowerCase(), isActive: true },
-            relations: typeorm_helpers_1.USER_PROFILES,
-        });
+        const user = await (0, user_auth_1.findActiveUserByLoginIdentifier)(loginId, typeorm_helpers_1.USER_PROFILES);
         if (user?.lockedUntil && new Date() < new Date(user.lockedUntil)) {
             return res.status(423).json({
                 message: `Account temporarily locked. Try again in ${formatLockoutRemaining(new Date(user.lockedUntil))}.`,
@@ -98,6 +98,7 @@ router.post('/login', async (req, res) => {
             user: {
                 id: fullUser.id,
                 email: fullUser.email,
+                username: fullUser.username ?? null,
                 firstName: fullUser.firstName,
                 lastName: fullUser.lastName,
                 role: fullUser.role,
@@ -137,6 +138,29 @@ router.get('/me', auth_1.authenticate, async (req, res) => {
         parentId: user.parentProfile?.id,
         studentId: user.studentProfile?.id,
     });
+});
+router.post('/forgot-password', async (req, res) => {
+    try {
+        const { username, email } = req.body;
+        const result = await (0, password_reset_service_1.requestPasswordReset)(String(username || email || ''));
+        res.json(result);
+    }
+    catch (err) {
+        console.error('Forgot password error:', err);
+        res.status(500).json({ message: 'Could not process password reset request.' });
+    }
+});
+router.post('/reset-password', async (req, res) => {
+    try {
+        const { token, password } = req.body;
+        const result = await (0, password_reset_service_1.resetPasswordWithToken)(String(token || ''), String(password || ''));
+        res.json(result);
+    }
+    catch (err) {
+        return res.status(400).json({
+            message: err instanceof Error ? err.message : 'Could not reset password',
+        });
+    }
 });
 router.get('/password-policy', async (_req, res) => {
     const policy = await (0, security_policy_service_1.getSecurityPolicy)();

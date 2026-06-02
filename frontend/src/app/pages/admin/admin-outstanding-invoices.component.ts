@@ -1,7 +1,7 @@
 import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
 import { ApiService } from '../../core/services/api.service';
@@ -67,6 +67,7 @@ type ViewMode = 'grouped' | 'flat' | 'cards';
 })
 export class AdminOutstandingInvoicesComponent implements OnInit {
   private api = inject(ApiService);
+  private router = inject(Router);
 
   readonly adminNav = ADMIN_NAV_SECTIONS;
 
@@ -380,6 +381,12 @@ export class AdminOutstandingInvoicesComponent implements OnInit {
 
   downloadPdf() {
     this.exportPdf(false);
+  }
+
+  recordPayment(studentId: string, invoiceId?: string): void {
+    void this.router.navigate(['/admin/fin-reports/record-payment', studentId], {
+      queryParams: invoiceId ? { invoiceId } : {},
+    });
   }
 
   private earliestDue(student: OutstandingStudentRow): number {

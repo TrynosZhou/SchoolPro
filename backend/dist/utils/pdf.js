@@ -10,13 +10,13 @@ exports.generateReportCardPdf = generateReportCardPdf;
 exports.generateClassListPdf = generateClassListPdf;
 exports.generateMarkSheetPdf = generateMarkSheetPdf;
 exports.generateRankingsPdf = generateRankingsPdf;
+exports.generateResultsAnalysisPdf = generateResultsAnalysisPdf;
 exports.generateReconciliationPdf = generateReconciliationPdf;
 const pdfkit_1 = __importDefault(require("pdfkit"));
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
 const qrcode_1 = __importDefault(require("qrcode"));
 const subject_abbrev_1 = require("./subject-abbrev");
-const grade_boundaries_1 = require("../types/grade-boundaries");
 const receiptsDir = path_1.default.join(process.cwd(), 'uploads', 'receipts');
 const invoicesDir = path_1.default.join(process.cwd(), 'uploads', 'invoices');
 const logosDir = path_1.default.join(process.cwd(), 'uploads', 'logos');
@@ -769,9 +769,6 @@ async function generateReportCardPdf(data) {
         width: 160,
         errorCorrectionLevel: 'M',
     });
-    const gradeLegend = (data.gradeBoundaries?.length ? data.gradeBoundaries : grade_boundaries_1.DEFAULT_GRADE_BOUNDARIES)
-        .slice()
-        .sort((a, b) => b.minPercent - a.minPercent);
     return new Promise((resolve, reject) => {
         const margin = 36;
         const pageW = 595.28;
@@ -1104,30 +1101,13 @@ async function generateReportCardPdf(data) {
             if (data.principalRemarks)
                 drawComment('Principal', data.principalRemarks);
         }
-        // —— Grade scale legend ——
-        if (y + 52 > pageBottom()) {
-            doc.addPage();
-            y = margin;
-        }
-        doc.fillColor(RC.ink).font('Helvetica-Bold').fontSize(11);
-        doc.text('Grading scale', margin, y);
-        y += 14;
-        const legendText = gradeLegend
-            .map((b) => {
-            const label = b.label ? ` ${b.label}` : '';
-            return `${b.grade} ≥ ${b.minPercent}%${label}`;
-        })
-            .join('   ·   ');
-        doc.font('Helvetica').fontSize(8.5).fillColor(RC.muted);
-        doc.text(legendText, margin, y, { width: contentW - 88, lineGap: 2 });
-        y += 24;
         // —— Signatures ——
         if (y + 58 > pageBottom()) {
             doc.addPage();
             y = margin;
         }
-        const sigW = (contentW - 24) / 3;
-        const sigLabels = ['Class teacher', 'Principal', 'Parent / guardian'];
+        const sigW = (contentW - 12) / 2;
+        const sigLabels = ['Class teacher', 'Principal'];
         sigLabels.forEach((label, i) => {
             const sx = margin + i * (sigW + 12);
             doc.strokeColor(RC.border).moveTo(sx, y + 28).lineTo(sx + sigW, y + 28).stroke();
@@ -1158,59 +1138,133 @@ async function generateClassListPdf(data) {
         doc.on('data', (c) => chunks.push(c));
         doc.on('end', () => resolve(Buffer.concat(chunks)));
         doc.on('error', reject);
-        const pageBottom = () => doc.page.height - 50;
-        const pageW = doc.page.width;
-        const margin = 40;
-        const contentW = pageW - margin * 2;
-        const logoPath = resolveUploadPath(data.logoUrl);
-        if (logoPath) {
-            try {
-                doc.image(logoPath, margin, 26, { fit: [36, 36], align: 'center', valign: 'center' });
-            }
-            catch {
-                /* skip invalid logo */
-            }
-        }
-        const titleX = logoPath ? margin + 46 : margin;
-        const titleW = logoPath ? contentW - 46 : contentW;
-        doc.fontSize(16).text(data.schoolName, titleX, 32, { width: titleW, align: logoPath ? 'left' : 'center' });
-        if (data.tagline) {
-            doc.fontSize(9).fillColor('#64748b').text(data.tagline, titleX, 50, { width: titleW, align: logoPath ? 'left' : 'center' });
-            doc.fillColor('#000000');
-        }
-        doc.fontSize(13).text('CLASS LIST REPORT', { align: 'center' });
-        doc.moveDown(0.5);
-        doc.fontSize(10);
-        doc.text(`Class: ${data.classLabel}`, { align: 'center' });
-        doc.text(`Total students: ${data.students.length}`, { align: 'center' });
-        doc.moveDown();
-        const colX = { num: 40, id: 70, last: 165, first: 295, gender: 430 };
-        const drawHeader = () => {
-            const y = doc.y;
-            doc.fontSize(9).font('Helvetica-Bold');
-            doc.text('#', colX.num, y);
-            doc.text('Student ID', colX.id, y);
-            doc.text('Last Name', colX.last, y);
-            doc.text('First Name', colX.first, y);
-            doc.text('Gender', colX.gender, y);
-            doc.moveDown(0.6);
-            doc.font('Helvetica');
+        const CL = {
+            primary: '#1e40af',
+            primaryLight: '#2563eb',
+            headerBg: '#1e3a8a',
+            headerText: '#ffffff',
+            rowBlue: '#eff6ff',
+            rowGrey: '#f1f5f9',
+            grid: '#94a3b8',
+            gridLight: '#cbd5e1',
+            ink: '#0f172a',
+            muted: '#64748b',
+            white: '#ffffff',
+            metaBg: '#dbeafe',
         };
-        drawHeader();
-        data.students.forEach((s, index) => {
-            if (doc.y > pageBottom()) {
-                doc.addPage();
-                drawHeader();
+        const margin = 40;
+        const pageW = doc.page.width;
+        const contentW = pageW - margin * 2;
+        const rowH = 22;
+        const headerRowH = 24;
+        const colWidths = [32, 98, 138, 138, 109];
+        const tableW = colWidths.reduce((a, b) => a + b, 0);
+        const tableX = margin + (contentW - tableW) / 2;
+        const pageBottom = () => doc.page.height - 58;
+        const colX = (index) => {
+            let x = tableX;
+            for (let i = 0; i < index; i++)
+                x += colWidths[i];
+            return x;
+        };
+        const drawPageHeader = () => {
+            const bannerH = 56;
+            doc.rect(0, 0, pageW, bannerH).fill(CL.headerBg);
+            doc.rect(0, bannerH - 3, pageW, 3).fill(CL.primaryLight);
+            const logoPath = resolveUploadPath(data.logoUrl);
+            let textX = margin;
+            if (logoPath) {
+                try {
+                    doc.image(logoPath, margin, 10, { fit: [36, 36], align: 'center', valign: 'center' });
+                    textX = margin + 46;
+                }
+                catch {
+                    /* skip invalid logo */
+                }
             }
+            doc.fillColor(CL.white).font('Helvetica-Bold').fontSize(15);
+            doc.text(data.schoolName, textX, 14, { width: contentW - (textX - margin), lineBreak: false });
+            if (data.tagline) {
+                doc.font('Helvetica').fontSize(8.5).fillColor('#bfdbfe');
+                doc.text(data.tagline, textX, 32, { width: contentW - (textX - margin), lineBreak: false });
+            }
+            doc.font('Helvetica-Bold').fontSize(10).fillColor('#dbeafe');
+            doc.text('CLASS LIST REPORT', margin, bannerH + 14, { width: contentW, align: 'center' });
+            const metaY = bannerH + 32;
+            doc.roundedRect(margin, metaY, contentW, 34, 6).fill(CL.metaBg);
+            doc.roundedRect(margin, metaY, contentW, 34, 6).strokeColor(CL.gridLight).lineWidth(0.75).stroke();
+            doc.fillColor(CL.muted).font('Helvetica').fontSize(7.5);
+            doc.text('CLASS', margin + 12, metaY + 7, { lineBreak: false });
+            doc.text('TOTAL STUDENTS', margin + contentW / 2 + 6, metaY + 7, { lineBreak: false });
+            doc.text('GENERATED', margin + contentW - 120, metaY + 7, { width: 108, align: 'right', lineBreak: false });
+            doc.fillColor(CL.ink).font('Helvetica-Bold').fontSize(10);
+            doc.text(data.classLabel, margin + 12, metaY + 18, { width: contentW / 2 - 18, lineBreak: false });
+            doc.text(String(data.students.length), margin + contentW / 2 + 6, metaY + 18, { lineBreak: false });
+            doc.font('Helvetica').fontSize(8.5).fillColor(CL.muted);
+            doc.text(formatGeneratedTimestamp(data.generatedAt), margin + contentW - 120, metaY + 18, {
+                width: 108,
+                align: 'right',
+                lineBreak: false,
+            });
+            doc.y = metaY + 44;
+        };
+        const drawTableHeader = () => {
             const y = doc.y;
-            doc.fontSize(9);
-            doc.text(String(index + 1), colX.num, y);
-            doc.text(s.admissionNumber, colX.id, y);
-            doc.text(s.lastName, colX.last, y, { width: 120 });
-            doc.text(s.firstName, colX.first, y, { width: 120 });
-            doc.text(s.gender || '—', colX.gender, y);
-            doc.moveDown(0.55);
+            const headers = ['#', 'Student ID', 'Last Name', 'First Name', 'Gender'];
+            doc.rect(tableX, y, tableW, headerRowH).fill(CL.primary);
+            doc.fillColor(CL.headerText).font('Helvetica-Bold').fontSize(8.5);
+            headers.forEach((label, i) => {
+                const x = colX(i);
+                const w = colWidths[i];
+                doc.text(label, x + 5, y + 7, { width: w - 10, lineBreak: false });
+                if (i > 0) {
+                    doc.moveTo(x, y).lineTo(x, y + headerRowH).strokeColor(CL.grid).lineWidth(0.75).stroke();
+                }
+            });
+            doc.rect(tableX, y, tableW, headerRowH).strokeColor(CL.grid).lineWidth(0.85).stroke();
+            doc.y = y + headerRowH;
+        };
+        const drawStudentRow = (index, student) => {
+            const y = doc.y;
+            const bg = index % 2 === 0 ? CL.rowBlue : CL.rowGrey;
+            const values = [
+                String(index + 1),
+                student.admissionNumber,
+                student.lastName,
+                student.firstName,
+                student.gender || '—',
+            ];
+            doc.rect(tableX, y, tableW, rowH).fill(bg);
+            doc.fillColor(CL.ink).font('Helvetica').fontSize(8.5);
+            values.forEach((value, i) => {
+                const x = colX(i);
+                const w = colWidths[i];
+                const isId = i === 1;
+                if (isId)
+                    doc.font('Helvetica-Bold').fillColor(CL.primaryLight);
+                else
+                    doc.font('Helvetica').fillColor(CL.ink);
+                doc.text(value, x + 5, y + 6, { width: w - 10, lineBreak: false, ellipsis: true });
+                if (i > 0) {
+                    doc.moveTo(x, y).lineTo(x, y + rowH).strokeColor(CL.gridLight).lineWidth(0.6).stroke();
+                }
+            });
+            doc.rect(tableX, y, tableW, rowH).strokeColor(CL.grid).lineWidth(0.75).stroke();
+            doc.y = y + rowH;
+        };
+        drawPageHeader();
+        drawTableHeader();
+        data.students.forEach((student, index) => {
+            if (doc.y + rowH > pageBottom()) {
+                doc.addPage();
+                drawPageHeader();
+                drawTableHeader();
+            }
+            drawStudentRow(index, student);
         });
+        doc.moveDown(0.6);
+        doc.fillColor(CL.muted).font('Helvetica').fontSize(7.5);
+        doc.text(`End of class list · ${data.students.length} student${data.students.length === 1 ? '' : 's'}`, margin, doc.y, { width: contentW, align: 'center' });
         drawGeneratedFooter(doc, data.generatedAt, margin, contentW);
         doc.end();
     });
@@ -1768,6 +1822,153 @@ async function generateRankingsPdf(data) {
             }
             drawRow(row, idx);
         });
+        const footerY = pageH - margin - 6;
+        doc.save();
+        doc.strokeColor(MS.border).lineWidth(1);
+        doc.moveTo(margin, footerY - 10).lineTo(margin + contentW, footerY - 10).stroke();
+        doc.fillColor(MS.blue).font('Helvetica').fontSize(8);
+        doc.text(`Official Academic Record — ${school}`, margin, footerY - 4, { lineBreak: false });
+        doc.font('Helvetica').fontSize(7.5).fillColor(MS.muted);
+        doc.text(`Generated: ${formatGeneratedTimestamp(data.generatedAt)}`, margin, footerY - 4, {
+            width: contentW,
+            align: 'right',
+        });
+        doc.restore();
+        doc.end();
+    });
+}
+async function generateResultsAnalysisPdf(data) {
+    return new Promise((resolve, reject) => {
+        const margin = 36;
+        const doc = new pdfkit_1.default({ margin, size: 'A4' });
+        const chunks = [];
+        doc.on('data', (c) => chunks.push(c));
+        doc.on('end', () => resolve(Buffer.concat(chunks)));
+        doc.on('error', reject);
+        const pageW = doc.page.width;
+        const pageH = doc.page.height;
+        const contentW = pageW - margin * 2;
+        const logoPath = resolveUploadPath(data.logoUrl);
+        const school = data.schoolName || 'School Pro Academy';
+        const pageBottom = () => pageH - margin - 28;
+        const drawBanner = () => {
+            const bannerH = 72;
+            doc.save();
+            doc.rect(0, 0, pageW, bannerH).fill(MS.blue);
+            if (logoPath) {
+                try {
+                    doc.save();
+                    doc.circle(margin + 28, 36, 24).fill(MS.white);
+                    doc.restore();
+                    doc.image(logoPath, margin + 10, 18, { fit: [36, 36] });
+                }
+                catch {
+                    /* skip */
+                }
+            }
+            const tx = logoPath ? margin + 58 : margin;
+            doc.fillColor(MS.white).font('Helvetica-Bold').fontSize(15);
+            doc.text(school, tx, 16, { width: contentW - 80, lineBreak: false });
+            if (data.tagline) {
+                doc.font('Helvetica').fontSize(8.5).fillColor('#dbeafe');
+                doc.text(data.tagline, tx, 34, { width: contentW - 80, lineBreak: false });
+            }
+            doc.font('Helvetica-Bold').fontSize(10.5).fillColor('#bfdbfe');
+            doc.text('RESULTS ANALYSIS', tx, data.tagline ? 48 : 38, { width: contentW - 80, lineBreak: false });
+            doc.restore();
+            return bannerH;
+        };
+        const drawPerformersTable = (title, hint, rows, startY) => {
+            let y = startY;
+            if (y + 60 > pageBottom()) {
+                doc.addPage({ size: 'A4', margin });
+                y = margin;
+            }
+            doc.fillColor(MS.ink).font('Helvetica-Bold').fontSize(11);
+            doc.text(title, margin, y);
+            y += 13;
+            doc.fillColor(MS.muted).font('Helvetica').fontSize(8.5);
+            doc.text(hint, margin, y, { width: contentW });
+            y += 16;
+            if (!rows.length) {
+                doc.text('No ranked students with marks for this selection.', margin, y);
+                return y + 20;
+            }
+            const headers = ['RANK', 'STUDENT ID', 'NAME', 'SUBJ PASSED', 'AVG %'];
+            const buildRow = (s) => [
+                String(s.rank),
+                s.admissionNumber,
+                `${s.lastName}, ${s.firstName}`,
+                `${s.subjectsPassed} / ${s.subjectCount}`,
+                s.averagePercent.toFixed(2),
+            ];
+            const mins = [32, 68, 120, 72, 48];
+            const widths = headers.map((label, i) => {
+                let w = msTextWidth(doc, label, MS_HDR, true) + MS_PAD * 2 + 4;
+                for (const row of rows) {
+                    const cell = buildRow(row)[i];
+                    w = Math.max(w, msTextWidth(doc, cell, MS_FONT) + MS_PAD * 2 + 6);
+                }
+                return Math.ceil(Math.max(mins[i] ?? 40, w));
+            });
+            const colW = msFitWidths(widths, contentW, mins);
+            const headerH = 22;
+            const rowH = 20;
+            const drawTableHeader = () => {
+                msDrawRankingsGrid(doc, margin, y, colW, headerH, MS.header);
+                for (let i = 0; i < headers.length; i++) {
+                    const cx = msColX(margin, colW, i);
+                    const align = i === 0 || i === 3 || i === 4 ? 'center' : 'left';
+                    msDrawRankingsCell(doc, headers[i], cx, y, colW[i], headerH, { header: true, align });
+                }
+                y += headerH;
+            };
+            drawTableHeader();
+            rows.forEach((row, idx) => {
+                if (y + rowH > pageBottom()) {
+                    doc.addPage({ size: 'A4', margin });
+                    y = margin;
+                    drawTableHeader();
+                }
+                const cells = buildRow(row);
+                const fill = idx % 2 === 1 ? '#f8fafc' : MS.white;
+                msDrawRankingsGrid(doc, margin, y, colW, rowH, fill);
+                for (let i = 0; i < headers.length; i++) {
+                    const cx = msColX(margin, colW, i);
+                    const align = i === 0 || i === 3 || i === 4 ? 'center' : 'left';
+                    msDrawRankingsCell(doc, cells[i], cx, y, colW[i], rowH, {
+                        align,
+                        posBadge: i === 0,
+                        bold: i === 4,
+                    });
+                }
+                y += rowH;
+            });
+            return y + 14;
+        };
+        let y = drawBanner() + 12;
+        doc.fillColor(MS.meta).font('Helvetica').fontSize(8.5);
+        const meta = `Exam: ${data.examTypeName}    Term: ${data.termName}    Class: ${data.className}    Max marks: ${data.maxMarks}`;
+        doc.text(meta, margin, y, { width: contentW });
+        y += 18;
+        doc.roundedRect(margin, y, contentW, 68, 8).stroke(MS.border);
+        doc.fillColor(MS.ink).font('Helvetica-Bold').fontSize(10);
+        doc.text('Class overall pass rate', margin + 14, y + 12);
+        doc.fillColor(MS.blue).font('Helvetica-Bold').fontSize(22);
+        doc.text(`${data.summary.overallPassRatePercent.toFixed(1)}%`, margin + 14, y + 28);
+        const statX = margin + contentW * 0.42;
+        doc.fillColor(MS.muted).font('Helvetica').fontSize(8.5);
+        doc.text(`Students in class: ${data.summary.totalStudents}`, statX, y + 14);
+        doc.text(`With exam marks: ${data.summary.studentsWithExamMarks}`, statX, y + 28);
+        doc.text(`Met pass criteria (${data.minSubjectsForPass}+ subjects): ${data.summary.studentsPassedOverall}`, statX, y + 42);
+        doc.text(`Pass detail: ${data.summary.studentsPassedOverall} of ${data.summary.totalStudents} students`, margin + 14, y + 52, { width: contentW - 28 });
+        y += 82;
+        doc.fillColor(MS.muted).font('Helvetica').fontSize(8);
+        doc.text(`A subject is passed when the mark is greater than 49. Class pass rate counts students with ${data.minSubjectsForPass} or more passed subjects.`, margin, y, { width: contentW, lineGap: 1 });
+        y += 24;
+        const topN = data.topPerformers.length;
+        y = drawPerformersTable(`Top ${topN} performers`, 'Ranked by average % (then subjects passed)', data.topPerformers, y);
+        y = drawPerformersTable(`Bottom ${data.bottomPerformers.length} performers`, 'Lowest average % among students with marks', data.bottomPerformers, y);
         const footerY = pageH - margin - 6;
         doc.save();
         doc.strokeColor(MS.border).lineWidth(1);

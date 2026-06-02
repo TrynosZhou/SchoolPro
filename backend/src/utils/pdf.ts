@@ -4,7 +4,6 @@ import path from 'path';
 import QRCode from 'qrcode';
 import { formatSubjectAbbrev } from './subject-abbrev';
 import type { GradeBoundary } from '../types/grade-boundaries';
-import { DEFAULT_GRADE_BOUNDARIES } from '../types/grade-boundaries';
 
 const receiptsDir = path.join(process.cwd(), 'uploads', 'receipts');
 const invoicesDir = path.join(process.cwd(), 'uploads', 'invoices');
@@ -1019,10 +1018,6 @@ export async function generateReportCardPdf(data: {
     errorCorrectionLevel: 'M',
   });
 
-  const gradeLegend = (data.gradeBoundaries?.length ? data.gradeBoundaries : DEFAULT_GRADE_BOUNDARIES)
-    .slice()
-    .sort((a, b) => b.minPercent - a.minPercent);
-
   return new Promise((resolve, reject) => {
     const margin = 36;
     const pageW = 595.28;
@@ -1422,31 +1417,13 @@ export async function generateReportCardPdf(data: {
       if (data.principalRemarks) drawComment('Principal', data.principalRemarks);
     }
 
-    // —— Grade scale legend ——
-    if (y + 52 > pageBottom()) {
-      doc.addPage();
-      y = margin;
-    }
-    doc.fillColor(RC.ink).font('Helvetica-Bold').fontSize(11);
-    doc.text('Grading scale', margin, y);
-    y += 14;
-    const legendText = gradeLegend
-      .map((b) => {
-        const label = b.label ? ` ${b.label}` : '';
-        return `${b.grade} ≥ ${b.minPercent}%${label}`;
-      })
-      .join('   ·   ');
-    doc.font('Helvetica').fontSize(8.5).fillColor(RC.muted);
-    doc.text(legendText, margin, y, { width: contentW - 88, lineGap: 2 });
-    y += 24;
-
     // —— Signatures ——
     if (y + 58 > pageBottom()) {
       doc.addPage();
       y = margin;
     }
-    const sigW = (contentW - 24) / 3;
-    const sigLabels = ['Class teacher', 'Principal', 'Parent / guardian'];
+    const sigW = (contentW - 12) / 2;
+    const sigLabels = ['Class teacher', 'Principal'];
     sigLabels.forEach((label, i) => {
       const sx = margin + i * (sigW + 12);
       doc.strokeColor(RC.border).moveTo(sx, y + 28).lineTo(sx + sigW, y + 28).stroke();
@@ -2349,6 +2326,243 @@ export async function generateRankingsPdf(data: RankingsPdfData): Promise<Buffer
       }
       drawRow(row, idx);
     });
+
+    const footerY = pageH - margin - 6;
+    doc.save();
+    doc.strokeColor(MS.border).lineWidth(1);
+    doc.moveTo(margin, footerY - 10).lineTo(margin + contentW, footerY - 10).stroke();
+    doc.fillColor(MS.blue).font('Helvetica').fontSize(8);
+    doc.text(`Official Academic Record — ${school}`, margin, footerY - 4, { lineBreak: false });
+    doc.font('Helvetica').fontSize(7.5).fillColor(MS.muted);
+    doc.text(`Generated: ${formatGeneratedTimestamp(data.generatedAt)}`, margin, footerY - 4, {
+      width: contentW,
+      align: 'right',
+    });
+    doc.restore();
+
+    doc.end();
+  });
+}
+
+export interface ResultsAnalysisPdfData {
+  schoolName: string;
+  tagline?: string;
+  logoUrl?: string;
+  examTypeName: string;
+  termName: string;
+  className: string;
+  maxMarks: number;
+  minSubjectsForPass: number;
+  generatedAt: Date;
+  summary: {
+    totalStudents: number;
+    studentsWithExamMarks: number;
+    studentsPassedOverall: number;
+    overallPassRatePercent: number;
+  };
+  topPerformers: {
+    rank: number;
+    admissionNumber: string;
+    lastName: string;
+    firstName: string;
+    subjectsPassed: number;
+    subjectCount: number;
+    averagePercent: number;
+  }[];
+  bottomPerformers: {
+    rank: number;
+    admissionNumber: string;
+    lastName: string;
+    firstName: string;
+    subjectsPassed: number;
+    subjectCount: number;
+    averagePercent: number;
+  }[];
+}
+
+export async function generateResultsAnalysisPdf(data: ResultsAnalysisPdfData): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const margin = 36;
+    const doc = new PDFDocument({ margin, size: 'A4' });
+    const chunks: Buffer[] = [];
+    doc.on('data', (c) => chunks.push(c));
+    doc.on('end', () => resolve(Buffer.concat(chunks)));
+    doc.on('error', reject);
+
+    const pageW = doc.page.width;
+    const pageH = doc.page.height;
+    const contentW = pageW - margin * 2;
+    const logoPath = resolveUploadPath(data.logoUrl);
+    const school = data.schoolName || 'School Pro Academy';
+    const pageBottom = () => pageH - margin - 28;
+
+    const drawBanner = () => {
+      const bannerH = 72;
+      doc.save();
+      doc.rect(0, 0, pageW, bannerH).fill(MS.blue);
+
+      if (logoPath) {
+        try {
+          doc.save();
+          doc.circle(margin + 28, 36, 24).fill(MS.white);
+          doc.restore();
+          doc.image(logoPath, margin + 10, 18, { fit: [36, 36] });
+        } catch {
+          /* skip */
+        }
+      }
+
+      const tx = logoPath ? margin + 58 : margin;
+      doc.fillColor(MS.white).font('Helvetica-Bold').fontSize(15);
+      doc.text(school, tx, 16, { width: contentW - 80, lineBreak: false });
+      if (data.tagline) {
+        doc.font('Helvetica').fontSize(8.5).fillColor('#dbeafe');
+        doc.text(data.tagline, tx, 34, { width: contentW - 80, lineBreak: false });
+      }
+      doc.font('Helvetica-Bold').fontSize(10.5).fillColor('#bfdbfe');
+      doc.text('RESULTS ANALYSIS', tx, data.tagline ? 48 : 38, { width: contentW - 80, lineBreak: false });
+      doc.restore();
+      return bannerH;
+    };
+
+    const drawPerformersTable = (
+      title: string,
+      hint: string,
+      rows: ResultsAnalysisPdfData['topPerformers'],
+      startY: number,
+    ): number => {
+      let y = startY;
+      if (y + 60 > pageBottom()) {
+        doc.addPage({ size: 'A4', margin });
+        y = margin;
+      }
+
+      doc.fillColor(MS.ink).font('Helvetica-Bold').fontSize(11);
+      doc.text(title, margin, y);
+      y += 13;
+      doc.fillColor(MS.muted).font('Helvetica').fontSize(8.5);
+      doc.text(hint, margin, y, { width: contentW });
+      y += 16;
+
+      if (!rows.length) {
+        doc.text('No ranked students with marks for this selection.', margin, y);
+        return y + 20;
+      }
+
+      const headers = ['RANK', 'STUDENT ID', 'NAME', 'SUBJ PASSED', 'AVG %'];
+      const buildRow = (s: ResultsAnalysisPdfData['topPerformers'][0]): string[] => [
+        String(s.rank),
+        s.admissionNumber,
+        `${s.lastName}, ${s.firstName}`,
+        `${s.subjectsPassed} / ${s.subjectCount}`,
+        s.averagePercent.toFixed(2),
+      ];
+
+      const mins = [32, 68, 120, 72, 48];
+      const widths = headers.map((label, i) => {
+        let w = msTextWidth(doc, label, MS_HDR, true) + MS_PAD * 2 + 4;
+        for (const row of rows) {
+          const cell = buildRow(row)[i];
+          w = Math.max(w, msTextWidth(doc, cell, MS_FONT) + MS_PAD * 2 + 6);
+        }
+        return Math.ceil(Math.max(mins[i] ?? 40, w));
+      });
+
+      const colW = msFitWidths(widths, contentW, mins);
+      const headerH = 22;
+      const rowH = 20;
+
+      const drawTableHeader = () => {
+        msDrawRankingsGrid(doc, margin, y, colW, headerH, MS.header);
+        for (let i = 0; i < headers.length; i++) {
+          const cx = msColX(margin, colW, i);
+          const align: 'left' | 'center' | 'right' =
+            i === 0 || i === 3 || i === 4 ? 'center' : 'left';
+          msDrawRankingsCell(doc, headers[i], cx, y, colW[i], headerH, { header: true, align });
+        }
+        y += headerH;
+      };
+
+      drawTableHeader();
+
+      rows.forEach((row, idx) => {
+        if (y + rowH > pageBottom()) {
+          doc.addPage({ size: 'A4', margin });
+          y = margin;
+          drawTableHeader();
+        }
+        const cells = buildRow(row);
+        const fill = idx % 2 === 1 ? '#f8fafc' : MS.white;
+        msDrawRankingsGrid(doc, margin, y, colW, rowH, fill);
+        for (let i = 0; i < headers.length; i++) {
+          const cx = msColX(margin, colW, i);
+          const align: 'left' | 'center' | 'right' =
+            i === 0 || i === 3 || i === 4 ? 'center' : 'left';
+          msDrawRankingsCell(doc, cells[i], cx, y, colW[i], rowH, {
+            align,
+            posBadge: i === 0,
+            bold: i === 4,
+          });
+        }
+        y += rowH;
+      });
+
+      return y + 14;
+    };
+
+    let y = drawBanner() + 12;
+
+    doc.fillColor(MS.meta).font('Helvetica').fontSize(8.5);
+    const meta =
+      `Exam: ${data.examTypeName}    Term: ${data.termName}    Class: ${data.className}    Max marks: ${data.maxMarks}`;
+    doc.text(meta, margin, y, { width: contentW });
+    y += 18;
+
+    doc.roundedRect(margin, y, contentW, 68, 8).stroke(MS.border);
+    doc.fillColor(MS.ink).font('Helvetica-Bold').fontSize(10);
+    doc.text('Class overall pass rate', margin + 14, y + 12);
+    doc.fillColor(MS.blue).font('Helvetica-Bold').fontSize(22);
+    doc.text(`${data.summary.overallPassRatePercent.toFixed(1)}%`, margin + 14, y + 28);
+
+    const statX = margin + contentW * 0.42;
+    doc.fillColor(MS.muted).font('Helvetica').fontSize(8.5);
+    doc.text(`Students in class: ${data.summary.totalStudents}`, statX, y + 14);
+    doc.text(`With exam marks: ${data.summary.studentsWithExamMarks}`, statX, y + 28);
+    doc.text(
+      `Met pass criteria (${data.minSubjectsForPass}+ subjects): ${data.summary.studentsPassedOverall}`,
+      statX,
+      y + 42,
+    );
+    doc.text(
+      `Pass detail: ${data.summary.studentsPassedOverall} of ${data.summary.totalStudents} students`,
+      margin + 14,
+      y + 52,
+      { width: contentW - 28 },
+    );
+    y += 82;
+
+    doc.fillColor(MS.muted).font('Helvetica').fontSize(8);
+    doc.text(
+      `A subject is passed when the mark is greater than 49. Class pass rate counts students with ${data.minSubjectsForPass} or more passed subjects.`,
+      margin,
+      y,
+      { width: contentW, lineGap: 1 },
+    );
+    y += 24;
+
+    const topN = data.topPerformers.length;
+    y = drawPerformersTable(
+      `Top ${topN} performers`,
+      'Ranked by average % (then subjects passed)',
+      data.topPerformers,
+      y,
+    );
+    y = drawPerformersTable(
+      `Bottom ${data.bottomPerformers.length} performers`,
+      'Lowest average % among students with marks',
+      data.bottomPerformers,
+      y,
+    );
 
     const footerY = pageH - margin - 6;
     doc.save();

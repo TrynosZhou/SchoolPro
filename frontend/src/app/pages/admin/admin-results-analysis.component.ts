@@ -1,6 +1,7 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, inject, OnDestroy, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { DecimalPipe } from '@angular/common';
+import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { RouterLink, Router } from '@angular/router';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
@@ -41,9 +42,10 @@ interface ResultsAnalysisData {
   templateUrl: './admin-results-analysis.component.html',
   styleUrl: './admin-results-analysis.component.scss',
 })
-export class AdminResultsAnalysisComponent implements OnInit {
+export class AdminResultsAnalysisComponent implements OnInit, OnDestroy {
   private api = inject(ApiService);
   private router = inject(Router);
+  private sanitizer = inject(DomSanitizer);
 
   readonly portalLayout = resolveExecutivePortalLayout(this.router);
   readonly adminNav = ADMIN_NAV_SECTIONS;
@@ -58,7 +60,12 @@ export class AdminResultsAnalysisComponent implements OnInit {
   sessionLabel = signal('');
   loading = signal(false);
   hasAnalyzed = signal(false);
+  pdfLoading = signal(false);
+  pdfPreviewOpen = signal(false);
+  pdfPreviewUrl = signal<SafeResourceUrl | null>(null);
   toast = signal<{ type: 'success' | 'error'; msg: string } | null>(null);
+
+  private pdfObjectUrl: string | null = null;
 
   filtersReady(): boolean {
     return !!(this.filters.examTypeId && this.filters.termId && this.filters.classId);
@@ -83,9 +90,14 @@ export class AdminResultsAnalysisComponent implements OnInit {
     });
   }
 
+  ngOnDestroy(): void {
+    this.revokePdfUrl();
+  }
+
   onFilterChange(): void {
     this.analysis.set(null);
     this.hasAnalyzed.set(false);
+    this.closePdfPreview();
   }
 
   runAnalysis(): void {
@@ -96,6 +108,7 @@ export class AdminResultsAnalysisComponent implements OnInit {
 
     this.loading.set(true);
     this.hasAnalyzed.set(false);
+    this.closePdfPreview();
     const { examTypeId, termId, classId } = this.filters;
 
     this.api
@@ -121,6 +134,96 @@ export class AdminResultsAnalysisComponent implements OnInit {
           this.showToast('error', e.error?.message || 'Failed to run analysis.');
         },
       });
+  }
+
+  previewPdf(): void {
+    this.fetchPdfBlob(true).then((blob) => {
+      if (!blob) return;
+      this.revokePdfUrl();
+      this.pdfObjectUrl = URL.createObjectURL(blob);
+      this.pdfPreviewUrl.set(this.sanitizer.bypassSecurityTrustResourceUrl(this.pdfObjectUrl));
+      this.pdfPreviewOpen.set(true);
+    });
+  }
+
+  downloadPdf(): void {
+    this.fetchPdfBlob(false).then((blob) => {
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = this.pdfFilename();
+      a.click();
+      URL.revokeObjectURL(url);
+      this.showToast('success', 'Results analysis PDF downloaded.');
+    });
+  }
+
+  closePdfPreview(): void {
+    this.pdfPreviewOpen.set(false);
+    this.revokePdfUrl();
+  }
+
+  private fetchPdfBlob(preview: boolean): Promise<Blob | null> {
+    if (!this.hasAnalyzed() || !this.filtersReady()) {
+      this.showToast('error', 'Run analysis before exporting PDF.');
+      return Promise.resolve(null);
+    }
+
+    this.pdfLoading.set(true);
+    const params: Record<string, string> = {
+      examTypeId: this.filters.examTypeId,
+      termId: this.filters.termId,
+      classId: this.filters.classId,
+      topN: String(this.topCount),
+      ...(preview ? { preview: 'true' } : {}),
+    };
+
+    return new Promise((resolve) => {
+      this.api.getBlob('/exams/results-analysis/pdf', params).subscribe({
+        next: (blob) => {
+          this.pdfLoading.set(false);
+          if (blob.type && !blob.type.includes('pdf')) {
+            this.showToast('error', 'Could not generate results analysis PDF.');
+            resolve(null);
+            return;
+          }
+          resolve(blob);
+        },
+        error: async (e) => {
+          this.pdfLoading.set(false);
+          let msg = 'Could not generate results analysis PDF.';
+          if (e.error instanceof Blob) {
+            try {
+              const body = JSON.parse(await e.error.text());
+              if (body.message) msg = body.message;
+            } catch {
+              /* ignore */
+            }
+          } else if (e.error?.message) {
+            msg = e.error.message;
+          }
+          this.showToast('error', msg);
+          resolve(null);
+        },
+      });
+    });
+  }
+
+  private pdfFilename(): string {
+    const data = this.analysis();
+    const cls = data?.class.name || 'class';
+    const exam = data?.examType.name || 'exam';
+    const safe = `${cls}-${exam}`.replace(/[^\w\-]+/g, '-').replace(/-+/g, '-');
+    return `results-analysis-${safe}.pdf`;
+  }
+
+  private revokePdfUrl(): void {
+    if (this.pdfObjectUrl) {
+      URL.revokeObjectURL(this.pdfObjectUrl);
+      this.pdfObjectUrl = null;
+    }
+    this.pdfPreviewUrl.set(null);
   }
 
   private showToast(type: 'success' | 'error', msg: string): void {

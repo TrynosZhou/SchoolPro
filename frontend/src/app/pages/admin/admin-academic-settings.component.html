@@ -541,6 +541,144 @@
           </section>
         }
 
+        @if (activeTab() === 'publish') {
+          <section class="panel publish-panel">
+            <div class="panel-head">
+              <div>
+                <h3>Publish results</h3>
+                <p>
+                  Release report cards for a term and exam type to parents and students.
+                  Administrators and principals can publish; notifications are sent via WhatsApp and SMS.
+                </p>
+              </div>
+              <a routerLink="/admin/report-cards" class="btn-outline btn-sm">Report cards →</a>
+            </div>
+
+            <div class="publish-form">
+              <div class="field">
+                <label>Term</label>
+                <select
+                  [(ngModel)]="publishTermId"
+                  name="publishTermId"
+                  (ngModelChange)="onPublishFiltersChange()"
+                >
+                  <option value="">Select term</option>
+                  @for (t of allTerms(); track t.id) {
+                    <option [value]="t.id">{{ t.name }}@if (t.isCurrent) { (current) }</option>
+                  }
+                </select>
+              </div>
+              <div class="field">
+                <label>Exam type</label>
+                <select
+                  [(ngModel)]="publishExamTypeId"
+                  name="publishExamTypeId"
+                  (ngModelChange)="onPublishFiltersChange()"
+                >
+                  <option value="">Select exam type</option>
+                  @for (e of examTypes(); track e.id) {
+                    <option [value]="e.id">{{ e.name }}</option>
+                  }
+                </select>
+              </div>
+            </div>
+
+            @if (loadingPublication()) {
+              <p class="hint">Checking publication status…</p>
+            } @else if (publicationStatus()) {
+              <div class="publish-status" [class.published]="publicationStatus()!.isPublished">
+                <div class="status-grid">
+                  <div>
+                    <span class="status-label">Report cards ready</span>
+                    <strong>{{ publicationStatus()!.readyReportCardCount }}</strong>
+                  </div>
+                  <div>
+                    <span class="status-label">Published</span>
+                    <strong>{{ publicationStatus()!.reportCardCount }}</strong>
+                  </div>
+                  <div>
+                    <span class="status-label">Status</span>
+                    <strong>{{ publicationStatus()!.isPublished ? 'Live for parents' : 'Not published' }}</strong>
+                  </div>
+                  @if (publicationStatus()!.publishedAt) {
+                    <div>
+                      <span class="status-label">Last published</span>
+                      <strong>{{ publicationStatus()!.publishedAt | date:'medium' }}</strong>
+                    </div>
+                  }
+                  @if (publicationStatus()!.publishedByName) {
+                    <div>
+                      <span class="status-label">Published by</span>
+                      <strong>{{ publicationStatus()!.publishedByName }}</strong>
+                    </div>
+                  }
+                  @if (publicationStatus()!.whatsappSent != null) {
+                    <div>
+                      <span class="status-label">WhatsApp sent</span>
+                      <strong>{{ publicationStatus()!.whatsappSent }}</strong>
+                    </div>
+                  }
+                  @if (publicationStatus()!.smsSent != null) {
+                    <div>
+                      <span class="status-label">SMS sent</span>
+                      <strong>{{ publicationStatus()!.smsSent }}</strong>
+                    </div>
+                  }
+                </div>
+              </div>
+            }
+
+            <div class="notify-options">
+              <h4>Notify families</h4>
+              <label class="toggle">
+                <input type="checkbox" [(ngModel)]="notifyWhatsApp" name="notifyWhatsApp" />
+                <span>Send WhatsApp message (Twilio)</span>
+              </label>
+              <label class="toggle">
+                <input type="checkbox" [(ngModel)]="notifySms" name="notifySms" />
+                <span>Send SMS message (Twilio)</span>
+              </label>
+              <p class="hint">
+                Configure messaging in <a routerLink="/admin/integrations">Integrations</a>.
+                In development, messages are logged to the server console when WhatsApp is disabled.
+              </p>
+            </div>
+
+            <div class="publish-actions">
+              <button
+                type="button"
+                class="btn-primary"
+                (click)="publishResults()"
+                [disabled]="submitting() || !publishTermId || !publishExamTypeId || !publicationStatus()?.readyReportCardCount || publicationStatus()?.isPublished"
+              >
+                {{ submitting() ? 'Publishing…' : 'Publish results' }}
+              </button>
+              <button
+                type="button"
+                class="btn-unpublish"
+                (click)="unpublishResults()"
+                [disabled]="submitting() || !publishTermId || !publishExamTypeId || !publicationStatus()?.isPublished"
+              >
+                {{ submitting() ? 'Working…' : 'Unpublish results' }}
+              </button>
+              <button
+                type="button"
+                class="btn-outline"
+                (click)="refreshPublicationStatus()"
+                [disabled]="loadingPublication() || !publishTermId || !publishExamTypeId"
+              >
+                Refresh status
+              </button>
+            </div>
+
+            @if (publicationStatus() && !publicationStatus()!.readyReportCardCount) {
+              <p class="validation-note">
+                No report cards exist for this term and exam type. Generate them on the Report Cards page first.
+              </p>
+            }
+          </section>
+        }
+
         @if (activeTab() === 'promotion') {
           @if (!classes().length) {
             <section class="panel empty-card">

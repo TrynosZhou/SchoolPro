@@ -11,6 +11,7 @@ exports.debtorAgingToCsv = debtorAgingToCsv;
 const data_source_1 = require("../config/data-source");
 const entities_1 = require("../entities");
 const typeorm_helpers_1 = require("../utils/typeorm-helpers");
+const term_balance_service_1 = require("./term-balance.service");
 async function searchStudents(q, limit = 20) {
     const rawQ = String(q || '').trim();
     if (!rawQ)
@@ -62,20 +63,25 @@ async function buildStudentLedgerReport(studentId, termId) {
     });
     if (!student)
         return null;
-    const termStart = `${term.startDate}T00:00:00.000Z`;
-    const termEnd = `${term.endDate}T23:59:59.999Z`;
-    const priorInvoices = await invoiceRepo
-        .createQueryBuilder('i')
-        .where('i.studentId = :studentId', { studentId })
-        .andWhere('COALESCE(i."issuedDate", i."dueDate") < :termStart', { termStart: term.startDate })
-        .getMany();
-    const priorPayments = await paymentRepo
-        .createQueryBuilder('p')
-        .where('p.studentId = :studentId', { studentId })
-        .andWhere('p."paidAt" < :termStart', { termStart })
-        .getMany();
-    const openingBalance = priorInvoices.reduce((s, i) => s + Number(i.totalAmount), 0) -
-        priorPayments.reduce((s, p) => s + Number(p.amount), 0);
+    await (0, term_balance_service_1.ensureTermBalanceInitialized)(studentId, termId);
+    const termBalanceRepo = data_source_1.AppDataSource.getRepository(entities_1.StudentTermBalance);
+    const termBalance = await termBalanceRepo.findOne({ where: { studentId, termId } });
+    const prevTerm = await (0, term_balance_service_1.findPreviousTerm)(term);
+    const termStartDate = toDateKey(term.startDate);
+    const termEndDate = toDateKey(term.endDate);
+    const termStart = `${termStartDate}T00:00:00.000Z`;
+    const termEnd = `${termEndDate}T23:59:59.999Z`;
+    const ledgerRepo = data_source_1.AppDataSource.getRepository(entities_1.LedgerEntry);
+    const termLedgerPaymentRows = await ledgerRepo
+        .createQueryBuilder('l')
+        .select('l.referenceId', 'referenceId')
+        .where('l.studentId = :studentId', { studentId })
+        .andWhere('l.termId = :termId', { termId })
+        .andWhere('l.referenceType = :referenceType', { referenceType: 'payment' })
+        .getRawMany();
+    const termLedgerPaymentIds = termLedgerPaymentRows
+        .map((row) => row.referenceId)
+        .filter((id) => Boolean(id));
     const termInvoices = await invoiceRepo.find({
         where: { studentId, termId },
         relations: (0, typeorm_helpers_1.relations)('lines'),
@@ -83,24 +89,31 @@ async function buildStudentLedgerReport(studentId, termId) {
     });
     const termInvoiceIds = termInvoices.map((i) => i.id);
     let termPayments = [];
+    const termPaymentQb = paymentRepo
+        .createQueryBuilder('p')
+        .where('p.studentId = :studentId', { studentId });
+    const termPaymentConditions = [
+        '(p."paidAt" >= :termStart AND p."paidAt" <= :termEnd)',
+    ];
+    const termPaymentParams = { studentId, termStart, termEnd };
     if (termInvoiceIds.length) {
-        termPayments = await paymentRepo
-            .createQueryBuilder('p')
-            .where('p.studentId = :studentId', { studentId })
-            .andWhere('(p."invoiceId" IN (:...ids) OR (p."invoiceId" IS NULL AND p."paidAt" >= :termStart AND p."paidAt" <= :termEnd))', { ids: termInvoiceIds, termStart, termEnd })
-            .orderBy('p.paidAt', 'ASC')
-            .getMany();
+        termPaymentConditions.push('p."invoiceId" IN (:...ids)');
+        termPaymentParams.ids = termInvoiceIds;
     }
-    else {
-        termPayments = await paymentRepo
-            .createQueryBuilder('p')
-            .where('p.studentId = :studentId', { studentId })
-            .andWhere('p."paidAt" >= :termStart AND p."paidAt" <= :termEnd', { termStart, termEnd })
-            .orderBy('p.paidAt', 'ASC')
-            .getMany();
+    if (termLedgerPaymentIds.length) {
+        termPaymentConditions.push('p.id IN (:...termLedgerPaymentIds)');
+        termPaymentParams.termLedgerPaymentIds = termLedgerPaymentIds;
     }
+    termPayments = await termPaymentQb
+        .andWhere(`(${termPaymentConditions.join(' OR ')})`, termPaymentParams)
+        .orderBy('p.paidAt', 'ASC')
+        .getMany();
+    const openingBalance = termBalance ? Number(termBalance.openingBalance) : 0;
+    const prepaidAvailable = termBalance ? await (0, term_balance_service_1.getAvailablePrepaidCredit)(termBalance) : 0;
     const txns = [];
     for (const inv of termInvoices) {
+        if (inv.feeType === term_balance_service_1.BALANCE_FORWARD_FEE_TYPE)
+            continue;
         const date = inv.issuedDate || inv.dueDate;
         txns.push({
             date,
@@ -129,12 +142,16 @@ async function buildStudentLedgerReport(studentId, termId) {
     txns.sort((a, b) => a.sortAt - b.sortAt || a.reference.localeCompare(b.reference));
     const lines = [];
     let running = openingBalance;
-    if (openingBalance !== 0) {
+    if (openingBalance !== 0 || prepaidAvailable > 0) {
+        const prevLabel = prevTerm?.name || 'previous term';
+        const description = openingBalance > 0
+            ? `Opening balance brought forward from ${prevLabel}`
+            : `Prepaid credit brought forward from ${prevLabel}`;
         lines.push({
             date: term.startDate,
             type: 'opening',
             reference: '—',
-            description: 'Opening balance',
+            description,
             debit: openingBalance > 0 ? openingBalance : 0,
             credit: openingBalance < 0 ? Math.abs(openingBalance) : 0,
             balance: running,
@@ -396,18 +413,16 @@ async function reconcileStudent(student, dateFrom, dateTo, feeType, includeTrans
         periodInvoices = allInvoices.filter((i) => i.termId === termId);
         const periodInvoiceIds = new Set(periodInvoices.map((i) => i.id));
         priorInvoices = allInvoices.filter((i) => !periodInvoiceIds.has(i.id) && invoiceDate(i) < dateFrom);
-        if (periodInvoices.length) {
-            periodPayments = allPayments.filter((p) => {
-                if (p.invoiceId && periodInvoiceIds.has(p.invoiceId))
-                    return true;
-                if (!p.invoiceId)
-                    return inDateRange(paymentDate(p), dateFrom, dateTo);
-                return false;
-            });
-        }
-        else {
-            periodPayments = allPayments.filter((p) => inDateRange(paymentDate(p), dateFrom, dateTo));
-        }
+        const termLedgerPaymentIds = new Set(allLedger
+            .filter((l) => l.termId === termId && l.referenceType === 'payment' && l.referenceId)
+            .map((l) => l.referenceId));
+        periodPayments = allPayments.filter((p) => {
+            if (p.invoiceId && periodInvoiceIds.has(p.invoiceId))
+                return true;
+            if (termLedgerPaymentIds.has(p.id))
+                return true;
+            return inDateRange(paymentDate(p), dateFrom, dateTo);
+        });
     }
     else {
         priorInvoices = allInvoices.filter((i) => invoiceDate(i) < dateFrom);

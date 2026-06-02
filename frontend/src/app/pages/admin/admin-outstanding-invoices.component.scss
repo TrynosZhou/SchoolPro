@@ -775,3 +775,38 @@
   gap: 0.45rem;
   align-items: center;
 }
+
+.actions-col {
+  width: 3rem;
+  text-align: center;
+}
+
+.pay-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+  background: #ecfdf5;
+  color: #15803d;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+
+  svg {
+    width: 1.1rem;
+    height: 1.1rem;
+  }
+
+  &:hover {
+    background: #dcfce7;
+    border-color: #86efac;
+    transform: translateY(-1px);
+  }
+
+  &:focus-visible {
+    outline: 2px solid #22c55e;
+    outline-offset: 2px;
+  }
+}

@@ -138,6 +138,128 @@
 .session-card {
   .session-label {
     margin: 0 0 0.5rem;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #0f172a;
+  }
+}
+
+.toolbar-card {
+  padding: 1rem 1.25rem;
+}
+
+.toolbar-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.toolbar-title {
+  margin: 0 0 0.2rem;
+  font-size: 1.05rem;
+  color: #0f172a;
+}
+
+.toolbar-card .session-label {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #64748b;
+}
+
+.pdf-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.btn-pdf {
+  padding: 0.55rem 1rem;
+  border-radius: 10px;
+  font-size: 0.86rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+
+  &:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+}
+
+.btn-preview {
+  background: #f5f3ff;
+  color: #6d28d9;
+  border-color: #ddd6fe;
+}
+
+.btn-download {
+  background: #7c3aed;
+  color: #fff;
+}
+
+.pdf-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2500;
+  display: flex;
+  flex-direction: column;
+  background: #0f172a;
+
+  &.maximized {
+    width: 100vw;
+    height: 100vh;
+  }
+}
+
+.pdf-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.65rem 1rem;
+  background: #1e293b;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  color: #f8fafc;
+  flex-shrink: 0;
+}
+
+.pdf-toolbar-title {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+
+  span {
+    font-size: 0.8rem;
+    color: #94a3b8;
+  }
+}
+
+.pdf-toolbar-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.btn-close {
+  background: transparent;
+  color: #e2e8f0;
+  border-color: #475569;
+}
+
+.pdf-frame {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  border: none;
+  background: #525659;
+}
+
+.session-card {
+  .session-label {
+    margin: 0 0 0.5rem;
     font-weight: 600;
     color: #1e40af;
     font-size: 1rem;

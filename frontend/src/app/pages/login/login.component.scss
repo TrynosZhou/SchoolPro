@@ -378,6 +378,32 @@
   &:hover {
     color: #4338ca;
   }
+
+  &--inline {
+    margin-left: 0;
+    font-size: 0.8rem;
+    text-decoration: none;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+}
+
+.dev-reset-hint {
+  margin: 0;
+  padding: 0.65rem 0.75rem;
+  font-size: 0.8rem;
+  color: #92400e;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 10px;
+
+  a {
+    color: #b45309;
+    font-weight: 600;
+    word-break: break-all;
+  }
 }
 
 .signin-header {
@@ -576,98 +602,6 @@
 
 @keyframes spin {
   to { transform: rotate(360deg); }
-}
-
-/* —— Demo accounts —— */
-.demo-section {
-  margin-top: 0.85rem;
-  padding-top: 0.75rem;
-  border-top: 1px solid #f1f5f9;
-}
-
-.demo-head {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 0.35rem;
-  margin-bottom: 0.5rem;
-}
-
-.demo-title {
-  font-size: 0.78rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: #64748b;
-}
-
-.demo-pw {
-  font-size: 0.75rem;
-  color: #94a3b8;
-
-  code {
-    background: #f1f5f9;
-    padding: 0.1rem 0.35rem;
-    border-radius: 4px;
-    color: #475569;
-    font-size: 0.72rem;
-  }
-}
-
-.demo-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.35rem;
-
-  @media (max-width: 420px) {
-    grid-template-columns: 1fr;
-  }
-}
-
-.demo-chip {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-  width: 100%;
-  padding: 0.4rem 0.5rem;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  background: #fff;
-  cursor: pointer;
-  text-align: left;
-  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
-
-  &:hover {
-    border-color: #c7d2fe;
-    background: #f8fafc;
-    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.1);
-  }
-}
-
-.demo-chip-icon {
-  font-size: 1rem;
-  flex-shrink: 0;
-}
-
-.demo-chip-body {
-  display: flex;
-  flex-direction: column;
-  gap: 0.05rem;
-  min-width: 0;
-
-  strong {
-    font-size: 0.78rem;
-    color: #0f172a;
-  }
-
-  small {
-    font-size: 0.68rem;
-    color: #94a3b8;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
 }
 
 .mobile-brand {

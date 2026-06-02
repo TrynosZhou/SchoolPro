@@ -8,13 +8,16 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "seed": "ts-node src/seed.ts",
-    "db:init": "ts-node src/scripts/init-database.ts"
+    "db:init": "ts-node src/scripts/init-database.ts",
+    "admin:login": "ts-node src/scripts/set-admin-login.ts",
+    "billing:reverse-bulk-tuition": "ts-node src/scripts/reverse-bulk-tuition-invoices.ts"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@types/nodemailer": "^8.0.0",
     "bcryptjs": "^3.0.3",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
@@ -24,6 +27,7 @@
     "helmet": "^8.2.0",
     "jsonwebtoken": "^9.0.3",
     "multer": "^2.1.1",
+    "nodemailer": "^8.0.10",
     "pdfkit": "^0.18.0",
     "pg": "^8.21.0",
     "qrcode": "^1.5.4",

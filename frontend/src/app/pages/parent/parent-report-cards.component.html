@@ -41,7 +41,12 @@
 
       <label class="field">
         <span>Term</span>
-        <select [(ngModel)]="selectedTermId" name="term" [disabled]="!terms().length">
+        <select
+          [ngModel]="selectedTermId"
+          (ngModelChange)="onTermChange($event)"
+          name="term"
+          [disabled]="!terms().length"
+        >
           @if (!terms().length) {
             <option value="">No terms available</option>
           } @else {

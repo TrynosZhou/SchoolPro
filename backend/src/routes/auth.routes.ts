@@ -15,6 +15,8 @@ import {
   loadUserWithRole,
   resolvePermissionsForUser,
 } from '../services/role-permissions.service';
+import { requestPasswordReset, resetPasswordWithToken } from '../services/password-reset.service';
+import { findActiveUserByLoginIdentifier } from '../utils/user-auth';
 
 const router = Router();
 
@@ -30,17 +32,15 @@ function formatLockoutRemaining(until: Date): string {
 
 router.post('/login', async (req, res: Response) => {
   try {
-    const { email, password } = req.body;
-    if (!email || !password) {
-      return res.status(400).json({ message: 'Email and password required' });
+    const { username, email, password } = req.body;
+    const loginId = String(username || email || '').trim();
+    if (!loginId || !password) {
+      return res.status(400).json({ message: 'Username and password required' });
     }
 
     const policy = await getSecurityPolicy();
     const userRepo = AppDataSource.getRepository(User);
-    const user = await userRepo.findOne({
-      where: { email: email.toLowerCase(), isActive: true },
-      relations: USER_PROFILES,
-    });
+    const user = await findActiveUserByLoginIdentifier(loginId, USER_PROFILES);
 
     if (user?.lockedUntil && new Date() < new Date(user.lockedUntil)) {
       return res.status(423).json({
@@ -106,6 +106,7 @@ router.post('/login', async (req, res: Response) => {
       user: {
         id: fullUser.id,
         email: fullUser.email,
+        username: fullUser.username ?? null,
         firstName: fullUser.firstName,
         lastName: fullUser.lastName,
         role: fullUser.role,
@@ -144,6 +145,29 @@ router.get('/me', authenticate, async (req: AuthRequest, res: Response) => {
     parentId: user.parentProfile?.id,
     studentId: user.studentProfile?.id,
   });
+});
+
+router.post('/forgot-password', async (req, res: Response) => {
+  try {
+    const { username, email } = req.body;
+    const result = await requestPasswordReset(String(username || email || ''));
+    res.json(result);
+  } catch (err) {
+    console.error('Forgot password error:', err);
+    res.status(500).json({ message: 'Could not process password reset request.' });
+  }
+});
+
+router.post('/reset-password', async (req, res: Response) => {
+  try {
+    const { token, password } = req.body;
+    const result = await resetPasswordWithToken(String(token || ''), String(password || ''));
+    res.json(result);
+  } catch (err) {
+    return res.status(400).json({
+      message: err instanceof Error ? err.message : 'Could not reset password',
+    });
+  }
 });
 
 router.get('/password-policy', async (_req, res: Response) => {

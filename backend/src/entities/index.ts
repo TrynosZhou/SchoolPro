@@ -34,6 +34,8 @@ import { UniformSale } from './UniformSale';
 import { SchoolSettings } from './SchoolSettings';
 import { SchoolFee } from './SchoolFee';
 import { ClassPromotionRule } from './ClassPromotionRule';
+import { ResultsPublication } from './ResultsPublication';
+import { StudentTermBalance } from './StudentTermBalance';
 
 export const entities = [
   User,
@@ -41,6 +43,8 @@ export const entities = [
   SchoolSettings,
   SchoolFee,
   ClassPromotionRule,
+  ResultsPublication,
+  StudentTermBalance,
   SchoolYear,
   Term,
   Form,
@@ -112,5 +116,7 @@ export {
   SchoolSettings,
   SchoolFee,
   ClassPromotionRule,
+  ResultsPublication,
+  StudentTermBalance,
 };
 

@@ -22,7 +22,23 @@ app.use((0, helmet_1.default)({
     // Allow frontend (different origin) to load /uploads images (school logo, etc.)
     crossOriginResourcePolicy: { policy: 'cross-origin' },
 }));
-app.use((0, cors_1.default)({ origin: env_1.env.frontendUrl, credentials: true }));
+const allowedOrigins = env_1.env.frontendUrl
+    .split(',')
+    .map((v) => v.trim())
+    .filter(Boolean);
+app.use((0, cors_1.default)({
+    origin: (origin, callback) => {
+        if (!origin)
+            return callback(null, true);
+        if (allowedOrigins.includes(origin))
+            return callback(null, true);
+        if (env_1.env.nodeEnv === 'development' && /^http:\/\/localhost:\d+$/.test(origin)) {
+            return callback(null, true);
+        }
+        return callback(new Error(`CORS blocked for origin: ${origin}`));
+    },
+    credentials: true,
+}));
 app.use(express_1.default.json());
 app.use('/uploads', express_1.default.static(path_1.default.join(process.cwd(), 'uploads')));
 app.get('/api/health', (_req, res) => res.json({ status: 'ok', service: 'School Pro API' }));

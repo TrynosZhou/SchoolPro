@@ -12,6 +12,7 @@ const enums_1 = require("../entities/enums");
 const auth_1 = require("../middleware/auth");
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const typeorm_helpers_1 = require("../utils/typeorm-helpers");
+const permissions_1 = require("../config/permissions");
 const helpers_1 = require("../utils/helpers");
 const grade_boundaries_1 = require("../types/grade-boundaries");
 const security_policy_1 = require("../types/security-policy");
@@ -20,6 +21,7 @@ const security_policy_service_1 = require("../services/security-policy.service")
 const integrations_service_1 = require("../services/integrations.service");
 const integrations_config_1 = require("../types/integrations-config");
 const whatsapp_service_1 = require("../services/whatsapp.service");
+const term_balance_service_1 = require("../services/term-balance.service");
 const permissions_routes_1 = __importDefault(require("./permissions.routes"));
 const multer_1 = __importDefault(require("multer"));
 const path_1 = __importDefault(require("path"));
@@ -224,6 +226,14 @@ router.post('/terms', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (req,
         await repo.update({ isCurrent: true }, { isCurrent: false });
     }
     const term = await repo.save(repo.create(req.body));
+    if (req.body.isCurrent) {
+        try {
+            await (0, term_balance_service_1.carryForwardBalancesForTerm)(term.id);
+        }
+        catch {
+            // Balance carry-forward can be retried via billing API if needed.
+        }
+    }
     res.status(201).json(term);
 });
 router.patch('/school-years/:id', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (req, res) => {
@@ -246,7 +256,16 @@ router.patch('/terms/:id', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async 
         await repo.update({ isCurrent: true }, { isCurrent: false });
     }
     Object.assign(term, req.body);
-    res.json(await repo.save(term));
+    const saved = await repo.save(term);
+    if (req.body.isCurrent) {
+        try {
+            await (0, term_balance_service_1.carryForwardBalancesForTerm)(saved.id);
+        }
+        catch {
+            // Balance carry-forward can be retried via billing API if needed.
+        }
+    }
+    res.json(saved);
 });
 router.get('/forms', async (_req, res) => {
     res.json(await data_source_1.AppDataSource.getRepository(entities_1.Form).find({ relations: (0, typeorm_helpers_1.relations)('classes'), order: { level: 'ASC' } }));
@@ -814,6 +833,588 @@ router.post('/uniform/sales', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), asy
         totalAmount: req.body.unitPrice * (req.body.quantity || 1),
     }));
     res.status(201).json(sale);
+});
+const STAFF_PORTAL_ROLES = [enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.ADMIN, enums_1.UserRole.TEACHER];
+function serializeManagedUser(user) {
+    return {
+        id: user.id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        phone: user.phone ?? null,
+        role: user.role,
+        roleLabel: permissions_1.PORTAL_ROLE_LABELS[user.role] ?? user.role,
+        isActive: user.isActive,
+        schoolRoleId: user.schoolRoleId ?? null,
+        schoolRole: user.schoolRole
+            ? { id: user.schoolRole.id, name: user.schoolRole.name, baseRole: user.schoolRole.baseRole }
+            : null,
+        failedLoginAttempts: user.failedLoginAttempts ?? 0,
+        lockedUntil: user.lockedUntil ?? null,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
+        staffProfile: user.staffProfile
+            ? {
+                id: user.staffProfile.id,
+                employeeNumber: user.staffProfile.employeeNumber,
+                department: user.staffProfile.department ?? null,
+                isActive: user.staffProfile.isActive,
+            }
+            : null,
+        parentProfile: user.parentProfile ? { id: user.parentProfile.id } : null,
+        studentProfile: user.studentProfile
+            ? {
+                id: user.studentProfile.id,
+                admissionNumber: user.studentProfile.admissionNumber,
+                firstName: user.studentProfile.firstName,
+                lastName: user.studentProfile.lastName,
+            }
+            : null,
+    };
+}
+async function loadManagedUser(userId) {
+    return data_source_1.AppDataSource.getRepository(entities_1.User).findOne({
+        where: { id: userId },
+        relations: (0, typeorm_helpers_1.relations)('schoolRole', 'staffProfile', 'parentProfile', 'studentProfile'),
+    });
+}
+router.get('/users', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (req, res) => {
+    const { search, role, status } = req.query;
+    const qb = data_source_1.AppDataSource.getRepository(entities_1.User)
+        .createQueryBuilder('u')
+        .leftJoinAndSelect('u.schoolRole', 'schoolRole')
+        .leftJoinAndSelect('u.staffProfile', 'staffProfile')
+        .leftJoinAndSelect('u.parentProfile', 'parentProfile')
+        .leftJoinAndSelect('u.studentProfile', 'studentProfile')
+        .orderBy('u.lastName', 'ASC')
+        .addOrderBy('u.firstName', 'ASC');
+    if (status === 'inactive') {
+        qb.andWhere('u.isActive = false');
+    }
+    else if (status !== 'all') {
+        qb.andWhere('u.isActive = true');
+    }
+    if (role)
+        qb.andWhere('u.role = :role', { role: String(role) });
+    if (search) {
+        qb.andWhere(`(u.firstName ILIKE :q OR u.lastName ILIKE :q OR u.email ILIKE :q OR staffProfile.employeeNumber ILIKE :q OR studentProfile.admissionNumber ILIKE :q)`, { q: `%${String(search)}%` });
+    }
+    const users = await qb.getMany();
+    res.json(users.map(serializeManagedUser));
+});
+router.get('/users/:id', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (req, res) => {
+    const user = await loadManagedUser(req.params.id);
+    if (!user)
+        return res.status(404).json({ message: 'User not found' });
+    res.json(serializeManagedUser(user));
+});
+router.post('/users', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (req, res) => {
+    const { email, password, firstName, lastName, phone, role, schoolRoleId, department, qualification, hireDate, admissionNumber, linkAdmissionNumber, relationship, } = req.body || {};
+    const trimmedEmail = String(email || '').trim().toLowerCase();
+    const trimmedFirst = String(firstName || '').trim();
+    const trimmedLast = String(lastName || '').trim();
+    const portalRole = Object.values(enums_1.UserRole).includes(role) ? role : null;
+    if (!trimmedEmail || !trimmedFirst || !trimmedLast || !portalRole) {
+        return res.status(400).json({ message: 'Email, first name, last name, and role are required' });
+    }
+    const userRepo = data_source_1.AppDataSource.getRepository(entities_1.User);
+    const existing = await userRepo.findOne({ where: { email: trimmedEmail } });
+    if (existing)
+        return res.status(409).json({ message: 'Email already registered' });
+    const plainPassword = password || 'ChangeMe123!';
+    const policy = await (0, security_policy_service_1.getSecurityPolicy)();
+    const pwdErr = (0, security_policy_1.validatePasswordAgainstPolicy)(plainPassword, policy);
+    if (pwdErr)
+        return res.status(400).json({ message: pwdErr });
+    const passwordHash = await bcryptjs_1.default.hash(plainPassword, 10);
+    let schoolRole = null;
+    if (schoolRoleId) {
+        schoolRole = await data_source_1.AppDataSource.getRepository(entities_1.SchoolRole).findOne({ where: { id: schoolRoleId } });
+        if (!schoolRole)
+            return res.status(404).json({ message: 'Assigned role not found' });
+    }
+    if (portalRole === enums_1.UserRole.STUDENT) {
+        const admission = String(admissionNumber || '').trim().toUpperCase();
+        if (!admission) {
+            return res.status(400).json({ message: 'Student ID (admission number) is required for student accounts' });
+        }
+        const studentRepo = data_source_1.AppDataSource.getRepository(entities_1.Student);
+        const student = await studentRepo.findOne({ where: { admissionNumber: admission, isActive: true } });
+        if (!student)
+            return res.status(404).json({ message: 'No active student found with that admission number' });
+        if (student.userId)
+            return res.status(409).json({ message: 'That student already has a portal account' });
+        const user = await userRepo.save(userRepo.create({
+            email: trimmedEmail,
+            passwordHash,
+            firstName: trimmedFirst,
+            lastName: trimmedLast,
+            phone: phone?.trim() || undefined,
+            role: enums_1.UserRole.STUDENT,
+        }));
+        student.userId = user.id;
+        await studentRepo.save(student);
+        const full = await loadManagedUser(user.id);
+        return res.status(201).json(serializeManagedUser(full));
+    }
+    const user = await userRepo.save(userRepo.create({
+        email: trimmedEmail,
+        passwordHash,
+        firstName: trimmedFirst,
+        lastName: trimmedLast,
+        phone: phone?.trim() || undefined,
+        role: schoolRole ? schoolRole.baseRole : portalRole,
+        schoolRoleId: schoolRole?.id,
+    }));
+    if (STAFF_PORTAL_ROLES.includes(portalRole)) {
+        if (portalRole !== enums_1.UserRole.DIRECTOR) {
+            const staffRepo = data_source_1.AppDataSource.getRepository(entities_1.Staff);
+            const employeeNumber = await (0, helpers_1.generateEmployeeNumber)();
+            await staffRepo.save(staffRepo.create({
+                userId: user.id,
+                employeeNumber,
+                department: department?.trim() || undefined,
+                qualification: qualification?.trim() || undefined,
+                hireDate: hireDate || (0, helpers_1.today)(),
+                isActive: true,
+            }));
+        }
+    }
+    else if (portalRole === enums_1.UserRole.PARENT) {
+        const parentRepo = data_source_1.AppDataSource.getRepository(entities_1.Parent);
+        const parent = await parentRepo.save(parentRepo.create({ userId: user.id }));
+        const linkAdmission = String(linkAdmissionNumber || '').trim().toUpperCase();
+        if (linkAdmission) {
+            const studentRepo = data_source_1.AppDataSource.getRepository(entities_1.Student);
+            const guardianRepo = data_source_1.AppDataSource.getRepository(entities_1.Guardian);
+            const student = await studentRepo.findOne({ where: { admissionNumber: linkAdmission, isActive: true } });
+            if (student) {
+                let guardian = await guardianRepo.findOne({
+                    where: [{ studentId: student.id, email: trimmedEmail }, { studentId: student.id, parentId: parent.id }],
+                });
+                if (guardian) {
+                    guardian.parentId = parent.id;
+                    if (relationship)
+                        guardian.relationship = String(relationship).trim();
+                }
+                else {
+                    guardian = guardianRepo.create({
+                        studentId: student.id,
+                        parentId: parent.id,
+                        fullName: `${trimmedFirst} ${trimmedLast}`,
+                        relationship: relationship?.trim() || 'Parent',
+                        phone: phone?.trim() || undefined,
+                        email: trimmedEmail,
+                        isPrimary: false,
+                    });
+                }
+                await guardianRepo.save(guardian);
+            }
+        }
+    }
+    else {
+        await userRepo.delete({ id: user.id });
+        return res.status(400).json({ message: 'Invalid role for user creation' });
+    }
+    const full = await loadManagedUser(user.id);
+    res.status(201).json(serializeManagedUser(full));
+});
+router.patch('/users/:id', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (req, res) => {
+    const userRepo = data_source_1.AppDataSource.getRepository(entities_1.User);
+    const user = await userRepo.findOne({
+        where: { id: req.params.id },
+        relations: (0, typeorm_helpers_1.relations)('schoolRole', 'staffProfile', 'parentProfile', 'studentProfile'),
+    });
+    if (!user)
+        return res.status(404).json({ message: 'User not found' });
+    const { email, password, firstName, lastName, phone, role, schoolRoleId, isActive, department, qualification, hireDate, } = req.body || {};
+    if (req.params.id === req.user.userId && isActive === false) {
+        return res.status(400).json({ message: 'You cannot deactivate your own account' });
+    }
+    if (email !== undefined) {
+        const trimmedEmail = String(email).trim().toLowerCase();
+        if (!trimmedEmail)
+            return res.status(400).json({ message: 'Email is required' });
+        if (trimmedEmail !== user.email) {
+            const dup = await userRepo.findOne({ where: { email: trimmedEmail } });
+            if (dup)
+                return res.status(409).json({ message: 'Email already in use' });
+            user.email = trimmedEmail;
+        }
+    }
+    if (firstName !== undefined)
+        user.firstName = String(firstName).trim();
+    if (lastName !== undefined)
+        user.lastName = String(lastName).trim();
+    if (phone !== undefined)
+        user.phone = phone?.trim() || undefined;
+    if (password) {
+        const policy = await (0, security_policy_service_1.getSecurityPolicy)();
+        const pwdErr = (0, security_policy_1.validatePasswordAgainstPolicy)(password, policy);
+        if (pwdErr)
+            return res.status(400).json({ message: pwdErr });
+        user.passwordHash = await bcryptjs_1.default.hash(password, 10);
+        user.failedLoginAttempts = 0;
+        user.lockedUntil = null;
+    }
+    if (schoolRoleId !== undefined) {
+        if (schoolRoleId === null || schoolRoleId === '') {
+            user.schoolRoleId = undefined;
+            user.schoolRole = undefined;
+        }
+        else if (STAFF_PORTAL_ROLES.includes(user.role)) {
+            const schoolRole = await data_source_1.AppDataSource.getRepository(entities_1.SchoolRole).findOne({ where: { id: schoolRoleId } });
+            if (!schoolRole)
+                return res.status(404).json({ message: 'Assigned role not found' });
+            user.schoolRoleId = schoolRole.id;
+            user.schoolRole = schoolRole;
+            user.role = schoolRole.baseRole;
+        }
+    }
+    if (role !== undefined && req.params.id !== req.user.userId) {
+        const nextRole = Object.values(enums_1.UserRole).includes(role) ? role : null;
+        if (!nextRole)
+            return res.status(400).json({ message: 'Invalid role' });
+        if (user.role !== nextRole) {
+            return res.status(400).json({ message: 'Role changes are not supported here. Create a new account with the correct role instead.' });
+        }
+    }
+    if (isActive !== undefined) {
+        user.isActive = Boolean(isActive);
+        if (user.staffProfile)
+            user.staffProfile.isActive = user.isActive;
+    }
+    await userRepo.save(user);
+    if (user.staffProfile) {
+        if (department !== undefined)
+            user.staffProfile.department = department?.trim() || undefined;
+        if (qualification !== undefined)
+            user.staffProfile.qualification = qualification?.trim() || undefined;
+        if (hireDate !== undefined)
+            user.staffProfile.hireDate = hireDate || user.staffProfile.hireDate;
+        await data_source_1.AppDataSource.getRepository(entities_1.Staff).save(user.staffProfile);
+    }
+    const full = await loadManagedUser(user.id);
+    res.json(serializeManagedUser(full));
+});
+router.post('/users/:id/unlock', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (req, res) => {
+    const userRepo = data_source_1.AppDataSource.getRepository(entities_1.User);
+    const user = await userRepo.findOne({ where: { id: req.params.id } });
+    if (!user)
+        return res.status(404).json({ message: 'User not found' });
+    user.failedLoginAttempts = 0;
+    user.lockedUntil = null;
+    await userRepo.save(user);
+    const full = await loadManagedUser(user.id);
+    res.json(serializeManagedUser(full));
+});
+async function loadParentRecord(parentId) {
+    return data_source_1.AppDataSource.getRepository(entities_1.Parent).findOne({
+        where: { id: parentId },
+        relations: (0, typeorm_helpers_1.relations)('user', 'guardianships', 'guardianships.student', 'guardianships.student.schoolClass', 'guardianships.student.form'),
+    });
+}
+function serializeParent(parent) {
+    const user = parent.user;
+    const linkedStudents = (parent.guardianships || [])
+        .filter((g) => g.student && g.parentId === parent.id)
+        .map((g) => ({
+        guardianId: g.id,
+        studentId: g.student.id,
+        admissionNumber: g.student.admissionNumber,
+        firstName: g.student.firstName,
+        lastName: g.student.lastName,
+        className: g.student.schoolClass?.name ?? null,
+        formName: g.student.form?.name ?? null,
+        relationship: g.relationship || 'Parent',
+    }));
+    return {
+        id: parent.id,
+        userId: user.id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        phone: user.phone ?? null,
+        isActive: user.isActive,
+        occupation: parent.occupation ?? null,
+        address: parent.address ?? null,
+        receivesWhatsApp: parent.receivesWhatsApp,
+        linkedStudents,
+        createdAt: user.createdAt,
+    };
+}
+router.get('/parents', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), async (req, res) => {
+    const search = String(req.query.search || '').trim();
+    const status = String(req.query.status || 'active');
+    const qb = data_source_1.AppDataSource.getRepository(entities_1.Parent)
+        .createQueryBuilder('p')
+        .innerJoinAndSelect('p.user', 'u')
+        .leftJoinAndSelect('p.guardianships', 'g')
+        .leftJoinAndSelect('g.student', 's')
+        .where('u.role = :role', { role: enums_1.UserRole.PARENT });
+    if (status === 'active')
+        qb.andWhere('u.isActive = true');
+    else if (status === 'inactive')
+        qb.andWhere('u.isActive = false');
+    if (search) {
+        qb.andWhere(`(u.firstName ILIKE :q OR u.lastName ILIKE :q OR u.email ILIKE :q OR u.phone ILIKE :q OR p.occupation ILIKE :q OR s."admissionNumber" ILIKE :q OR s."firstName" ILIKE :q OR s."lastName" ILIKE :q)`, { q: `%${search}%` });
+    }
+    qb.orderBy('u.lastName', 'ASC').addOrderBy('u.firstName', 'ASC');
+    const parents = await qb.getMany();
+    res.json(parents.map(serializeParent));
+});
+router.get('/parents/:id', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), async (req, res) => {
+    const parent = await loadParentRecord(req.params.id);
+    if (!parent)
+        return res.status(404).json({ message: 'Parent not found' });
+    res.json(serializeParent(parent));
+});
+router.get('/parents/:id/students/search', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), async (req, res) => {
+    const q = String(req.query.q || '').trim();
+    if (!q) {
+        return res.status(400).json({ message: 'Enter a first name or last name to search' });
+    }
+    const parent = await loadParentRecord(req.params.id);
+    if (!parent)
+        return res.status(404).json({ message: 'Parent not found' });
+    const linkedStudentIds = new Set((parent.guardianships || [])
+        .filter((g) => g.parentId === parent.id && g.studentId)
+        .map((g) => g.studentId));
+    const students = await data_source_1.AppDataSource.getRepository(entities_1.Student)
+        .createQueryBuilder('s')
+        .leftJoinAndSelect('s.schoolClass', 'c')
+        .leftJoinAndSelect('s.form', 'f')
+        .where('s.isActive = true')
+        .andWhere('(s.firstName ILIKE :q OR s.lastName ILIKE :q)', { q: `%${q}%` })
+        .orderBy('s.lastName', 'ASC')
+        .addOrderBy('s.firstName', 'ASC')
+        .take(50)
+        .getMany();
+    res.json(students.map((s) => ({
+        id: s.id,
+        admissionNumber: s.admissionNumber,
+        firstName: s.firstName,
+        lastName: s.lastName,
+        className: s.schoolClass?.name ?? null,
+        formName: s.form?.name ?? null,
+        alreadyLinked: linkedStudentIds.has(s.id),
+    })));
+});
+router.post('/parents/:id/students/link', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (req, res) => {
+    const { studentIds, relationship } = req.body || {};
+    const ids = Array.isArray(studentIds) ? [...new Set(studentIds.filter(Boolean))] : [];
+    if (!ids.length) {
+        return res.status(400).json({ message: 'Select at least one student to link' });
+    }
+    const parent = await loadParentRecord(req.params.id);
+    if (!parent)
+        return res.status(404).json({ message: 'Parent not found' });
+    const user = parent.user;
+    const rel = String(relationship || 'Parent').trim() || 'Parent';
+    const studentRepo = data_source_1.AppDataSource.getRepository(entities_1.Student);
+    const guardianRepo = data_source_1.AppDataSource.getRepository(entities_1.Guardian);
+    let linked = 0;
+    for (const studentId of ids) {
+        const student = await studentRepo.findOne({ where: { id: studentId, isActive: true } });
+        if (!student)
+            continue;
+        const existingLink = await guardianRepo.findOne({ where: { studentId, parentId: parent.id } });
+        if (existingLink)
+            continue;
+        let guardian = await guardianRepo.findOne({
+            where: [{ studentId, email: user.email }, { studentId, parentId: parent.id }],
+        });
+        if (guardian) {
+            guardian.parentId = parent.id;
+            guardian.relationship = rel;
+            guardian.fullName = `${user.firstName} ${user.lastName}`;
+            guardian.email = user.email;
+            guardian.phone = user.phone || guardian.phone;
+        }
+        else {
+            guardian = guardianRepo.create({
+                studentId,
+                parentId: parent.id,
+                fullName: `${user.firstName} ${user.lastName}`,
+                relationship: rel,
+                phone: user.phone || undefined,
+                email: user.email,
+                isPrimary: false,
+            });
+        }
+        await guardianRepo.save(guardian);
+        linked += 1;
+    }
+    const full = await loadParentRecord(parent.id);
+    res.json({ linked, parent: serializeParent(full) });
+});
+router.delete('/parents/:id/students/:studentId/unlink', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (req, res) => {
+    const parent = await loadParentRecord(req.params.id);
+    if (!parent)
+        return res.status(404).json({ message: 'Parent not found' });
+    const guardianRepo = data_source_1.AppDataSource.getRepository(entities_1.Guardian);
+    const guardian = await guardianRepo.findOne({
+        where: { studentId: req.params.studentId, parentId: parent.id },
+    });
+    if (!guardian) {
+        return res.status(404).json({ message: 'This student is not linked to the parent' });
+    }
+    guardian.parentId = null;
+    await guardianRepo.save(guardian);
+    const full = await loadParentRecord(parent.id);
+    res.json({ parent: serializeParent(full) });
+});
+router.post('/parents', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (req, res) => {
+    const { email, password, firstName, lastName, phone, occupation, address, receivesWhatsApp, linkAdmissionNumber, relationship, } = req.body || {};
+    const trimmedEmail = String(email || '').trim().toLowerCase();
+    const trimmedFirst = String(firstName || '').trim();
+    const trimmedLast = String(lastName || '').trim();
+    if (!trimmedEmail || !trimmedFirst || !trimmedLast) {
+        return res.status(400).json({ message: 'Email, first name, and last name are required' });
+    }
+    const userRepo = data_source_1.AppDataSource.getRepository(entities_1.User);
+    const existing = await userRepo.findOne({ where: { email: trimmedEmail } });
+    if (existing)
+        return res.status(409).json({ message: 'Email already registered' });
+    const plainPassword = password || 'ChangeMe123!';
+    const policy = await (0, security_policy_service_1.getSecurityPolicy)();
+    const pwdErr = (0, security_policy_1.validatePasswordAgainstPolicy)(plainPassword, policy);
+    if (pwdErr)
+        return res.status(400).json({ message: pwdErr });
+    const passwordHash = await bcryptjs_1.default.hash(plainPassword, 10);
+    const user = await userRepo.save(userRepo.create({
+        email: trimmedEmail,
+        passwordHash,
+        firstName: trimmedFirst,
+        lastName: trimmedLast,
+        phone: phone?.trim() || undefined,
+        role: enums_1.UserRole.PARENT,
+        isActive: true,
+    }));
+    const parentRepo = data_source_1.AppDataSource.getRepository(entities_1.Parent);
+    const parent = await parentRepo.save(parentRepo.create({
+        userId: user.id,
+        occupation: occupation?.trim() || undefined,
+        address: address?.trim() || undefined,
+        receivesWhatsApp: receivesWhatsApp !== false,
+    }));
+    const linkAdmission = String(linkAdmissionNumber || '').trim().toUpperCase();
+    if (linkAdmission) {
+        const studentRepo = data_source_1.AppDataSource.getRepository(entities_1.Student);
+        const guardianRepo = data_source_1.AppDataSource.getRepository(entities_1.Guardian);
+        const student = await studentRepo.findOne({ where: { admissionNumber: linkAdmission, isActive: true } });
+        if (student) {
+            let guardian = await guardianRepo.findOne({
+                where: [{ studentId: student.id, email: trimmedEmail }, { studentId: student.id, parentId: parent.id }],
+            });
+            if (guardian) {
+                guardian.parentId = parent.id;
+                if (relationship)
+                    guardian.relationship = String(relationship).trim();
+            }
+            else {
+                guardian = guardianRepo.create({
+                    studentId: student.id,
+                    parentId: parent.id,
+                    fullName: `${trimmedFirst} ${trimmedLast}`,
+                    relationship: relationship?.trim() || 'Parent',
+                    phone: phone?.trim() || undefined,
+                    email: trimmedEmail,
+                    isPrimary: false,
+                });
+            }
+            await guardianRepo.save(guardian);
+        }
+    }
+    const full = await loadParentRecord(parent.id);
+    res.status(201).json(serializeParent(full));
+});
+router.patch('/parents/:id', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (req, res) => {
+    const parent = await loadParentRecord(req.params.id);
+    if (!parent)
+        return res.status(404).json({ message: 'Parent not found' });
+    const { email, password, firstName, lastName, phone, occupation, address, receivesWhatsApp, isActive, linkAdmissionNumber, relationship, } = req.body || {};
+    const userRepo = data_source_1.AppDataSource.getRepository(entities_1.User);
+    const parentRepo = data_source_1.AppDataSource.getRepository(entities_1.Parent);
+    const user = parent.user;
+    if (email !== undefined) {
+        const trimmedEmail = String(email).trim().toLowerCase();
+        if (!trimmedEmail)
+            return res.status(400).json({ message: 'Email is required' });
+        if (trimmedEmail !== user.email) {
+            const dup = await userRepo.findOne({ where: { email: trimmedEmail } });
+            if (dup)
+                return res.status(409).json({ message: 'Email already in use' });
+            user.email = trimmedEmail;
+        }
+    }
+    if (firstName !== undefined)
+        user.firstName = String(firstName).trim();
+    if (lastName !== undefined)
+        user.lastName = String(lastName).trim();
+    if (phone !== undefined)
+        user.phone = phone?.trim() || undefined;
+    if (isActive !== undefined)
+        user.isActive = Boolean(isActive);
+    if (password) {
+        const policy = await (0, security_policy_service_1.getSecurityPolicy)();
+        const pwdErr = (0, security_policy_1.validatePasswordAgainstPolicy)(String(password), policy);
+        if (pwdErr)
+            return res.status(400).json({ message: pwdErr });
+        user.passwordHash = await bcryptjs_1.default.hash(String(password), 10);
+    }
+    if (occupation !== undefined)
+        parent.occupation = occupation?.trim() || undefined;
+    if (address !== undefined)
+        parent.address = address?.trim() || undefined;
+    if (receivesWhatsApp !== undefined)
+        parent.receivesWhatsApp = Boolean(receivesWhatsApp);
+    await userRepo.save(user);
+    await parentRepo.save(parent);
+    const linkAdmission = String(linkAdmissionNumber || '').trim().toUpperCase();
+    if (linkAdmission) {
+        const studentRepo = data_source_1.AppDataSource.getRepository(entities_1.Student);
+        const guardianRepo = data_source_1.AppDataSource.getRepository(entities_1.Guardian);
+        const student = await studentRepo.findOne({ where: { admissionNumber: linkAdmission, isActive: true } });
+        if (student) {
+            let guardian = await guardianRepo.findOne({
+                where: [{ studentId: student.id, parentId: parent.id }, { studentId: student.id, email: user.email }],
+            });
+            if (guardian) {
+                guardian.parentId = parent.id;
+                guardian.email = user.email;
+                guardian.fullName = `${user.firstName} ${user.lastName}`;
+                if (relationship)
+                    guardian.relationship = String(relationship).trim();
+                if (phone !== undefined)
+                    guardian.phone = phone?.trim() || undefined;
+            }
+            else {
+                guardian = guardianRepo.create({
+                    studentId: student.id,
+                    parentId: parent.id,
+                    fullName: `${user.firstName} ${user.lastName}`,
+                    relationship: relationship?.trim() || 'Parent',
+                    phone: user.phone || undefined,
+                    email: user.email,
+                    isPrimary: false,
+                });
+            }
+            await guardianRepo.save(guardian);
+        }
+    }
+    const full = await loadParentRecord(parent.id);
+    res.json(serializeParent(full));
+});
+router.delete('/parents/:id', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (req, res) => {
+    const parent = await loadParentRecord(req.params.id);
+    if (!parent)
+        return res.status(404).json({ message: 'Parent not found' });
+    if (parent.userId === req.user.userId) {
+        return res.status(400).json({ message: 'You cannot delete your own account' });
+    }
+    await data_source_1.AppDataSource.getRepository(entities_1.User).delete({ id: parent.userId });
+    res.json({ message: 'Parent deleted' });
 });
 router.use('/permissions', permissions_routes_1.default);
 exports.default = router;

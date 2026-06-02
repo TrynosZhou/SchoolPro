@@ -24,6 +24,7 @@ import {
 } from '../services/integrations.service';
 import { DEFAULT_INTEGRATIONS } from '../types/integrations-config';
 import { sendWhatsAppReminder } from '../services/whatsapp.service';
+import { carryForwardBalancesForTerm } from '../services/term-balance.service';
 import permissionsRoutes from './permissions.routes';
 import multer from 'multer';
 import path from 'path';
@@ -250,6 +251,13 @@ router.post('/terms', authorize(UserRole.ADMIN), async (req, res: Response) => {
     await repo.update({ isCurrent: true }, { isCurrent: false });
   }
   const term = await repo.save(repo.create(req.body));
+  if (req.body.isCurrent) {
+    try {
+      await carryForwardBalancesForTerm(term.id);
+    } catch {
+      // Balance carry-forward can be retried via billing API if needed.
+    }
+  }
   res.status(201).json(term);
 });
 
@@ -272,7 +280,15 @@ router.patch('/terms/:id', authorize(UserRole.ADMIN), async (req, res: Response)
     await repo.update({ isCurrent: true }, { isCurrent: false });
   }
   Object.assign(term, req.body);
-  res.json(await repo.save(term));
+  const saved = await repo.save(term);
+  if (req.body.isCurrent) {
+    try {
+      await carryForwardBalancesForTerm(saved.id);
+    } catch {
+      // Balance carry-forward can be retried via billing API if needed.
+    }
+  }
+  res.json(saved);
 });
 
 router.get('/forms', async (_req, res: Response) => {

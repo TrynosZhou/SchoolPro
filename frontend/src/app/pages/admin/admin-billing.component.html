@@ -233,6 +233,9 @@
               <h3>Create invoice</h3>
               <p class="subtitle">Bill a student for tuition, levies, uniform, or other fees.</p>
             </div>
+            <button type="button" class="btn-primary bulk-invoice-btn" (click)="openBulkInvoiceModal()" [disabled]="loading()">
+              Bulk invoice tuition
+            </button>
           </div>
 
           @if (sortedTerms().length) {
@@ -600,5 +603,103 @@
         }
       }
     </section>
+
+    @if (bulkModalOpen()) {
+      <div class="modal-backdrop" (click)="closeBulkInvoiceModal()">
+        <div class="modal bulk-modal" role="dialog" aria-labelledby="bulkInvoiceTitle" (click)="$event.stopPropagation()">
+          <div class="modal-head">
+            <div>
+              <p class="modal-eyebrow">Bulk billing</p>
+              <h3 id="bulkInvoiceTitle">Invoice tuition for all students</h3>
+              <p class="modal-sub">
+                Adds next-term tuition to each registered student's invoice balance for the current term.
+                Amounts come from Manage Fees (O-Level vs A-Level tuition).
+              </p>
+            </div>
+            <button type="button" class="modal-close" (click)="closeBulkInvoiceModal()" aria-label="Close">×</button>
+          </div>
+
+          @if (bulkPreviewLoading()) {
+            <div class="bulk-loading">
+              <div class="spinner"></div>
+              <p>Calculating preview…</p>
+            </div>
+          } @else {
+            @if (bulkPreview(); as preview) {
+            <div class="bulk-summary-grid">
+              <div class="bulk-stat">
+                <span>Current term</span>
+                <strong>{{ preview.currentTerm.name }}</strong>
+              </div>
+              <div class="bulk-stat accent">
+                <span>Next term fees</span>
+                <strong>{{ preview.nextTerm.name }}</strong>
+              </div>
+              <div class="bulk-stat">
+                <span>Registered students</span>
+                <strong>{{ preview.studentCount }}</strong>
+              </div>
+              <div class="bulk-stat">
+                <span>Pending invoices</span>
+                <strong>{{ preview.pendingCount }}</strong>
+              </div>
+              <div class="bulk-stat">
+                <span>Already invoiced</span>
+                <strong>{{ preview.alreadyInvoicedCount }}</strong>
+              </div>
+              <div class="bulk-stat warn">
+                <span>Estimated total</span>
+                <strong>${{ preview.estimatedTotal | number:'1.2-2' }}</strong>
+              </div>
+            </div>
+
+            @if (bulkLastResult(); as result) {
+              <div class="bulk-result">
+                <p>
+                  Created <strong>{{ result.created }}</strong> invoice{{ result.created === 1 ? '' : 's' }}
+                  totalling <strong>${{ result.totalBilled | number:'1.2-2' }}</strong>.
+                  @if (result.skipped) {
+                    Skipped {{ result.skipped }} student{{ result.skipped === 1 ? '' : 's' }}.
+                  }
+                </p>
+                @if (result.skippedStudents.length) {
+                  <details class="skipped-list">
+                    <summary>View skipped students</summary>
+                    <ul>
+                      @for (row of result.skippedStudents.slice(0, 20); track row.id) {
+                        <li><strong>{{ row.name }}</strong> — {{ row.reason }}</li>
+                      }
+                      @if (result.skippedStudents.length > 20) {
+                        <li>…and {{ result.skippedStudents.length - 20 }} more</li>
+                      }
+                    </ul>
+                  </details>
+                }
+              </div>
+            } @else {
+              <p class="bulk-note">
+                Each invoice is posted to <strong>{{ preview.currentTerm.name }}</strong> with description
+                “Tuition fees for {{ preview.nextTerm.name }}”. Prepaid credit is applied automatically.
+              </p>
+            }
+            }
+          }
+
+          <div class="modal-actions">
+            <button type="button" class="btn-ghost" (click)="closeBulkInvoiceModal()">Close</button>
+            @if (!bulkLastResult()) {
+              <button
+                type="button"
+                class="btn-primary"
+                (click)="runBulkInvoicing()"
+                [disabled]="bulkPreviewLoading() || bulkSubmitting() || !bulkPreview()?.pendingCount"
+              >
+                {{ bulkSubmitting() ? 'Creating invoices…' : 'Create bulk invoices' }}
+              </button>
+            }
+          </div>
+        </div>
+      </div>
+    }
   </div>
 </app-portal-layout>

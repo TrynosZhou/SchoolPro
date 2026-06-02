@@ -1,18 +1,11 @@
 import { Component, inject, OnInit, signal, computed } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { AuthService } from '../../core/services/auth.service';
 import { ApiService } from '../../core/services/api.service';
 
-type AuthMode = 'signin' | 'signup';
+type AuthMode = 'signin' | 'signup' | 'forgot' | 'reset';
 type SignupRole = 'parent' | 'student';
-
-interface DemoAccount {
-  email: string;
-  role: string;
-  icon: string;
-  desc: string;
-}
 
 interface PasswordPolicy {
   minPasswordLength: number;
@@ -33,19 +26,25 @@ export class LoginComponent implements OnInit {
   private auth = inject(AuthService);
   private api = inject(ApiService);
   private router = inject(Router);
+  private route = inject(ActivatedRoute);
 
-  private readonly rememberKey = 'school_pro_remember_email';
+  private readonly rememberKey = 'school_pro_remember_username';
 
   mode = signal<AuthMode>('signin');
   signupRole = signal<SignupRole>('parent');
 
-  email = '';
+  username = '';
+  signupEmail = '';
   password = '';
   rememberMe = true;
   showPassword = signal(false);
   loading = signal(false);
   error = signal('');
   success = signal('');
+
+  resetToken = '';
+  resetConfirmPassword = '';
+  devResetUrl = signal('');
 
   signup = {
     firstName: '',
@@ -73,15 +72,6 @@ export class LoginComponent implements OnInit {
     { icon: '👩‍🏫', title: 'Staff & attendance', text: 'Directory, roles, and daily attendance' },
   ];
 
-  readonly demoAccounts: DemoAccount[] = [
-    { email: 'admin@schoolpro.ac.zw', role: 'Administrator', icon: '⚙️', desc: 'Full school management' },
-    { email: 'teacher@schoolpro.ac.zw', role: 'Teacher', icon: '📝', desc: 'Marks & class tools' },
-    { email: 'principal@schoolpro.ac.zw', role: 'Principal', icon: '🏫', desc: 'Oversight & academics' },
-    { email: 'director@schoolpro.ac.zw', role: 'Director', icon: '📈', desc: 'Executive dashboard' },
-    { email: 'parent@schoolpro.ac.zw', role: 'Parent', icon: '👨‍👩‍👧', desc: 'Child progress & fees' },
-  ];
-
-  readonly demoPassword = 'Password123!';
   readonly currentYear = new Date().getFullYear();
 
   passwordRules = computed(() => {
@@ -97,16 +87,23 @@ export class LoginComponent implements OnInit {
   ngOnInit() {
     const saved = localStorage.getItem(this.rememberKey);
     if (saved) {
-      this.email = saved;
+      this.username = saved;
       this.rememberMe = true;
-    } else {
-      this.email = 'admin@schoolpro.ac.zw';
     }
-    this.password = this.demoPassword;
 
     this.api.get<PasswordPolicy>('/auth/password-policy').subscribe({
       next: (policy) => this.passwordPolicy.set(policy),
       error: () => {},
+    });
+
+    this.route.queryParamMap.subscribe((params) => {
+      const token = params.get('reset')?.trim();
+      if (token) {
+        this.resetToken = token;
+        this.mode.set('reset');
+        this.error.set('');
+        this.success.set('');
+      }
     });
   }
 
@@ -114,6 +111,17 @@ export class LoginComponent implements OnInit {
     this.mode.set(next);
     this.error.set('');
     this.success.set('');
+    this.devResetUrl.set('');
+    if (next !== 'reset') {
+      this.resetToken = '';
+      this.password = '';
+      this.resetConfirmPassword = '';
+      void this.router.navigate([], {
+        queryParams: { reset: null },
+        queryParamsHandling: 'merge',
+        replaceUrl: true,
+      });
+    }
   }
 
   setSignupRole(role: SignupRole) {
@@ -125,24 +133,83 @@ export class LoginComponent implements OnInit {
     this.showPassword.update((v) => !v);
   }
 
-  fillDemo(account: DemoAccount) {
-    this.setMode('signin');
-    this.email = account.email;
-    this.password = this.demoPassword;
-    this.error.set('');
-  }
-
   onSubmit() {
-    if (this.mode() === 'signin') {
+    const m = this.mode();
+    if (m === 'signin') {
       this.submitSignIn();
-    } else {
+    } else if (m === 'signup') {
       this.submitSignUp();
+    } else if (m === 'forgot') {
+      this.submitForgotPassword();
+    } else {
+      this.submitResetPassword();
     }
   }
 
+  submitForgotPassword() {
+    if (!this.username.trim()) {
+      this.error.set('Enter your username or email address.');
+      return;
+    }
+
+    this.loading.set(true);
+    this.error.set('');
+    this.success.set('');
+    this.devResetUrl.set('');
+
+    this.auth.forgotPassword(this.username.trim()).subscribe({
+      next: (res) => {
+        this.success.set(res.message);
+        if (res.resetUrl) {
+          this.devResetUrl.set(res.resetUrl);
+        }
+        this.loading.set(false);
+      },
+      error: (e) => {
+        this.error.set(e.error?.message || 'Could not send reset instructions. Please try again.');
+        this.loading.set(false);
+      },
+    });
+  }
+
+  submitResetPassword() {
+    this.error.set('');
+    this.success.set('');
+
+    if (!this.resetToken.trim()) {
+      this.error.set('This reset link is invalid. Request a new password reset.');
+      return;
+    }
+    if (!this.password) {
+      this.error.set('Enter a new password.');
+      return;
+    }
+    if (this.password !== this.resetConfirmPassword) {
+      this.error.set('Passwords do not match.');
+      return;
+    }
+
+    this.loading.set(true);
+
+    this.auth.resetPassword(this.resetToken.trim(), this.password).subscribe({
+      next: (res) => {
+        this.success.set(res.message);
+        this.password = '';
+        this.resetConfirmPassword = '';
+        this.resetToken = '';
+        this.loading.set(false);
+        setTimeout(() => this.setMode('signin'), 2000);
+      },
+      error: (e) => {
+        this.error.set(e.error?.message || 'Could not reset password. The link may have expired.');
+        this.loading.set(false);
+      },
+    });
+  }
+
   private submitSignIn() {
-    if (!this.email.trim() || !this.password) {
-      this.error.set('Enter your email and password.');
+    if (!this.username.trim() || !this.password) {
+      this.error.set('Enter your username and password.');
       return;
     }
 
@@ -151,15 +218,15 @@ export class LoginComponent implements OnInit {
     this.success.set('');
 
     if (this.rememberMe) {
-      localStorage.setItem(this.rememberKey, this.email.trim());
+      localStorage.setItem(this.rememberKey, this.username.trim());
     } else {
       localStorage.removeItem(this.rememberKey);
     }
 
-    this.auth.login(this.email.trim(), this.password).subscribe({
+    this.auth.login(this.username.trim(), this.password).subscribe({
       next: () => this.router.navigate([this.auth.getPortalRoute()]),
       error: (e) => {
-        this.error.set(e.error?.message || 'Invalid email or password. Please try again.');
+        this.error.set(e.error?.message || 'Invalid username or password. Please try again.');
         this.loading.set(false);
       },
       complete: () => this.loading.set(false),
@@ -174,7 +241,7 @@ export class LoginComponent implements OnInit {
       this.error.set('Enter your first and last name.');
       return;
     }
-    if (!this.email.trim()) {
+    if (!this.signupEmail.trim()) {
       this.error.set('Enter your email address.');
       return;
     }
@@ -194,7 +261,7 @@ export class LoginComponent implements OnInit {
     this.loading.set(true);
 
     this.auth.register({
-      email: this.email.trim(),
+      email: this.signupEmail.trim(),
       password: this.password,
       firstName: this.signup.firstName.trim(),
       lastName: this.signup.lastName.trim(),

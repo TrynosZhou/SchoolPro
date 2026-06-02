@@ -16,10 +16,21 @@ export class AuthService {
   user = this.userSignal.asReadonly();
   isLoggedIn = computed(() => !!this.userSignal() && !!this.getToken());
 
-  login(email: string, password: string) {
-    return this.api.post<AuthResponse>('/auth/login', { email, password }).pipe(
+  login(username: string, password: string) {
+    return this.api.post<AuthResponse>('/auth/login', { username, password }).pipe(
       tap((res) => this.persistSession(res))
     );
+  }
+
+  forgotPassword(username: string) {
+    return this.api.post<{ message: string; resetUrl?: string; emailSent?: boolean }>(
+      '/auth/forgot-password',
+      { username }
+    );
+  }
+
+  resetPassword(token: string, password: string) {
+    return this.api.post<{ message: string }>('/auth/reset-password', { token, password });
   }
 
   register(payload: {

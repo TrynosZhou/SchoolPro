@@ -83,6 +83,23 @@ interface Term {
   isCurrent?: boolean;
 }
 
+interface BulkTuitionPreview {
+  currentTerm: { id: string; name: string };
+  nextTerm: { id: string; name: string };
+  studentCount: number;
+  alreadyInvoicedCount: number;
+  pendingCount: number;
+  estimatedTotal: number;
+}
+
+interface BulkTuitionResult extends BulkTuitionPreview {
+  created: number;
+  skipped: number;
+  skippedStudents: Array<{ id: string; name: string; reason: string }>;
+  totalBilled: number;
+  message?: string;
+}
+
 @Component({
   selector: 'app-admin-billing',
   standalone: true,
@@ -100,6 +117,11 @@ export class AdminBillingComponent implements OnInit {
   activeTab = signal<Tab>('payment');
   loading = signal(true);
   submitting = signal(false);
+  bulkSubmitting = signal(false);
+  bulkModalOpen = signal(false);
+  bulkPreview = signal<BulkTuitionPreview | null>(null);
+  bulkPreviewLoading = signal(false);
+  bulkLastResult = signal<BulkTuitionResult | null>(null);
   pdfLoading = signal(false);
   previewingReceiptId = signal<string | null>(null);
   previewingInvoiceId = signal<string | null>(null);
@@ -429,6 +451,73 @@ export class AdminBillingComponent implements OnInit {
       this.debtors.set(data.debtors);
       this.payments.set(data.payments);
       this.invoices.set(data.invoices);
+    });
+  }
+
+  openBulkInvoiceModal() {
+    this.bulkLastResult.set(null);
+    this.bulkModalOpen.set(true);
+    this.loadBulkPreview();
+  }
+
+  closeBulkInvoiceModal() {
+    this.bulkModalOpen.set(false);
+    this.bulkPreview.set(null);
+  }
+
+  loadBulkPreview() {
+    this.bulkPreviewLoading.set(true);
+    this.api.get<BulkTuitionPreview>('/billing/invoices/bulk-tuition/preview').subscribe({
+      next: (preview) => {
+        this.bulkPreview.set(preview);
+        this.bulkPreviewLoading.set(false);
+      },
+      error: (e) => {
+        this.bulkPreviewLoading.set(false);
+        this.showToast('error', e.error?.message || 'Could not load bulk billing preview');
+        this.closeBulkInvoiceModal();
+      },
+    });
+  }
+
+  runBulkInvoicing() {
+    const preview = this.bulkPreview();
+    if (!preview?.pendingCount) {
+      this.showToast('error', 'No students are pending bulk tuition billing.');
+      return;
+    }
+
+    this.bulkSubmitting.set(true);
+    this.api.post<BulkTuitionResult>('/billing/invoices/bulk-tuition', {}).subscribe({
+      next: (result) => {
+        this.bulkSubmitting.set(false);
+        this.bulkLastResult.set(result);
+        this.bulkPreview.set({
+          currentTerm: result.currentTerm,
+          nextTerm: result.nextTerm,
+          studentCount: result.studentCount,
+          alreadyInvoicedCount: result.alreadyInvoicedCount + result.created,
+          pendingCount: 0,
+          estimatedTotal: 0,
+        });
+        this.showToast(
+          'success',
+          result.message || `Created ${result.created} tuition invoices for ${result.nextTerm.name}.`,
+        );
+        forkJoin({
+          summary: this.api.get<BillingSummary>('/billing/summary'),
+          debtors: this.api.get<Debtor[]>('/billing/debtors'),
+          invoices: this.api.get<InvoiceRow[]>('/billing/invoices'),
+        }).subscribe((data) => {
+          this.summary.set(data.summary);
+          this.debtors.set(data.debtors);
+          this.invoices.set(data.invoices);
+        });
+      },
+      error: (e) => {
+        this.bulkSubmitting.set(false);
+        this.showToast('error', e.error?.message || 'Bulk invoicing failed');
+      },
     });
   }
 

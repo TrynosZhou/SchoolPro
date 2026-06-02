@@ -5,12 +5,15 @@ exports.ensureRegistrationSchoolFees = ensureRegistrationSchoolFees;
 exports.resolveFormLevel = resolveFormLevel;
 exports.tuitionFeeCodeForFormLevel = tuitionFeeCodeForFormLevel;
 exports.getCurrentTermId = getCurrentTermId;
+exports.resolveTuitionFeeForFormLevel = resolveTuitionFeeForFormLevel;
+exports.bulkTuitionInvoiceDescription = bulkTuitionInvoiceDescription;
 exports.createRegistrationInvoiceForStudent = createRegistrationInvoiceForStudent;
 const data_source_1 = require("../config/data-source");
 const entities_1 = require("../entities");
 const enums_1 = require("../entities/enums");
 const helpers_1 = require("../utils/helpers");
 const pdf_1 = require("../utils/pdf");
+const term_balance_service_1 = require("./term-balance.service");
 const fee_catalog_service_1 = require("./fee-catalog.service");
 const school_branding_service_1 = require("./school-branding.service");
 const typeorm_helpers_1 = require("../utils/typeorm-helpers");
@@ -80,6 +83,67 @@ async function getCurrentTermId() {
         where: { isCurrent: true },
     });
     return term?.id;
+}
+/** Resolve the tuition fee catalog row for a student's form level (O-Level vs A-Level). */
+async function resolveTuitionFeeForFormLevel(level) {
+    await ensureRegistrationSchoolFees();
+    const feeRepo = data_source_1.AppDataSource.getRepository(entities_1.SchoolFee);
+    const fees = await feeRepo.find({ order: { sortOrder: 'ASC', name: 'ASC' } });
+    const activeFees = fees.filter((f) => f.isActive);
+    const norm = (v) => String(v || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const byCode = (pool, code) => pool.find((f) => norm(f.code) === norm(code));
+    const byNameHint = (pool, hints) => pool.find((f) => hints.some((h) => norm(f.name).includes(norm(h)) || norm(f.code).includes(norm(h))));
+    const resolveFee = (preferredCode, aliases, opts) => {
+        let candidates = [
+            byCode(activeFees, preferredCode),
+            byNameHint(activeFees, aliases),
+            byCode(fees, preferredCode),
+            byNameHint(fees, aliases),
+        ].filter(Boolean);
+        if (!candidates.length)
+            return undefined;
+        if (opts?.rejectHints?.length) {
+            const rejects = opts.rejectHints.map((h) => norm(h));
+            const filtered = candidates.filter((f) => {
+                const text = `${norm(f.code)} ${norm(f.name)}`;
+                return !rejects.some((r) => text.includes(r));
+            });
+            if (filtered.length)
+                candidates = filtered;
+        }
+        if (opts?.preferNonZeroAmount) {
+            const nonZero = candidates.find((f) => Number(f.defaultAmount) > 0);
+            if (nonZero)
+                return nonZero;
+        }
+        return candidates[0];
+    };
+    const tuitionCode = tuitionFeeCodeForFormLevel(level);
+    let tuitionFee = resolveFee(tuitionCode, level >= 5
+        ? ['advanced level tuition', 'a level tuition', 'advanced tuition', 'tuition fees', 'tuition']
+        : ['ordinary level tuition', 'o level tuition', 'ordinary tuition', 'tuition fees', 'tuition'], {
+        preferNonZeroAmount: true,
+        rejectHints: level >= 5 ? ['ordinary', 'o level', 'olevel'] : ['advanced', 'a level', 'alevel'],
+    });
+    if (level < 5 && (!tuitionFee || Number(tuitionFee.defaultAmount) <= 0)) {
+        const ordinaryFallback = resolveFee('tuition', ['ordinary level tuition fees', 'ordinary tuition', 'tuition fees', 'tuition'], { preferNonZeroAmount: true, rejectHints: ['advanced', 'a level', 'alevel'] });
+        if (ordinaryFallback)
+            tuitionFee = ordinaryFallback;
+    }
+    if (!tuitionFee) {
+        const def = exports.REGISTRATION_FEE_DEFINITIONS.find((d) => d.code === tuitionCode);
+        if (def) {
+            tuitionFee = await feeRepo.save(feeRepo.create({
+                ...def,
+                isActive: true,
+                defaultAmount: Number(def.defaultAmount || 0),
+            }));
+        }
+    }
+    return tuitionFee || null;
+}
+function bulkTuitionInvoiceDescription(nextTermName) {
+    return `Tuition fees for ${nextTermName}`;
 }
 async function createRegistrationInvoiceForStudent(student, form) {
     await ensureRegistrationSchoolFees();
@@ -281,6 +345,11 @@ async function createRegistrationInvoiceForStudent(student, form) {
     });
     invoice.pdfPath = pdfPath;
     await invoiceRepo.save(invoice);
+    if (termId) {
+        await (0, term_balance_service_1.ensureTermBalanceInitialized)(student.id, termId);
+        await (0, term_balance_service_1.applyAvailablePrepaidToInvoice)(invoice);
+        await (0, term_balance_service_1.refreshTermClosingBalance)(student.id, termId);
+    }
     return invoiceRepo.findOne({
         where: { id: invoice.id },
         relations: (0, typeorm_helpers_1.relations)('lines'),

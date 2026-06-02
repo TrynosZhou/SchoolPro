@@ -20,10 +20,60 @@ const school_branding_service_1 = require("../services/school-branding.service")
 const whatsapp_service_1 = require("../services/whatsapp.service");
 const typeorm_helpers_1 = require("../utils/typeorm-helpers");
 const fin_reports_service_1 = require("../services/fin-reports.service");
+const term_balance_service_1 = require("../services/term-balance.service");
+const bulk_tuition_invoice_service_1 = require("../services/bulk-tuition-invoice.service");
 const fee_collection_revenue_service_1 = require("../services/fee-collection-revenue.service");
 const pdf_2 = require("../utils/pdf");
 const router = (0, express_1.Router)();
 router.use(auth_1.authenticate);
+async function assertParentStudentAccess(req, studentId) {
+    if (req.user.role === enums_1.UserRole.STUDENT) {
+        return req.user.studentId === studentId ? null : 'You can only view your own finance records';
+    }
+    if (req.user.role !== enums_1.UserRole.PARENT) {
+        return null;
+    }
+    if (!req.user.parentId) {
+        return 'Parent profile not linked';
+    }
+    const link = await data_source_1.AppDataSource.getRepository(entities_1.Guardian).findOne({
+        where: { parentId: req.user.parentId, studentId },
+    });
+    return link ? null : 'You can only view finance for your linked students';
+}
+async function notifyLinkedParentUsersOfReceipt(manager, senderId, student, receipt, payment) {
+    const guardianRepo = manager.getRepository(entities_1.Guardian);
+    const messageRepo = manager.getRepository(entities_1.Message);
+    const guardians = await guardianRepo.find({
+        where: { studentId: student.id },
+        relations: (0, typeorm_helpers_1.relations)('parent', 'parent.user'),
+    });
+    const parentUserIds = new Set();
+    for (const g of guardians) {
+        const user = g.parent?.user;
+        if (g.parent?.userId && user?.isActive !== false) {
+            parentUserIds.add(g.parent.userId);
+        }
+    }
+    if (!parentUserIds.size)
+        return;
+    const amount = Number(payment.amount);
+    const subject = `Payment receipt — ${student.firstName} ${student.lastName}`;
+    const body = `A payment of $${amount.toFixed(2)} was received for ${student.firstName} ${student.lastName}.\n\n` +
+        `Receipt number: ${receipt.receiptNumber}\n` +
+        `Payment reference: ${payment.paymentReference}\n` +
+        `Description: ${payment.label}\n\n` +
+        `Open Finance in the Parent Portal to view and download all receipts.`;
+    const messages = [...parentUserIds].map((recipientId) => messageRepo.create({
+        senderId,
+        recipientId,
+        studentId: student.id,
+        subject,
+        body,
+        isRead: false,
+    }));
+    await messageRepo.save(messages);
+}
 async function renderPdfHeaderWithLogo(doc, title, opts) {
     const margin = opts?.margin ?? 34;
     const logoSize = opts?.logoSize ?? 36;
@@ -187,6 +237,39 @@ router.get('/invoices', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.Us
     }
     res.json(await qb.orderBy('i.createdAt', 'DESC').getMany());
 });
+router.get('/invoices/bulk-tuition/preview', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), async (_req, res) => {
+    try {
+        res.json(await (0, bulk_tuition_invoice_service_1.previewBulkTuitionInvoices)());
+    }
+    catch (err) {
+        return res.status(400).json({ message: err instanceof Error ? err.message : 'Failed to preview bulk tuition billing' });
+    }
+});
+router.post('/invoices/bulk-tuition', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), async (_req, res) => {
+    try {
+        const result = await (0, bulk_tuition_invoice_service_1.createBulkTuitionInvoices)();
+        res.status(201).json({
+            message: `Created ${result.created} tuition invoice${result.created === 1 ? '' : 's'} for ${result.nextTerm.name} on ${result.currentTerm.name} balances.`,
+            ...result,
+        });
+    }
+    catch (err) {
+        return res.status(400).json({ message: err instanceof Error ? err.message : 'Failed to create bulk tuition invoices' });
+    }
+});
+router.post('/invoices/bulk-tuition/reverse', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (req, res) => {
+    try {
+        const nextTermName = typeof req.body?.nextTermName === 'string' ? req.body.nextTermName.trim() : undefined;
+        const result = await (0, bulk_tuition_invoice_service_1.reverseBulkTuitionInvoices)(nextTermName || undefined);
+        res.json({
+            message: `Removed ${result.removed} bulk tuition invoice${result.removed === 1 ? '' : 's'} from ${result.billingTermName} balances.`,
+            ...result,
+        });
+    }
+    catch (err) {
+        return res.status(400).json({ message: err instanceof Error ? err.message : 'Failed to reverse bulk tuition invoices' });
+    }
+});
 router.post('/invoices', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (req, res) => {
     const repo = data_source_1.AppDataSource.getRepository(entities_1.Invoice);
     const ledgerRepo = data_source_1.AppDataSource.getRepository(entities_1.LedgerEntry);
@@ -254,6 +337,11 @@ router.post('/invoices', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (r
     });
     invoice.pdfPath = pdfPath;
     await repo.save(invoice);
+    if (data.termId) {
+        await (0, term_balance_service_1.ensureTermBalanceInitialized)(data.studentId, data.termId);
+        await (0, term_balance_service_1.applyAvailablePrepaidToInvoice)(invoice);
+        await (0, term_balance_service_1.refreshTermClosingBalance)(data.studentId, data.termId);
+    }
     res.status(201).json(invoice);
 });
 router.post('/payments', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (req, res) => {
@@ -291,11 +379,15 @@ router.post('/payments', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (r
             recordedById: req.user.userId,
         }));
         let ledgerTermId;
+        let overpaymentRemaining = 0;
         if (invoiceId) {
             const invoice = await invoiceRepo.findOne({ where: { id: invoiceId, studentId } });
             if (invoice) {
                 ledgerTermId = invoice.termId || undefined;
-                invoice.amountPaid = Number(invoice.amountPaid) + paymentAmount;
+                const due = Math.max(0, Number(invoice.totalAmount) - Number(invoice.amountPaid));
+                const applied = Math.min(due, paymentAmount);
+                overpaymentRemaining = (0, term_balance_service_1.roundMoney)(paymentAmount - applied);
+                invoice.amountPaid = Number(invoice.amountPaid) + applied;
                 invoice.status = Number(invoice.amountPaid) >= Number(invoice.totalAmount)
                     ? enums_1.InvoiceStatus.PAID
                     : enums_1.InvoiceStatus.PARTIAL;
@@ -305,6 +397,7 @@ router.post('/payments', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (r
         else {
             // Auto-allocate payment against outstanding invoices (oldest first).
             let remaining = paymentAmount;
+            let primaryInvoiceId;
             const outstanding = await invoiceRepo.find({
                 where: { studentId },
                 order: { dueDate: 'ASC', createdAt: 'ASC' },
@@ -321,10 +414,20 @@ router.post('/payments', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (r
                     ? enums_1.InvoiceStatus.PAID
                     : enums_1.InvoiceStatus.PARTIAL;
                 await invoiceRepo.save(inv);
+                if (!primaryInvoiceId)
+                    primaryInvoiceId = inv.id;
                 if (!ledgerTermId && inv.termId)
                     ledgerTermId = inv.termId;
                 remaining -= applied;
             }
+            overpaymentRemaining = (0, term_balance_service_1.roundMoney)(Math.max(0, remaining));
+            if (primaryInvoiceId) {
+                payment.invoiceId = primaryInvoiceId;
+                await paymentRepo.save(payment);
+            }
+        }
+        if (!ledgerTermId) {
+            ledgerTermId = await (0, term_balance_service_1.resolvePaymentTermId)(studentId, invoiceId);
         }
         const lastLedger = await ledgerRepo.findOne({
             where: { studentId },
@@ -382,6 +485,7 @@ router.post('/payments', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (r
             paymentId: payment.id,
             pdfPath,
         }));
+        await notifyLinkedParentUsersOfReceipt(queryRunner.manager, req.user.userId, student, receipt, payment);
         await notifRepo.save(notifRepo.create({
             title: 'Payment Received',
             message: `${student.firstName} ${student.lastName} (${student.schoolClass?.name}) paid $${paymentAmount} for ${label}`,
@@ -389,6 +493,12 @@ router.post('/payments', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (r
             metadata: { studentId, classId: student.classId, amount: paymentAmount, label },
         }));
         await queryRunner.commitTransaction();
+        if (overpaymentRemaining > 0.005) {
+            await (0, term_balance_service_1.recordOverpaymentPrepaid)(studentId, ledgerTermId, overpaymentRemaining);
+        }
+        if (ledgerTermId) {
+            await (0, term_balance_service_1.refreshTermClosingBalance)(studentId, ledgerTermId);
+        }
         const primaryGuardian = student.guardians?.find((g) => g.isPrimary) || student.guardians?.[0];
         if (primaryGuardian?.phone) {
             try {
@@ -416,6 +526,10 @@ router.get('/receipts/:id/pdf', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, en
     });
     if (!receipt?.payment?.student) {
         return res.status(404).json({ message: 'Receipt not found' });
+    }
+    const accessError = await assertParentStudentAccess(req, receipt.payment.studentId);
+    if (accessError) {
+        return res.status(403).json({ message: accessError });
     }
     const branding = await (0, school_branding_service_1.loadSchoolBranding)();
     const p = receipt.payment;
@@ -492,6 +606,10 @@ router.get('/invoices/:id/pdf', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, en
     res.sendFile(path_1.default.resolve(pdfPath));
 });
 router.get('/receipts/student/:studentId', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.PARENT, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), async (req, res) => {
+    const accessError = await assertParentStudentAccess(req, req.params.studentId);
+    if (accessError) {
+        return res.status(403).json({ message: accessError });
+    }
     const payments = await data_source_1.AppDataSource.getRepository(entities_1.Payment).find({
         where: { studentId: req.params.studentId },
         relations: (0, typeorm_helpers_1.relations)('receipt'),
@@ -500,6 +618,10 @@ router.get('/receipts/student/:studentId', (0, auth_1.authorize)(enums_1.UserRol
     res.json(payments.filter((p) => p.receipt).map((p) => ({ ...p.receipt, payment: p })));
 });
 router.get('/statement/:studentId', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.PARENT), async (req, res) => {
+    const accessError = await assertParentStudentAccess(req, req.params.studentId);
+    if (accessError) {
+        return res.status(403).json({ message: accessError });
+    }
     const { termId } = req.query;
     const ledgerRepo = data_source_1.AppDataSource.getRepository(entities_1.LedgerEntry);
     const invoiceRepo = data_source_1.AppDataSource.getRepository(entities_1.Invoice);
@@ -516,12 +638,21 @@ router.get('/statement/:studentId', (0, auth_1.authorize)(enums_1.UserRole.ADMIN
     res.json({ ledger, invoices, payments, summary: { totalInvoiced, totalPaid, balance } });
 });
 router.get('/statement/:studentId/pdf', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.PARENT), async (req, res) => {
-    const { termId } = req.query;
+    const requestedStudentId = String(req.params.studentId || '').trim();
     const studentRepo = data_source_1.AppDataSource.getRepository(entities_1.Student);
+    let resolvedForAccess = requestedStudentId;
+    const studentForAccess = await studentRepo.findOne({ where: { id: requestedStudentId } })
+        ?? await studentRepo.findOne({ where: { admissionNumber: requestedStudentId } });
+    if (studentForAccess)
+        resolvedForAccess = studentForAccess.id;
+    const accessError = await assertParentStudentAccess(req, resolvedForAccess);
+    if (accessError) {
+        return res.status(403).json({ message: accessError });
+    }
+    const { termId } = req.query;
     const ledgerRepo = data_source_1.AppDataSource.getRepository(entities_1.LedgerEntry);
     const invoiceRepo = data_source_1.AppDataSource.getRepository(entities_1.Invoice);
     const paymentRepo = data_source_1.AppDataSource.getRepository(entities_1.Payment);
-    const requestedStudentId = String(req.params.studentId || '').trim();
     let student = await studentRepo.findOne({
         where: { id: requestedStudentId },
         relations: (0, typeorm_helpers_1.relations)('schoolClass', 'schoolClass.form'),
@@ -1143,6 +1274,27 @@ router.get('/reports/student-ledger/export.pdf', (0, auth_1.authorize)(enums_1.U
 router.get('/reports/outstanding-invoices', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), async (_req, res) => {
     const data = await (0, fin_reports_service_1.buildOutstandingInvoicesReport)();
     res.json(data);
+});
+router.post('/terms/:termId/carry-forward-balances', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), async (req, res) => {
+    try {
+        const result = await (0, term_balance_service_1.carryForwardBalancesForTerm)(req.params.termId);
+        res.json({
+            message: `Carry-forward balances initialized for ${result.studentsProcessed} students.`,
+            ...result,
+        });
+    }
+    catch (err) {
+        return res.status(400).json({ message: err instanceof Error ? err.message : 'Failed to carry forward balances' });
+    }
+});
+router.get('/students/:studentId/term-balance/:termId', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), async (req, res) => {
+    try {
+        const summary = await (0, term_balance_service_1.getTermBalanceSummary)(req.params.studentId, req.params.termId);
+        res.json(summary);
+    }
+    catch (err) {
+        return res.status(400).json({ message: err instanceof Error ? err.message : 'Failed to load term balance' });
+    }
 });
 router.get('/reports/outstanding-invoices/export.pdf', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), async (req, res) => {
     const data = await (0, fin_reports_service_1.buildOutstandingInvoicesReport)();

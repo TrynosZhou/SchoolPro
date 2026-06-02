@@ -22,5 +22,8 @@ export const env = {
     authToken: process.env.TWILIO_AUTH_TOKEN || '',
     from: process.env.TWILIO_WHATSAPP_FROM || '',
   },
+  sms: {
+    from: process.env.TWILIO_SMS_FROM || '',
+  },
 };
 

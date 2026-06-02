@@ -16,22 +16,25 @@ async function seedDatabase() {
     if (existing > 0)
         return;
     console.log('Seeding database...');
-    const hash = await bcryptjs_1.default.hash('Password123!', 10);
+    const defaultHash = await bcryptjs_1.default.hash('Password123!', 10);
+    const adminHash = await bcryptjs_1.default.hash('admin123', 10);
     const director = await userRepo.save(userRepo.create({
         email: 'director@schoolpro.ac.zw',
-        passwordHash: hash,
+        username: 'director',
+        passwordHash: defaultHash,
         firstName: 'John',
         lastName: 'Director',
         role: enums_1.UserRole.DIRECTOR,
         phone: '+263771000001',
     }));
     await userRepo.save([
-        userRepo.create({ email: 'principal@schoolpro.ac.zw', passwordHash: hash, firstName: 'Mary', lastName: 'Principal', role: enums_1.UserRole.PRINCIPAL, phone: '+263771000002' }),
-        userRepo.create({ email: 'admin@schoolpro.ac.zw', passwordHash: hash, firstName: 'Peter', lastName: 'Admin', role: enums_1.UserRole.ADMIN, phone: '+263771000003' }),
+        userRepo.create({ email: 'principal@schoolpro.ac.zw', username: 'principal', passwordHash: defaultHash, firstName: 'Mary', lastName: 'Principal', role: enums_1.UserRole.PRINCIPAL, phone: '+263771000002' }),
+        userRepo.create({ email: 'admin@schoolpro.ac.zw', username: 'admin', passwordHash: adminHash, firstName: 'Peter', lastName: 'Admin', role: enums_1.UserRole.ADMIN, phone: '+263771000003' }),
     ]);
     const teacherUser = await userRepo.save(userRepo.create({
         email: 'teacher@schoolpro.ac.zw',
-        passwordHash: hash,
+        username: 'teacher',
+        passwordHash: defaultHash,
         firstName: 'Sarah',
         lastName: 'Moyo',
         role: enums_1.UserRole.TEACHER,
@@ -39,7 +42,8 @@ async function seedDatabase() {
     }));
     const parentUser = await userRepo.save(userRepo.create({
         email: 'parent@schoolpro.ac.zw',
-        passwordHash: hash,
+        username: 'parent',
+        passwordHash: defaultHash,
         firstName: 'Tendai',
         lastName: 'Chikwanha',
         role: enums_1.UserRole.PARENT,
@@ -127,10 +131,11 @@ async function seedDatabase() {
         tuckRepo.create({ name: 'Juice 500ml', unitPrice: 1.00, stockQuantity: 50, reorderLevel: 10 }),
         tuckRepo.create({ name: 'Bottled Water', unitPrice: 0.75, stockQuantity: 80, reorderLevel: 15 }),
     ]);
-    console.log('Seed complete. Demo accounts (password: Password123!):');
+    console.log('Seed complete. Demo accounts:');
     console.log('  director@schoolpro.ac.zw');
     console.log('  principal@schoolpro.ac.zw');
-    console.log('  admin@schoolpro.ac.zw');
+    console.log('  admin / admin@schoolpro.ac.zw (password: admin123)');
     console.log('  teacher@schoolpro.ac.zw');
     console.log('  parent@schoolpro.ac.zw');
+    console.log('  (others use password: Password123!)');
 }

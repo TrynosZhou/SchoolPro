@@ -1,6 +1,12 @@
 import { AppDataSource } from '../config/data-source';
-import { Invoice, Payment, Student, Term, LedgerEntry } from '../entities';
+import { Invoice, Payment, Student, Term, LedgerEntry, StudentTermBalance } from '../entities';
 import { relations } from '../utils/typeorm-helpers';
+import {
+  BALANCE_FORWARD_FEE_TYPE,
+  ensureTermBalanceInitialized,
+  findPreviousTerm,
+  getAvailablePrepaidCredit,
+} from './term-balance.service';
 
 export interface StudentSearchRow {
   id: string;
@@ -125,6 +131,11 @@ export async function buildStudentLedgerReport(
   });
   if (!student) return null;
 
+  await ensureTermBalanceInitialized(studentId, termId);
+  const termBalanceRepo = AppDataSource.getRepository(StudentTermBalance);
+  const termBalance = await termBalanceRepo.findOne({ where: { studentId, termId } });
+  const prevTerm = await findPreviousTerm(term);
+
   const termStartDate = toDateKey(term.startDate);
   const termEndDate = toDateKey(term.endDate);
   const termStart = `${termStartDate}T00:00:00.000Z`;
@@ -141,27 +152,6 @@ export async function buildStudentLedgerReport(
   const termLedgerPaymentIds = termLedgerPaymentRows
     .map((row) => row.referenceId)
     .filter((id): id is string => Boolean(id));
-
-  const priorInvoices = await invoiceRepo
-    .createQueryBuilder('i')
-    .where('i.studentId = :studentId', { studentId })
-    .andWhere('COALESCE(i."issuedDate", i."dueDate") < :termStart', { termStart: termStartDate })
-    .getMany();
-
-  const priorPaymentQb = paymentRepo
-    .createQueryBuilder('p')
-    .where('p.studentId = :studentId', { studentId })
-    .andWhere('p."paidAt" < :termStart', { termStart });
-
-  if (termLedgerPaymentIds.length) {
-    priorPaymentQb.andWhere('p.id NOT IN (:...termLedgerPaymentIds)', { termLedgerPaymentIds });
-  }
-
-  const priorPayments = await priorPaymentQb.getMany();
-
-  const openingBalance =
-    priorInvoices.reduce((s, i) => s + Number(i.totalAmount), 0) -
-    priorPayments.reduce((s, p) => s + Number(p.amount), 0);
 
   const termInvoices = await invoiceRepo.find({
     where: { studentId, termId },
@@ -195,6 +185,9 @@ export async function buildStudentLedgerReport(
     .orderBy('p.paidAt', 'ASC')
     .getMany();
 
+  const openingBalance = termBalance ? Number(termBalance.openingBalance) : 0;
+  const prepaidAvailable = termBalance ? await getAvailablePrepaidCredit(termBalance) : 0;
+
   type RawTxn = {
     date: string;
     sortAt: number;
@@ -208,6 +201,7 @@ export async function buildStudentLedgerReport(
   const txns: RawTxn[] = [];
 
   for (const inv of termInvoices) {
+    if (inv.feeType === BALANCE_FORWARD_FEE_TYPE) continue;
     const date = inv.issuedDate || inv.dueDate;
     txns.push({
       date,
@@ -240,12 +234,17 @@ export async function buildStudentLedgerReport(
   const lines: LedgerLine[] = [];
   let running = openingBalance;
 
-  if (openingBalance !== 0) {
+  if (openingBalance !== 0 || prepaidAvailable > 0) {
+    const prevLabel = prevTerm?.name || 'previous term';
+    const description =
+      openingBalance > 0
+        ? `Opening balance brought forward from ${prevLabel}`
+        : `Prepaid credit brought forward from ${prevLabel}`;
     lines.push({
       date: term.startDate,
       type: 'opening',
       reference: '—',
-      description: 'Opening balance',
+      description,
       debit: openingBalance > 0 ? openingBalance : 0,
       credit: openingBalance < 0 ? Math.abs(openingBalance) : 0,
       balance: running,

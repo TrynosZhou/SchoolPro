@@ -1,4 +1,5 @@
 import { Component, computed, inject, OnInit, signal } from '@angular/core';
+import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { forkJoin, of } from 'rxjs';
@@ -24,7 +25,26 @@ function labelToSentinel(label: string): string | undefined {
   return COMPLETION_OPTIONS.find((o) => o.label.replace('🎓 ', '') === label)?.value;
 }
 
-type Tab = 'calendar' | 'classes' | 'subjects' | 'departments' | 'exams' | 'promotion';
+type Tab = 'calendar' | 'classes' | 'subjects' | 'departments' | 'exams' | 'promotion' | 'publish';
+
+interface PublicationStatus {
+  termId: string;
+  examTypeId: string;
+  isPublished: boolean;
+  publishedAt?: string;
+  reportCardCount: number;
+  readyReportCardCount: number;
+  publishedByName?: string;
+  whatsappSent?: number;
+  smsSent?: number;
+}
+
+interface TermOption {
+  id: string;
+  name: string;
+  isCurrent?: boolean;
+  schoolYearId?: string;
+}
 
 interface GradeBoundaryRow {
   grade: string;
@@ -122,7 +142,7 @@ interface PromotionRuleRow {
 @Component({
   selector: 'app-admin-academic-settings',
   standalone: true,
-  imports: [PortalLayoutComponent, FormsModule, RouterLink],
+  imports: [PortalLayoutComponent, FormsModule, RouterLink, DatePipe],
   templateUrl: './admin-academic-settings.component.html',
   styleUrls: ['./admin-academic-settings.component.scss', './admin-settings.component.scss'],
 })
@@ -140,6 +160,7 @@ export class AdminAcademicSettingsComponent implements OnInit {
     { id: 'departments', label: 'Departments', icon: '🏛️', desc: 'School departments & faculties' },
     { id: 'exams', label: 'Exams & Grades', icon: '📝', desc: 'Weights & grade boundaries' },
     { id: 'promotion', label: 'Promotion Rules', icon: '🎯', desc: 'Class progression at year-end' },
+    { id: 'publish', label: 'Publish Results', icon: '📢', desc: 'Release results to parents & students' },
   ];
 
   activeTab = signal<Tab>('calendar');
@@ -158,6 +179,23 @@ export class AdminAcademicSettingsComponent implements OnInit {
   gradeBoundaries = signal<GradeBoundaryRow[]>([]);
   gradePreviewMarks = signal(65);
   targetsByClass = signal<Record<string, string>>({});
+
+  allTerms = computed<TermOption[]>(() => {
+    const terms: TermOption[] = [];
+    for (const y of this.schoolYears()) {
+      for (const t of y.terms || []) {
+        terms.push({ ...t, schoolYearId: y.id });
+      }
+    }
+    return terms.sort((a, b) => a.name.localeCompare(b.name));
+  });
+
+  publishTermId = '';
+  publishExamTypeId = '';
+  notifyWhatsApp = true;
+  notifySms = true;
+  publicationStatus = signal<PublicationStatus | null>(null);
+  loadingPublication = signal(false);
 
   newYear = { name: '', startDate: '', endDate: '', isCurrent: false };
   editingYearId = signal<string | null>(null);
@@ -241,6 +279,128 @@ export class AdminAcademicSettingsComponent implements OnInit {
 
   setTab(tab: Tab) {
     this.activeTab.set(tab);
+    if (tab === 'publish') {
+      this.initPublishDefaults();
+      this.refreshPublicationStatus();
+    }
+  }
+
+  initPublishDefaults() {
+    if (!this.publishTermId) {
+      const current = this.allTerms().find((t) => t.isCurrent) || this.allTerms()[0];
+      this.publishTermId = current?.id || '';
+    }
+    if (!this.publishExamTypeId && this.examTypes().length) {
+      this.publishExamTypeId = this.examTypes()[0].id;
+    }
+  }
+
+  onPublishFiltersChange() {
+    this.refreshPublicationStatus();
+  }
+
+  refreshPublicationStatus() {
+    if (!this.publishTermId || !this.publishExamTypeId) {
+      this.publicationStatus.set(null);
+      return;
+    }
+    this.loadingPublication.set(true);
+    this.api
+      .get<PublicationStatus>('/exams/results-publications/status', {
+        termId: this.publishTermId,
+        examTypeId: this.publishExamTypeId,
+      })
+      .subscribe({
+        next: (status) => {
+          this.publicationStatus.set(status);
+          this.loadingPublication.set(false);
+        },
+        error: () => {
+          this.publicationStatus.set(null);
+          this.loadingPublication.set(false);
+        },
+      });
+  }
+
+  publishResults() {
+    if (!this.publishTermId || !this.publishExamTypeId) {
+      this.showToast('error', 'Select a term and exam type.');
+      return;
+    }
+    const term = this.allTerms().find((t) => t.id === this.publishTermId)?.name || 'this term';
+    const exam = this.examTypes().find((e) => e.id === this.publishExamTypeId)?.name || 'this exam';
+    if (
+      !confirm(
+        `Publish ${exam} results for ${term}? Parents and students will be able to view report cards, and notification messages will be sent.`,
+      )
+    ) {
+      return;
+    }
+    this.submitting.set(true);
+    this.api
+      .post<{
+        message: string;
+        reportCardCount: number;
+        whatsappSent: number;
+        smsSent: number;
+        notificationsCreated: number;
+      }>('/exams/results/publish', {
+        termId: this.publishTermId,
+        examTypeId: this.publishExamTypeId,
+        notifyWhatsApp: this.notifyWhatsApp,
+        notifySms: this.notifySms,
+      })
+      .subscribe({
+        next: (r) => {
+          this.submitting.set(false);
+          this.showToast(
+            'success',
+            `${r.message} WhatsApp: ${r.whatsappSent}, SMS: ${r.smsSent}, in-app: ${r.notificationsCreated}.`,
+          );
+          this.refreshPublicationStatus();
+        },
+        error: (e) => {
+          this.submitting.set(false);
+          this.showToast('error', e.error?.message || 'Failed to publish results');
+        },
+      });
+  }
+
+  unpublishResults() {
+    if (!this.publishTermId || !this.publishExamTypeId) {
+      this.showToast('error', 'Select a term and exam type.');
+      return;
+    }
+    if (!this.publicationStatus()?.isPublished) {
+      this.showToast('error', 'These results are not currently published.');
+      return;
+    }
+    const term = this.allTerms().find((t) => t.id === this.publishTermId)?.name || 'this term';
+    const exam = this.examTypes().find((e) => e.id === this.publishExamTypeId)?.name || 'this exam';
+    if (
+      !confirm(
+        `Unpublish ${exam} results for ${term}? Parents and students will lose access until you publish again.`,
+      )
+    ) {
+      return;
+    }
+    this.submitting.set(true);
+    this.api
+      .post<{ message: string; unpublishedReportCards: number }>('/exams/results/unpublish', {
+        termId: this.publishTermId,
+        examTypeId: this.publishExamTypeId,
+      })
+      .subscribe({
+        next: (r) => {
+          this.submitting.set(false);
+          this.showToast('success', r.message);
+          this.refreshPublicationStatus();
+        },
+        error: (e) => {
+          this.submitting.set(false);
+          this.showToast('error', e.error?.message || 'Failed to unpublish results');
+        },
+      });
   }
 
   loadAll() {

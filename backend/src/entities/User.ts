@@ -22,6 +22,9 @@ export class User {
   @Column({ unique: true })
   email!: string;
 
+  @Column({ unique: true, nullable: true })
+  username?: string | null;
+
   @Column()
   passwordHash!: string;
 
@@ -52,6 +55,12 @@ export class User {
 
   @Column({ type: 'timestamptz', nullable: true })
   lockedUntil?: Date | null;
+
+  @Column({ nullable: true })
+  passwordResetTokenHash?: string | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  passwordResetExpires?: Date | null;
 
   @Column({ nullable: true })
   avatarUrl?: string;

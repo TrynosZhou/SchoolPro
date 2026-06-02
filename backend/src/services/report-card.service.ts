@@ -514,9 +514,17 @@ export async function syncReportCardForStudent(studentId: string, termId: string
     return countSubjectsPassed([r], max) === 1;
   }).length;
 
-  let report = await reportRepo.findOne({ where: { studentId, termId } });
+  const primaryExamTypeId = marks[0]?.examTypeId;
+  let report = primaryExamTypeId
+    ? await reportRepo.findOne({ where: { studentId, termId, examTypeId: primaryExamTypeId } })
+    : await reportRepo.findOne({ where: { studentId, termId } });
   if (!report) {
-    report = reportRepo.create({ studentId, termId, isPublished: true });
+    report = reportRepo.create({
+      studentId,
+      termId,
+      examTypeId: primaryExamTypeId,
+      isPublished: false,
+    });
   }
   report.subjectResults = subjectResults as unknown as Record<string, unknown>[];
   report.averageMark = Math.round(avg * 100) / 100;
@@ -525,7 +533,7 @@ export async function syncReportCardForStudent(studentId: string, termId: string
   report.formTotal = formTotal;
   report.subjectsPassed = subjectsPassed;
   report.totalSubjects = subjectResults.length;
-  report.isPublished = true;
+  report.isPublished = false;
   await reportRepo.save(report);
   return report;
 }
@@ -643,7 +651,7 @@ export async function generateClassReportCards(params: ClassReportCardParams) {
     report.formTotal = formTotal;
     report.subjectsPassed = countSubjectsPassed(row.subjectResults, Number(examType.maxMarks));
     report.totalSubjects = row.subjectResults.length;
-    report.isPublished = true;
+    report.isPublished = false;
     await reportRepo.save(report);
 
     const full = await reportRepo.findOne({

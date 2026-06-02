@@ -37,6 +37,7 @@ import { AdminUserManagementComponent } from './pages/admin/admin-user-managemen
 import { AdminClassPromotionComponent } from './pages/admin/admin-class-promotion.component';
 import { AdminStudentLedgerComponent } from './pages/admin/admin-student-ledger.component';
 import { AdminOutstandingInvoicesComponent } from './pages/admin/admin-outstanding-invoices.component';
+import { AdminRecordPaymentComponent } from './pages/admin/admin-record-payment.component';
 import { AdminStudentReconciliationComponent } from './pages/admin/admin-student-reconciliation.component';
 import { AdminDebtorAgingComponent } from './pages/admin/admin-debtor-aging.component';
 import { AdminFeeCollectionRevenueComponent } from './pages/admin/admin-fee-collection-revenue.component';
@@ -101,6 +102,7 @@ export const routes: Routes = [
       { path: 'finance', component: AdminFinanceComponent },
       { path: 'fin-reports/student-ledger', component: AdminStudentLedgerComponent },
       { path: 'fin-reports/outstanding-invoices', component: AdminOutstandingInvoicesComponent },
+      { path: 'fin-reports/record-payment/:studentId', component: AdminRecordPaymentComponent },
       { path: 'fin-reports/student-reconciliation', component: AdminStudentReconciliationComponent },
       { path: 'fin-reports/debtor-aging', component: AdminDebtorAgingComponent },
       { path: 'fin-reports/fee-collection-revenue', component: AdminFeeCollectionRevenueComponent },

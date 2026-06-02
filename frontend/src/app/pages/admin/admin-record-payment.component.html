@@ -1,0 +1,136 @@
+<app-portal-layout portalTitle="Admin Portal" pageTitle="Record Payment" [navSections]="adminNav">
+  <div class="record-payment-page">
+    @if (toast(); as t) {
+      <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>
+    }
+
+    <header class="page-head">
+      <a routerLink="/admin/fin-reports/outstanding-invoices" class="back-link">← Outstanding invoices</a>
+      <h2>Record payment</h2>
+      <p>Accept payment for an outstanding student invoice balance.</p>
+    </header>
+
+    @if (loading()) {
+      <div class="loading-panel">
+        <div class="spinner"></div>
+        <p>Loading student account…</p>
+      </div>
+    } @else {
+      @if (student(); as s) {
+      <section class="student-banner card">
+        <div class="student-identity">
+          <span class="avatar">{{ s.firstName.charAt(0) }}{{ s.lastName.charAt(0) }}</span>
+          <div>
+            <p class="label">Student</p>
+            <h3>{{ studentFullName() }}</h3>
+            <div class="meta-row">
+              <span><strong>Student ID:</strong> <code>{{ s.admissionNumber }}</code></span>
+              <span><strong>Class:</strong> {{ classLabel() }}</span>
+            </div>
+          </div>
+        </div>
+        <div class="balance-block">
+          <p class="label">Current term balance</p>
+          <strong class="balance">${{ effectiveBalance() | number:'1.2-2' }}</strong>
+          @if (termBalance(); as tb) {
+            <div class="term-balance-meta">
+              @if (tb.openingBalance > 0.005) {
+                <span>Opening (from {{ tb.previousTermName || 'prior term' }}): ${{ tb.openingBalance | number:'1.2-2' }}</span>
+              }
+              @if (tb.openingBalance < -0.005) {
+                <span>Prepaid brought forward: ${{ (-tb.openingBalance) | number:'1.2-2' }}</span>
+              }
+              @if (tb.prepaidCreditAvailable > 0.005) {
+                <span>Prepaid credit available: ${{ tb.prepaidCreditAvailable | number:'1.2-2' }}</span>
+              }
+            </div>
+          }
+          <span class="hint">{{ unpaidInvoices().length }} unpaid invoice{{ unpaidInvoices().length === 1 ? '' : 's' }}</span>
+        </div>
+      </section>
+
+      <div class="layout-grid">
+        <section class="card form-card">
+          <h3>Payment details</h3>
+          <p class="subtitle">Receipt is generated automatically after the payment is saved.</p>
+
+          @if (unpaidInvoices().length) {
+            <div class="unpaid-box">
+              <label>Apply to invoice (optional)</label>
+              <div class="unpaid-list">
+                @for (inv of unpaidInvoices(); track inv.id) {
+                  <button
+                    type="button"
+                    class="unpaid-item"
+                    [class.selected]="payment.invoiceId === inv.id"
+                    (click)="selectInvoice(inv)"
+                  >
+                    <span>{{ inv.invoiceNumber }} — {{ inv.description }}</span>
+                    <span class="owed">${{ (inv.totalAmount - inv.amountPaid) | number:'1.2-2' }} due</span>
+                  </button>
+                }
+              </div>
+              <button type="button" class="link-btn" (click)="payFullBalance()">Pay full balance (auto-allocate)</button>
+            </div>
+          }
+
+          <form class="pay-form" (ngSubmit)="recordPayment()">
+            <div class="form-row">
+              <div class="field">
+                <label for="amount">Amount *</label>
+                <input id="amount" type="number" [(ngModel)]="payment.amount" name="amount" min="0" step="0.01" required />
+              </div>
+              <div class="field">
+                <label for="method">Method</label>
+                <select id="method" [(ngModel)]="payment.method" name="method">
+                  <option value="cash">Cash</option>
+                  <option value="bank">Bank transfer</option>
+                  <option value="ecocash">EcoCash</option>
+                  <option value="onemoney">OneMoney</option>
+                  <option value="innbucks">InnBucks</option>
+                </select>
+              </div>
+            </div>
+            <div class="field">
+              <label for="label">Label</label>
+              <input id="label" [(ngModel)]="payment.label" name="label" placeholder="Payment description" />
+            </div>
+            <div class="field">
+              <label for="notes">Notes (optional)</label>
+              <input id="notes" [(ngModel)]="payment.notes" name="notes" placeholder="Internal note" />
+            </div>
+            <button type="submit" class="btn-primary btn-lg" [disabled]="submitting() || !payment.amount">
+              {{ submitting() ? 'Processing…' : 'Record payment & generate receipt' }}
+            </button>
+          </form>
+        </section>
+
+        <aside class="side-panel">
+          @if (lastReceipt(); as rcpt) {
+            <div class="success-card">
+              <div class="success-icon">✓</div>
+              <h3>Payment successful</h3>
+              <p class="rcpt-no">{{ rcpt.receiptNumber }}</p>
+              <p class="rcpt-amt">${{ rcpt.amount | number:'1.2-2' }}</p>
+              @if (rcpt.receiptId) {
+                <button type="button" class="btn-primary" (click)="downloadReceipt(rcpt.receiptId!)">Download PDF receipt</button>
+              }
+              <a routerLink="/admin/fin-reports/outstanding-invoices" class="btn-ghost">Back to outstanding invoices</a>
+              <button type="button" class="btn-ghost" (click)="lastReceipt.set(null)">Dismiss</button>
+            </div>
+          } @else {
+            <div class="info-card">
+              <h4>Payment tips</h4>
+              <ul>
+                <li>Select a specific invoice or leave auto-allocate to apply oldest invoices first.</li>
+                <li>Payments above the invoice due amount are recorded as prepaid credit for the next term.</li>
+                <li>A PDF receipt is available immediately after recording.</li>
+              </ul>
+            </div>
+          }
+        </aside>
+      </div>
+      }
+    }
+  </div>
+</app-portal-layout>

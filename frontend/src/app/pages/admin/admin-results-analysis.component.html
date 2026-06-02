@@ -68,6 +68,23 @@
   </section>
 
   @if (hasAnalyzed() && analysis(); as data) {
+    <section class="card toolbar-card">
+      <div class="toolbar-main">
+        <div>
+          <h2 class="toolbar-title">Analysis results</h2>
+          <p class="session-label">{{ sessionLabel() }}</p>
+        </div>
+        <div class="pdf-actions">
+          <button type="button" class="btn-pdf btn-preview" (click)="previewPdf()" [disabled]="pdfLoading()">
+            {{ pdfLoading() ? 'Generating…' : 'Preview PDF' }}
+          </button>
+          <button type="button" class="btn-pdf btn-download" (click)="downloadPdf()" [disabled]="pdfLoading()">
+            Download PDF
+          </button>
+        </div>
+      </div>
+    </section>
+
     <section class="card session-card">
       <p class="session-label">{{ sessionLabel() }}</p>
       <p class="criteria-note">
@@ -164,3 +181,21 @@
     </div>
   }
 </app-portal-layout>
+
+@if (pdfPreviewOpen() && pdfPreviewUrl()) {
+  <div class="pdf-overlay maximized" role="dialog" aria-modal="true" aria-label="Results analysis PDF preview">
+    <header class="pdf-toolbar">
+      <div class="pdf-toolbar-title">
+        <strong>Results Analysis Preview</strong>
+        <span>{{ sessionLabel() }}</span>
+      </div>
+      <div class="pdf-toolbar-actions">
+        <button type="button" class="btn-pdf btn-download" (click)="downloadPdf()" [disabled]="pdfLoading()">
+          Download PDF
+        </button>
+        <button type="button" class="btn-pdf btn-close" (click)="closePdfPreview()">Close</button>
+      </div>
+    </header>
+    <iframe class="pdf-frame" [src]="pdfPreviewUrl()!" title="Results analysis PDF preview"></iframe>
+  </div>
+}

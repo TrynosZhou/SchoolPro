@@ -18,11 +18,75 @@ const results_analysis_service_1 = require("../services/results-analysis.service
 const ranking_service_1 = require("../services/ranking.service");
 const helpers_1 = require("../utils/helpers");
 const typeorm_helpers_1 = require("../utils/typeorm-helpers");
+const publish_results_service_1 = require("../services/publish-results.service");
+const ResultsPublication_1 = require("../entities/ResultsPublication");
+const PUBLISH_ROLES = [enums_1.UserRole.ADMIN, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.DIRECTOR];
+function isPortalViewer(role) {
+    return role === enums_1.UserRole.PARENT || role === enums_1.UserRole.STUDENT;
+}
+async function assertReportVisibleToPortalUser(report, examTypeId) {
+    if (!report.isPublished) {
+        return 'Results for this term and exam type have not been published yet.';
+    }
+    const effectiveExamTypeId = examTypeId || report.examTypeId;
+    if (!effectiveExamTypeId)
+        return null;
+    const pub = await data_source_1.AppDataSource.getRepository(ResultsPublication_1.ResultsPublication).findOne({
+        where: { termId: report.termId, examTypeId: effectiveExamTypeId },
+    });
+    if (!pub) {
+        return 'Results for this term and exam type have not been published yet.';
+    }
+    return null;
+}
 const router = (0, express_1.Router)();
 router.use(auth_1.authenticate);
-router.get('/types', async (_req, res) => {
+router.get('/types', async (req, res) => {
+    const { termId } = req.query;
+    if (termId && isPortalViewer(req.user.role)) {
+        return res.json(await (0, publish_results_service_1.listPublishedExamTypesForTerm)(termId));
+    }
     const repo = data_source_1.AppDataSource.getRepository(entities_1.ExamType);
     res.json(await repo.find());
+});
+router.get('/results-publications/status', (0, auth_1.authorize)(...PUBLISH_ROLES), async (req, res) => {
+    const { termId, examTypeId } = req.query;
+    if (!termId || !examTypeId) {
+        return res.status(400).json({ message: 'termId and examTypeId are required' });
+    }
+    res.json(await (0, publish_results_service_1.getPublicationStatus)(termId, examTypeId));
+});
+router.post('/results/publish', (0, auth_1.authorize)(...PUBLISH_ROLES), async (req, res) => {
+    const { termId, examTypeId, notifyWhatsApp, notifySms } = req.body;
+    if (!termId || !examTypeId) {
+        return res.status(400).json({ message: 'termId and examTypeId are required' });
+    }
+    try {
+        const result = await (0, publish_results_service_1.publishResults)({
+            termId,
+            examTypeId,
+            publishedByUserId: req.user.id,
+            notifyWhatsApp: notifyWhatsApp !== false,
+            notifySms: notifySms !== false,
+        });
+        res.json(result);
+    }
+    catch (err) {
+        return res.status(400).json({ message: err instanceof Error ? err.message : 'Publish failed' });
+    }
+});
+router.post('/results/unpublish', (0, auth_1.authorize)(...PUBLISH_ROLES), async (req, res) => {
+    const { termId, examTypeId } = req.body;
+    if (!termId || !examTypeId) {
+        return res.status(400).json({ message: 'termId and examTypeId are required' });
+    }
+    try {
+        const result = await (0, publish_results_service_1.unpublishResults)(termId, examTypeId);
+        res.json(result);
+    }
+    catch (err) {
+        return res.status(400).json({ message: err instanceof Error ? err.message : 'Unpublish failed' });
+    }
 });
 router.get('/school-branding', (0, auth_1.authorize)(enums_1.UserRole.TEACHER, enums_1.UserRole.ADMIN, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.DIRECTOR), async (_req, res) => {
     res.json(await (0, school_branding_service_1.loadSchoolBranding)());
@@ -229,7 +293,7 @@ router.post('/report-cards/generate', (0, auth_1.authorize)(enums_1.UserRole.ADM
         report.subjectResults = subjectResults;
         report.averageMark = avg;
         report.overallGrade = await (0, grade_service_1.gradeForMarks)(avg);
-        report.isPublished = true;
+        report.isPublished = false;
         await reportRepo.save(report);
         generated.push(report);
     }
@@ -285,6 +349,51 @@ router.get('/results-analysis', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, en
     catch (err) {
         return res.status(400).json({
             message: err instanceof Error ? err.message : 'Failed to build results analysis',
+        });
+    }
+});
+router.get('/results-analysis/pdf', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.DIRECTOR, enums_1.UserRole.TEACHER), async (req, res) => {
+    const { examTypeId, termId, classId, topN } = req.query;
+    if (!examTypeId || !termId || !classId) {
+        return res.status(400).json({ message: 'examTypeId, termId, and classId are required' });
+    }
+    try {
+        const analysis = await (0, results_analysis_service_1.buildResultsAnalysis)({
+            examTypeId: examTypeId,
+            termId: termId,
+            classId: classId,
+            topN: topN ? Number(topN) : undefined,
+        });
+        if (analysis.summary.studentsWithExamMarks === 0) {
+            return res.status(404).json({
+                message: 'No exam marks found for this class, exam type, and term. Enter marks first.',
+            });
+        }
+        const branding = await (0, school_branding_service_1.loadSchoolBranding)();
+        const pdf = await (0, pdf_1.generateResultsAnalysisPdf)({
+            schoolName: branding.schoolName || 'School Pro Academy',
+            tagline: branding.tagline,
+            logoUrl: branding.logoUrl,
+            examTypeName: analysis.examType.name,
+            termName: analysis.term.name,
+            className: analysis.class.name,
+            maxMarks: analysis.examType.maxMarks,
+            minSubjectsForPass: analysis.minSubjectsForPass,
+            generatedAt: new Date(),
+            summary: analysis.summary,
+            topPerformers: analysis.topPerformers,
+            bottomPerformers: analysis.bottomPerformers,
+        });
+        const safeName = `${analysis.class.name}-${analysis.examType.name}`.replace(/[^\w\-]+/g, '-').replace(/-+/g, '-');
+        const filename = `results-analysis-${safeName}.pdf`;
+        const inline = req.query.preview === 'true';
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `${inline ? 'inline' : 'attachment'}; filename="${filename}"`);
+        res.send(pdf);
+    }
+    catch (err) {
+        return res.status(400).json({
+            message: err instanceof Error ? err.message : 'Failed to generate results analysis PDF',
         });
     }
 });
@@ -489,6 +598,11 @@ router.get('/report-cards/:studentId/:termId', (0, auth_1.authorize)(enums_1.Use
     }
     if (!report)
         return res.status(404).json({ message: 'Report card not found' });
+    if (isPortalViewer(req.user.role)) {
+        const block = await assertReportVisibleToPortalUser(report, req.query.examTypeId);
+        if (block)
+            return res.status(403).json({ message: block });
+    }
     res.json(report);
 });
 router.get('/report-cards/:studentId/:termId/pdf', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.DIRECTOR, enums_1.UserRole.TEACHER, enums_1.UserRole.PARENT, enums_1.UserRole.STUDENT), async (req, res) => {
@@ -506,6 +620,11 @@ router.get('/report-cards/:studentId/:termId/pdf', (0, auth_1.authorize)(enums_1
     });
     if (!report)
         return res.status(404).json({ message: 'Report card not found' });
+    if (isPortalViewer(req.user.role)) {
+        const block = await assertReportVisibleToPortalUser(report, req.query.examTypeId);
+        if (block)
+            return res.status(403).json({ message: block });
+    }
     const settings = await data_source_1.AppDataSource.getRepository(entities_1.SchoolSettings).findOne({ where: { id: 'default' } });
     const inline = req.query.preview === 'true';
     const maxMarks = Number(report.examType?.maxMarks) || 100;

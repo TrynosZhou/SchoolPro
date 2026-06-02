@@ -24,6 +24,22 @@ import {
   searchStudents,
 } from '../services/fin-reports.service';
 import {
+  applyAvailablePrepaidToInvoice,
+  BALANCE_FORWARD_FEE_TYPE,
+  carryForwardBalancesForTerm,
+  ensureTermBalanceInitialized,
+  getTermBalanceSummary,
+  recordOverpaymentPrepaid,
+  refreshTermClosingBalance,
+  resolvePaymentTermId,
+  roundMoney,
+} from '../services/term-balance.service';
+import {
+  createBulkTuitionInvoices,
+  previewBulkTuitionInvoices,
+  reverseBulkTuitionInvoices,
+} from '../services/bulk-tuition-invoice.service';
+import {
   buildFeeCollectionRevenueReport,
   feeCollectionReportToCsv,
 } from '../services/fee-collection-revenue.service';
@@ -273,6 +289,39 @@ router.get('/invoices', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PR
   res.json(await qb.orderBy('i.createdAt', 'DESC').getMany());
 });
 
+router.get('/invoices/bulk-tuition/preview', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (_req, res: Response) => {
+  try {
+    res.json(await previewBulkTuitionInvoices());
+  } catch (err) {
+    return res.status(400).json({ message: err instanceof Error ? err.message : 'Failed to preview bulk tuition billing' });
+  }
+});
+
+router.post('/invoices/bulk-tuition', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (_req, res: Response) => {
+  try {
+    const result = await createBulkTuitionInvoices();
+    res.status(201).json({
+      message: `Created ${result.created} tuition invoice${result.created === 1 ? '' : 's'} for ${result.nextTerm.name} on ${result.currentTerm.name} balances.`,
+      ...result,
+    });
+  } catch (err) {
+    return res.status(400).json({ message: err instanceof Error ? err.message : 'Failed to create bulk tuition invoices' });
+  }
+});
+
+router.post('/invoices/bulk-tuition/reverse', authorize(UserRole.ADMIN), async (req, res: Response) => {
+  try {
+    const nextTermName = typeof req.body?.nextTermName === 'string' ? req.body.nextTermName.trim() : undefined;
+    const result = await reverseBulkTuitionInvoices(nextTermName || undefined);
+    res.json({
+      message: `Removed ${result.removed} bulk tuition invoice${result.removed === 1 ? '' : 's'} from ${result.billingTermName} balances.`,
+      ...result,
+    });
+  } catch (err) {
+    return res.status(400).json({ message: err instanceof Error ? err.message : 'Failed to reverse bulk tuition invoices' });
+  }
+});
+
 router.post('/invoices', authorize(UserRole.ADMIN), async (req, res: Response) => {
   const repo = AppDataSource.getRepository(Invoice);
   const ledgerRepo = AppDataSource.getRepository(LedgerEntry);
@@ -347,6 +396,12 @@ router.post('/invoices', authorize(UserRole.ADMIN), async (req, res: Response) =
   invoice.pdfPath = pdfPath;
   await repo.save(invoice);
 
+  if (data.termId) {
+    await ensureTermBalanceInitialized(data.studentId, data.termId);
+    await applyAvailablePrepaidToInvoice(invoice);
+    await refreshTermClosingBalance(data.studentId, data.termId);
+  }
+
   res.status(201).json(invoice);
 });
 
@@ -389,11 +444,16 @@ router.post('/payments', authorize(UserRole.ADMIN), async (req: AuthRequest, res
     }));
 
     let ledgerTermId: string | undefined;
+    let overpaymentRemaining = 0;
+
     if (invoiceId) {
       const invoice = await invoiceRepo.findOne({ where: { id: invoiceId, studentId } });
       if (invoice) {
         ledgerTermId = invoice.termId || undefined;
-        invoice.amountPaid = Number(invoice.amountPaid) + paymentAmount;
+        const due = Math.max(0, Number(invoice.totalAmount) - Number(invoice.amountPaid));
+        const applied = Math.min(due, paymentAmount);
+        overpaymentRemaining = roundMoney(paymentAmount - applied);
+        invoice.amountPaid = Number(invoice.amountPaid) + applied;
         invoice.status = Number(invoice.amountPaid) >= Number(invoice.totalAmount)
           ? InvoiceStatus.PAID
           : InvoiceStatus.PARTIAL;
@@ -421,10 +481,15 @@ router.post('/payments', authorize(UserRole.ADMIN), async (req: AuthRequest, res
         if (!ledgerTermId && inv.termId) ledgerTermId = inv.termId;
         remaining -= applied;
       }
+      overpaymentRemaining = roundMoney(Math.max(0, remaining));
       if (primaryInvoiceId) {
         payment.invoiceId = primaryInvoiceId;
         await paymentRepo.save(payment);
       }
+    }
+
+    if (!ledgerTermId) {
+      ledgerTermId = await resolvePaymentTermId(studentId, invoiceId);
     }
 
     const lastLedger = await ledgerRepo.findOne({
@@ -505,6 +570,13 @@ router.post('/payments', authorize(UserRole.ADMIN), async (req: AuthRequest, res
     }));
 
     await queryRunner.commitTransaction();
+
+    if (overpaymentRemaining > 0.005) {
+      await recordOverpaymentPrepaid(studentId, ledgerTermId, overpaymentRemaining);
+    }
+    if (ledgerTermId) {
+      await refreshTermClosingBalance(studentId, ledgerTermId);
+    }
 
     const primaryGuardian = student.guardians?.find((g) => g.isPrimary) || student.guardians?.[0];
     if (primaryGuardian?.phone) {
@@ -1392,6 +1464,27 @@ router.get('/reports/student-ledger/export.pdf', authorize(UserRole.ADMIN, UserR
 router.get('/reports/outstanding-invoices', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (_req, res: Response) => {
   const data = await buildOutstandingInvoicesReport();
   res.json(data);
+});
+
+router.post('/terms/:termId/carry-forward-balances', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (req, res: Response) => {
+  try {
+    const result = await carryForwardBalancesForTerm(req.params.termId);
+    res.json({
+      message: `Carry-forward balances initialized for ${result.studentsProcessed} students.`,
+      ...result,
+    });
+  } catch (err) {
+    return res.status(400).json({ message: err instanceof Error ? err.message : 'Failed to carry forward balances' });
+  }
+});
+
+router.get('/students/:studentId/term-balance/:termId', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (req, res: Response) => {
+  try {
+    const summary = await getTermBalanceSummary(req.params.studentId, req.params.termId);
+    res.json(summary);
+  } catch (err) {
+    return res.status(400).json({ message: err instanceof Error ? err.message : 'Failed to load term balance' });
+  }
 });
 
 router.get('/reports/outstanding-invoices/export.pdf', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (req, res: Response) => {
