@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.CashbookEntryType = exports.ExamTypeName = exports.FeeType = exports.StudentType = exports.InvoiceStatus = exports.PaymentMethod = exports.AttendanceStatus = exports.UserRole = void 0;
+exports.PayslipStatus = exports.PayrollRunStatus = exports.PayrollPaymentMethod = exports.PayFrequency = exports.CashbookEntryType = exports.ExamTypeName = exports.FeeType = exports.StudentType = exports.InvoiceStatus = exports.PaymentMethod = exports.AttendanceStatus = exports.UserRole = void 0;
 var UserRole;
 (function (UserRole) {
     UserRole["DIRECTOR"] = "director";
@@ -63,3 +63,27 @@ var CashbookEntryType;
     CashbookEntryType["PAYMENT"] = "payment";
     CashbookEntryType["TRANSFER"] = "transfer";
 })(CashbookEntryType || (exports.CashbookEntryType = CashbookEntryType = {}));
+var PayFrequency;
+(function (PayFrequency) {
+    PayFrequency["MONTHLY"] = "monthly";
+    PayFrequency["BIWEEKLY"] = "biweekly";
+})(PayFrequency || (exports.PayFrequency = PayFrequency = {}));
+var PayrollPaymentMethod;
+(function (PayrollPaymentMethod) {
+    PayrollPaymentMethod["BANK_TRANSFER"] = "bank_transfer";
+    PayrollPaymentMethod["CASH"] = "cash";
+    PayrollPaymentMethod["ECOCASH"] = "ecocash";
+})(PayrollPaymentMethod || (exports.PayrollPaymentMethod = PayrollPaymentMethod = {}));
+var PayrollRunStatus;
+(function (PayrollRunStatus) {
+    PayrollRunStatus["DRAFT"] = "draft";
+    PayrollRunStatus["PROCESSED"] = "processed";
+    PayrollRunStatus["PAID"] = "paid";
+    PayrollRunStatus["CANCELLED"] = "cancelled";
+})(PayrollRunStatus || (exports.PayrollRunStatus = PayrollRunStatus = {}));
+var PayslipStatus;
+(function (PayslipStatus) {
+    PayslipStatus["PENDING"] = "pending";
+    PayslipStatus["PAID"] = "paid";
+    PayslipStatus["EXCLUDED"] = "excluded";
+})(PayslipStatus || (exports.PayslipStatus = PayslipStatus = {}));

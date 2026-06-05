@@ -61,14 +61,16 @@
             @if (section.items.length && isExpanded(section.heading)) {
               <div class="nav-section-items" [id]="'nav-section-' + si">
                 @for (item of section.items; track item.path + item.label) {
-                  <a
-                    [routerLink]="item.path"
-                    routerLinkActive="active"
-                    [routerLinkActiveOptions]="{ exact: item.path === '/admin' || item.path === '/teacher' }"
-                  >
-                    <span class="sub-bullet" aria-hidden="true">•</span>
-                    <span class="nav-label">{{ item.label }}</span>
-                  </a>
+                  <div class="submenu-item">
+                    <a
+                      [routerLink]="item.path"
+                      routerLinkActive="active"
+                      [routerLinkActiveOptions]="{ exact: item.path === '/admin' || item.path === '/teacher' }"
+                    >
+                      <span class="sub-dot" aria-hidden="true"></span>
+                      <span class="nav-label">{{ item.label }}</span>
+                    </a>
+                  </div>
                 }
               </div>
             }
@@ -177,6 +179,13 @@
         <path d="M16 19a4 4 0 0 0-8 0" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" />
         <circle cx="12" cy="8" r="3.25" stroke="currentColor" stroke-width="1.75" />
         <path d="M19 19a3 3 0 0 0-2.2-2.87M5 19a3 3 0 0 1 2.2-2.87" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" />
+      </svg>
+    }
+    @case ('parents') {
+      <svg viewBox="0 0 24 24" fill="none">
+        <circle cx="9" cy="8" r="2.75" stroke="currentColor" stroke-width="1.75" />
+        <circle cx="17" cy="9" r="2.25" stroke="currentColor" stroke-width="1.75" />
+        <path d="M4 19a5 5 0 0 1 5-4.5M15 19a4 4 0 0 1 4-3.5" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" />
       </svg>
     }
     @case ('attendance') {

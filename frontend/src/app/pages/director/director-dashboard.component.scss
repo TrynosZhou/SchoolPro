@@ -549,12 +549,30 @@
   gap: 1rem;
 }
 
+.quick-actions {
+  background: linear-gradient(135deg, #1e293b 0%, #334155 55%, #475569 100%);
+  border-color: rgba(255, 255, 255, 0.08);
+
+  .panel-head h3 {
+    color: #ffffff;
+  }
+
+  .panel-sub {
+    color: rgba(255, 255, 255, 0.78);
+  }
+
+  .chip.accent {
+    background: rgba(255, 255, 255, 0.14);
+    color: #ffffff;
+  }
+}
+
 .action-group h4 {
   margin: 0 0 0.55rem;
   font-size: 0.82rem;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: #64748b;
+  color: rgba(255, 255, 255, 0.85);
 }
 
 .action-grid {
@@ -569,23 +587,24 @@
   gap: 0.55rem;
   padding: 0.65rem 0.75rem;
   border-radius: 10px;
-  border: 1px solid #e2e8f0;
-  background: #f8fafc;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.08);
   text-decoration: none;
-  color: #0f172a;
+  color: #ffffff;
   transition: background 0.15s, border-color 0.15s;
 
   &:hover {
-    background: #f5f3ff;
-    border-color: #c4b5fd;
+    background: rgba(255, 255, 255, 0.16);
+    border-color: rgba(255, 255, 255, 0.28);
+    color: #ffffff;
   }
 }
 
 .action-icon { font-size: 1rem; }
-.action-label { flex: 1; font-size: 0.88rem; font-weight: 600; }
+.action-label { flex: 1; font-size: 0.88rem; font-weight: 600; color: #ffffff; }
 
 .action-arrow {
   width: 1rem;
   height: 1rem;
-  color: #94a3b8;
+  color: rgba(255, 255, 255, 0.7);
 }

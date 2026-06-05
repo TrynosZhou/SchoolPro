@@ -34,6 +34,7 @@ export const ADMIN_NAV_SECTIONS: NavSection[] = [
     items: [
       { label: 'Staff Directory', path: '/admin/staff', icon: '🧑' },
       { label: 'Staff Attendance', path: '/admin/staff', icon: '🗂' },
+      { label: 'Payroll', path: '/admin/payroll', icon: '💰' },
     ],
   },
   {

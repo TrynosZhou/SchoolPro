@@ -17,6 +17,7 @@ const finance_routes_1 = __importDefault(require("./routes/finance.routes"));
 const academics_routes_1 = __importDefault(require("./routes/academics.routes"));
 const admin_routes_1 = __importDefault(require("./routes/admin.routes"));
 const dashboard_routes_1 = __importDefault(require("./routes/dashboard.routes"));
+const payroll_routes_1 = __importDefault(require("./routes/payroll.routes"));
 const app = (0, express_1.default)();
 app.use((0, helmet_1.default)({
     // Allow frontend (different origin) to load /uploads images (school logo, etc.)
@@ -51,6 +52,7 @@ app.use('/api/finance', finance_routes_1.default);
 app.use('/api/academics', academics_routes_1.default);
 app.use('/api/admin', admin_routes_1.default);
 app.use('/api/dashboard', dashboard_routes_1.default);
+app.use('/api/payroll', payroll_routes_1.default);
 app.use((err, _req, res, _next) => {
     console.error(err);
     res.status(500).json({ message: 'Internal server error', error: env_1.env.nodeEnv === 'development' ? err.message : undefined });

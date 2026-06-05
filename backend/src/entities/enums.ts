@@ -60,3 +60,27 @@ export enum CashbookEntryType {
   TRANSFER = 'transfer',
 }
 
+export enum PayFrequency {
+  MONTHLY = 'monthly',
+  BIWEEKLY = 'biweekly',
+}
+
+export enum PayrollPaymentMethod {
+  BANK_TRANSFER = 'bank_transfer',
+  CASH = 'cash',
+  ECOCASH = 'ecocash',
+}
+
+export enum PayrollRunStatus {
+  DRAFT = 'draft',
+  PROCESSED = 'processed',
+  PAID = 'paid',
+  CANCELLED = 'cancelled',
+}
+
+export enum PayslipStatus {
+  PENDING = 'pending',
+  PAID = 'paid',
+  EXCLUDED = 'excluded',
+}
+

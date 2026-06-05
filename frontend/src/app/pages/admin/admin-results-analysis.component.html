@@ -14,7 +14,7 @@
       <p class="eyebrow">Academics · Performance</p>
       <h1 class="admin-hero-title">Results Analysis</h1>
       <p class="admin-hero-sub">
-        Analyse class exam results: overall pass rate (students with five or more passed subjects) and top and bottom performers.
+        Analyse class exam results or drill into a single student’s performance across all subjects for the selected term and exam type.
       </p>
     </div>
     <div class="admin-hero-actions">
@@ -24,6 +24,8 @@
   </header>
 
   <section class="filters-card card">
+    <h2 class="section-title">Class analysis</h2>
+    <p class="section-hint">Overall pass rate and top / bottom performers for the selected class.</p>
     <div class="filters-row">
       <label class="field">
         <span>Term</span>
@@ -65,6 +67,83 @@
         }
       </button>
     </div>
+  </section>
+
+  <section class="filters-card card student-section">
+    <h2 class="section-title">Student analysis</h2>
+    <p class="section-hint">
+      Load students for a class, then click a student to view mark distribution across all subjects.
+      Exam type (above) is used when opening a student profile.
+    </p>
+    <div class="filters-row">
+      <label class="field">
+        <span>Term</span>
+        <select [(ngModel)]="studentFilters.termId" name="studentTerm" (ngModelChange)="onStudentFilterChange()">
+          <option value="">— Select —</option>
+          @for (t of terms(); track t.id) {
+            <option [value]="t.id">{{ t.name }}</option>
+          }
+        </select>
+      </label>
+      <label class="field">
+        <span>Class</span>
+        <select [(ngModel)]="studentFilters.classId" name="studentClass" (ngModelChange)="onStudentFilterChange()">
+          <option value="">— Select —</option>
+          @for (c of classes(); track c.id) {
+            <option [value]="c.id">{{ c.name }}</option>
+          }
+        </select>
+      </label>
+      <button
+        type="button"
+        class="btn-analyze btn-load-students"
+        (click)="loadStudents()"
+        [disabled]="studentsLoading() || !studentFiltersReady()"
+      >
+        @if (studentsLoading()) {
+          Loading…
+        } @else {
+          Load students
+        }
+      </button>
+    </div>
+
+    @if (studentsLoaded()) {
+      <div class="student-list-wrap">
+        <div class="student-list-head">
+          <h3>Class roster</h3>
+          @if (studentSessionLabel()) {
+            <p class="session-label">{{ studentSessionLabel() }}</p>
+          }
+        </div>
+        @if (classStudents().length) {
+          <table class="students-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Student ID</th>
+                <th>Name</th>
+                <th>Gender</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (s of classStudents(); track s.id; let i = $index) {
+                <tr class="student-row" tabindex="0" (click)="openStudentAnalysis(s)" (keyup.enter)="openStudentAnalysis(s)">
+                  <td>{{ i + 1 }}</td>
+                  <td><code>{{ s.admissionNumber }}</code></td>
+                  <td>{{ s.lastName }}, {{ s.firstName }}</td>
+                  <td>{{ s.gender || '—' }}</td>
+                  <td class="row-action">View marks →</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        } @else {
+          <p class="empty">No active students enrolled in this class.</p>
+        }
+      </div>
+    }
   </section>
 
   @if (hasAnalyzed() && analysis(); as data) {
@@ -187,7 +266,7 @@
     <header class="pdf-toolbar">
       <div class="pdf-toolbar-title">
         <strong>Results Analysis Preview</strong>
-        <span>{{ sessionLabel() }}</span>
+        <span>{{ sessionLabel() }} — scroll to view full document</span>
       </div>
       <div class="pdf-toolbar-actions">
         <button type="button" class="btn-pdf btn-download" (click)="downloadPdf()" [disabled]="pdfLoading()">
@@ -196,6 +275,121 @@
         <button type="button" class="btn-pdf btn-close" (click)="closePdfPreview()">Close</button>
       </div>
     </header>
-    <iframe class="pdf-frame" [src]="pdfPreviewUrl()!" title="Results analysis PDF preview"></iframe>
+    <div class="pdf-viewport">
+      <iframe
+        class="pdf-frame"
+        [src]="pdfPreviewUrl()!"
+        title="Results analysis PDF preview"
+        scrolling="yes"
+      ></iframe>
+    </div>
+  </div>
+}
+
+@if (studentModalOpen()) {
+  <div class="modal-backdrop" (click)="closeStudentModal()" role="presentation">
+    <div
+      class="modal student-analysis-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="studentAnalysisTitle"
+      (click)="$event.stopPropagation()"
+    >
+      <header class="modal-head">
+        <div>
+          <p class="modal-eyebrow">Student performance</p>
+          <h2 id="studentAnalysisTitle" class="modal-title">
+            @if (selectedStudent(); as s) {
+              {{ s.lastName }}, {{ s.firstName }}
+            } @else {
+              Student analysis
+            }
+          </h2>
+          @if (studentAnalysis(); as profile) {
+            <p class="modal-sub">
+              {{ profile.examType.name }} · {{ profile.term.name }} · {{ profile.class.name }}
+              · ID {{ profile.student.admissionNumber }}
+            </p>
+          }
+        </div>
+        <button type="button" class="modal-close" (click)="closeStudentModal()" aria-label="Close">×</button>
+      </header>
+
+      @if (studentAnalysisLoading()) {
+        <div class="modal-loading">Loading mark distribution…</div>
+      } @else {
+        @if (studentAnalysis(); as profile) {
+          <div class="student-summary-grid">
+          <article class="summary-chip">
+            <span class="chip-label">Average</span>
+            <span class="chip-value">
+              @if (profile.summary.averagePercent != null) {
+                {{ profile.summary.averagePercent | number:'1.2-2' }}%
+              } @else {
+                —
+              }
+            </span>
+          </article>
+          <article class="summary-chip">
+            <span class="chip-label">Subjects passed</span>
+            <span class="chip-value">{{ profile.summary.subjectsPassed }} / {{ profile.summary.subjectsWithMarks }}</span>
+          </article>
+          <article class="summary-chip">
+            <span class="chip-label">Class position</span>
+            <span class="chip-value">
+              @if (profile.summary.classPosition != null) {
+                {{ profile.summary.classPosition }}
+              } @else {
+                —
+              }
+            </span>
+          </article>
+          <article class="summary-chip">
+            <span class="chip-label">Max marks</span>
+            <span class="chip-value">{{ profile.examType.maxMarks }}</span>
+          </article>
+        </div>
+
+        @if (profile.subjects.length) {
+          <div class="subject-distribution">
+            <h3>Mark distribution by subject</h3>
+            <p class="table-hint">Passed when mark is greater than 49</p>
+            <ul class="subject-bars">
+              @for (sub of profile.subjects; track sub.subjectId) {
+                <li class="subject-bar-row" [class.passed]="sub.passed" [class.no-mark]="sub.marks == null">
+                  <div class="subject-meta">
+                    <span class="subject-name">{{ sub.subjectName }}</span>
+                    <span class="subject-code">{{ sub.subjectCode }}</span>
+                  </div>
+                  <div class="bar-track" aria-hidden="true">
+                    <div
+                      class="bar-fill"
+                      [style.width]="subjectBarWidth(sub.percentOfMax)"
+                      [class.pass]="sub.passed"
+                      [class.fail]="sub.marks != null && !sub.passed"
+                    ></div>
+                  </div>
+                  <div class="subject-score">
+                    @if (sub.marks != null) {
+                      <strong>{{ sub.marks }}</strong>
+                      <span class="grade-pill" [class.pass]="sub.passed">{{ sub.grade }}</span>
+                    } @else {
+                      <span class="no-mark-label">No mark</span>
+                    }
+                  </div>
+                </li>
+              }
+            </ul>
+          </div>
+        } @else {
+          <p class="empty">No subjects configured for this class.</p>
+        }
+        }
+      }
+
+      <footer class="modal-actions">
+        <button type="button" class="btn-modal-close" (click)="closeStudentModal()">Close</button>
+      </footer>
+    </div>
   </div>
 }

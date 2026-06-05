@@ -4,118 +4,332 @@
   [navSections]="isTeacherPortal ? teacherNav : (isDirectorPortal || isPrincipalPortal ? [] : adminNav)"
   [navItems]="isPrincipalPortal ? principalNav : (isDirectorPortal ? directorNav : [])"
 >
-  @if (toast(); as t) {
-    <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>
-  }
+  <div class="report-page">
+    @if (toast(); as t) {
+      <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>
+    }
 
-  <header class="page-intro">
-    <p>Select a class and term to generate attendance totals for each student.</p>
-  </header>
-
-  <section class="card filter-card">
-    <div class="filter-row">
-      <div class="field">
-        <label for="classSelect">Class</label>
-        <select id="classSelect" [(ngModel)]="selectedClassId" name="classId" [disabled]="loadingClasses()">
-          <option value="">— Select class —</option>
-          @for (c of classes(); track c.id) {
-            <option [value]="c.id">{{ c.name }}</option>
-          }
-        </select>
-      </div>
-      <div class="field">
-        <label for="termSelect">Term</label>
-        <select id="termSelect" [(ngModel)]="selectedTermId" name="termId" [disabled]="loadingTerms()">
-          <option value="">— Select term —</option>
-          @for (t of terms(); track t.id) {
-            <option [value]="t.id">{{ t.name }}{{ t.isCurrent ? ' (current)' : '' }}</option>
-          }
-        </select>
-      </div>
-      <div class="field field-actions">
-        <label class="sr-only">Generate</label>
-        <button type="button" class="btn-primary" [disabled]="loadingReport()" (click)="generateReport()">
-          {{ loadingReport() ? 'Generating…' : 'Generate Report' }}
-        </button>
-      </div>
-    </div>
-  </section>
-
-  @if (hasGenerated() && report(); as r) {
-    <section class="card report-header">
-      <div>
-        <h2>{{ selectedClassLabel() }}</h2>
-        <p class="meta">
-          {{ r.term.name }}
-          @if (r.term.schoolYear) {
-            <span> · {{ r.term.schoolYear }}</span>
-          }
-          · {{ r.term.startDate | slice:0:10 }} to {{ r.term.endDate | slice:0:10 }}
-          @if (r.term.extendedEnd) {
-            <span class="range-note">(includes attendance through today; term calendar ends {{ r.term.configuredEndDate | slice:0:10 }})</span>
-          }
+    <header class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">Attendance</p>
+        <h2>Attendance Report</h2>
+        <p class="hero-sub">
+          Analyse term-wide attendance by class. Identify at-risk learners, export data, and print summaries for records.
         </p>
       </div>
-      <div class="header-actions">
-        <input type="search" class="search" placeholder="Search student…" [ngModel]="search()" (ngModelChange)="search.set($event)" name="q" />
-        @if (r.students.length) {
-          <button type="button" class="btn-ghost" (click)="exportCsv()">Export CSV</button>
-        }
+      <div class="hero-actions">
+        <a class="hero-link" [routerLink]="markRegisterPath">Mark register →</a>
+      </div>
+    </header>
+
+    <section class="card filters-card">
+      <div class="filters-row">
+        <label class="field">
+          <span>Class</span>
+          <select [(ngModel)]="selectedClassId" name="classId" [disabled]="loadingClasses()">
+            <option value="">— Select class —</option>
+            @for (c of classes(); track c.id) {
+              <option [value]="c.id">{{ c.name }}</option>
+            }
+          </select>
+        </label>
+        <label class="field">
+          <span>Term</span>
+          <select [(ngModel)]="selectedTermId" name="termId" [disabled]="loadingTerms()">
+            <option value="">— Select term —</option>
+            @for (t of terms(); track t.id) {
+              <option [value]="t.id">{{ t.name }}{{ t.isCurrent ? ' (current)' : '' }}</option>
+            }
+          </select>
+        </label>
+        <button
+          type="button"
+          class="btn-generate"
+          [disabled]="loadingReport() || !selectedClassId || !selectedTermId"
+          (click)="generateReport()"
+        >
+          @if (loadingReport()) {
+            <span class="spinner" aria-hidden="true"></span>
+            Generating…
+          } @else {
+            Generate report
+          }
+        </button>
       </div>
     </section>
 
-    @if (filteredRows().length) {
-      <section class="card table-wrap">
-        <table class="report-table">
-          <thead>
-            <tr>
-              <th>Student ID</th>
-              <th>Last Name</th>
-              <th>First Name</th>
-              <th class="num">Days</th>
-              <th class="num">Present</th>
-              <th class="num">Late</th>
-              <th class="num">Absent</th>
-              <th class="num">Excused</th>
-              <th class="num">Rate</th>
-            </tr>
-          </thead>
-          <tbody>
-            @for (s of filteredRows(); track s.studentId) {
-              <tr>
-                <td><code>{{ s.admissionNumber }}</code></td>
-                <td>{{ s.lastName }}</td>
-                <td>{{ s.firstName }}</td>
-                <td class="num">{{ s.daysMarked }}</td>
-                <td class="num present">{{ s.present }}</td>
-                <td class="num late">{{ s.late }}</td>
-                <td class="num absent">{{ s.absent }}</td>
-                <td class="num excused">{{ s.excused }}</td>
-                <td class="num">
-                  @if (s.attendancePercent != null) {
-                    {{ s.attendancePercent | number:'1.0-1' }}%
-                  } @else {
-                    —
-                  }
-                </td>
-              </tr>
-            }
-          </tbody>
-          <tfoot>
-            <tr class="totals-row">
-              <td colspan="3"><strong>Class totals</strong></td>
-              <td class="num">{{ classTotals().daysMarked }}</td>
-              <td class="num">{{ classTotals().present }}</td>
-              <td class="num">{{ classTotals().late }}</td>
-              <td class="num">{{ classTotals().absent }}</td>
-              <td class="num">{{ classTotals().excused }}</td>
-              <td></td>
-            </tr>
-          </tfoot>
-        </table>
+    @if (loadingReport()) {
+      <section class="card loading-panel" aria-busy="true">
+        <div class="skeleton-kpis">
+          @for (i of [1, 2, 3, 4]; track i) {
+            <div class="skeleton-kpi"></div>
+          }
+        </div>
+        <div class="skeleton-table">
+          @for (i of [1, 2, 3, 4, 5, 6]; track i) {
+            <div class="skeleton-row"></div>
+          }
+        </div>
       </section>
-    } @else {
-      <p class="empty card">No students match your search.</p>
+    } @else if (hasGenerated()) {
+      @if (report(); as r) {
+      <section class="report-meta card">
+        <div class="meta-copy">
+          <h3>{{ selectedClassLabel() }}</h3>
+          <p class="meta-line">
+            <span class="badge">{{ r.term.name }}</span>
+            @if (r.term.schoolYear) {
+              <span class="badge muted">{{ r.term.schoolYear }}</span>
+            }
+            <span class="badge muted">{{ r.term.startDate | slice:0:10 }} – {{ r.term.endDate | slice:0:10 }}</span>
+          </p>
+          @if (r.term.extendedEnd) {
+            <p class="range-note">
+              Includes attendance through today; term calendar ends {{ r.term.configuredEndDate | slice:0:10 }}.
+            </p>
+          }
+        </div>
+        @if (distribution().total) {
+          <div class="distribution" aria-label="Attendance status distribution">
+            <span class="dist-label">Status mix</span>
+            <div class="dist-bar" role="presentation">
+              <span class="seg present" [style.width.%]="distribution().present" title="Present"></span>
+              <span class="seg late" [style.width.%]="distribution().late" title="Late"></span>
+              <span class="seg absent" [style.width.%]="distribution().absent" title="Absent"></span>
+              <span class="seg excused" [style.width.%]="distribution().excused" title="Excused"></span>
+            </div>
+            <div class="dist-legend">
+              <span><i class="dot present"></i> Present {{ distribution().present }}%</span>
+              <span><i class="dot late"></i> Late {{ distribution().late }}%</span>
+              <span><i class="dot absent"></i> Absent {{ distribution().absent }}%</span>
+              <span><i class="dot excused"></i> Excused {{ distribution().excused }}%</span>
+            </div>
+          </div>
+        }
+      </section>
+
+      <div class="kpi-grid">
+        <article class="kpi">
+          <span class="kpi-icon">👥</span>
+          <div>
+            <span class="kpi-value">{{ reportStats().totalStudents }}</span>
+            <span class="kpi-label">Students</span>
+          </div>
+        </article>
+        <article class="kpi accent">
+          <span class="kpi-icon">📊</span>
+          <div>
+            <span class="kpi-value">
+              @if (reportStats().classAverage != null) {
+                {{ reportStats().classAverage | number:'1.0-1' }}%
+              } @else {
+                —
+              }
+            </span>
+            <span class="kpi-label">Class average</span>
+          </div>
+        </article>
+        <article class="kpi ok">
+          <span class="kpi-icon">✓</span>
+          <div>
+            <span class="kpi-value">{{ reportStats().excellent }}</span>
+            <span class="kpi-label">Excellent (≥95%)</span>
+          </div>
+        </article>
+        <article class="kpi warn">
+          <span class="kpi-icon">⚠</span>
+          <div>
+            <span class="kpi-value">{{ reportStats().atRisk }}</span>
+            <span class="kpi-label">At risk (&lt;80%)</span>
+          </div>
+        </article>
+      </div>
+
+      @if (r.students.length) {
+        <section class="card toolbar-card">
+          <div class="toolbar-top">
+            <div class="search-wrap">
+              <svg class="search-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2" />
+                <path d="M20 20l-3-3" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+              </svg>
+              <input
+                type="search"
+                placeholder="Search by name or ID…"
+                [ngModel]="search()"
+                (ngModelChange)="search.set($event)"
+                name="q"
+              />
+            </div>
+            <div class="toolbar-actions">
+              <select class="sort-select" [ngModel]="sortBy()" (ngModelChange)="sortBy.set($event)" name="sort">
+                @for (opt of sortOptions; track opt.value) {
+                  <option [value]="opt.value">{{ opt.label }}</option>
+                }
+              </select>
+              <button type="button" class="btn-outline" (click)="exportCsv()" [disabled]="!filteredRows().length">
+                Export CSV
+              </button>
+              <button type="button" class="btn-outline" (click)="printReport()" [disabled]="!filteredRows().length">
+                Print
+              </button>
+              <div class="view-toggle" role="group" aria-label="View mode">
+                <button
+                  type="button"
+                  class="view-btn"
+                  [class.active]="viewMode() === 'table'"
+                  (click)="viewMode.set('table')"
+                  title="Table view"
+                >☰</button>
+                <button
+                  type="button"
+                  class="view-btn"
+                  [class.active]="viewMode() === 'cards'"
+                  (click)="viewMode.set('cards')"
+                  title="Card view"
+                >▦</button>
+              </div>
+            </div>
+          </div>
+          <div class="filter-chips">
+            <button type="button" class="chip" [class.active]="rateFilter() === 'all'" (click)="rateFilter.set('all')">
+              All ({{ rateFilterCounts().all }})
+            </button>
+            <button type="button" class="chip ok" [class.active]="rateFilter() === 'excellent'" (click)="rateFilter.set('excellent')">
+              Excellent ({{ rateFilterCounts().excellent }})
+            </button>
+            <button type="button" class="chip" [class.active]="rateFilter() === 'good'" (click)="rateFilter.set('good')">
+              Good ({{ rateFilterCounts().good }})
+            </button>
+            <button type="button" class="chip warn" [class.active]="rateFilter() === 'atRisk'" (click)="rateFilter.set('atRisk')">
+              At risk ({{ rateFilterCounts().atRisk }})
+            </button>
+            <button type="button" class="chip muted" [class.active]="rateFilter() === 'noData'" (click)="rateFilter.set('noData')">
+              No data ({{ rateFilterCounts().noData }})
+            </button>
+          </div>
+          <div class="results-meta">
+            <span>Showing <strong>{{ filteredRows().length }}</strong> of {{ r.students.length }} students</span>
+            @if (hasActiveFilters()) {
+              <button type="button" class="clear-filters" (click)="clearFilters()">Clear filters</button>
+            }
+          </div>
+        </section>
+
+        @if (!filteredRows().length) {
+          <div class="empty-state card">
+            <span class="empty-icon">🔍</span>
+            <h3>No students match</h3>
+            <p>Try a different search term or attendance filter.</p>
+            <button type="button" class="btn-primary" (click)="clearFilters()">Clear filters</button>
+          </div>
+        } @else if (viewMode() === 'table') {
+          <section class="card table-wrap">
+            <table class="report-table">
+              <thead>
+                <tr>
+                  <th>Student</th>
+                  <th class="num">Days</th>
+                  <th class="num">Present</th>
+                  <th class="num">Late</th>
+                  <th class="num">Absent</th>
+                  <th class="num">Excused</th>
+                  <th class="num">Rate</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (s of filteredRows(); track s.studentId) {
+                  <tr [ngClass]="'tier-' + rateTier(s.attendancePercent)">
+                    <td class="student-cell">
+                      <span class="student-name">{{ s.lastName }}, {{ s.firstName }}</span>
+                      <code>{{ s.admissionNumber }}</code>
+                    </td>
+                    <td class="num">{{ s.daysMarked }}</td>
+                    <td class="num present">{{ s.present }}</td>
+                    <td class="num late">{{ s.late }}</td>
+                    <td class="num absent">{{ s.absent }}</td>
+                    <td class="num excused">{{ s.excused }}</td>
+                    <td class="num rate-cell">
+                      @if (s.attendancePercent != null) {
+                        <div class="rate-wrap">
+                          <span class="rate-value" [ngClass]="'tier-' + rateTier(s.attendancePercent)">
+                            {{ s.attendancePercent | number:'1.0-1' }}%
+                          </span>
+                          <div class="rate-bar" aria-hidden="true">
+                            <span class="rate-fill" [ngClass]="'tier-' + rateTier(s.attendancePercent)" [style.width.%]="s.attendancePercent"></span>
+                          </div>
+                        </div>
+                      } @else {
+                        <span class="no-rate">—</span>
+                      }
+                    </td>
+                  </tr>
+                }
+              </tbody>
+              <tfoot>
+                <tr class="totals-row">
+                  <td><strong>Class totals</strong></td>
+                  <td class="num">{{ classTotals().daysMarked }}</td>
+                  <td class="num">{{ classTotals().present }}</td>
+                  <td class="num">{{ classTotals().late }}</td>
+                  <td class="num">{{ classTotals().absent }}</td>
+                  <td class="num">{{ classTotals().excused }}</td>
+                  <td class="num">
+                    @if (reportStats().classAverage != null) {
+                      <strong>{{ reportStats().classAverage | number:'1.0-1' }}% avg</strong>
+                    }
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </section>
+        } @else {
+          <div class="card-grid">
+            @for (s of filteredRows(); track s.studentId) {
+              <article class="student-card" [ngClass]="'tier-' + rateTier(s.attendancePercent)">
+                <header class="card-head">
+                  <div>
+                    <h4>{{ s.firstName }} {{ s.lastName }}</h4>
+                    <code>{{ s.admissionNumber }}</code>
+                  </div>
+                  @if (s.attendancePercent != null) {
+                    <span class="rate-pill" [ngClass]="'tier-' + rateTier(s.attendancePercent)">
+                      {{ s.attendancePercent | number:'1.0-1' }}%
+                    </span>
+                  } @else {
+                    <span class="rate-pill tier-none">No data</span>
+                  }
+                </header>
+                @if (s.attendancePercent != null) {
+                  <div class="card-rate-bar" aria-hidden="true">
+                    <span class="rate-fill" [ngClass]="'tier-' + rateTier(s.attendancePercent)" [style.width.%]="s.attendancePercent"></span>
+                  </div>
+                }
+                <dl class="stat-grid">
+                  <div><dt>Days</dt><dd>{{ s.daysMarked }}</dd></div>
+                  <div class="present"><dt>Present</dt><dd>{{ s.present }}</dd></div>
+                  <div class="late"><dt>Late</dt><dd>{{ s.late }}</dd></div>
+                  <div class="absent"><dt>Absent</dt><dd>{{ s.absent }}</dd></div>
+                  <div class="excused"><dt>Excused</dt><dd>{{ s.excused }}</dd></div>
+                </dl>
+              </article>
+            }
+          </div>
+        }
+      } @else {
+        <div class="empty-state card">
+          <span class="empty-icon">📋</span>
+          <h3>No students in this class</h3>
+          <p>There are no active students enrolled for the selected class.</p>
+        </div>
+      }
+      }
+    } @else if (!hasGenerated()) {
+      <div class="empty-state card welcome">
+        <span class="empty-icon">📅</span>
+        <h3>Generate a report</h3>
+        <p>Select a class and term above, then click <strong>Generate report</strong> to view attendance analytics.</p>
+      </div>
     }
-  }
+  </div>
 </app-portal-layout>

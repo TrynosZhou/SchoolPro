@@ -1,6 +1,6 @@
 import { Component, computed, inject, OnDestroy, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { DecimalPipe } from '@angular/common';
+import { DecimalPipe, NgClass } from '@angular/common';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { RouterLink, Router } from '@angular/router';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
@@ -74,13 +74,15 @@ interface GenerateResponse {
   reports: ReportCardRow[];
 }
 
-type ViewMode = 'cards' | 'compact';
+type ViewMode = 'cards' | 'compact' | 'table';
+type PerformanceFilter = 'all' | 'honour' | 'high' | 'atRisk' | 'needsRemarks';
+type SortKey = 'position' | 'avgDesc' | 'avgAsc' | 'name';
 type UserRole = 'director' | 'principal' | 'admin' | 'teacher' | 'parent' | 'student';
 
 @Component({
   selector: 'app-admin-report-cards',
   standalone: true,
-  imports: [PortalLayoutComponent, FormsModule, DecimalPipe, RouterLink],
+  imports: [PortalLayoutComponent, FormsModule, DecimalPipe, NgClass, RouterLink],
   templateUrl: './admin-report-cards.component.html',
   styleUrl: './admin-report-cards.component.scss',
 })
@@ -104,8 +106,11 @@ export class AdminReportCardsComponent implements OnInit, OnDestroy {
   hasLoaded = signal(false);
   toast = signal<{ type: 'success' | 'error'; msg: string } | null>(null);
   search = signal('');
+  performanceFilter = signal<PerformanceFilter>('all');
+  sortBy = signal<SortKey>('position');
   viewMode = signal<ViewMode>('cards');
   expandedIds = signal<Set<string>>(new Set());
+  bulkDownloading = signal(false);
   activeStudentId = signal<string | null>(null);
 
   pdfLoading = signal(false);
@@ -120,6 +125,19 @@ export class AdminReportCardsComponent implements OnInit, OnDestroy {
 
   schoolBranding = signal<SchoolBranding | null>(null);
 
+  readonly sortOptions: { value: SortKey; label: string }[] = [
+    { value: 'position', label: 'Class position' },
+    { value: 'avgDesc', label: 'Average % (high → low)' },
+    { value: 'avgAsc', label: 'Average % (low → high)' },
+    { value: 'name', label: 'Name (A–Z)' },
+  ];
+
+  readonly isTeacherPortal = this.router.url.includes('/teacher');
+  readonly isAdminPortal = this.router.url.includes('/admin');
+  readonly examsLink = this.portalPath('exams');
+  readonly settingsLink = '/admin/settings';
+  readonly markSheetLink = this.portalPath('mark-sheet');
+
   filtersReady(): boolean {
     return !!(this.filters.examTypeId && this.filters.termId && this.filters.classId);
   }
@@ -127,17 +145,38 @@ export class AdminReportCardsComponent implements OnInit, OnDestroy {
   readonly stats = computed(() => {
     const rows = this.reports();
     if (!rows.length) {
-      return { count: 0, classAvg: 0, topMark: 0, honourCount: 0 };
+      return {
+        count: 0,
+        classAvg: 0,
+        topMark: 0,
+        honourCount: 0,
+        fullPassCount: 0,
+        passRate: 0,
+        remarksComplete: 0,
+        atRiskCount: 0,
+      };
     }
     const avgs = rows.map((r) => Number(r.averageMark) || 0);
     const classAvg = avgs.reduce((a, b) => a + b, 0) / avgs.length;
     const topMark = Math.max(...avgs);
     const honourCount = rows.filter((r) => (r.classPosition || 99) <= 3).length;
+    const fullPassCount = rows.filter(
+      (r) => r.subjectsPassed != null && r.totalSubjects && r.subjectsPassed === r.totalSubjects,
+    ).length;
+    const passRate = Math.round((fullPassCount / rows.length) * 1000) / 10;
+    const remarksComplete = rows.filter(
+      (r) => (r.classTeacherRemarks || '').trim() && (r.principalRemarks || '').trim(),
+    ).length;
+    const atRiskCount = rows.filter((r) => (Number(r.averageMark) || 0) < 50).length;
     return {
       count: rows.length,
       classAvg: Math.round(classAvg * 10) / 10,
       topMark: Math.round(topMark * 10) / 10,
       honourCount,
+      fullPassCount,
+      passRate,
+      remarksComplete,
+      atRiskCount,
     };
   });
 
@@ -153,9 +192,28 @@ export class AdminReportCardsComponent implements OnInit, OnDestroy {
       .sort((a, b) => b.count - a.count);
   });
 
+  readonly filterCounts = computed(() => {
+    const rows = this.reports();
+    return {
+      all: rows.length,
+      honour: rows.filter((r) => (r.classPosition || 99) <= 3).length,
+      high: rows.filter((r) => (Number(r.averageMark) || 0) >= 80).length,
+      atRisk: rows.filter((r) => (Number(r.averageMark) || 0) < 50).length,
+      needsRemarks: rows.filter(
+        (r) => !(r.classTeacherRemarks || '').trim() || !(r.principalRemarks || '').trim(),
+      ).length,
+    };
+  });
+
+  readonly hasActiveFilters = computed(
+    () => !!this.search().trim() || this.performanceFilter() !== 'all' || this.sortBy() !== 'position',
+  );
+
   readonly filteredReports = computed(() => {
     const q = this.search().trim().toLowerCase();
+    const filter = this.performanceFilter();
     let rows = [...this.reports()];
+
     if (q) {
       rows = rows.filter((r) =>
         `${r.student?.firstName} ${r.student?.lastName} ${r.student?.admissionNumber} ${r.overallGrade}`
@@ -163,6 +221,39 @@ export class AdminReportCardsComponent implements OnInit, OnDestroy {
           .includes(q),
       );
     }
+
+    rows = rows.filter((r) => {
+      const avg = Number(r.averageMark) || 0;
+      switch (filter) {
+        case 'honour':
+          return (r.classPosition || 99) <= 3;
+        case 'high':
+          return avg >= 80;
+        case 'atRisk':
+          return avg < 50;
+        case 'needsRemarks':
+          return !(r.classTeacherRemarks || '').trim() || !(r.principalRemarks || '').trim();
+        default:
+          return true;
+      }
+    });
+
+    const sort = this.sortBy();
+    rows.sort((a, b) => {
+      if (sort === 'avgDesc') {
+        return (Number(b.averageMark) || 0) - (Number(a.averageMark) || 0);
+      }
+      if (sort === 'avgAsc') {
+        return (Number(a.averageMark) || 0) - (Number(b.averageMark) || 0);
+      }
+      if (sort === 'name') {
+        const an = `${a.student?.lastName} ${a.student?.firstName}`;
+        const bn = `${b.student?.lastName} ${b.student?.firstName}`;
+        return an.localeCompare(bn);
+      }
+      return (a.classPosition || 999) - (b.classPosition || 999);
+    });
+
     return rows;
   });
 
@@ -180,9 +271,16 @@ export class AdminReportCardsComponent implements OnInit, OnDestroy {
       const current = terms.find((t) => t.isCurrent);
       if (current) this.filters.termId = current.id;
     });
-    this.api.get<{ id: string; name: string; form?: { name: string } }[]>('/admin/classes').subscribe((c) =>
-      this.classes.set(c),
-    );
+    if (this.isTeacherPortal) {
+      this.api.get<{ assignedClasses: { id: string; name: string; form?: { name: string } }[] }>('/dashboard/teacher').subscribe({
+        next: (d) => this.classes.set(d.assignedClasses || []),
+        error: () => this.showToast('error', 'Could not load your classes.'),
+      });
+    } else {
+      this.api.get<{ id: string; name: string; form?: { name: string } }[]>('/admin/classes').subscribe((c) =>
+        this.classes.set(c),
+      );
+    }
     this.api.get<SchoolBranding>('/exams/school-branding').subscribe({
       next: (b) => this.schoolBranding.set(b),
       error: () => this.schoolBranding.set({ schoolName: 'School Pro Academy' }),
@@ -211,7 +309,15 @@ export class AdminReportCardsComponent implements OnInit, OnDestroy {
     this.hasLoaded.set(false);
     this.sessionLabel.set('');
     this.search.set('');
+    this.performanceFilter.set('all');
+    this.sortBy.set('position');
     this.closePdfPreview();
+  }
+
+  clearFilters(): void {
+    this.search.set('');
+    this.performanceFilter.set('all');
+    this.sortBy.set('position');
   }
 
   loadReportCards(): void {
@@ -310,6 +416,112 @@ export class AdminReportCardsComponent implements OnInit, OnDestroy {
       a.click();
       URL.revokeObjectURL(url);
     });
+  }
+
+  printClassSummary(): void {
+    const rows = this.filteredReports();
+    if (!rows.length) return;
+
+    const stats = this.stats();
+    const session = this.sessionLabel();
+    const tableRows = rows
+      .map(
+        (r) => `
+      <tr>
+        <td class="num">${r.classPosition ?? '—'}</td>
+        <td>${r.student?.admissionNumber ?? ''}</td>
+        <td>${r.student?.lastName ?? ''}</td>
+        <td>${r.student?.firstName ?? ''}</td>
+        <td class="num">${r.averageMark != null ? `${r.averageMark}%` : '—'}</td>
+        <td>${r.overallGrade ?? '—'}</td>
+        <td class="num">${r.subjectsPassed != null && r.totalSubjects ? `${r.subjectsPassed}/${r.totalSubjects}` : '—'}</td>
+        <td class="num">${r.attendance?.attendancePercent != null ? `${r.attendance.attendancePercent}%` : '—'}</td>
+      </tr>`,
+      )
+      .join('');
+
+    const html = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Report Cards — ${session}</title>
+<style>
+  body { font-family: system-ui, sans-serif; color: #0f172a; margin: 24px; }
+  h1 { margin: 0 0 4px; font-size: 1.25rem; }
+  .meta { color: #64748b; font-size: 0.88rem; margin-bottom: 16px; }
+  .summary { display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 18px; font-size: 0.85rem; }
+  .summary strong { display: block; font-size: 1rem; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+  th, td { border: 1px solid #e2e8f0; padding: 7px 9px; text-align: left; }
+  th { background: #f8fafc; font-size: 0.68rem; text-transform: uppercase; color: #64748b; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; }
+</style></head><body>
+  <h1>Class Report Cards Summary</h1>
+  <p class="meta">${session} · ${this.schoolName()}</p>
+  <div class="summary">
+    <div><span>Students</span><strong>${stats.count}</strong></div>
+    <div><span>Class average</span><strong>${stats.classAvg}%</strong></div>
+    <div><span>Full pass rate</span><strong>${stats.passRate}%</strong></div>
+    <div><span>Top 3</span><strong>${stats.honourCount}</strong></div>
+  </div>
+  <table>
+    <thead><tr>
+      <th>Pos</th><th>ID</th><th>Last</th><th>First</th><th>Avg</th><th>Grade</th><th>Subjects</th><th>Attend.</th>
+    </tr></thead>
+    <tbody>${tableRows}</tbody>
+  </table>
+  <script>window.onload = () => { window.print(); window.onafterprint = () => window.close(); };</script>
+</body></html>`;
+
+    const win = window.open('', '_blank', 'noopener,noreferrer,width=900,height=700');
+    if (!win) {
+      this.showToast('error', 'Allow pop-ups to print the summary.');
+      return;
+    }
+    win.document.write(html);
+    win.document.close();
+  }
+
+  async downloadAllPdfs(): Promise<void> {
+    const rows = this.filteredReports();
+    if (!rows.length || this.bulkDownloading()) return;
+
+    this.bulkDownloading.set(true);
+    let done = 0;
+    for (const report of rows) {
+      const blob = await this.fetchPdfBlob(report, false);
+      if (blob) {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const student = report.student;
+        a.download = reportCardPdfFilename(
+          student?.firstName,
+          student?.lastName,
+          student?.admissionNumber || report.studentId,
+        );
+        a.click();
+        URL.revokeObjectURL(url);
+        done += 1;
+      }
+      await new Promise((r) => setTimeout(r, 400));
+    }
+    this.bulkDownloading.set(false);
+    this.showToast('success', `Downloaded ${done} PDF(s).`);
+  }
+
+  gradePillClass(grade?: string): string {
+    const g = (grade || '').trim().toUpperCase().charAt(0);
+    if (g === 'A') return 'grade-a';
+    if (g === 'B') return 'grade-b';
+    if (g === 'C') return 'grade-c';
+    if (g === 'D') return 'grade-d';
+    if (g === 'E' || g === 'F') return 'grade-f';
+    return 'grade-default';
+  }
+
+  averageTier(avg?: number): 'excellent' | 'good' | 'atRisk' | 'none' {
+    if (avg == null) return 'none';
+    if (avg >= 80) return 'excellent';
+    if (avg >= 50) return 'good';
+    return 'atRisk';
   }
 
   exportSummaryCsv(): void {
@@ -558,6 +770,13 @@ export class AdminReportCardsComponent implements OnInit, OnDestroy {
     this.portalTitle.set('Admin Portal');
     this.navSections.set(ADMIN_NAV_SECTIONS);
     this.navItems.set([]);
+  }
+
+  private portalPath(segment: string): string {
+    if (this.router.url.includes('/director')) return `/director/${segment}`;
+    if (this.router.url.includes('/principal')) return `/principal/${segment}`;
+    if (this.router.url.includes('/teacher')) return `/teacher/${segment}`;
+    return `/admin/${segment}`;
   }
 
   private getCurrentRole(): UserRole | null {

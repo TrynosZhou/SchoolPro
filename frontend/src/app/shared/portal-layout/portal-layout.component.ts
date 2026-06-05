@@ -224,6 +224,7 @@ export class PortalLayoutComponent implements OnInit, OnDestroy {
     const h = heading.toLowerCase();
     if (h === 'overview' || h === 'dashboard') return 'dashboard';
     if (h === 'students') return 'students';
+    if (h === 'parents') return 'parents';
     if (h === 'attendance') return 'attendance';
     if (h === 'staff') return 'staff';
     if (h === 'academics' || h === 'examination' || h === 'examinations') return 'examinations';

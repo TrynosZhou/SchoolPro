@@ -2,6 +2,10 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.MIN_SUBJECTS_FOR_CLASS_PASS = void 0;
 exports.buildResultsAnalysis = buildResultsAnalysis;
+exports.buildStudentSubjectAnalysis = buildStudentSubjectAnalysis;
+const data_source_1 = require("../config/data-source");
+const entities_1 = require("../entities");
+const grade_service_1 = require("./grade.service");
 const mark_sheet_service_1 = require("./mark-sheet.service");
 /** Minimum passed subjects (mark &gt; 49) for a student to count toward class pass rate. */
 exports.MIN_SUBJECTS_FOR_CLASS_PASS = 5;
@@ -54,5 +58,64 @@ async function buildResultsAnalysis(params) {
         },
         topPerformers,
         bottomPerformers,
+    };
+}
+function isPassingMark(marks) {
+    return marks > 49;
+}
+async function buildStudentSubjectAnalysis(params) {
+    const { studentId, classId } = params;
+    const student = await data_source_1.AppDataSource.getRepository(entities_1.Student).findOne({
+        where: { id: studentId, isActive: true },
+    });
+    if (!student)
+        throw new Error('Student not found');
+    if (student.classId !== classId) {
+        throw new Error('Student is not enrolled in the selected class');
+    }
+    const sheet = await (0, mark_sheet_service_1.buildMarkSheet)(params);
+    const row = sheet.students.find((s) => s.studentId === studentId);
+    const maxMarks = sheet.examType.maxMarks;
+    const subjects = await Promise.all(sheet.subjects.map(async (sub) => {
+        const cell = row?.marksBySubject[sub.id];
+        const marks = cell?.marks ?? null;
+        let grade = null;
+        let passed = false;
+        let percentOfMax = null;
+        if (marks != null) {
+            grade = await (0, grade_service_1.gradeForMarks)(marks, maxMarks);
+            passed = isPassingMark(marks);
+            percentOfMax = maxMarks > 0 ? round2((marks / maxMarks) * 100) : null;
+        }
+        return {
+            subjectId: sub.id,
+            subjectCode: sub.code,
+            subjectName: sub.name,
+            marks,
+            grade,
+            passed,
+            percentOfMax,
+        };
+    }));
+    const withMarks = subjects.filter((s) => s.marks != null);
+    return {
+        student: {
+            id: student.id,
+            admissionNumber: student.admissionNumber,
+            firstName: student.firstName,
+            lastName: student.lastName,
+            gender: student.gender || '—',
+        },
+        examType: sheet.examType,
+        term: sheet.term,
+        class: sheet.class,
+        summary: {
+            subjectCount: sheet.subjects.length,
+            subjectsWithMarks: withMarks.length,
+            subjectsPassed: row?.subjectsPassed ?? 0,
+            averagePercent: row?.averagePercent ?? null,
+            classPosition: row?.position ?? null,
+        },
+        subjects,
     };
 }

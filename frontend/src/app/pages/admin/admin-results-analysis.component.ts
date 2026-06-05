@@ -35,6 +35,45 @@ interface ResultsAnalysisData {
   bottomPerformers: ResultsAnalysisPerformer[];
 }
 
+interface ClassStudentRow {
+  id: string;
+  admissionNumber: string;
+  firstName: string;
+  lastName: string;
+  gender?: string;
+}
+
+interface StudentSubjectMark {
+  subjectId: string;
+  subjectCode: string;
+  subjectName: string;
+  marks: number | null;
+  grade: string | null;
+  passed: boolean;
+  percentOfMax: number | null;
+}
+
+interface StudentSubjectAnalysis {
+  student: {
+    id: string;
+    admissionNumber: string;
+    firstName: string;
+    lastName: string;
+    gender: string;
+  };
+  examType: { id: string; name: string; maxMarks: number };
+  term: { id: string; name: string };
+  class: { id: string; name: string };
+  summary: {
+    subjectCount: number;
+    subjectsWithMarks: number;
+    subjectsPassed: number;
+    averagePercent: number | null;
+    classPosition: number | null;
+  };
+  subjects: StudentSubjectMark[];
+}
+
 @Component({
   selector: 'app-admin-results-analysis',
   standalone: true,
@@ -56,6 +95,8 @@ export class AdminResultsAnalysisComponent implements OnInit, OnDestroy {
   classes = signal<{ id: string; name: string }[]>([]);
 
   filters = { examTypeId: '', termId: '', classId: '' };
+  studentFilters = { termId: '', classId: '' };
+
   analysis = signal<ResultsAnalysisData | null>(null);
   sessionLabel = signal('');
   loading = signal(false);
@@ -65,10 +106,24 @@ export class AdminResultsAnalysisComponent implements OnInit, OnDestroy {
   pdfPreviewUrl = signal<SafeResourceUrl | null>(null);
   toast = signal<{ type: 'success' | 'error'; msg: string } | null>(null);
 
+  classStudents = signal<ClassStudentRow[]>([]);
+  studentsLoaded = signal(false);
+  studentsLoading = signal(false);
+  studentSessionLabel = signal('');
+
+  studentModalOpen = signal(false);
+  studentAnalysisLoading = signal(false);
+  studentAnalysis = signal<StudentSubjectAnalysis | null>(null);
+  selectedStudent = signal<ClassStudentRow | null>(null);
+
   private pdfObjectUrl: string | null = null;
 
   filtersReady(): boolean {
     return !!(this.filters.examTypeId && this.filters.termId && this.filters.classId);
+  }
+
+  studentFiltersReady(): boolean {
+    return !!(this.studentFilters.termId && this.studentFilters.classId);
   }
 
   ngOnInit(): void {
@@ -80,7 +135,10 @@ export class AdminResultsAnalysisComponent implements OnInit, OnDestroy {
       next: (t) => {
         this.terms.set(t);
         const current = t.find((x) => x.isCurrent);
-        if (current) this.filters.termId = current.id;
+        if (current) {
+          this.filters.termId = current.id;
+          this.studentFilters.termId = current.id;
+        }
       },
       error: () => this.showToast('error', 'Could not load terms.'),
     });
@@ -98,6 +156,93 @@ export class AdminResultsAnalysisComponent implements OnInit, OnDestroy {
     this.analysis.set(null);
     this.hasAnalyzed.set(false);
     this.closePdfPreview();
+  }
+
+  onStudentFilterChange(): void {
+    this.classStudents.set([]);
+    this.studentsLoaded.set(false);
+    this.closeStudentModal();
+  }
+
+  loadStudents(): void {
+    if (!this.studentFiltersReady()) {
+      this.showToast('error', 'Select term and class.');
+      return;
+    }
+
+    this.studentsLoading.set(true);
+    this.studentsLoaded.set(false);
+    this.closeStudentModal();
+
+    const { termId, classId } = this.studentFilters;
+    this.api
+      .get<ClassStudentRow[]>('/students', { classId, enrolled: 'true' })
+      .subscribe({
+        next: (rows) => {
+          this.classStudents.set(rows);
+          this.studentsLoaded.set(true);
+          this.studentsLoading.set(false);
+          const term = this.terms().find((t) => t.id === termId)?.name || '';
+          const cls = classDisplayName(this.classes(), classId);
+          this.studentSessionLabel.set([term, cls].filter(Boolean).join(' · '));
+          if (!rows.length) {
+            this.showToast('error', 'No active students found in this class.');
+          } else {
+            this.showToast('success', `${rows.length} student(s) loaded. Click a row to view marks.`);
+          }
+        },
+        error: (e) => {
+          this.studentsLoading.set(false);
+          this.showToast('error', e.error?.message || 'Failed to load students.');
+        },
+      });
+  }
+
+  openStudentAnalysis(student: ClassStudentRow): void {
+    if (!this.filters.examTypeId) {
+      this.showToast('error', 'Select an exam type above to view mark distribution.');
+      return;
+    }
+    if (!this.studentFiltersReady()) {
+      this.showToast('error', 'Select term and class, then load students.');
+      return;
+    }
+
+    this.selectedStudent.set(student);
+    this.studentModalOpen.set(true);
+    this.studentAnalysis.set(null);
+    this.studentAnalysisLoading.set(true);
+
+    const { termId, classId } = this.studentFilters;
+    this.api
+      .get<StudentSubjectAnalysis>('/exams/results-analysis/student', {
+        examTypeId: this.filters.examTypeId,
+        termId,
+        classId,
+        studentId: student.id,
+      })
+      .subscribe({
+        next: (data) => {
+          this.studentAnalysis.set(data);
+          this.studentAnalysisLoading.set(false);
+        },
+        error: (e) => {
+          this.studentAnalysisLoading.set(false);
+          this.showToast('error', e.error?.message || 'Failed to load student analysis.');
+        },
+      });
+  }
+
+  closeStudentModal(): void {
+    this.studentModalOpen.set(false);
+    this.studentAnalysis.set(null);
+    this.selectedStudent.set(null);
+    this.studentAnalysisLoading.set(false);
+  }
+
+  subjectBarWidth(percent: number | null): string {
+    if (percent == null) return '0%';
+    return `${Math.max(0, Math.min(100, percent))}%`;
   }
 
   runAnalysis(): void {

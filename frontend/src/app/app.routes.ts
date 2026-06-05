@@ -48,6 +48,7 @@ import { AdminSendMessageComponent } from './pages/admin/admin-send-message.comp
 import { AdminInboxComponent } from './pages/admin/admin-inbox.component';
 import { AdminParentsComponent } from './pages/admin/admin-parents.component';
 import { AdminParentDetailComponent } from './pages/admin/admin-parent-detail.component';
+import { AdminPayrollComponent } from './pages/admin/admin-payroll.component';
 
 export const routes: Routes = [
   { path: '', redirectTo: 'login', pathMatch: 'full' },
@@ -62,6 +63,7 @@ export const routes: Routes = [
       { path: 'attendance', component: AttendanceReportComponent },
       { path: 'academics', component: DirectorAcademicsComponent },
       { path: 'store', component: DirectorStoreComponent },
+      { path: 'payroll', component: AdminPayrollComponent },
       { path: 'exams', component: ExamMarksEntryComponent },
       { path: 'report-cards', component: AdminReportCardsComponent },
       { path: 'mark-sheet', component: AdminMarkSheetComponent },
@@ -78,6 +80,7 @@ export const routes: Routes = [
       { path: 'attendance', component: AttendanceReportComponent },
       { path: 'academics', component: DirectorAcademicsComponent },
       { path: 'store', component: DirectorStoreComponent },
+      { path: 'payroll', component: AdminPayrollComponent },
       { path: 'exams', component: ExamMarksEntryComponent },
       { path: 'report-cards', component: AdminReportCardsComponent },
       { path: 'mark-sheet', component: AdminMarkSheetComponent },
@@ -113,6 +116,7 @@ export const routes: Routes = [
       { path: 'timetable/generate', component: AdminTimetableGenerateComponent },
       { path: 'timetable/view', component: AdminTimetableViewComponent },
       { path: 'staff', component: AdminStaffComponent },
+      { path: 'payroll', component: AdminPayrollComponent },
       { path: 'exams', component: ExamMarksEntryComponent },
       { path: 'attendance', redirectTo: 'attendance/mark-register', pathMatch: 'full' },
       { path: 'attendance/mark-register', component: AttendanceMarkRegisterComponent },

@@ -1,3 +1,6 @@
+import { AppDataSource } from '../config/data-source';
+import { Student } from '../entities';
+import { gradeForMarks } from './grade.service';
 import { buildMarkSheet, MarkSheetParams } from './mark-sheet.service';
 
 /** Minimum passed subjects (mark &gt; 49) for a student to count toward class pass rate. */
@@ -106,5 +109,111 @@ export async function buildResultsAnalysis(
     },
     topPerformers,
     bottomPerformers,
+  };
+}
+
+export interface StudentSubjectMark {
+  subjectId: string;
+  subjectCode: string;
+  subjectName: string;
+  marks: number | null;
+  grade: string | null;
+  passed: boolean;
+  percentOfMax: number | null;
+}
+
+export interface StudentSubjectAnalysis {
+  student: {
+    id: string;
+    admissionNumber: string;
+    firstName: string;
+    lastName: string;
+    gender: string;
+  };
+  examType: { id: string; name: string; maxMarks: number };
+  term: { id: string; name: string };
+  class: { id: string; name: string };
+  summary: {
+    subjectCount: number;
+    subjectsWithMarks: number;
+    subjectsPassed: number;
+    averagePercent: number | null;
+    classPosition: number | null;
+  };
+  subjects: StudentSubjectMark[];
+}
+
+export interface StudentSubjectAnalysisParams extends MarkSheetParams {
+  studentId: string;
+}
+
+function isPassingMark(marks: number): boolean {
+  return marks > 49;
+}
+
+export async function buildStudentSubjectAnalysis(
+  params: StudentSubjectAnalysisParams,
+): Promise<StudentSubjectAnalysis> {
+  const { studentId, classId } = params;
+
+  const student = await AppDataSource.getRepository(Student).findOne({
+    where: { id: studentId, isActive: true },
+  });
+  if (!student) throw new Error('Student not found');
+  if (student.classId !== classId) {
+    throw new Error('Student is not enrolled in the selected class');
+  }
+
+  const sheet = await buildMarkSheet(params);
+  const row = sheet.students.find((s) => s.studentId === studentId);
+  const maxMarks = sheet.examType.maxMarks;
+
+  const subjects: StudentSubjectMark[] = await Promise.all(
+    sheet.subjects.map(async (sub) => {
+      const cell = row?.marksBySubject[sub.id];
+      const marks = cell?.marks ?? null;
+      let grade: string | null = null;
+      let passed = false;
+      let percentOfMax: number | null = null;
+
+      if (marks != null) {
+        grade = await gradeForMarks(marks, maxMarks);
+        passed = isPassingMark(marks);
+        percentOfMax = maxMarks > 0 ? round2((marks / maxMarks) * 100) : null;
+      }
+
+      return {
+        subjectId: sub.id,
+        subjectCode: sub.code,
+        subjectName: sub.name,
+        marks,
+        grade,
+        passed,
+        percentOfMax,
+      };
+    }),
+  );
+
+  const withMarks = subjects.filter((s) => s.marks != null);
+
+  return {
+    student: {
+      id: student.id,
+      admissionNumber: student.admissionNumber,
+      firstName: student.firstName,
+      lastName: student.lastName,
+      gender: student.gender || '—',
+    },
+    examType: sheet.examType,
+    term: sheet.term,
+    class: sheet.class,
+    summary: {
+      subjectCount: sheet.subjects.length,
+      subjectsWithMarks: withMarks.length,
+      subjectsPassed: row?.subjectsPassed ?? 0,
+      averagePercent: row?.averagePercent ?? null,
+      classPosition: row?.position ?? null,
+    },
+    subjects,
   };
 }

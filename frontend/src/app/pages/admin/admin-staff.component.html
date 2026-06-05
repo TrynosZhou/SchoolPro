@@ -1,325 +1,570 @@
 <app-portal-layout portalTitle="Admin Portal" pageTitle="Staff Management" [navSections]="adminNav">
-
-  @if (toast(); as t) {
-    <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>
-  }
-
-  <header class="hero">
-    <div class="hero-text">
-      <p class="eyebrow">Human Resources</p>
-      <h1 class="hero-title">Staff Management</h1>
-      <p class="hero-sub">Manage teachers, administrators, and daily staff attendance</p>
-    </div>
-    <div class="hero-stats">
-      <div class="stat"><span class="val">{{ stats().total }}</span><span class="lbl">Total</span></div>
-      <div class="stat"><span class="val">{{ stats().teachers }}</span><span class="lbl">Teachers</span></div>
-      <div class="stat"><span class="val">{{ stats().admins }}</span><span class="lbl">Admins</span></div>
-      <div class="stat accent"><span class="val">{{ stats().principals }}</span><span class="lbl">Principals</span></div>
-    </div>
-  </header>
-
-  <nav class="tab-rail">
-    <button type="button" [class.active]="activeTab() === 'directory'" (click)="setTab('directory')">
-      <span class="ico">👥</span> Staff Directory
-    </button>
-    <button type="button" [class.active]="activeTab() === 'add'" (click)="setTab('add')">
-      <span class="ico">➕</span> Add Staff
-    </button>
-    <button type="button" [class.active]="activeTab() === 'attendance'" (click)="setTab('attendance')">
-      <span class="ico">📋</span> Staff Attendance
-    </button>
-  </nav>
-
-  <!-- DIRECTORY -->
-  @if (activeTab() === 'directory') {
-    <div class="toolbar">
-      <input type="search" class="search grow" placeholder="Search name, email, employee ID…"
-        [ngModel]="search()" (ngModelChange)="search.set($event)" name="q" />
-      <select [ngModel]="roleFilter()" (ngModelChange)="roleFilter.set($event); loadStaff()" name="roleF">
-        <option value="">All roles</option>
-        <option value="teacher">Teachers</option>
-        <option value="admin">Administrators</option>
-        <option value="principal">Principals</option>
-      </select>
-      <select [ngModel]="statusFilter()" (ngModelChange)="statusFilter.set($event); loadStaff()" name="statusF">
-        <option value="active">Active only</option>
-        <option value="all">All staff</option>
-        <option value="inactive">Inactive only</option>
-      </select>
-    </div>
-
-    @if (loading()) {
-      <div class="loading">Loading staff…</div>
-    } @else if (filteredStaff().length) {
-      <div class="staff-listview">
-        <div class="listview-header" aria-hidden="true">
-          <span class="col-avatar"></span>
-          <span class="col-id">Employee ID</span>
-          <span class="col-name">Name</span>
-          <span class="col-role">Role</span>
-          <span class="col-dept">Department</span>
-          <span class="col-contact">Contact</span>
-          <span class="col-status">Status</span>
-          <span class="col-actions">Actions</span>
-        </div>
-        <ul class="listview-body">
-          @for (s of filteredStaff(); track s.id) {
-            <li class="staff-list-item" [class.inactive]="!s.isActive">
-              <div class="col-avatar">
-                <span class="avatar" [attr.data-role]="s.user.role">
-                  {{ s.user.firstName.charAt(0) }}{{ s.user.lastName.charAt(0) }}
-                </span>
-              </div>
-              <div class="col-id">
-                <code class="emp-id">{{ s.employeeNumber }}</code>
-              </div>
-              <div class="col-name">
-                <strong class="list-name">{{ fullName(s) }}</strong>
-                @if (s.qualification) {
-                  <small class="list-sub">{{ s.qualification }}</small>
-                }
-              </div>
-              <div class="col-role">
-                <span class="role-badge" [attr.data-role]="s.user.role">{{ roleLabel(s.user.role) }}</span>
-              </div>
-              <div class="col-dept">
-                <span>{{ s.department || '—' }}</span>
-                @if (s.hireDate) {
-                  <small class="list-sub">Since {{ s.hireDate }}</small>
-                }
-              </div>
-              <div class="col-contact">
-                <span class="contact-line">{{ s.user.email }}</span>
-                <small class="list-sub">{{ s.user.phone || 'No phone' }}</small>
-              </div>
-              <div class="col-status">
-                @if (s.isActive) {
-                  <span class="status-pill active">Active</span>
-                } @else {
-                  <span class="status-pill inactive">Inactive</span>
-                }
-              </div>
-              <div class="col-actions">
-                <button type="button" class="icon-btn edit" (click)="startEdit(s)" title="Edit" aria-label="Edit staff">
-                  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-                    <path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1.003 1.003 0 0 0 0-1.42l-2.34-2.34a1.003 1.003 0 0 0-1.42 0l-1.83 1.83 3.75 3.75 1.84-1.82z"/>
-                  </svg>
-                </button>
-                <button type="button" class="icon-btn toggle" (click)="toggleActive(s)"
-                  [title]="s.isActive ? 'Deactivate' : 'Reactivate'"
-                  [attr.aria-label]="s.isActive ? 'Deactivate staff' : 'Reactivate staff'">
-                  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-                    @if (s.isActive) {
-                      <path fill="currentColor" d="M16 9v10H8V9H6v12h12V9h-2zm-3-4V3H9v2H4v2h16V5h-5z"/>
-                    } @else {
-                      <path fill="currentColor" d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
-                    }
-                  </svg>
-                </button>
-              </div>
-            </li>
-          }
-        </ul>
-        <p class="listview-footer">{{ filteredStaff().length }} staff record(s) shown</p>
-      </div>
-    } @else {
-      <div class="empty">
-        <span class="empty-icon">👩‍🏫</span>
-        <h3>No staff found</h3>
-        <p>Add your first staff member to get started.</p>
-        <button type="button" class="btn-primary" (click)="setTab('add')">Add Staff</button>
-      </div>
+  <div class="staff-page">
+    @if (toast(); as t) {
+      <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>
     }
-  }
 
-  <!-- ADD STAFF -->
-  @if (activeTab() === 'add') {
-    <section class="panel">
-      <div class="panel-head">
-        <div>
-          <h2>Add New Staff Member</h2>
-          <p class="subtitle">Creates a portal login. Default password is <code>Teacher123!</code> if left blank.</p>
-        </div>
-        <div class="progress-card" aria-label="Staff form completion">
-          <div class="progress-meta">
-            <span>Completion</span>
-            <strong>{{ addFormProgress() }}%</strong>
-          </div>
-          <div class="progress-track"><div class="progress-fill" [style.width.%]="addFormProgress()"></div></div>
-        </div>
-      </div>
-
-      <div class="emp-preview">
-        <label>Employee ID (auto-generated)</label>
-        <div class="emp-badge">{{ nextEmployeeId() || 'EMP------' }}</div>
-      </div>
-
-      <form class="add-form" (ngSubmit)="addStaff()">
-        <div class="form-intro">{{ roleHint() }}</div>
-        <div class="form-grid">
-          <div class="field">
-            <label>First Name *</label>
-            <input [(ngModel)]="newStaff.firstName" name="nfn" required placeholder="Enter first name" autocomplete="given-name" />
-          </div>
-          <div class="field">
-            <label>Last Name *</label>
-            <input [(ngModel)]="newStaff.lastName" name="nln" required placeholder="Enter last name" autocomplete="family-name" />
-          </div>
-          <div class="field">
-            <label>Email *</label>
-            <input type="email" [(ngModel)]="newStaff.email" name="nem" required placeholder="name@schoolpro.ac.zw" autocomplete="email" />
-          </div>
-          <div class="field">
-            <label>Phone</label>
-            <input [(ngModel)]="newStaff.phone" name="nph" placeholder="+263..." autocomplete="tel" />
-          </div>
-          <div class="field">
-            <label>Role *</label>
-            <select [(ngModel)]="newStaff.role" name="nrole">
-              <option value="teacher">Teacher</option>
-              <option value="admin">Administrator</option>
-              <option value="principal">Principal</option>
-            </select>
-          </div>
-          <div class="field">
-            <label>Department</label>
-            <input [(ngModel)]="newStaff.department" name="ndept" placeholder="e.g. Sciences" />
-          </div>
-          <div class="field">
-            <label>Qualification</label>
-            <input [(ngModel)]="newStaff.qualification" name="nqual" placeholder="e.g. B.Ed" />
-          </div>
-          <div class="field">
-            <label>Hire Date</label>
-            <input type="date" [(ngModel)]="newStaff.hireDate" name="nhire" />
-          </div>
-          <div class="field">
-            <label>Initial Password</label>
-            <div class="password-field">
-              <input
-                [type]="showInitialPassword() ? 'text' : 'password'"
-                [(ngModel)]="newStaff.password"
-                name="npw"
-                placeholder="Leave blank for default"
-                autocomplete="new-password"
-              />
-              <button type="button" class="toggle-pw" (click)="toggleInitialPasswordVisibility()">
-                {{ showInitialPassword() ? 'Hide' : 'Show' }}
-              </button>
-            </div>
-          </div>
-        </div>
-        <button type="submit" class="btn-primary btn-lg modern-submit" [disabled]="submitting()">
-          {{ submitting() ? 'Adding…' : 'Add Staff Member' }}
-        </button>
-      </form>
-    </section>
-  }
-
-  <!-- ATTENDANCE -->
-  @if (activeTab() === 'attendance') {
-    <section class="panel">
-      <div class="attendance-head">
-        <div>
-          <h2>Staff Attendance</h2>
-          <p class="subtitle">Mark daily attendance for all active staff</p>
-        </div>
-        <div class="date-row">
-          <label>Date</label>
-          <input type="date" [(ngModel)]="attendanceDate" (ngModelChange)="loadAttendanceForDate()" name="attDate" />
-          <button type="button" class="btn-primary" [disabled]="submitting()" (click)="saveAttendance()">
-            {{ submitting() ? 'Saving…' : 'Save Attendance' }}
+    <header class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">Human Resources</p>
+        <h2>Staff directory</h2>
+        <p class="hero-sub">
+          Manage teachers, administrators, and principals. Track daily attendance and export your staff roster.
+        </p>
+        <div class="hero-actions">
+          <button type="button" class="primary-action" (click)="openRegister()">Register staff</button>
+          <button type="button" class="secondary-action" (click)="setTab('attendance')">Mark attendance</button>
+          <button type="button" class="refresh-action" (click)="refreshList()" [disabled]="loading() || refreshing()">
+            {{ refreshing() ? 'Refreshing…' : 'Refresh' }}
           </button>
         </div>
       </div>
+      <div class="kpi-grid">
+        <article class="kpi">
+          <span class="kpi-icon">👥</span>
+          <div>
+            <strong>{{ stats().active }}</strong>
+            <span>Active</span>
+            <small>{{ stats().total }} total</small>
+          </div>
+        </article>
+        <article class="kpi accent">
+          <span class="kpi-icon">👩‍🏫</span>
+          <div>
+            <strong>{{ stats().teachers }}</strong>
+            <span>Teachers</span>
+          </div>
+        </article>
+        <article class="kpi">
+          <span class="kpi-icon">🛡️</span>
+          <div>
+            <strong>{{ stats().admins + stats().principals }}</strong>
+            <span>Leadership</span>
+            <small>{{ stats().principals }} principal{{ stats().principals === 1 ? '' : 's' }}</small>
+          </div>
+        </article>
+        <article class="kpi ok">
+          <span class="kpi-icon">✨</span>
+          <div>
+            <strong>{{ stats().recentHires }}</strong>
+            <span>New (30 days)</span>
+          </div>
+        </article>
+      </div>
+    </header>
 
-      <div class="attendance-grid">
-        @for (s of activeStaff(); track s.id) {
-          <div class="att-row">
-            <div class="att-info">
-              <code>{{ s.employeeNumber }}</code>
-              <strong>{{ fullName(s) }}</strong>
-              <small>{{ roleLabel(s.user.role) }}</small>
+    <section class="list-shell">
+      <nav class="tab-bar">
+        <button type="button" [class.active]="activeTab() === 'directory'" (click)="setTab('directory')">
+          Directory
+          <span class="tab-count">{{ stats().total }}</span>
+        </button>
+        <button type="button" [class.active]="activeTab() === 'attendance'" (click)="setTab('attendance')">
+          Attendance
+          <span class="tab-count">{{ stats().active }}</span>
+        </button>
+      </nav>
+
+      @if (activeTab() === 'directory') {
+        <div class="list-toolbar">
+          <div class="search-wrap">
+            <span class="search-icon" aria-hidden="true">🔍</span>
+            <input
+              type="search"
+              class="search-input"
+              placeholder="Search name, email, employee ID, department…"
+              [ngModel]="search()"
+              (ngModelChange)="search.set($event)"
+              name="q"
+            />
+            @if (search()) {
+              <button type="button" class="clear-search" (click)="search.set('')" aria-label="Clear search">×</button>
+            }
+          </div>
+
+          <div class="toolbar-row">
+            <div class="filter-chips">
+              <button type="button" class="chip" [class.active]="statusFilter() === 'active'" (click)="setStatusFilter('active')">
+                Active
+              </button>
+              <button type="button" class="chip" [class.active]="statusFilter() === 'all'" (click)="setStatusFilter('all')">
+                All
+              </button>
+              <button type="button" class="chip" [class.active]="statusFilter() === 'inactive'" (click)="setStatusFilter('inactive')">
+                Inactive
+              </button>
+              <span class="chip-divider"></span>
+              <button type="button" class="chip" [class.active]="roleFilter() === 'teacher'" (click)="setRoleFilter('teacher')">
+                Teachers
+              </button>
+              <button type="button" class="chip" [class.active]="roleFilter() === 'admin'" (click)="setRoleFilter('admin')">
+                Admins
+              </button>
+              <button type="button" class="chip" [class.active]="roleFilter() === 'principal'" (click)="setRoleFilter('principal')">
+                Principals
+              </button>
+              @if (departments().length) {
+                <span class="chip-divider"></span>
+                <select class="dept-select" [ngModel]="departmentFilter()" (ngModelChange)="departmentFilter.set($event)" name="deptF">
+                  <option value="">All departments</option>
+                  @for (d of departments(); track d) {
+                    <option [value]="d">{{ d }}</option>
+                  }
+                </select>
+              }
             </div>
-            <div class="att-btns">
-              @for (st of ['present', 'late', 'absent', 'excused']; track st) {
-                <button type="button" class="att-chip" [attr.data-s]="st"
-                  [class.active]="attendanceMarks()[s.id] === st"
-                  (click)="setAttendance(s.id, $any(st))">
-                  {{ st }}
-                </button>
+            <div class="toolbar-actions">
+              <select class="sort-select" [ngModel]="sortBy()" (ngModelChange)="sortBy.set($event)" name="sort">
+                @for (opt of sortOptions; track opt.value) {
+                  <option [value]="opt.value">{{ opt.label }}</option>
+                }
+              </select>
+              <button type="button" class="btn-outline btn-sm" (click)="exportCsv()" [disabled]="!sortedStaff().length">
+                Export CSV
+              </button>
+              <div class="view-toggle" role="group" aria-label="View mode">
+                <button type="button" class="view-btn" [class.active]="viewMode() === 'table'" (click)="viewMode.set('table')" title="Table view">☰</button>
+                <button type="button" class="view-btn" [class.active]="viewMode() === 'cards'" (click)="viewMode.set('cards')" title="Card view">▦</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="results-meta">
+            <span>Showing <strong>{{ sortedStaff().length }}</strong> staff</span>
+            @if (hasActiveFilters()) {
+              <button type="button" class="clear-filters" (click)="clearFilters()">Clear filters</button>
+            }
+          </div>
+        </div>
+
+        @if (loading()) {
+          <div class="loading-panel">
+            <div class="skeleton-grid">
+              @for (i of [1, 2, 3, 4, 5, 6]; track i) {
+                <div class="skeleton-card"></div>
               }
             </div>
           </div>
-        } @empty {
-          <p class="empty-inline">No active staff to mark attendance for.</p>
+        } @else if (!sortedStaff().length) {
+          <div class="empty-state">
+            <span class="empty-icon">👩‍🏫</span>
+            <h3>No staff found</h3>
+            <p>@if (hasActiveFilters()) { Try adjusting your filters. } @else { Add your first staff member to get started. }</p>
+            <button type="button" class="btn-primary" (click)="openRegister()">Register staff</button>
+          </div>
+        } @else if (viewMode() === 'cards') {
+          <div class="card-grid">
+            @for (s of sortedStaff(); track s.id) {
+              <article class="staff-card" [class.inactive]="!s.isActive" (click)="openProfile(s)">
+                <div class="card-top">
+                  <span class="avatar" [attr.data-role]="s.user.role">{{ initials(s) }}</span>
+                  <div class="card-head-text">
+                    <strong>{{ fullName(s) }}</strong>
+                    <code class="emp-id">{{ s.employeeNumber }}</code>
+                  </div>
+                  @if (s.isActive) {
+                    <span class="status-dot active" title="Active"></span>
+                  } @else {
+                    <span class="status-dot inactive" title="Inactive"></span>
+                  }
+                </div>
+                <div class="card-meta">
+                  <span class="role-badge" [attr.data-role]="s.user.role">{{ roleLabel(s.user.role) }}</span>
+                  <span class="pill">{{ s.department || 'No department' }}</span>
+                </div>
+                <p class="card-email">{{ s.user.email }}</p>
+                <div class="card-actions" (click)="$event.stopPropagation()">
+                  <button type="button" class="btn-ghost btn-sm" (click)="copyEmail(s.user.email)">Copy email</button>
+                  <button type="button" class="btn-outline btn-sm" (click)="startEdit(s)">Edit</button>
+                </div>
+              </article>
+            }
+          </div>
+        } @else {
+          <div class="staff-listview">
+            <div class="listview-header" aria-hidden="true">
+              <span class="col-avatar"></span>
+              <span class="col-id">Employee ID</span>
+              <span class="col-name">Name</span>
+              <span class="col-role">Role</span>
+              <span class="col-dept">Department</span>
+              <span class="col-contact">Contact</span>
+              <span class="col-status">Status</span>
+              <span class="col-actions">Actions</span>
+            </div>
+            <ul class="listview-body">
+              @for (s of sortedStaff(); track s.id) {
+                <li class="staff-list-item" [class.inactive]="!s.isActive">
+                  <div class="col-avatar">
+                    <button type="button" class="avatar-btn" (click)="openProfile(s)" [attr.aria-label]="'View ' + fullName(s)">
+                      <span class="avatar" [attr.data-role]="s.user.role">{{ initials(s) }}</span>
+                    </button>
+                  </div>
+                  <div class="col-id"><code class="emp-id">{{ s.employeeNumber }}</code></div>
+                  <div class="col-name">
+                    <button type="button" class="name-link" (click)="openProfile(s)">
+                      <strong class="list-name">{{ fullName(s) }}</strong>
+                    </button>
+                    @if (s.qualification) {
+                      <small class="list-sub">{{ s.qualification }}</small>
+                    }
+                  </div>
+                  <div class="col-role">
+                    <span class="role-badge" [attr.data-role]="s.user.role">{{ roleLabel(s.user.role) }}</span>
+                  </div>
+                  <div class="col-dept">
+                    <span>{{ s.department || '—' }}</span>
+                    @if (s.hireDate) {
+                      <small class="list-sub">Since {{ s.hireDate }}</small>
+                    }
+                  </div>
+                  <div class="col-contact">
+                    <span class="contact-line">{{ s.user.email }}</span>
+                    <small class="list-sub">{{ s.user.phone || 'No phone' }}</small>
+                  </div>
+                  <div class="col-status">
+                    @if (s.isActive) {
+                      <span class="status-pill active">Active</span>
+                    } @else {
+                      <span class="status-pill inactive">Inactive</span>
+                    }
+                  </div>
+                  <div class="col-actions">
+                    <button type="button" class="icon-btn" (click)="copyEmail(s.user.email)" title="Copy email" aria-label="Copy email">
+                      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                        <path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
+                      </svg>
+                    </button>
+                    <button type="button" class="icon-btn edit" (click)="startEdit(s)" title="Edit" aria-label="Edit staff">
+                      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                        <path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1.003 1.003 0 0 0 0-1.42l-2.34-2.34a1.003 1.003 0 0 0-1.42 0l-1.83 1.83 3.75 3.75 1.84-1.82z"/>
+                      </svg>
+                    </button>
+                    <button type="button" class="icon-btn toggle" (click)="requestDeactivate(s)"
+                      [title]="s.isActive ? 'Deactivate' : 'Reactivate'"
+                      [attr.aria-label]="s.isActive ? 'Deactivate staff' : 'Reactivate staff'">
+                      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                        @if (s.isActive) {
+                          <path fill="currentColor" d="M16 9v10H8V9H6v12h12V9h-2zm-3-4V3H9v2H4v2h16V5h-5z"/>
+                        } @else {
+                          <path fill="currentColor" d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+                        }
+                      </svg>
+                    </button>
+                  </div>
+                </li>
+              }
+            </ul>
+          </div>
         }
-      </div>
-    </section>
-  }
+      }
 
-  @if (editingStaff(); as staff) {
-    <div class="modal-backdrop" (click)="cancelEdit()">
-      <div class="modal" role="dialog" aria-labelledby="edit-staff-title" (click)="$event.stopPropagation()">
-        <header class="modal-head">
-          <div>
-            <h2 id="edit-staff-title">Edit Staff</h2>
-            <p class="modal-sub"><code class="emp-id">{{ staff.employeeNumber }}</code></p>
-          </div>
-          <button type="button" class="modal-close" (click)="cancelEdit()" aria-label="Close">×</button>
-        </header>
-        <form class="edit-form modal-form" (ngSubmit)="saveEdit()">
-          <div class="form-grid">
-            <div class="field">
-              <label>First Name *</label>
-              <input [(ngModel)]="editForm.firstName" name="efn" required />
+      @if (activeTab() === 'attendance') {
+        <div class="panel attendance-panel">
+          <div class="attendance-head">
+            <div>
+              <h3>Staff attendance</h3>
+              <p class="subtitle">Mark daily attendance for all active staff</p>
             </div>
-            <div class="field">
-              <label>Last Name *</label>
-              <input [(ngModel)]="editForm.lastName" name="eln" required />
-            </div>
-            <div class="field">
-              <label>Email</label>
-              <input [(ngModel)]="editForm.email" name="eem" type="email" />
-            </div>
-            <div class="field">
-              <label>Phone</label>
-              <input [(ngModel)]="editForm.phone" name="eph" />
-            </div>
-            <div class="field">
-              <label>Role</label>
-              <select [(ngModel)]="editForm.role" name="erole">
-                <option value="teacher">Teacher</option>
-                <option value="admin">Administrator</option>
-                <option value="principal">Principal</option>
-              </select>
-            </div>
-            <div class="field">
-              <label>Department</label>
-              <input [(ngModel)]="editForm.department" name="edept" />
-            </div>
-            <div class="field">
-              <label>Qualification</label>
-              <input [(ngModel)]="editForm.qualification" name="equal" />
-            </div>
-            <div class="field">
-              <label>Hire Date</label>
-              <input type="date" [(ngModel)]="editForm.hireDate" name="ehire" />
-            </div>
-            <div class="field span-2">
-              <label>New Password (optional)</label>
-              <input [(ngModel)]="editForm.password" name="epw" type="password" placeholder="Leave blank to keep current" />
+            <div class="date-row">
+              <label for="attDate">Date</label>
+              <input id="attDate" type="date" [(ngModel)]="attendanceDate" (ngModelChange)="loadAttendanceForDate()" name="attDate" />
+              <button type="button" class="btn-primary" [disabled]="submitting() || !activeStaff().length" (click)="saveAttendance()">
+                {{ submitting() ? 'Saving…' : 'Save attendance' }}
+              </button>
             </div>
           </div>
-          <div class="modal-actions">
-            <button type="button" class="btn-ghost" (click)="cancelEdit()">Cancel</button>
-            <button type="submit" class="btn-primary" [disabled]="submitting()">
-              {{ submitting() ? 'Saving…' : 'Save Changes' }}
+
+          @if (activeStaff().length) {
+            <div class="att-summary">
+              <div class="att-stat present">
+                <strong>{{ attendanceStats().present }}</strong>
+                <span>Present</span>
+              </div>
+              <div class="att-stat late">
+                <strong>{{ attendanceStats().late }}</strong>
+                <span>Late</span>
+              </div>
+              <div class="att-stat absent">
+                <strong>{{ attendanceStats().absent }}</strong>
+                <span>Absent</span>
+              </div>
+              <div class="att-stat excused">
+                <strong>{{ attendanceStats().excused }}</strong>
+                <span>Excused</span>
+              </div>
+              <div class="att-bulk">
+                <button type="button" class="btn-outline btn-sm" (click)="markAllAttendance('present')">All present</button>
+                <button type="button" class="btn-ghost btn-sm" (click)="markAllAttendance('absent')">All absent</button>
+              </div>
+            </div>
+
+            <div class="search-wrap compact">
+              <span class="search-icon" aria-hidden="true">🔍</span>
+              <input
+                type="search"
+                class="search-input"
+                placeholder="Filter staff for attendance…"
+                [ngModel]="attendanceSearch()"
+                (ngModelChange)="attendanceSearch.set($event)"
+                name="attQ"
+              />
+            </div>
+          }
+
+          <div class="attendance-grid">
+            @for (s of filteredAttendanceStaff(); track s.id) {
+              <div class="att-row">
+                <div class="att-info">
+                  <span class="avatar sm" [attr.data-role]="s.user.role">{{ initials(s) }}</span>
+                  <div>
+                    <code>{{ s.employeeNumber }}</code>
+                    <strong>{{ fullName(s) }}</strong>
+                    <small>{{ roleLabel(s.user.role) }} · {{ s.department || '—' }}</small>
+                  </div>
+                </div>
+                <div class="att-btns">
+                  @for (st of attendanceStatuses; track st) {
+                    <button
+                      type="button"
+                      class="att-chip"
+                      [attr.data-s]="st"
+                      [class.active]="attendanceMarks()[s.id] === st"
+                      (click)="setAttendance(s.id, st)"
+                    >
+                      {{ attendanceLabel(st) }}
+                    </button>
+                  }
+                </div>
+              </div>
+            } @empty {
+              <p class="empty-inline">No active staff to mark attendance for.</p>
+            }
+          </div>
+        </div>
+      }
+    </section>
+  </div>
+</app-portal-layout>
+
+@if (registerDrawerOpen()) {
+  <div class="register-drawer-backdrop" (click)="closeRegister()"></div>
+  <aside class="register-drawer" role="dialog" aria-labelledby="register-staff-title">
+    <div class="drawer-head">
+      <div>
+        <p class="eyebrow drawer-eyebrow">New staff</p>
+        <h2 id="register-staff-title">Register staff</h2>
+        <p class="drawer-sub">Required fields are marked with *</p>
+      </div>
+      <button type="button" class="drawer-close" (click)="closeRegister()" aria-label="Close">×</button>
+    </div>
+
+    <form class="drawer-body" (ngSubmit)="addStaff()">
+      <div class="reg-progress" aria-label="Registration completion progress">
+        <div class="progress-meta">
+          <span>Completion</span>
+          <strong>{{ addFormProgress() }}%</strong>
+        </div>
+        <div class="progress-track" role="presentation">
+          <div class="progress-fill" [style.width.%]="addFormProgress()"></div>
+        </div>
+      </div>
+
+      <div class="staff-id-preview">
+        <label>Employee ID (auto-generated)</label>
+        <div class="id-badge">{{ nextEmployeeId() || 'EMP------' }}</div>
+      </div>
+
+      <div class="section-title">
+        <h3>Staff details</h3>
+        <p>{{ roleHint() }} Default password is <code>Teacher123!</code> if left blank.</p>
+      </div>
+
+      <div class="form-grid drawer-form-grid">
+        <div class="field">
+          <label>First name *</label>
+          <input [(ngModel)]="newStaff.firstName" name="nfn" required placeholder="Enter first name" autocomplete="given-name" />
+        </div>
+        <div class="field">
+          <label>Last name *</label>
+          <input [(ngModel)]="newStaff.lastName" name="nln" required placeholder="Enter last name" autocomplete="family-name" />
+        </div>
+        <div class="field">
+          <label>Email *</label>
+          <input type="email" [(ngModel)]="newStaff.email" name="nem" required placeholder="name@schoolpro.ac.zw" autocomplete="email" />
+        </div>
+        <div class="field">
+          <label>Phone</label>
+          <input [(ngModel)]="newStaff.phone" name="nph" placeholder="+263…" autocomplete="tel" />
+        </div>
+        <div class="field">
+          <label>Role *</label>
+          <select [(ngModel)]="newStaff.role" name="nrole">
+            <option value="teacher">Teacher</option>
+            <option value="admin">Administrator</option>
+            <option value="principal">Principal</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Department</label>
+          <input [(ngModel)]="newStaff.department" name="ndept" placeholder="e.g. Sciences" list="dept-suggestions-register" />
+          <datalist id="dept-suggestions-register">
+            @for (d of departments(); track d) {
+              <option [value]="d"></option>
+            }
+          </datalist>
+        </div>
+        <div class="field">
+          <label>Qualification</label>
+          <input [(ngModel)]="newStaff.qualification" name="nqual" placeholder="e.g. B.Ed" />
+        </div>
+        <div class="field">
+          <label>Hire date *</label>
+          <input type="date" [(ngModel)]="newStaff.hireDate" name="nhire" />
+        </div>
+        <div class="field span-2">
+          <label>Initial password</label>
+          <div class="password-field">
+            <input
+              [type]="showInitialPassword() ? 'text' : 'password'"
+              [(ngModel)]="newStaff.password"
+              name="npw"
+              placeholder="Leave blank for default"
+              autocomplete="new-password"
+            />
+            <button type="button" class="toggle-pw" (click)="toggleInitialPasswordVisibility()">
+              {{ showInitialPassword() ? 'Hide' : 'Show' }}
             </button>
           </div>
-        </form>
+        </div>
       </div>
-    </div>
-  }
 
-</app-portal-layout>
+      <div class="drawer-foot">
+        <button type="button" class="btn-secondary" (click)="closeRegister()">Cancel</button>
+        <button type="submit" class="btn-primary" [disabled]="submitting()">
+          {{ submitting() ? 'Registering…' : 'Register staff' }}
+        </button>
+      </div>
+    </form>
+  </aside>
+}
+
+@if (profileStaff(); as s) {
+      <div class="drawer-backdrop" (click)="closeProfile()">
+        <aside class="profile-drawer" role="dialog" aria-labelledby="profile-title" (click)="$event.stopPropagation()">
+          <header class="drawer-head">
+            <span class="avatar lg" [attr.data-role]="s.user.role">{{ initials(s) }}</span>
+            <div>
+              <h2 id="profile-title">{{ fullName(s) }}</h2>
+              <code class="emp-id">{{ s.employeeNumber }}</code>
+            </div>
+            <button type="button" class="modal-close" (click)="closeProfile()" aria-label="Close">×</button>
+          </header>
+          <div class="drawer-body">
+            <div class="detail-grid">
+              <div><span class="lbl">Role</span><span class="role-badge" [attr.data-role]="s.user.role">{{ roleLabel(s.user.role) }}</span></div>
+              <div><span class="lbl">Status</span>
+                @if (s.isActive) { <span class="status-pill active">Active</span> }
+                @else { <span class="status-pill inactive">Inactive</span> }
+              </div>
+              <div><span class="lbl">Department</span><strong>{{ s.department || '—' }}</strong></div>
+              <div><span class="lbl">Qualification</span><strong>{{ s.qualification || '—' }}</strong></div>
+              <div><span class="lbl">Hire date</span><strong>{{ s.hireDate || '—' }}</strong></div>
+              <div><span class="lbl">Email</span><a class="email-link" [href]="'mailto:' + s.user.email">{{ s.user.email }}</a></div>
+              <div><span class="lbl">Phone</span><strong>{{ s.user.phone || '—' }}</strong></div>
+            </div>
+          </div>
+          <footer class="drawer-actions">
+            <button type="button" class="btn-ghost" (click)="copyEmail(s.user.email)">Copy email</button>
+            <button type="button" class="btn-outline" (click)="startEdit(s)">Edit profile</button>
+            <button type="button" class="btn-danger-outline" (click)="requestDeactivate(s)">
+              {{ s.isActive ? 'Deactivate' : 'Reactivate' }}
+            </button>
+          </footer>
+        </aside>
+      </div>
+    }
+
+    @if (editingStaff(); as staff) {
+      <div class="modal-backdrop" (click)="cancelEdit()">
+        <div class="modal" role="dialog" aria-labelledby="edit-staff-title" (click)="$event.stopPropagation()">
+          <header class="modal-head">
+            <div>
+              <h2 id="edit-staff-title">Edit staff</h2>
+              <p class="modal-sub"><code class="emp-id">{{ staff.employeeNumber }}</code></p>
+            </div>
+            <button type="button" class="modal-close" (click)="cancelEdit()" aria-label="Close">×</button>
+          </header>
+          <form class="edit-form modal-form" (ngSubmit)="saveEdit()">
+            <div class="form-grid">
+              <div class="field">
+                <label>First name *</label>
+                <input [(ngModel)]="editForm.firstName" name="efn" required />
+              </div>
+              <div class="field">
+                <label>Last name *</label>
+                <input [(ngModel)]="editForm.lastName" name="eln" required />
+              </div>
+              <div class="field">
+                <label>Email</label>
+                <input [(ngModel)]="editForm.email" name="eem" type="email" />
+              </div>
+              <div class="field">
+                <label>Phone</label>
+                <input [(ngModel)]="editForm.phone" name="eph" />
+              </div>
+              <div class="field">
+                <label>Role</label>
+                <select [(ngModel)]="editForm.role" name="erole">
+                  <option value="teacher">Teacher</option>
+                  <option value="admin">Administrator</option>
+                  <option value="principal">Principal</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>Department</label>
+                <input [(ngModel)]="editForm.department" name="edept" list="dept-suggestions-edit" />
+                <datalist id="dept-suggestions-edit">
+                  @for (d of departments(); track d) {
+                    <option [value]="d"></option>
+                  }
+                </datalist>
+              </div>
+              <div class="field">
+                <label>Qualification</label>
+                <input [(ngModel)]="editForm.qualification" name="equal" />
+              </div>
+              <div class="field">
+                <label>Hire date</label>
+                <input type="date" [(ngModel)]="editForm.hireDate" name="ehire" />
+              </div>
+              <div class="field span-2">
+                <label>New password (optional)</label>
+                <input [(ngModel)]="editForm.password" name="epw" type="password" placeholder="Leave blank to keep current" />
+              </div>
+            </div>
+            <div class="modal-actions">
+              <button type="button" class="btn-ghost" (click)="cancelEdit()">Cancel</button>
+              <button type="submit" class="btn-primary" [disabled]="submitting()">
+                {{ submitting() ? 'Saving…' : 'Save changes' }}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    }
+
+    @if (deactivateTarget(); as target) {
+      <div class="modal-backdrop" (click)="cancelDeactivate()">
+        <div class="modal modal-sm confirm-modal" role="alertdialog" (click)="$event.stopPropagation()">
+          <h2>Deactivate staff member?</h2>
+          <p>
+            <strong>{{ fullName(target) }}</strong> ({{ target.employeeNumber }}) will lose portal access until reactivated.
+          </p>
+          <div class="modal-actions">
+            <button type="button" class="btn-ghost" (click)="cancelDeactivate()">Cancel</button>
+            <button type="button" class="btn-danger" (click)="confirmDeactivate()">Deactivate</button>
+          </div>
+        </div>
+      </div>
+    }

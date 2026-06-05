@@ -13,6 +13,7 @@ import financeRoutes from './routes/finance.routes';
 import academicsRoutes from './routes/academics.routes';
 import adminRoutes from './routes/admin.routes';
 import dashboardRoutes from './routes/dashboard.routes';
+import payrollRoutes from './routes/payroll.routes';
 
 const app = express();
 
@@ -54,6 +55,7 @@ app.use('/api/finance', financeRoutes);
 app.use('/api/academics', academicsRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/payroll', payrollRoutes);
 
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error(err);

@@ -36,6 +36,10 @@ import { SchoolFee } from './SchoolFee';
 import { ClassPromotionRule } from './ClassPromotionRule';
 import { ResultsPublication } from './ResultsPublication';
 import { StudentTermBalance } from './StudentTermBalance';
+import { StaffPayrollProfile } from './StaffPayrollProfile';
+import { PayrollRun } from './PayrollRun';
+import { Payslip } from './Payslip';
+import { StaffLeaveBalance } from './StaffLeaveBalance';
 
 export const entities = [
   User,
@@ -76,6 +80,10 @@ export const entities = [
   TuckshopItem,
   TuckshopSale,
   UniformSale,
+  StaffPayrollProfile,
+  PayrollRun,
+  Payslip,
+  StaffLeaveBalance,
 ];
 
 export * from './enums';
@@ -118,5 +126,9 @@ export {
   ClassPromotionRule,
   ResultsPublication,
   StudentTermBalance,
+  StaffPayrollProfile,
+  PayrollRun,
+  Payslip,
+  StaffLeaveBalance,
 };
 

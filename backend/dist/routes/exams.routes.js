@@ -327,6 +327,28 @@ router.get('/mark-sheet', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.
         return res.status(400).json({ message: err instanceof Error ? err.message : 'Failed to build mark sheet' });
     }
 });
+router.get('/results-analysis/student', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.DIRECTOR, enums_1.UserRole.TEACHER), async (req, res) => {
+    const { examTypeId, termId, classId, studentId } = req.query;
+    if (!examTypeId || !termId || !classId || !studentId) {
+        return res.status(400).json({
+            message: 'examTypeId, termId, classId, and studentId are required',
+        });
+    }
+    try {
+        const analysis = await (0, results_analysis_service_1.buildStudentSubjectAnalysis)({
+            examTypeId: examTypeId,
+            termId: termId,
+            classId: classId,
+            studentId: studentId,
+        });
+        res.json(analysis);
+    }
+    catch (err) {
+        return res.status(400).json({
+            message: err instanceof Error ? err.message : 'Failed to build student subject analysis',
+        });
+    }
+});
 router.get('/results-analysis', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.DIRECTOR, enums_1.UserRole.TEACHER), async (req, res) => {
     const { examTypeId, termId, classId, topN } = req.query;
     if (!examTypeId || !termId || !classId) {
@@ -633,6 +655,9 @@ router.get('/report-cards/:studentId/:termId/pdf', (0, auth_1.authorize)(enums_1
         schoolName: settings?.schoolName || 'School Pro Academy',
         tagline: settings?.tagline || undefined,
         logoUrl: settings?.logoUrl || undefined,
+        address: settings?.address || undefined,
+        phone: settings?.phone || undefined,
+        website: settings?.website || undefined,
         studentName: `${report.student.firstName} ${report.student.lastName}`,
         admissionNumber: report.student.admissionNumber,
         className: report.student.schoolClass?.name || '',

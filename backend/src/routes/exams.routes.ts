@@ -18,7 +18,7 @@ import { loadSchoolBranding } from '../services/school-branding.service';
 import { DEFAULT_GRADE_BOUNDARIES } from '../types/grade-boundaries';
 import { generateMarkSheetPdf, generateRankingsPdf, generateReportCardPdf, generateResultsAnalysisPdf } from '../utils/pdf';
 import { buildMarkSheet } from '../services/mark-sheet.service';
-import { buildResultsAnalysis } from '../services/results-analysis.service';
+import { buildResultsAnalysis, buildStudentSubjectAnalysis } from '../services/results-analysis.service';
 import { buildRankings, RankingType } from '../services/ranking.service';
 import { reportCardPdfFilename } from '../utils/helpers';
 import { relations } from '../utils/typeorm-helpers';
@@ -397,6 +397,32 @@ router.get(
 );
 
 router.get(
+  '/results-analysis/student',
+  authorize(UserRole.ADMIN, UserRole.PRINCIPAL, UserRole.DIRECTOR, UserRole.TEACHER),
+  async (req, res: Response) => {
+    const { examTypeId, termId, classId, studentId } = req.query;
+    if (!examTypeId || !termId || !classId || !studentId) {
+      return res.status(400).json({
+        message: 'examTypeId, termId, classId, and studentId are required',
+      });
+    }
+    try {
+      const analysis = await buildStudentSubjectAnalysis({
+        examTypeId: examTypeId as string,
+        termId: termId as string,
+        classId: classId as string,
+        studentId: studentId as string,
+      });
+      res.json(analysis);
+    } catch (err) {
+      return res.status(400).json({
+        message: err instanceof Error ? err.message : 'Failed to build student subject analysis',
+      });
+    }
+  },
+);
+
+router.get(
   '/results-analysis',
   authorize(UserRole.ADMIN, UserRole.PRINCIPAL, UserRole.DIRECTOR, UserRole.TEACHER),
   async (req, res: Response) => {
@@ -755,6 +781,9 @@ router.get('/report-cards/:studentId/:termId/pdf', authorize(UserRole.ADMIN, Use
     schoolName: settings?.schoolName || 'School Pro Academy',
     tagline: settings?.tagline || undefined,
     logoUrl: settings?.logoUrl || undefined,
+    address: settings?.address || undefined,
+    phone: settings?.phone || undefined,
+    website: settings?.website || undefined,
     studentName: `${report.student.firstName} ${report.student.lastName}`,
     admissionNumber: report.student.admissionNumber,
     className: report.student.schoolClass?.name || '',

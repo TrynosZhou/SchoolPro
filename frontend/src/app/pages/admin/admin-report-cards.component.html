@@ -1,353 +1,543 @@
 <app-portal-layout [portalTitle]="portalTitle()" pageTitle="Report Cards" [navSections]="navSections()" [navItems]="navItems()">
 
-  @if (toast(); as t) {
-    <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>
-  }
-
-  <header class="rc-page-header card">
-    <div class="rc-page-header-text">
-      <p class="eyebrow">Examinations · Results</p>
-      <h1 class="rc-page-title">Class Report Cards</h1>
-      <p class="rc-page-subtitle">{{ schoolName() }}</p>
-      @if (schoolBranding()?.tagline) {
-        <p class="rc-page-tagline">{{ schoolBranding()!.tagline }}</p>
-      }
-    </div>
-    <div class="rc-page-header-actions">
-      <a routerLink="/admin/exams" class="header-link">Exam marks →</a>
-      <a routerLink="/admin/settings" class="header-link">Grade boundaries →</a>
-      @if (hasLoaded() && reports().length) {
-        <span class="live-pill"><span class="pulse"></span> {{ reports().length }} generated</span>
-      }
-    </div>
-    @if (hasLoaded() && reports().length) {
-      <div class="header-mini-stats">
-        <span>{{ stats().count }} students</span>
-        <span>Class avg {{ stats().classAvg | number:'1.1-1' }}%</span>
-        <span>Top {{ stats().topMark | number:'1.1-1' }}%</span>
-        <span>{{ stats().honourCount }} top 3</span>
-      </div>
+  <div class="rc-page">
+    @if (toast(); as t) {
+      <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>
     }
-  </header>
 
-  <div class="workflow-steps">
-    <div class="step" [class.done]="filters.examTypeId"><span class="step-num">1</span> Exam type</div>
-    <div class="step-line"></div>
-    <div class="step" [class.done]="filters.termId"><span class="step-num">2</span> Term</div>
-    <div class="step-line"></div>
-    <div class="step" [class.done]="filters.classId"><span class="step-num">3</span> Class</div>
-    <div class="step-line"></div>
-    <div class="step" [class.done]="hasLoaded()"><span class="step-num">4</span> Load & review</div>
-  </div>
-
-  <section class="filters-card card">
-    <div class="filters-row">
-      <label class="field">
-        <span>Exam type</span>
-        <select [(ngModel)]="filters.examTypeId" name="examType" (ngModelChange)="onFilterChange()">
-          <option value="">— Select —</option>
-          @for (t of examTypes(); track t.id) {
-            <option [value]="t.id">{{ t.name }}</option>
-          }
-        </select>
-      </label>
-      <label class="field">
-        <span>Term</span>
-        <select [(ngModel)]="filters.termId" name="term" (ngModelChange)="onFilterChange()">
-          <option value="">— Select —</option>
-          @for (t of terms(); track t.id) {
-            <option [value]="t.id">{{ t.name }}</option>
-          }
-        </select>
-      </label>
-      <label class="field">
-        <span>Class</span>
-        <select [(ngModel)]="filters.classId" name="class" (ngModelChange)="onFilterChange()">
-          <option value="">— Select —</option>
-          @for (c of classes(); track c.id) {
-            <option [value]="c.id">{{ c.name }}</option>
-          }
-        </select>
-      </label>
-      <button
-        type="button"
-        class="btn-load"
-        (click)="loadReportCards()"
-        [disabled]="loading() || !filtersReady()"
-      >
-        @if (loading()) {
-          <span class="btn-spinner"></span> Generating…
-        } @else {
-          Load report cards
+    <header class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">Examinations · Results</p>
+        <h2>Class Report Cards</h2>
+        <p class="hero-sub">
+          Generate ranked report cards for a class, review subject results and attendance, add remarks, and export or print summaries.
+        </p>
+        <p class="hero-school">{{ schoolName() }}</p>
+        @if (schoolBranding()?.tagline) {
+          <p class="hero-tagline">{{ schoolBranding()!.tagline }}</p>
         }
-      </button>
-    </div>
-  </section>
+      </div>
+      <div class="hero-actions">
+        <a [routerLink]="examsLink" class="hero-link">Exam marks →</a>
+        @if (isAdminPortal) {
+          <a [routerLink]="settingsLink" class="hero-link">Grade boundaries →</a>
+        }
+        @if (!isTeacherPortal) {
+          <a [routerLink]="markSheetLink" class="hero-link">Mark sheet →</a>
+        }
+        @if (hasLoaded() && reports().length) {
+          <span class="live-pill"><span class="pulse"></span> {{ reports().length }} loaded</span>
+        }
+      </div>
+    </header>
 
-  @if (hasLoaded()) {
-    @if (reports().length) {
-      <section class="kpi-grid">
-        <div class="kpi-card">
-          <span class="kpi-val">{{ stats().count }}</span>
-          <span class="kpi-lbl">Report cards</span>
+    <div class="workflow-steps">
+      <div class="step" [class.done]="filters.examTypeId"><span class="step-num">1</span> Exam type</div>
+      <div class="step-line"></div>
+      <div class="step" [class.done]="filters.termId"><span class="step-num">2</span> Term</div>
+      <div class="step-line"></div>
+      <div class="step" [class.done]="filters.classId"><span class="step-num">3</span> Class</div>
+      <div class="step-line"></div>
+      <div class="step" [class.done]="hasLoaded()"><span class="step-num">4</span> Load & review</div>
+    </div>
+
+    <section class="card filters-card">
+      <div class="filters-row">
+        <label class="field">
+          <span>Exam type</span>
+          <select [(ngModel)]="filters.examTypeId" name="examType" (ngModelChange)="onFilterChange()">
+            <option value="">— Select —</option>
+            @for (t of examTypes(); track t.id) {
+              <option [value]="t.id">{{ t.name }}</option>
+            }
+          </select>
+        </label>
+        <label class="field">
+          <span>Term</span>
+          <select [(ngModel)]="filters.termId" name="term" (ngModelChange)="onFilterChange()">
+            <option value="">— Select —</option>
+            @for (t of terms(); track t.id) {
+              <option [value]="t.id">{{ t.name }}{{ t.isCurrent ? ' (current)' : '' }}</option>
+            }
+          </select>
+        </label>
+        <label class="field">
+          <span>Class</span>
+          <select [(ngModel)]="filters.classId" name="class" (ngModelChange)="onFilterChange()">
+            <option value="">— Select —</option>
+            @for (c of classes(); track c.id) {
+              <option [value]="c.id">{{ c.name }}</option>
+            }
+          </select>
+        </label>
+        <button
+          type="button"
+          class="btn-load"
+          (click)="loadReportCards()"
+          [disabled]="loading() || !filtersReady()"
+        >
+          @if (loading()) {
+            <span class="btn-spinner"></span> Generating…
+          } @else {
+            Load report cards
+          }
+        </button>
+      </div>
+    </section>
+
+    @if (loading()) {
+      <section class="card loading-panel" aria-busy="true">
+        <div class="skeleton-kpis">
+          @for (i of [1, 2, 3, 4, 5, 6]; track i) {
+            <div class="skeleton-kpi"></div>
+          }
         </div>
-        <div class="kpi-card accent">
-          <span class="kpi-val">{{ stats().classAvg | number:'1.1-1' }}%</span>
-          <span class="kpi-lbl">Class average</span>
-        </div>
-        <div class="kpi-card gold">
-          <span class="kpi-val">{{ stats().topMark | number:'1.1-1' }}%</span>
-          <span class="kpi-lbl">Highest average</span>
-        </div>
-        <div class="kpi-card purple">
-          <span class="kpi-val">{{ stats().honourCount }}</span>
-          <span class="kpi-lbl">Top 3 positions</span>
+        <div class="skeleton-cards">
+          @for (i of [1, 2, 3]; track i) {
+            <div class="skeleton-card"></div>
+          }
         </div>
       </section>
+    } @else if (hasLoaded()) {
+      @if (reports().length) {
+        <section class="session-meta card">
+          <div>
+            <h3 class="session-title">{{ sessionLabel() }}</h3>
+            <p class="session-sub">Ranked by class position · remarks auto-save on blur</p>
+          </div>
+          @if (gradeDistribution().length) {
+            <div class="mini-grade-dist" aria-label="Grade distribution">
+              @for (g of gradeDistribution(); track g.grade) {
+                <span class="mini-grade-chip" [ngClass]="gradePillClass(g.grade)">
+                  {{ g.grade }} <strong>{{ g.count }}</strong>
+                </span>
+              }
+            </div>
+          }
+        </section>
 
-      @if (gradeDistribution().length) {
-        <section class="grade-dist card">
-          <h3>Grade distribution</h3>
-          <div class="dist-bars">
-            @for (g of gradeDistribution(); track g.grade) {
-              <div class="dist-row">
-                <span class="dist-grade">{{ g.grade }}</span>
-                <div class="dist-track">
-                  <div
-                    class="dist-fill"
-                    [style.width.%]="(g.count / maxGradeCount()) * 100"
-                  ></div>
+        <div class="kpi-grid">
+          <article class="kpi-card">
+            <span class="kpi-icon">👥</span>
+            <div>
+              <span class="kpi-val">{{ stats().count }}</span>
+              <span class="kpi-lbl">Report cards</span>
+            </div>
+          </article>
+          <article class="kpi-card accent">
+            <span class="kpi-icon">📊</span>
+            <div>
+              <span class="kpi-val">{{ stats().classAvg | number:'1.1-1' }}%</span>
+              <span class="kpi-lbl">Class average</span>
+            </div>
+          </article>
+          <article class="kpi-card gold">
+            <span class="kpi-icon">🏆</span>
+            <div>
+              <span class="kpi-val">{{ stats().honourCount }}</span>
+              <span class="kpi-lbl">Top 3 positions</span>
+            </div>
+          </article>
+          <article class="kpi-card ok">
+            <span class="kpi-icon">✓</span>
+            <div>
+              <span class="kpi-val">{{ stats().passRate | number:'1.0-1' }}%</span>
+              <span class="kpi-lbl">Full pass rate</span>
+            </div>
+          </article>
+          <article class="kpi-card purple">
+            <span class="kpi-icon">★</span>
+            <div>
+              <span class="kpi-val">{{ stats().topMark | number:'1.1-1' }}%</span>
+              <span class="kpi-lbl">Highest average</span>
+            </div>
+          </article>
+          <article class="kpi-card warn">
+            <span class="kpi-icon">⚠</span>
+            <div>
+              <span class="kpi-val">{{ stats().atRiskCount }}</span>
+              <span class="kpi-lbl">Below 50% avg</span>
+            </div>
+          </article>
+        </div>
+
+        @if (gradeDistribution().length) {
+          <section class="grade-dist card">
+            <h3>Grade distribution</h3>
+            <div class="dist-bars">
+              @for (g of gradeDistribution(); track g.grade) {
+                <div class="dist-row">
+                  <span class="dist-grade" [ngClass]="gradePillClass(g.grade)">{{ g.grade }}</span>
+                  <div class="dist-track">
+                    <div
+                      class="dist-fill"
+                      [ngClass]="gradePillClass(g.grade)"
+                      [style.width.%]="(g.count / maxGradeCount()) * 100"
+                    ></div>
+                  </div>
+                  <span class="dist-count">{{ g.count }}</span>
                 </div>
-                <span class="dist-count">{{ g.count }}</span>
+              }
+            </div>
+          </section>
+        }
+
+        <section class="card toolbar">
+          <div class="toolbar-top">
+            <div class="search-wrap">
+              <svg class="search-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2" />
+                <path d="M20 20l-3-3" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+              </svg>
+              <input
+                type="search"
+                placeholder="Search student or grade…"
+                [ngModel]="search()"
+                (ngModelChange)="search.set($event)"
+                name="search"
+              />
+            </div>
+            <div class="toolbar-actions">
+              <select class="sort-select" [ngModel]="sortBy()" (ngModelChange)="sortBy.set($event)" name="sort">
+                @for (opt of sortOptions; track opt.value) {
+                  <option [value]="opt.value">{{ opt.label }}</option>
+                }
+              </select>
+              <div class="view-toggle" role="group" aria-label="View mode">
+                <button type="button" [class.active]="viewMode() === 'table'" (click)="setViewMode('table')" title="Summary table">☰</button>
+                <button type="button" [class.active]="viewMode() === 'cards'" (click)="setViewMode('cards')" title="Full cards">▦</button>
+                <button type="button" [class.active]="viewMode() === 'compact'" (click)="setViewMode('compact')" title="Compact cards">≡</button>
               </div>
+              <button type="button" class="btn-ghost" (click)="expandAll()">Expand all</button>
+              <button type="button" class="btn-ghost" (click)="collapseAll()">Collapse all</button>
+              <button type="button" class="btn-ghost" (click)="exportSummaryCsv()" [disabled]="!filteredReports().length">Export CSV</button>
+              <button type="button" class="btn-ghost" (click)="printClassSummary()" [disabled]="!filteredReports().length">Print</button>
+              <button
+                type="button"
+                class="btn-ghost"
+                (click)="downloadAllPdfs()"
+                [disabled]="!filteredReports().length || bulkDownloading() || pdfLoading()"
+              >
+                {{ bulkDownloading() ? 'Downloading…' : 'All PDFs' }}
+              </button>
+            </div>
+          </div>
+          <div class="filter-chips">
+            <button type="button" class="chip" [class.active]="performanceFilter() === 'all'" (click)="performanceFilter.set('all')">
+              All ({{ filterCounts().all }})
+            </button>
+            <button type="button" class="chip gold" [class.active]="performanceFilter() === 'honour'" (click)="performanceFilter.set('honour')">
+              Top 3 ({{ filterCounts().honour }})
+            </button>
+            <button type="button" class="chip ok" [class.active]="performanceFilter() === 'high'" (click)="performanceFilter.set('high')">
+              High avg ≥80% ({{ filterCounts().high }})
+            </button>
+            <button type="button" class="chip warn" [class.active]="performanceFilter() === 'atRisk'" (click)="performanceFilter.set('atRisk')">
+              Below 50% ({{ filterCounts().atRisk }})
+            </button>
+            <button type="button" class="chip muted" [class.active]="performanceFilter() === 'needsRemarks'" (click)="performanceFilter.set('needsRemarks')">
+              Needs remarks ({{ filterCounts().needsRemarks }})
+            </button>
+          </div>
+          <div class="results-meta">
+            <span>Showing <strong>{{ filteredReports().length }}</strong> of {{ reports().length }} students</span>
+            @if (hasActiveFilters()) {
+              <button type="button" class="clear-filters" (click)="clearFilters()">Clear filters</button>
             }
           </div>
         </section>
-      }
 
-      <div class="toolbar card">
-        <div class="toolbar-left">
-          <strong class="session-label">{{ sessionLabel() }}</strong>
-          <span class="muted">{{ filteredReports().length }} shown</span>
-        </div>
-        <div class="toolbar-right">
-          <input
-            type="search"
-            class="search"
-            placeholder="Search student or grade…"
-            [ngModel]="search()"
-            (ngModelChange)="search.set($event)"
-            name="search"
-          />
-          <div class="view-toggle">
-            <button type="button" [class.active]="viewMode() === 'cards'" (click)="setViewMode('cards')">Cards</button>
-            <button type="button" [class.active]="viewMode() === 'compact'" (click)="setViewMode('compact')">Compact</button>
+        @if (!filteredReports().length) {
+          <div class="empty card">
+            <div class="empty-icon">🔍</div>
+            <h3>No report cards match</h3>
+            <p>Try adjusting your search or performance filter.</p>
+            <button type="button" class="btn-load" (click)="clearFilters()">Clear filters</button>
           </div>
-          <button type="button" class="btn-ghost" (click)="expandAll()">Expand all</button>
-          <button type="button" class="btn-ghost" (click)="collapseAll()">Collapse all</button>
-          <button type="button" class="btn-ghost" (click)="exportSummaryCsv()">Export CSV</button>
-        </div>
-      </div>
+        } @else if (viewMode() === 'table') {
+          <section class="card summary-table-wrap">
+            <table class="summary-table">
+              <thead>
+                <tr>
+                  <th class="num">Pos</th>
+                  <th>Student</th>
+                  <th class="num">Average</th>
+                  <th>Grade</th>
+                  <th>Subjects</th>
+                  <th class="num">Attendance</th>
+                  <th>Remarks</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (report of filteredReports(); track report.id) {
+                  <tr [ngClass]="'tier-' + averageTier(report.averageMark)">
+                    <td class="num">
+                      <span class="pos-badge" [class.top]="(report.classPosition || 0) <= 3">{{ report.classPosition ?? '—' }}</span>
+                    </td>
+                    <td class="student-cell">
+                      <strong>{{ report.student?.firstName }} {{ report.student?.lastName }}</strong>
+                      <code>{{ report.student?.admissionNumber }}</code>
+                    </td>
+                    <td class="num">
+                      @if (report.averageMark != null) {
+                        <span class="avg-value" [ngClass]="'tier-' + averageTier(report.averageMark)">
+                          {{ report.averageMark | number:'1.1-1' }}%
+                        </span>
+                      } @else {
+                        —
+                      }
+                    </td>
+                    <td>
+                      @if (report.overallGrade) {
+                        <span class="grade-pill" [ngClass]="gradePillClass(report.overallGrade)">{{ report.overallGrade }}</span>
+                      } @else {
+                        —
+                      }
+                    </td>
+                    <td>{{ subjectsPassedLabel(report.subjectsPassed, report.totalSubjects) }}</td>
+                    <td class="num">
+                      @if (report.attendance?.attendancePercent != null) {
+                        {{ report.attendance!.attendancePercent | number:'1.0-1' }}%
+                      } @else {
+                        —
+                      }
+                    </td>
+                    <td>
+                      <span class="remarks-pill" [class.complete]="(report.classTeacherRemarks || '').trim() && (report.principalRemarks || '').trim()">
+                        @if ((report.classTeacherRemarks || '').trim() && (report.principalRemarks || '').trim()) {
+                          Complete
+                        } @else {
+                          Pending
+                        }
+                      </span>
+                    </td>
+                    <td class="actions-cell">
+                      <button type="button" class="link-btn" (click)="scrollToReport(report.studentId)">Open</button>
+                      <button type="button" class="link-btn" (click)="previewPdf(report)" [disabled]="pdfLoading()">PDF</button>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </section>
+        } @else {
+          <div class="results-layout">
+            <aside class="jump-nav card" aria-label="Student navigation">
+              <h3>Class ranking</h3>
+              <ol class="jump-list">
+                @for (report of filteredReports(); track report.id) {
+                  <li>
+                    <button
+                      type="button"
+                      class="jump-item"
+                      [class.active]="activeStudentId() === report.studentId"
+                      (click)="scrollToReport(report.studentId)"
+                    >
+                      <span class="jump-pos" [class.top]="(report.classPosition || 0) <= 3">
+                        {{ report.classPosition }}
+                      </span>
+                      <span class="jump-name">{{ report.student?.lastName }}, {{ report.student?.firstName }}</span>
+                      <span class="jump-grade">{{ report.overallGrade || '—' }}</span>
+                    </button>
+                  </li>
+                }
+              </ol>
+            </aside>
 
-      <div class="results-layout">
-        <aside class="jump-nav card" aria-label="Student navigation">
-          <h3>Class ranking</h3>
-          <ol class="jump-list">
-            @for (report of filteredReports(); track report.id) {
-              <li>
-                <button
-                  type="button"
-                  class="jump-item"
-                  [class.active]="activeStudentId() === report.studentId"
-                  (click)="scrollToReport(report.studentId)"
+            <div class="report-sequence" [class.compact]="viewMode() === 'compact'">
+              @for (report of filteredReports(); track report.id) {
+                <article
+                  class="report-card card"
+                  [class.collapsed]="!isExpanded(report.id)"
+                  [attr.id]="'report-' + report.studentId"
                 >
-                  <span class="jump-pos" [class.top]="(report.classPosition || 0) <= 3">
-                    {{ report.classPosition }}
-                  </span>
-                  <span class="jump-name">{{ report.student?.lastName }}, {{ report.student?.firstName }}</span>
-                  <span class="jump-grade">{{ positionOutOfLabel(report.classPosition, report.classTotal) }}</span>
-                </button>
-              </li>
-            }
-          </ol>
-        </aside>
-
-        <div class="report-sequence" [class.compact]="viewMode() === 'compact'">
-          @for (report of filteredReports(); track report.id) {
-            <article
-              class="report-card card"
-              [class.collapsed]="!isExpanded(report.id)"
-              [attr.id]="'report-' + report.studentId"
-            >
-              <header class="report-card-head" (click)="toggleExpanded(report.id)">
-                <div class="report-head-main">
-                  <div class="report-brand-row">
-                    <div class="report-card-brand">
-                      @if (logoFullUrl()) {
-                        <img [src]="logoFullUrl()!" alt="School logo" class="report-school-logo" />
-                      } @else {
-                        <div class="report-school-logo placeholder" aria-hidden="true">🏫</div>
-                      }
-                    </div>
-                    <div class="report-brand-text">
-                      <h3 class="report-school-name">{{ schoolName() }}</h3>
-                    </div>
-                  </div>
-                  <div class="report-head-lower">
-                    <div class="student-block">
-                      <h2>{{ report.student?.firstName }} {{ report.student?.lastName }}</h2>
-                      <p class="meta">
-                        <span class="chip student-id-chip">Student ID: {{ report.student?.admissionNumber }}</span>
-                        <span class="chip">Class: {{ report.student?.schoolClass?.name || '—' }}</span>
-                        @if (report.classPosition) {
-                          <span class="chip grade-chip">Class Position: {{ positionOutOfLabel(report.classPosition, report.classTotal) }}</span>
-                        }
-                        @if (report.formPosition) {
-                          <span class="chip form-chip">Form Position: {{ positionOutOfLabel(report.formPosition, report.formTotal) }}</span>
-                        }
-                        @if (report.subjectsPassed != null && report.totalSubjects) {
-                          <span class="chip pass-chip">Subjects Passed: {{ subjectsPassedLabel(report.subjectsPassed, report.totalSubjects) }}</span>
-                        }
-                      </p>
-                    </div>
-                  </div>
-                </div>
-                <div class="head-actions" (click)="$event.stopPropagation()">
-                  <button type="button" class="btn-ghost" (click)="previewPdf(report)" [disabled]="pdfLoading()">
-                    Preview PDF
-                  </button>
-                  <button type="button" class="btn-primary-sm" (click)="downloadPdf(report)">Download</button>
-                  <span class="chevron" [class.open]="isExpanded(report.id)">▼</span>
-                </div>
-              </header>
-
-              @if (isExpanded(report.id)) {
-                <div class="report-body">
-                  @if (report.attendance) {
-                    <section class="attendance-panel">
-                      <h4>Attendance (term)</h4>
-                      @if (report.attendance.daysMarked > 0) {
-                        <div class="attendance-stats">
-                          <div class="att-stat"><span class="lbl">Days marked</span><strong>{{ report.attendance.daysMarked }}</strong></div>
-                          <div class="att-stat"><span class="lbl">Present</span><strong>{{ report.attendance.present }}</strong></div>
-                          <div class="att-stat"><span class="lbl">Late</span><strong>{{ report.attendance.late }}</strong></div>
-                          <div class="att-stat"><span class="lbl">Absent</span><strong>{{ report.attendance.absent }}</strong></div>
-                          <div class="att-stat"><span class="lbl">Excused</span><strong>{{ report.attendance.excused }}</strong></div>
-                          <div class="att-stat highlight">
-                            <span class="lbl">Attendance %</span>
-                            <strong>
-                              @if (report.attendance.attendancePercent != null) {
-                                {{ report.attendance.attendancePercent | number:'1.1-1' }}%
-                              } @else {
-                                —
-                              }
-                            </strong>
-                          </div>
+                  <header class="report-card-head" (click)="toggleExpanded(report.id)">
+                    <div class="report-head-main">
+                      <div class="report-brand-row">
+                        <div class="report-card-brand">
+                          @if (logoFullUrl()) {
+                            <img [src]="logoFullUrl()!" alt="School logo" class="report-school-logo" />
+                          } @else {
+                            <div class="report-school-logo placeholder" aria-hidden="true">🏫</div>
+                          }
                         </div>
-                      } @else {
-                        <p class="attendance-empty">No attendance records for this term.</p>
-                      }
-                    </section>
-                  }
-                  <div class="table-wrap">
-                    <table class="results-table">
-                      <thead>
-                        <tr>
-                          <th class="col-subject">Subject</th>
-                          <th class="col-code">Code</th>
-                          <th class="col-mark">Mark</th>
-                          <th class="col-grade">Grade</th>
-                          <th class="col-rank nowrap">Rank</th>
-                          <th class="col-avg nowrap">Mean</th>
-                          <th>Remarks</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        @for (row of report.subjectResults; track row.subject) {
-                          <tr>
-                            <td class="col-subject">{{ row.subjectName || row.subject }}</td>
-                            <td class="code col-code">{{ row.subjectCode || '—' }}</td>
-                            <td class="marks mark-cell">{{ row.marks }}</td>
-                            <td class="grade-cell"><span class="grade-pill">{{ row.grade }}</span></td>
-                            <td class="rank col-rank">{{ subjectPositionLabel(row.subjectPosition, row.subjectPositionTotal) }}</td>
-                            <td class="mean col-avg">{{ row.mean != null ? (row.mean | number:'1.1-1') : '—' }}</td>
-                            <td class="remarks">{{ row.remarks || '—' }}</td>
-                          </tr>
+                        <div class="report-brand-text">
+                          <h3 class="report-school-name">{{ schoolName() }}</h3>
+                        </div>
+                        @if (report.classPosition) {
+                          <span class="position-pill" [class.top]="report.classPosition <= 3">
+                            #{{ report.classPosition }}
+                          </span>
                         }
-                      </tbody>
-                      <tfoot>
-                        <tr class="average-row">
-                          <td colspan="5" class="avg-label-cell">Average Mark</td>
-                          <td colspan="2" class="avg-value-cell">
+                      </div>
+                      <div class="report-head-lower">
+                        <div class="student-block">
+                          <h2>{{ report.student?.firstName }} {{ report.student?.lastName }}</h2>
+                          <p class="meta">
+                            <span class="chip student-id-chip">Student ID: {{ report.student?.admissionNumber }}</span>
+                            <span class="chip">Class: {{ report.student?.schoolClass?.name || '—' }}</span>
                             @if (report.averageMark != null) {
-                              {{ report.averageMark | number:'1.1-1' }}%
-                            } @else {
-                              —
+                              <span class="chip avg-chip" [ngClass]="'tier-' + averageTier(report.averageMark)">
+                                Avg: {{ report.averageMark | number:'1.1-1' }}%
+                              </span>
                             }
-                          </td>
-                        </tr>
-                      </tfoot>
-                    </table>
-                  </div>
-                  <div class="comments remarks-editor">
-                    <p class="remarks-hint">
-                      Teachers and administrators may comment on each learner’s performance and behaviour.
-                      Remarks save automatically when you leave the text box.
-                    </p>
-                    <div class="comment-box">
-                      <span class="comment-label">Class teacher — performance &amp; behaviour</span>
-                      <textarea
-                        rows="4"
-                        [value]="remarkDraft(report.id).classTeacherRemarks"
-                        (input)="onClassTeacherRemarkInput(report.id, $any($event.target).value)"
-                        (blur)="onRemarksBlur(report)"
-                        [readonly]="!canEditClassTeacherRemark()"
-                        [class.readonly]="!canEditClassTeacherRemark()"
-                        placeholder="Comment on academic performance, attitude, conduct, and participation…"
-                      ></textarea>
+                            @if (report.overallGrade) {
+                              <span class="chip grade-chip" [ngClass]="gradePillClass(report.overallGrade)">{{ report.overallGrade }}</span>
+                            }
+                            @if (report.classPosition) {
+                              <span class="chip grade-chip">Class Position: {{ positionOutOfLabel(report.classPosition, report.classTotal) }}</span>
+                            }
+                            @if (report.formPosition) {
+                              <span class="chip form-chip">Form Position: {{ positionOutOfLabel(report.formPosition, report.formTotal) }}</span>
+                            }
+                            @if (report.subjectsPassed != null && report.totalSubjects) {
+                              <span class="chip pass-chip">Subjects Passed: {{ subjectsPassedLabel(report.subjectsPassed, report.totalSubjects) }}</span>
+                            }
+                          </p>
+                        </div>
+                      </div>
                     </div>
-                    <div class="comment-box">
-                      <span class="comment-label">Principal / head — performance &amp; behaviour</span>
-                      <textarea
-                        rows="4"
-                        [value]="remarkDraft(report.id).principalRemarks"
-                        (input)="onPrincipalRemarkInput(report.id, $any($event.target).value)"
-                        (blur)="onRemarksBlur(report)"
-                        [readonly]="!canEditPrincipalRemark()"
-                        [class.readonly]="!canEditPrincipalRemark()"
-                        placeholder="Overall assessment of performance, behaviour, and recommendations…"
-                      ></textarea>
+                    <div class="head-actions" (click)="$event.stopPropagation()">
+                      <button type="button" class="btn-ghost" (click)="previewPdf(report)" [disabled]="pdfLoading()">
+                        Preview PDF
+                      </button>
+                      <button type="button" class="btn-primary-sm" (click)="downloadPdf(report)">Download</button>
+                      <span class="chevron" [class.open]="isExpanded(report.id)">▼</span>
                     </div>
-                  </div>
-                  <div class="remarks-actions">
-                    @if (savingRemarks()[report.id]) {
-                      <span class="remarks-status saving">Saving remarks…</span>
-                    } @else if (remarksJustSaved(report.id)) {
-                      <span class="remarks-status saved">Remarks saved</span>
-                    } @else if (canEditClassTeacherRemark() || canEditPrincipalRemark()) {
-                      <span class="remarks-status hint">Edits save when you click outside the text box</span>
-                    }
-                  </div>
-                </div>
+                  </header>
+
+                  @if (isExpanded(report.id)) {
+                    <div class="report-body">
+                      @if (report.attendance) {
+                        <section class="attendance-panel">
+                          <h4>Attendance (term)</h4>
+                          @if (report.attendance.daysMarked > 0) {
+                            <div class="attendance-stats">
+                              <div class="att-stat"><span class="lbl">Days marked</span><strong>{{ report.attendance.daysMarked }}</strong></div>
+                              <div class="att-stat"><span class="lbl">Present</span><strong>{{ report.attendance.present }}</strong></div>
+                              <div class="att-stat"><span class="lbl">Late</span><strong>{{ report.attendance.late }}</strong></div>
+                              <div class="att-stat"><span class="lbl">Absent</span><strong>{{ report.attendance.absent }}</strong></div>
+                              <div class="att-stat"><span class="lbl">Excused</span><strong>{{ report.attendance.excused }}</strong></div>
+                              <div class="att-stat highlight">
+                                <span class="lbl">Attendance %</span>
+                                <strong>
+                                  @if (report.attendance.attendancePercent != null) {
+                                    {{ report.attendance.attendancePercent | number:'1.1-1' }}%
+                                  } @else {
+                                    —
+                                  }
+                                </strong>
+                              </div>
+                            </div>
+                          } @else {
+                            <p class="attendance-empty">No attendance records for this term.</p>
+                          }
+                        </section>
+                      }
+                      <div class="table-wrap">
+                        <table class="results-table">
+                          <thead>
+                            <tr>
+                              <th class="col-subject">Subject</th>
+                              <th class="col-code">Code</th>
+                              <th class="col-mark">Mark</th>
+                              <th class="col-grade">Grade</th>
+                              <th class="col-rank nowrap">Rank</th>
+                              <th class="col-avg nowrap">Mean</th>
+                              <th>Remarks</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            @for (row of report.subjectResults; track row.subject) {
+                              <tr>
+                                <td class="col-subject">{{ row.subjectName || row.subject }}</td>
+                                <td class="code col-code">{{ row.subjectCode || '—' }}</td>
+                                <td class="marks mark-cell">{{ row.marks }}</td>
+                                <td class="grade-cell">
+                                  <span class="grade-pill" [ngClass]="gradePillClass(row.grade)">{{ row.grade }}</span>
+                                </td>
+                                <td class="rank col-rank">{{ subjectPositionLabel(row.subjectPosition, row.subjectPositionTotal) }}</td>
+                                <td class="mean col-avg">{{ row.mean != null ? (row.mean | number:'1.1-1') : '—' }}</td>
+                                <td class="remarks">{{ row.remarks || '—' }}</td>
+                              </tr>
+                            }
+                          </tbody>
+                          <tfoot>
+                            <tr class="average-row">
+                              <td colspan="5" class="avg-label-cell">Average Mark</td>
+                              <td colspan="2" class="avg-value-cell">
+                                @if (report.averageMark != null) {
+                                  {{ report.averageMark | number:'1.1-1' }}%
+                                } @else {
+                                  —
+                                }
+                              </td>
+                            </tr>
+                          </tfoot>
+                        </table>
+                      </div>
+                      <div class="comments remarks-editor">
+                        <p class="remarks-hint">
+                          Teachers and administrators may comment on each learner’s performance and behaviour.
+                          Remarks save automatically when you leave the text box.
+                        </p>
+                        <div class="comment-box">
+                          <span class="comment-label">Class teacher — performance &amp; behaviour</span>
+                          <textarea
+                            rows="4"
+                            [value]="remarkDraft(report.id).classTeacherRemarks"
+                            (input)="onClassTeacherRemarkInput(report.id, $any($event.target).value)"
+                            (blur)="onRemarksBlur(report)"
+                            [readonly]="!canEditClassTeacherRemark()"
+                            [class.readonly]="!canEditClassTeacherRemark()"
+                            placeholder="Comment on academic performance, attitude, conduct, and participation…"
+                          ></textarea>
+                        </div>
+                        <div class="comment-box">
+                          <span class="comment-label">Principal / head — performance &amp; behaviour</span>
+                          <textarea
+                            rows="4"
+                            [value]="remarkDraft(report.id).principalRemarks"
+                            (input)="onPrincipalRemarkInput(report.id, $any($event.target).value)"
+                            (blur)="onRemarksBlur(report)"
+                            [readonly]="!canEditPrincipalRemark()"
+                            [class.readonly]="!canEditPrincipalRemark()"
+                            placeholder="Overall assessment of performance, behaviour, and recommendations…"
+                          ></textarea>
+                        </div>
+                      </div>
+                      <div class="remarks-actions">
+                        @if (savingRemarks()[report.id]) {
+                          <span class="remarks-status saving">Saving remarks…</span>
+                        } @else if (remarksJustSaved(report.id)) {
+                          <span class="remarks-status saved">Remarks saved</span>
+                        } @else if (canEditClassTeacherRemark() || canEditPrincipalRemark()) {
+                          <span class="remarks-status hint">Edits save when you click outside the text box</span>
+                        }
+                      </div>
+                    </div>
+                  }
+                </article>
               }
-            </article>
-          }
+            </div>
+          </div>
+        }
+      } @else {
+        <div class="empty card">
+          <div class="empty-icon">📄</div>
+          <h3>No report cards generated</h3>
+          <p>Enter exam marks for this class, exam type, and term on the <a [routerLink]="examsLink">Exam Marks</a> page, then try again.</p>
         </div>
-      </div>
-    } @else if (!loading()) {
-      <div class="empty card">
-        <div class="empty-icon">📄</div>
-        <h3>No report cards generated</h3>
-        <p>Enter exam marks for this class, exam type, and term on the <a routerLink="/admin/exams">Exam Marks</a> page, then try again.</p>
+      }
+    } @else {
+      <div class="empty card muted-empty">
+        <div class="empty-icon">🎓</div>
+        <h3>Ready to generate</h3>
+        <p>Select exam type, term, and class above, then click <strong>Load report cards</strong>.</p>
       </div>
     }
-  } @else if (!loading()) {
-    <div class="empty card muted-empty">
-      <div class="empty-icon">🎓</div>
-      <h3>Ready to generate</h3>
-      <p>Select exam type, term, and class above, then click <strong>Load report cards</strong>.</p>
-    </div>
-  }
+  </div>
 </app-portal-layout>
 
 @if (pdfPreviewOpen() && pdfPreviewUrl()) {
