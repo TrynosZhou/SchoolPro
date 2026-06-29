@@ -1,7 +1,7 @@
-import { Component, inject, OnInit, signal, computed } from '@angular/core';
+import { Component, inject, OnInit, signal, computed, viewChild, ElementRef } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { DecimalPipe, DatePipe } from '@angular/common';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { forkJoin } from 'rxjs';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
@@ -10,7 +10,10 @@ import { AuthService } from '../../core/services/auth.service';
 import { environment } from '../../../environments/environment';
 import { Student } from '../../core/models';
 
-type Tab = 'payment' | 'invoice' | 'invoices' | 'receipts' | 'debtors';
+type FinanceMode = 'billing' | 'payment';
+type BillingTab = 'single-invoice' | 'bulk-invoice' | 'invoices';
+type PaymentTab = 'payment' | 'receipts' | 'debtors';
+type Tab = BillingTab | PaymentTab;
 type ViewMode = 'table' | 'cards';
 
 interface BillingSummary {
@@ -111,20 +114,24 @@ export class AdminBillingComponent implements OnInit {
   private api = inject(ApiService);
   private auth = inject(AuthService);
   private route = inject(ActivatedRoute);
+  private router = inject(Router);
 
   readonly adminNav = ADMIN_NAV_SECTIONS;
 
-  activeTab = signal<Tab>('payment');
+  readonly paymentStudentSearch = viewChild<ElementRef<HTMLInputElement>>('paymentStudentSearch');
+  pageMode = signal<FinanceMode>('billing');
+  pageTitle = computed(() => (this.pageMode() === 'payment' ? 'Payment' : 'Billing'));
+  activeTab = signal<Tab>('single-invoice');
   loading = signal(true);
   submitting = signal(false);
   bulkSubmitting = signal(false);
-  bulkModalOpen = signal(false);
   bulkPreview = signal<BulkTuitionPreview | null>(null);
   bulkPreviewLoading = signal(false);
   bulkLastResult = signal<BulkTuitionResult | null>(null);
   pdfLoading = signal(false);
   previewingReceiptId = signal<string | null>(null);
   previewingInvoiceId = signal<string | null>(null);
+  studentInvoiceLoading = signal(false);
   toast = signal<{ type: 'success' | 'error'; msg: string } | null>(null);
 
   summary = signal<BillingSummary | null>(null);
@@ -135,6 +142,9 @@ export class AdminBillingComponent implements OnInit {
   payments = signal<PaymentRow[]>([]);
 
   studentSearch = signal('');
+  searchAttempted = signal(false);
+  searchResults = signal<Student[]>([]);
+
   filteredStudents = computed(() => {
     const q = this.studentSearch().toLowerCase();
     if (!q) return this.students();
@@ -142,6 +152,36 @@ export class AdminBillingComponent implements OnInit {
       `${s.firstName} ${s.lastName} ${s.admissionNumber}`.toLowerCase().includes(q)
     );
   });
+
+  invoiceStudentSearch = signal('');
+  filteredStudentsForInvoice = computed(() => {
+    const q = this.invoiceStudentSearch().toLowerCase();
+    if (!q) return this.students();
+    return this.students().filter((s) =>
+      `${s.firstName} ${s.lastName} ${s.admissionNumber}`.toLowerCase().includes(q)
+    );
+  });
+
+  // Reactive signals that mirror the plain-object studentId fields so computed() can track them
+  paymentStudentId = signal('');
+  invoiceStudentId = signal('');
+
+  selectedPaymentStudent = computed(() =>
+    this.students().find((s) => s.id === this.paymentStudentId()) ?? null
+  );
+
+  selectedInvoiceStudent = computed(() =>
+    this.students().find((s) => s.id === this.invoiceStudentId()) ?? null
+  );
+
+  studentTotalBalance = computed(() =>
+    this.studentUnpaidInvoices().reduce(
+      (sum, inv) => sum + (Number(inv.totalAmount) - Number(inv.amountPaid)),
+      0,
+    )
+  );
+
+  studentUnpaidCount = computed(() => this.studentUnpaidInvoices().length);
 
   debtorSearch = signal('');
   filteredDebtors = computed(() => {
@@ -210,7 +250,7 @@ export class AdminBillingComponent implements OnInit {
     amount: 0,
     method: 'cash',
     feeType: 'tuition',
-    label: 'Tuition Fees',
+    label: '',
     notes: '',
   };
 
@@ -229,6 +269,7 @@ export class AdminBillingComponent implements OnInit {
   fees = signal<SchoolFeeRow[]>([]);
   private prefillStudentId = '';
   private prefillAmount: number | null = null;
+  private prefillInvoiceId = '';
 
   feePresets = computed<FeePreset[]>(() =>
     this.fees()
@@ -242,14 +283,84 @@ export class AdminBillingComponent implements OnInit {
   );
 
   ngOnInit() {
-    this.prefillStudentId = this.route.snapshot.queryParamMap.get('studentId') || '';
-    const amountParam = this.route.snapshot.queryParamMap.get('amount');
-    this.prefillAmount = amountParam ? Number(amountParam) : null;
+    this.applyPageMode((this.route.snapshot.data['financeMode'] as FinanceMode) || 'billing');
+
+    this.route.data.subscribe((data) => {
+      this.applyPageMode((data['financeMode'] as FinanceMode) || 'billing');
+    });
+
+    this.route.queryParamMap.subscribe((params) => {
+      const studentId = params.get('studentId') || '';
+      const amountParam = params.get('amount');
+      const tab = params.get('tab');
+      const invoiceId = params.get('invoiceId') || '';
+
+      if (studentId && this.pageMode() === 'billing') {
+        this.router.navigate(['/admin/payment'], {
+          queryParams: {
+            studentId,
+            ...(amountParam ? { amount: amountParam } : {}),
+            ...(invoiceId ? { invoiceId } : {}),
+            ...(tab ? { tab } : {}),
+          },
+          replaceUrl: true,
+        });
+        return;
+      }
+
+      if (tab === 'payment' || tab === 'receipts' || tab === 'debtors') {
+        this.setTab(tab as PaymentTab);
+      } else if (tab === 'single-invoice' || tab === 'bulk-invoice' || tab === 'invoices') {
+        this.setTab(tab as BillingTab);
+      } else if (tab === 'invoice') {
+        this.setTab('single-invoice');
+      }
+
+      this.prefillStudentId = studentId;
+      this.prefillAmount = amountParam ? Number(amountParam) : null;
+      this.prefillInvoiceId = invoiceId;
+
+      if (!this.loading()) {
+        this.applyPaymentPrefill();
+      }
+    });
+
     this.loadData();
   }
 
+  private applyPageMode(mode: FinanceMode) {
+    this.pageMode.set(mode);
+    const tab = this.activeTab();
+    if (mode === 'payment') {
+      if (tab !== 'payment' && tab !== 'receipts' && tab !== 'debtors') {
+        this.activeTab.set('payment');
+      }
+      if (this.activeTab() === 'payment') {
+        this.schedulePaymentSearchFocus();
+      }
+    } else if (tab !== 'single-invoice' && tab !== 'bulk-invoice' && tab !== 'invoices') {
+      this.activeTab.set('single-invoice');
+    }
+  }
+
+  isBillingMode(): boolean {
+    return this.pageMode() === 'billing';
+  }
+
+  isPaymentMode(): boolean {
+    return this.pageMode() === 'payment';
+  }
+
   setTab(tab: Tab) {
+    if (this.pageMode() === 'billing' && tab !== 'single-invoice' && tab !== 'bulk-invoice' && tab !== 'invoices') return;
+    if (this.pageMode() === 'payment' && tab !== 'payment' && tab !== 'receipts' && tab !== 'debtors') return;
     this.activeTab.set(tab);
+    if (tab === 'bulk-invoice' && !this.bulkPreview() && !this.bulkPreviewLoading()) {
+      this.loadBulkPreview();
+    }
+    if (tab === 'payment') {
+      this.schedulePaymentSearchFocus();
+    }
   }
 
   selectTermForInvoice(termId: string) {
@@ -261,10 +372,57 @@ export class AdminBillingComponent implements OnInit {
     this.invoiceFilter.set('all');
   }
 
+  private setPaymentStudentId(id: string) {
+    this.payment.studentId = id;
+    this.paymentStudentId.set(id);
+  }
+
+  private setInvoiceStudentId(id: string) {
+    this.newInvoice.studentId = id;
+    this.invoiceStudentId.set(id);
+  }
+
   pickStudentForPayment(studentId: string) {
-    this.payment.studentId = studentId;
+    this.setPaymentStudentId(studentId);
     this.studentSearch.set('');
     this.onStudentChange();
+  }
+
+  pickStudentForInvoice(studentId: string) {
+    this.setInvoiceStudentId(studentId);
+    this.invoiceStudentSearch.set('');
+  }
+
+  clearPaymentStudent() {
+    this.setPaymentStudentId('');
+    this.payment.invoiceId = '';
+    this.payment.amount = 0;
+    this.studentSearch.set('');
+    this.studentUnpaidInvoices.set([]);
+    this.searchAttempted.set(false);
+    this.searchResults.set([]);
+    this.schedulePaymentSearchFocus();
+  }
+
+  getBalance() {
+    const q = this.studentSearch().trim().toLowerCase();
+    if (!q) {
+      this.showToast('error', 'Please enter a Student ID, First Name, or Last Name');
+      return;
+    }
+    const matches = this.students().filter((s) =>
+      `${s.firstName} ${s.lastName} ${s.admissionNumber}`.toLowerCase().includes(q)
+    );
+    this.searchAttempted.set(true);
+    this.searchResults.set(matches);
+    if (matches.length === 1) {
+      this.pickStudentForPayment(matches[0].id);
+    }
+  }
+
+  clearInvoiceStudent() {
+    this.setInvoiceStudentId('');
+    this.invoiceStudentSearch.set('');
   }
 
   initials(first: string, last: string): string {
@@ -306,11 +464,11 @@ export class AdminBillingComponent implements OnInit {
         const firstFee = data.fees[0];
         if (firstFee) {
           this.payment.feeType = firstFee.code;
-          this.payment.label = firstFee.name;
           this.newInvoice.feeType = firstFee.code;
         }
         this.applyPaymentPrefill();
         this.loading.set(false);
+        this.schedulePaymentSearchFocus();
       },
       error: () => {
         this.loading.set(false);
@@ -321,10 +479,13 @@ export class AdminBillingComponent implements OnInit {
 
   onStudentChange() {
     this.payment.invoiceId = '';
+    this.payment.amount = 0;
     if (!this.payment.studentId) {
       this.studentUnpaidInvoices.set([]);
+      this.studentInvoiceLoading.set(false);
       return;
     }
+    this.studentInvoiceLoading.set(true);
     this.api.get<InvoiceRow[]>('/billing/invoices', { studentId: this.payment.studentId }).subscribe({
       next: (allInv) => {
         const unpaid = allInv.filter(
@@ -332,6 +493,19 @@ export class AdminBillingComponent implements OnInit {
             Number(i.totalAmount) > Number(i.amountPaid)
         );
         this.studentUnpaidInvoices.set(unpaid);
+        const total = unpaid.reduce(
+          (sum, i) => sum + (Number(i.totalAmount) - Number(i.amountPaid)), 0
+        );
+        if (total > 0) {
+          this.payment.amount = Number(total.toFixed(2));
+          this.payment.label = unpaid.length === 1
+            ? unpaid[0].description
+            : 'Outstanding balance';
+        }
+        this.studentInvoiceLoading.set(false);
+      },
+      error: () => {
+        this.studentInvoiceLoading.set(false);
       },
     });
   }
@@ -382,11 +556,15 @@ export class AdminBillingComponent implements OnInit {
           amount: 0,
           method: 'cash',
           feeType: 'tuition',
-          label: 'Tuition Fees',
+          label: '',
           notes: '',
         };
+        this.paymentStudentId.set('');
+        this.searchAttempted.set(false);
+        this.searchResults.set([]);
         this.studentUnpaidInvoices.set([]);
         this.refreshAfterPayment();
+        this.schedulePaymentSearchFocus();
       },
       error: (e) => {
         this.submitting.set(false);
@@ -454,15 +632,14 @@ export class AdminBillingComponent implements OnInit {
     });
   }
 
-  openBulkInvoiceModal() {
+  openBulkInvoiceTab() {
     this.bulkLastResult.set(null);
-    this.bulkModalOpen.set(true);
-    this.loadBulkPreview();
+    this.setTab('bulk-invoice');
   }
 
-  closeBulkInvoiceModal() {
-    this.bulkModalOpen.set(false);
-    this.bulkPreview.set(null);
+  refreshBulkPreview() {
+    this.bulkLastResult.set(null);
+    this.loadBulkPreview();
   }
 
   loadBulkPreview() {
@@ -475,7 +652,6 @@ export class AdminBillingComponent implements OnInit {
       error: (e) => {
         this.bulkPreviewLoading.set(false);
         this.showToast('error', e.error?.message || 'Could not load bulk billing preview');
-        this.closeBulkInvoiceModal();
       },
     });
   }
@@ -584,7 +760,7 @@ export class AdminBillingComponent implements OnInit {
   }
 
   payDebtor(debtor: Debtor) {
-    this.payment.studentId = debtor.id;
+    this.setPaymentStudentId(debtor.id);
     this.payment.amount = Number(debtor.owed);
     this.setTab('payment');
     this.onStudentChange();
@@ -596,9 +772,15 @@ export class AdminBillingComponent implements OnInit {
       this.showToast('error', 'Student not linked to this invoice');
       return;
     }
-    this.payment.studentId = studentId;
-    this.selectInvoiceForPayment(inv);
-    this.setTab('payment');
+    const balance = Number(inv.totalAmount) - Number(inv.amountPaid);
+    this.router.navigate(['/admin/payment'], {
+      queryParams: {
+        studentId,
+        invoiceId: inv.id,
+        amount: balance > 0 ? balance : undefined,
+        tab: 'payment',
+      },
+    });
   }
 
   private downloadBillingPdf(path: string, filename: string) {
@@ -688,14 +870,39 @@ export class AdminBillingComponent implements OnInit {
     setTimeout(() => this.toast.set(null), 4500);
   }
 
+  private schedulePaymentSearchFocus(): void {
+    setTimeout(() => this.focusPaymentStudentSearch());
+  }
+
+  private focusPaymentStudentSearch(): void {
+    if (
+      this.pageMode() !== 'payment' ||
+      this.activeTab() !== 'payment' ||
+      this.loading() ||
+      this.selectedPaymentStudent()
+    ) {
+      return;
+    }
+    this.paymentStudentSearch()?.nativeElement?.focus();
+  }
+
   private applyPaymentPrefill(): void {
-    if (!this.prefillStudentId) return;
-    this.payment.studentId = this.prefillStudentId;
+    if (this.pageMode() !== 'payment' || !this.prefillStudentId) return;
+    this.setPaymentStudentId(this.prefillStudentId);
     if (this.prefillAmount && this.prefillAmount > 0) {
       this.payment.amount = Number(this.prefillAmount.toFixed(2));
     }
     this.setTab('payment');
     this.onStudentChange();
+
+    if (this.prefillInvoiceId) {
+      const inv = this.invoices().find((i) => i.id === this.prefillInvoiceId);
+      if (inv) {
+        this.selectInvoiceForPayment(inv);
+      }
+      this.prefillInvoiceId = '';
+    }
+
     this.prefillStudentId = '';
     this.prefillAmount = null;
   }

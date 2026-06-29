@@ -263,7 +263,7 @@
                   <th>Student</th>
                   <th class="num">Average</th>
                   <th>Grade</th>
-                  <th>Subjects</th>
+                  <th>Subjects Passed</th>
                   <th class="num">Attendance</th>
                   <th>Remarks</th>
                   <th></th>
@@ -314,7 +314,7 @@
                     </td>
                     <td class="actions-cell">
                       <button type="button" class="link-btn" (click)="scrollToReport(report.studentId)">Open</button>
-                      <button type="button" class="link-btn" (click)="previewPdf(report)" [disabled]="pdfLoading()">PDF</button>
+                      <button type="button" class="link-btn" (click)="previewPdf(report)">PDF</button>
                     </td>
                   </tr>
                 }
@@ -338,7 +338,6 @@
                         {{ report.classPosition }}
                       </span>
                       <span class="jump-name">{{ report.student?.lastName }}, {{ report.student?.firstName }}</span>
-                      <span class="jump-grade">{{ report.overallGrade || '—' }}</span>
                     </button>
                   </li>
                 }
@@ -392,14 +391,14 @@
                               <span class="chip form-chip">Form Position: {{ positionOutOfLabel(report.formPosition, report.formTotal) }}</span>
                             }
                             @if (report.subjectsPassed != null && report.totalSubjects) {
-                              <span class="chip pass-chip">Subjects Passed: {{ subjectsPassedLabel(report.subjectsPassed, report.totalSubjects) }}</span>
+                              <span class="chip pass-chip">Subjects Passed {{ subjectsPassedLabel(report.subjectsPassed, report.totalSubjects) }}</span>
                             }
                           </p>
                         </div>
                       </div>
                     </div>
                     <div class="head-actions" (click)="$event.stopPropagation()">
-                      <button type="button" class="btn-ghost" (click)="previewPdf(report)" [disabled]="pdfLoading()">
+                      <button type="button" class="btn-primary-sm" (click)="previewPdf(report)">
                         Preview PDF
                       </button>
                       <button type="button" class="btn-primary-sm" (click)="downloadPdf(report)">Download</button>

@@ -8,16 +8,16 @@ export const ADMIN_NAV_SECTIONS: NavSection[] = [
     path: '/admin',
   },
   {
-    heading: 'Students',
+    heading: 'All Students',
     items: [
-      { label: 'All Students', path: '/admin/students', icon: '👥' },
+      { label: 'Students', path: '/admin/students', icon: '👥' },
       { label: 'Enrolment', path: '/admin/enrollment', icon: '🎓' },
       { label: 'Class List', path: '/admin/class-list', icon: '📋' },
       { label: 'Class Promotion', path: '/admin/class-promotion', icon: '⬆' },
     ],
   },
   {
-    heading: 'Parents',
+    heading: 'All Parents',
     items: [
       { label: 'All Parents', path: '/admin/parents', icon: '👨‍👩‍👧' },
     ],
@@ -30,7 +30,7 @@ export const ADMIN_NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
-    heading: 'Staff',
+    heading: 'All Teachers',
     items: [
       { label: 'Staff Directory', path: '/admin/staff', icon: '🧑' },
       { label: 'Staff Attendance', path: '/admin/staff', icon: '🗂' },
@@ -50,7 +50,8 @@ export const ADMIN_NAV_SECTIONS: NavSection[] = [
   {
     heading: 'Finance',
     items: [
-      { label: 'Billing & Payments', path: '/admin/billing', icon: '💳' },
+      { label: 'Billing', path: '/admin/billing', icon: '🧾' },
+      { label: 'Payment', path: '/admin/payment', icon: '💳' },
       { label: 'Manage Fees', path: '/admin/manage-fees', icon: '💵' },
       { label: 'Student Balance', path: '/admin/student-balance', icon: '🧮' },
       { label: 'Financial Books', path: '/admin/finance', icon: '📚' },

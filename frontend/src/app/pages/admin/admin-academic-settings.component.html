@@ -50,7 +50,12 @@
       <main class="tab-content">
         <div class="content-head">
           <div>
-            <h2>{{ activeTabMeta().icon }} {{ activeTabMeta().label }}</h2>
+            <div class="content-head-title">
+              <h2>{{ activeTabMeta().icon }} {{ activeTabMeta().label }}</h2>
+              @if (activeTab() === 'subjects') {
+                <span class="count-badge">{{ subjects().length }} {{ subjects().length === 1 ? 'subject' : 'subjects' }} registered</span>
+              }
+            </div>
             <p>{{ activeTabMeta().desc }}</p>
           </div>
           <a routerLink="/admin/settings" class="hero-link-inline">School profile &amp; integrations →</a>
@@ -260,7 +265,7 @@
                   <h3>Subjects Catalogue</h3>
                   <p class="panel-sub">Master list of subjects taught at your school</p>
                 </div>
-                <span class="count-badge">{{ subjects().length }}</span>
+                <span class="count-badge">{{ subjects().length }} registered</span>
               </div>
               <div class="add-bar elevated">
                 <div class="input-group code-group">

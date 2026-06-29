@@ -38,12 +38,26 @@ export class PortalLayoutComponent implements OnInit, OnDestroy {
   readonly userMenuOpen = signal(false);
   readonly logoutConfirmOpen = signal(false);
   readonly sidebarOpen = signal(false);
+  readonly sidebarCollapsed = signal(false);
 
   /** Section headings that are expanded in the sidebar. */
   readonly expandedSections = signal<Set<string>>(new Set());
 
   get useSections(): boolean {
     return this.navSections.length > 0;
+  }
+
+  get groupedNav(): { label: string; sections: NavSection[] }[] {
+    const order = ['Main', 'People', 'Learning', 'Finance', 'Administration'];
+    const map = new Map<string, NavSection[]>();
+    for (const section of this.navSections) {
+      const group = this.sectionGroup(section.heading);
+      if (!map.has(group)) map.set(group, []);
+      map.get(group)!.push(section);
+    }
+    return order
+      .filter((label) => map.has(label))
+      .map((label) => ({ label, sections: map.get(label)! }));
   }
 
   ngOnInit(): void {
@@ -95,6 +109,10 @@ export class PortalLayoutComponent implements OnInit, OnDestroy {
     if (this.sidebarOpen()) {
       this.userMenuOpen.set(false);
     }
+  }
+
+  toggleSidebarCollapsed(): void {
+    this.sidebarCollapsed.update((v) => !v);
   }
 
   closeSidebar(): void {
@@ -158,13 +176,10 @@ export class PortalLayoutComponent implements OnInit, OnDestroy {
 
   toggleSection(heading: string): void {
     this.expandedSections.update((set) => {
-      const next = new Set(set);
-      if (next.has(heading)) {
-        next.delete(heading);
-      } else {
-        next.add(heading);
+      if (set.has(heading)) {
+        return new Set<string>();
       }
-      return next;
+      return new Set([heading]);
     });
   }
 
@@ -174,33 +189,15 @@ export class PortalLayoutComponent implements OnInit, OnDestroy {
   }
 
   private initExpandedSections(): void {
-    const activeHeadings = this.navSections
-      .filter((s) => this.sectionHasActive(s))
-      .map((s) => s.heading);
-
-    if (activeHeadings.length) {
-      this.expandedSections.set(new Set(activeHeadings));
-      return;
-    }
-
-    const dashboard = this.navSections.find((s) => s.heading === 'Dashboard');
-    this.expandedSections.set(new Set([dashboard?.heading ?? this.navSections[0]?.heading].filter(Boolean) as string[]));
+    const active = this.navSections.find((s) => s.items.length && this.sectionHasActive(s));
+    this.expandedSections.set(active ? new Set([active.heading]) : new Set());
   }
 
-  /** Keep the section for the current route open without collapsing others the user opened. */
+  /** Keep only the section for the current route expanded. */
   private ensureActiveSectionExpanded(): void {
-    const activeHeadings = this.navSections
-      .filter((s) => this.sectionHasActive(s))
-      .map((s) => s.heading);
-    if (!activeHeadings.length) return;
-
-    this.expandedSections.update((set) => {
-      const next = new Set(set);
-      for (const heading of activeHeadings) {
-        next.add(heading);
-      }
-      return next;
-    });
+    const active = this.navSections.find((s) => s.items.length && this.sectionHasActive(s));
+    if (!active) return;
+    this.expandedSections.set(new Set([active.heading]));
   }
 
   private isNavItemActive(path: string): boolean {
@@ -214,19 +211,24 @@ export class PortalLayoutComponent implements OnInit, OnDestroy {
   sectionGroup(heading: string): string {
     const h = heading.toLowerCase();
     if (h === 'overview' || h === 'dashboard') return 'Main';
-    if (h === 'students' || h === 'staff' || h === 'attendance' || h === 'communication') return 'People';
+    if (h === 'students' || h === 'all students' || h === 'parents' || h === 'all parents' || h === 'staff' || h === 'all teachers' || h === 'attendance' || h === 'communication') return 'People';
     if (h === 'academics' || h === 'examination' || h === 'examinations' || h === 'timetable') return 'Learning';
     if (h === 'finance' || h === 'fin.reports') return 'Finance';
     return 'Administration';
   }
 
+  sectionDomId(heading: string): string {
+    return heading.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  }
+
   sectionIconKey(heading: string): string {
     const h = heading.toLowerCase();
     if (h === 'overview' || h === 'dashboard') return 'dashboard';
-    if (h === 'students') return 'students';
-    if (h === 'parents') return 'parents';
+    if (h === 'students' || h === 'all students') return 'students';
+    if (h === 'parents' || h === 'all parents') return 'parents';
+    if (h === 'payroll') return 'staff';
     if (h === 'attendance') return 'attendance';
-    if (h === 'staff') return 'staff';
+    if (h === 'staff' || h === 'all teachers') return 'staff';
     if (h === 'academics' || h === 'examination' || h === 'examinations') return 'examinations';
     if (h === 'finance') return 'finance';
     if (h === 'fin.reports' || h === 'fin. reports') return 'fin-reports';

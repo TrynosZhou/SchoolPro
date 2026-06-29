@@ -15,6 +15,7 @@ exports.generateClassReportCards = generateClassReportCards;
 const data_source_1 = require("../config/data-source");
 const entities_1 = require("../entities");
 const grade_service_1 = require("./grade.service");
+const report_card_remarks_service_1 = require("./report-card-remarks.service");
 const typeorm_helpers_1 = require("../utils/typeorm-helpers");
 const helpers_1 = require("../utils/helpers");
 const typeorm_1 = require("typeorm");
@@ -410,6 +411,13 @@ async function generateClassReportCards(params) {
     if (!examType) {
         throw new Error('Exam type not found');
     }
+    const schoolClass = await data_source_1.AppDataSource.getRepository(entities_1.SchoolClass).findOne({
+        where: { id: classId },
+        relations: (0, typeorm_helpers_1.relations)('classTeacher', 'classTeacher.user'),
+    });
+    const classTeacherName = schoolClass?.classTeacher?.user
+        ? formatStaffSignature(schoolClass.classTeacher.user)
+        : null;
     const students = await studentRepo.find({
         where: { classId, isActive: true },
         relations: (0, typeorm_helpers_1.relations)('schoolClass', 'schoolClass.form'),
@@ -474,6 +482,7 @@ async function generateClassReportCards(params) {
         : new Map();
     const saved = [];
     for (const row of scoreRows) {
+        const student = students.find((s) => s.id === row.studentId);
         let report = await reportRepo.findOne({
             where: { studentId: row.studentId, termId, examTypeId },
         });
@@ -490,6 +499,30 @@ async function generateClassReportCards(params) {
         report.subjectsPassed = countSubjectsPassed(row.subjectResults, Number(examType.maxMarks));
         report.totalSubjects = row.subjectResults.length;
         report.isPublished = false;
+        if (student) {
+            const remarks = (0, report_card_remarks_service_1.buildReportCardRemarks)({
+                firstName: student.firstName,
+                lastName: student.lastName,
+                averageMark: report.averageMark,
+                overallGrade: report.overallGrade ?? undefined,
+                subjectsPassed: report.subjectsPassed,
+                totalSubjects: report.totalSubjects,
+                subjectResults: row.subjectResults,
+                classTeacherName,
+            });
+            if (!(report.classTeacherRemarks || '').trim()) {
+                report.classTeacherRemarks = remarks.classTeacherRemarks;
+            }
+            else {
+                report.classTeacherRemarks = (0, report_card_remarks_service_1.sanitizeReportCardRemark)(report.classTeacherRemarks, student.firstName, student.lastName);
+            }
+            if (!(report.principalRemarks || '').trim()) {
+                report.principalRemarks = remarks.principalRemarks;
+            }
+            else {
+                report.principalRemarks = (0, report_card_remarks_service_1.sanitizeReportCardRemark)(report.principalRemarks, student.firstName, student.lastName);
+            }
+        }
         await reportRepo.save(report);
         const full = await reportRepo.findOne({
             where: { id: report.id },
@@ -505,4 +538,14 @@ async function generateClassReportCards(params) {
         count: saved.length,
         reports: attachAttendanceToReports(saved, attendanceMap),
     };
+}
+function formatStaffSignature(user) {
+    const first = (user.firstName || '').trim();
+    const last = (user.lastName || '').trim();
+    if (!first && !last)
+        return '';
+    if (last && first) {
+        return `${last} ${first.charAt(0).toUpperCase()}.`;
+    }
+    return `${first} ${last}`.trim();
 }

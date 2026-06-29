@@ -1,4 +1,4 @@
-import { Component, inject, signal, computed } from '@angular/core';
+import { Component, inject, signal, computed, viewChild, ElementRef, AfterViewInit } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
@@ -28,11 +28,12 @@ type SortOrder = 'name-asc' | 'name-desc' | 'balance-desc' | 'balance-asc';
   templateUrl: './admin-student-balance.component.html',
   styleUrl: './admin-student-balance.component.scss',
 })
-export class AdminStudentBalanceComponent {
+export class AdminStudentBalanceComponent implements AfterViewInit {
   private api = inject(ApiService);
   private router = inject(Router);
 
   readonly adminNav = ADMIN_NAV_SECTIONS;
+  readonly balanceSearchInput = viewChild<ElementRef<HTMLInputElement>>('balanceSearchInput');
 
   query = '';
   loading = signal(false);
@@ -79,6 +80,10 @@ export class AdminStudentBalanceComponent {
 
   hasActiveFilters = computed(() => this.balanceFilter() !== 'all');
 
+  ngAfterViewInit(): void {
+    this.scheduleSearchFocus();
+  }
+
   getBalance() {
     const q = this.query.trim();
     if (!q) {
@@ -111,6 +116,7 @@ export class AdminStudentBalanceComponent {
     this.rows.set([]);
     this.hasSearched.set(false);
     this.balanceFilter.set('all');
+    this.scheduleSearchFocus();
   }
 
   clearFilters() {
@@ -189,12 +195,16 @@ export class AdminStudentBalanceComponent {
       this.showToast('error', 'This student has no outstanding balance to pay.');
       return;
     }
-    this.router.navigate(['/admin/billing'], {
+    this.router.navigate(['/admin/payment'], {
       queryParams: {
         studentId: row.id,
         amount: Number(row.balance).toFixed(2),
       },
     });
+  }
+
+  private scheduleSearchFocus(): void {
+    setTimeout(() => this.balanceSearchInput()?.nativeElement?.focus());
   }
 
   private showToast(type: 'success' | 'error', msg: string) {

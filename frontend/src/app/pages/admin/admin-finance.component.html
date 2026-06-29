@@ -12,13 +12,15 @@
           Cashbook, debtors, collections, and student statements in one place.
           Record payments on
           <a routerLink="/admin/billing">Billing</a>
+          ·
+          <a routerLink="/admin/payment">Payment</a>
           or open
           <a routerLink="/admin/fin-reports/fee-collection-revenue">Fee Collection</a>
           and
           <a routerLink="/admin/fin-reports/student-ledger">Student Ledger</a> reports.
         </p>
         <div class="hero-actions">
-          <a routerLink="/admin/billing" class="primary-action">+ Record payment</a>
+          <a routerLink="/admin/payment" class="primary-action">+ Record payment</a>
           <button type="button" class="refresh-action" (click)="loadAll()" [disabled]="loading()">
             {{ loading() ? 'Refreshing…' : 'Refresh data' }}
           </button>
@@ -349,7 +351,7 @@
                 </div>
                 <div class="card-actions">
                   <button type="button" class="btn-ghost btn-sm" (click)="viewDebtorStatement(d.id)">Statement</button>
-                  <a routerLink="/admin/billing" [queryParams]="{ studentId: d.id, amount: d.owed }" class="btn-primary btn-sm">Collect</a>
+                  <a routerLink="/admin/payment" [queryParams]="{ studentId: d.id, amount: d.owed }" class="btn-primary btn-sm">Collect</a>
                 </div>
               </article>
             }
@@ -376,7 +378,7 @@
                     <td class="num owed"><strong>${{ d.owed | number:'1.2-2' }}</strong></td>
                     <td class="actions">
                       <button type="button" class="btn-ghost btn-sm" (click)="viewDebtorStatement(d.id)">Statement</button>
-                      <a routerLink="/admin/billing" [queryParams]="{ studentId: d.id, amount: d.owed }" class="btn-primary btn-sm">Collect</a>
+                      <a routerLink="/admin/payment" [queryParams]="{ studentId: d.id, amount: d.owed }" class="btn-primary btn-sm">Collect</a>
                     </td>
                   </tr>
                 }

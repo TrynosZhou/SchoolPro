@@ -14,12 +14,6 @@
           <a routerLink="/admin/fin-reports/fee-collection-revenue">Fee Collection & Revenue</a>.
         </p>
         <div class="hero-actions">
-          <button type="button" class="btn-outline" (click)="previewPdf()" [disabled]="pdfLoading() || loading()">
-            {{ pdfLoading() ? 'Generating…' : 'Preview PDF' }}
-          </button>
-          <button type="button" class="btn-primary" (click)="downloadPdf()" [disabled]="pdfLoading() || loading()">
-            {{ pdfLoading() ? 'Generating…' : 'Download PDF' }}
-          </button>
           <button type="button" class="btn-ghost" (click)="loadReport()" [disabled]="loading() || pdfLoading()">
             {{ loading() ? 'Refreshing…' : 'Refresh' }}
           </button>
@@ -71,10 +65,30 @@
             <h3>Outstanding balances</h3>
             <p>Filter by class, due date, or search student ID, name, invoice #, or description.</p>
           </div>
-          <div class="view-tabs">
-            <button type="button" [class.active]="viewMode() === 'grouped'" (click)="viewMode.set('grouped')">By class</button>
-            <button type="button" [class.active]="viewMode() === 'flat'" (click)="viewMode.set('flat')">Flat list</button>
-            <button type="button" [class.active]="viewMode() === 'cards'" (click)="viewMode.set('cards')">Cards</button>
+          <div class="toolbar-head-actions">
+            <div class="view-tabs">
+              <button type="button" [class.active]="viewMode() === 'grouped'" (click)="viewMode.set('grouped')">By class</button>
+              <button type="button" [class.active]="viewMode() === 'flat'" (click)="viewMode.set('flat')">Flat list</button>
+              <button type="button" [class.active]="viewMode() === 'cards'" (click)="viewMode.set('cards')">Cards</button>
+            </div>
+            <div class="pdf-actions">
+              <button
+                type="button"
+                class="btn-preview-pdf"
+                (click)="previewPdf()"
+                [disabled]="pdfLoading() || loading() || !report()"
+              >
+                {{ pdfLoading() ? 'Generating…' : 'Preview PDF' }}
+              </button>
+              <button
+                type="button"
+                class="btn-download-pdf"
+                (click)="downloadPdf()"
+                [disabled]="pdfLoading() || loading() || !report()"
+              >
+                {{ pdfLoading() ? 'Generating…' : 'Download PDF' }}
+              </button>
+            </div>
           </div>
         </div>
 

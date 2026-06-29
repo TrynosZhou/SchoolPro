@@ -7,7 +7,7 @@ import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
 import { ApiService } from '../../core/services/api.service';
 import { environment } from '../../../environments/environment';
 
-type Tab = 'profile' | 'security' | 'notifications' | 'store';
+type Tab = 'profile' | 'bank' | 'security' | 'notifications' | 'store';
 
 interface SecurityPolicy {
   minPasswordLength: number;
@@ -41,6 +41,11 @@ interface SchoolSettings {
   currency: string;
   feeReminderTemplate?: string;
   gradeBoundaries?: GradeBoundaryRow[];
+  bankAccountName?: string;
+  bankName?: string;
+  bankBranch?: string;
+  bankAccountNumber?: string;
+  bankPaymentReferenceNote?: string;
 }
 
 interface SchoolYear {
@@ -139,6 +144,7 @@ export class AdminSettingsComponent implements OnInit {
 
   readonly tabs: { id: Tab; label: string; icon: string; desc: string }[] = [
     { id: 'profile', label: 'School Profile', icon: '🏫', desc: 'Branding & contact details' },
+    { id: 'bank', label: 'Bank Details', icon: '🏦', desc: 'Payment & banking info for PDFs' },
     { id: 'security', label: 'Security', icon: '🔒', desc: 'Password policy & login protection' },
     { id: 'notifications', label: 'WhatsApp', icon: '📱', desc: 'Parent messaging' },
     { id: 'store', label: 'Tuckshop', icon: '🛒', desc: 'Inventory & stock' },
@@ -173,6 +179,14 @@ export class AdminSettingsComponent implements OnInit {
     website: '',
     currency: 'USD',
     feeReminderTemplate: '',
+  };
+
+  bankForm = {
+    bankAccountName: '',
+    bankName: '',
+    bankBranch: '',
+    bankAccountNumber: '',
+    bankPaymentReferenceNote: 'Please use the account number as your payment reference.',
   };
 
   securityForm: SecurityPolicy = {
@@ -302,6 +316,15 @@ export class AdminSettingsComponent implements OnInit {
         this.school.set(data.settings.school);
         this.whatsapp.set(data.settings.whatsapp);
         this.profileForm = { ...data.settings.school };
+        this.bankForm = {
+          bankAccountName: data.settings.school.bankAccountName || '',
+          bankName: data.settings.school.bankName || '',
+          bankBranch: data.settings.school.bankBranch || '',
+          bankAccountNumber: data.settings.school.bankAccountNumber || '',
+          bankPaymentReferenceNote:
+            data.settings.school.bankPaymentReferenceNote
+            || 'Please use the account number as your payment reference.',
+        };
         this.securityForm = { ...data.settings.security };
         this.tuckshopItems.set(data.tuckshop);
         this.loading.set(false);
@@ -375,6 +398,30 @@ export class AdminSettingsComponent implements OnInit {
       error: () => {
         this.submitting.set(false);
         this.showToast('error', 'Failed to save profile');
+      },
+    });
+  }
+
+  saveBankDetails() {
+    this.submitting.set(true);
+    this.api.patch<SchoolSettings>('/admin/settings', this.bankForm).subscribe({
+      next: (s) => {
+        this.school.set(s);
+        this.bankForm = {
+          bankAccountName: s.bankAccountName || '',
+          bankName: s.bankName || '',
+          bankBranch: s.bankBranch || '',
+          bankAccountNumber: s.bankAccountNumber || '',
+          bankPaymentReferenceNote:
+            s.bankPaymentReferenceNote
+            || 'Please use the account number as your payment reference.',
+        };
+        this.submitting.set(false);
+        this.showToast('success', 'Bank details saved');
+      },
+      error: () => {
+        this.submitting.set(false);
+        this.showToast('error', 'Failed to save bank details');
       },
     });
   }

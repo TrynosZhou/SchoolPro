@@ -405,6 +405,11 @@ export class AdminOutstandingInvoicesComponent implements OnInit {
   }
 
   private exportPdf(preview: boolean) {
+    if (!this.report()) {
+      this.showToast('error', 'Load outstanding invoices before exporting PDF.');
+      return;
+    }
+
     this.pdfLoading.set(true);
     const query = preview ? { preview: 'true' } : undefined;
     this.api.getBlob('/billing/reports/outstanding-invoices/export.pdf', query).subscribe({

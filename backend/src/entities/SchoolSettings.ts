@@ -38,6 +38,21 @@ export class SchoolSettings {
   @Column({ default: 'USD' })
   currency!: string;
 
+  @Column({ nullable: true })
+  bankAccountName?: string;
+
+  @Column({ nullable: true })
+  bankName?: string;
+
+  @Column({ nullable: true })
+  bankBranch?: string;
+
+  @Column({ nullable: true })
+  bankAccountNumber?: string;
+
+  @Column({ type: 'text', nullable: true })
+  bankPaymentReferenceNote?: string;
+
   @Column({ type: 'text', nullable: true })
   feeReminderTemplate?: string;
 

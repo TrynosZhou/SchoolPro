@@ -13,6 +13,7 @@ const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const typeorm_helpers_1 = require("../utils/typeorm-helpers");
 const helpers_1 = require("../utils/helpers");
 const pdf_1 = require("../utils/pdf");
+const school_branding_service_1 = require("../services/school-branding.service");
 const teacher_class_access_1 = require("../utils/teacher-class-access");
 const registration_invoice_service_1 = require("../services/registration-invoice.service");
 const router = (0, express_1.Router)();
@@ -61,7 +62,7 @@ router.get('/class-list/pdf', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enum
     const settings = await settingsRepo.findOne({ where: { id: 'default' } });
     const schoolName = settings?.schoolName || 'School Pro Academy';
     const cls = students[0].schoolClass;
-    const classLabel = cls?.form?.name ? `${cls.form.name} · ${cls.name}` : cls?.name || 'Class';
+    const classLabel = cls?.name || 'Class';
     const pdf = await (0, pdf_1.generateClassListPdf)({
         schoolName,
         tagline: settings?.tagline || undefined,
@@ -73,6 +74,8 @@ router.get('/class-list/pdf', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enum
             lastName: s.lastName,
             firstName: s.firstName,
             gender: s.gender || '—',
+            dateOfBirth: s.dateOfBirth ? String(s.dateOfBirth) : undefined,
+            studentType: s.studentType || undefined,
         })),
     });
     const safeName = classLabel.replace(/[^\w\-]+/g, '-').replace(/-+/g, '-');
@@ -167,6 +170,37 @@ router.post('/parent/link-child', (0, auth_1.authorize)(enums_1.UserRole.PARENT)
             },
         },
     });
+});
+router.get('/:id/id-card/pdf', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.TEACHER), async (req, res) => {
+    const repo = data_source_1.AppDataSource.getRepository(entities_1.Student);
+    const student = await repo.findOne({
+        where: { id: (0, typeorm_helpers_1.param)(req.params.id), isActive: true },
+        relations: (0, typeorm_helpers_1.relations)('schoolClass', 'schoolClass.form', 'form'),
+    });
+    if (!student)
+        return res.status(404).json({ message: 'Student not found' });
+    if (student.classId && !(await (0, teacher_class_access_1.assertTeacherClassAccess)(req, student.classId))) {
+        return res.status(403).json({ message: 'You are not assigned to this class' });
+    }
+    const branding = await (0, school_branding_service_1.loadSchoolBranding)();
+    const pdf = await (0, pdf_1.generateStudentIdCardPdf)({
+        ...branding,
+        admissionNumber: student.admissionNumber,
+        firstName: student.firstName,
+        lastName: student.lastName,
+        dateOfBirth: student.dateOfBirth || undefined,
+        studentAddress: student.address || undefined,
+        gender: student.gender || undefined,
+        studentType: student.studentType || undefined,
+        className: student.schoolClass?.name || undefined,
+        formName: student.form?.name || student.schoolClass?.form?.name || undefined,
+        generatedAt: new Date(),
+    });
+    const filename = `student-id-${student.admissionNumber}.pdf`;
+    const inline = req.query.preview === 'true';
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `${inline ? 'inline' : 'attachment'}; filename="${filename}"`);
+    res.send(pdf);
 });
 router.get('/:id', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.TEACHER, enums_1.UserRole.PARENT, enums_1.UserRole.STUDENT), async (req, res) => {
     const repo = data_source_1.AppDataSource.getRepository(entities_1.Student);

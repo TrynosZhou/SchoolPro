@@ -1,0 +1,141 @@
+// ── Global heading colour: deep blue + bold ──
+.page-body {
+  h1, h2, h3, h4 {
+    color: #1e3a8a;
+    font-weight: 700;
+  }
+}
+
+// Neutral page headers — remove gradient/coloured hero banners app-wide
+.hero,
+.page-hero,
+.admin-hero {
+  background: #ffffff !important;
+  background-image: none !important;
+  color: #0f172a !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06) !important;
+}
+
+.hero-glow {
+  display: none !important;
+}
+
+.hero .eyebrow,
+.hero-copy .eyebrow,
+.page-hero .hero-eyebrow,
+.admin-hero .eyebrow {
+  color: #64748b !important;
+  opacity: 1 !important;
+}
+
+.hero h2,
+.hero-copy h2,
+.page-hero .hero-title,
+.page-hero h1,
+.admin-hero-title {
+  color: #0f172a !important;
+}
+
+.hero-sub,
+.hero-copy .hero-sub,
+.page-hero .hero-sub,
+.page-hero p,
+.admin-hero-sub,
+.hero-school {
+  color: #64748b !important;
+  opacity: 1 !important;
+}
+
+.hero-tagline {
+  color: #475569 !important;
+}
+
+.hero-link,
+.hero-link-inline {
+  color: #2563eb !important;
+
+  &:hover {
+    color: #1d4ed8 !important;
+  }
+}
+
+.hero .secondary-action,
+.hero .refresh-action {
+  background: #f8fafc !important;
+  border-color: #cbd5e1 !important;
+  color: #334155 !important;
+
+  &:hover {
+    background: #f1f5f9 !important;
+  }
+}
+
+.hero .primary-action {
+  background: #1e40af !important;
+  color: #ffffff !important;
+}
+
+.hero .kpi {
+  background: #f8fafc !important;
+  border-color: #e2e8f0 !important;
+  color: #0f172a !important;
+
+  strong {
+    color: #0f172a !important;
+  }
+
+  span:not(.kpi-icon) {
+    color: #64748b !important;
+  }
+
+  &.warn strong {
+    color: #c2410c !important;
+  }
+}
+
+.hero .meta-chip {
+  background: #f1f5f9 !important;
+  border-color: #e2e8f0 !important;
+  color: #475569 !important;
+}
+
+.hero .pending-banner {
+  background: #fff7ed !important;
+  border-color: #fed7aa !important;
+  color: #c2410c !important;
+}
+
+.page-hero .stat-chip,
+.hero .stat-chip {
+  background: #f8fafc !important;
+  border-color: #e2e8f0 !important;
+  color: #0f172a !important;
+
+  &.accent {
+    background: #eff6ff !important;
+    border-color: #bfdbfe !important;
+  }
+}
+
+.page-hero .stat-lbl,
+.hero .stat-lbl {
+  color: #64748b !important;
+  opacity: 1 !important;
+}
+
+.hero-visual .orbit {
+  border-color: #cbd5e1 !important;
+}
+
+.hero-badge {
+  background: #f1f5f9 !important;
+  color: #334155 !important;
+  border: 1px solid #e2e8f0 !important;
+}
+
+.hero-mini-stats .mini-stat {
+  background: #f8fafc !important;
+  border-color: #e2e8f0 !important;
+  color: #0f172a !important;
+}

@@ -148,12 +148,32 @@ export class AdminManageFeesComponent implements OnInit {
 
   deleteFee(fee: SchoolFeeRow) {
     if (!confirm(`Delete fee "${fee.name}"? This cannot be undone.`)) return;
-    this.api.delete(`/billing/fees/${fee.id}`).subscribe({
-      next: () => {
-        this.showToast('success', 'Fee deleted');
+    this.api.delete<{ message: string; forced?: boolean }>(`/billing/fees/${fee.id}`).subscribe({
+      next: (res) => {
+        this.showToast('success', res.message || 'Fee deleted');
         this.loadFees();
       },
       error: (err) => {
+        if (err.status === 400 && err.error?.linked) {
+          const usage = err.error.usage as { invoices: number; payments: number } | undefined;
+          const linkedMsg = usage
+            ? `${usage.invoices} invoice(s) and ${usage.payments} payment(s)`
+            : 'other records';
+          const forceMsg =
+            `This fee is linked to ${linkedMsg}.\n\n` +
+            'Force delete anyway? The catalog entry will be removed; existing invoices and payments will keep their fee code for history.';
+          if (!confirm(forceMsg)) return;
+          this.api.delete<{ message: string }>(`/billing/fees/${fee.id}`, { force: 'true' }).subscribe({
+            next: (res) => {
+              this.showToast('success', res.message || 'Fee force-deleted');
+              this.loadFees();
+            },
+            error: (forceErr) => {
+              this.showToast('error', forceErr.error?.message || 'Cannot delete this fee');
+            },
+          });
+          return;
+        }
         this.showToast('error', err.error?.message || 'Cannot delete this fee');
       },
     });

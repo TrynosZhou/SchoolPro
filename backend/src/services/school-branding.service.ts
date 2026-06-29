@@ -14,5 +14,10 @@ export async function loadSchoolBranding(): Promise<SchoolBranding> {
     phone: settings?.phone,
     email: settings?.email,
     currency: settings?.currency || 'USD',
+    bankAccountName: settings?.bankAccountName,
+    bankName: settings?.bankName,
+    bankBranch: settings?.bankBranch,
+    bankAccountNumber: settings?.bankAccountNumber,
+    bankPaymentReferenceNote: settings?.bankPaymentReferenceNote,
   };
 }

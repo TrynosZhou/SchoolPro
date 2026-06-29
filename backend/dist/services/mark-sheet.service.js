@@ -26,7 +26,7 @@ function isPassingMark(marks) {
     return marks > 49;
 }
 async function buildMarkSheet(params) {
-    const { examTypeId, termId, classId } = params;
+    const { examTypeId, termId, classId, skipGradeCounts = false } = params;
     const examType = await data_source_1.AppDataSource.getRepository(entities_1.ExamType).findOne({ where: { id: examTypeId } });
     if (!examType)
         throw new Error('Exam type not found');
@@ -90,9 +90,11 @@ async function buildMarkSheet(params) {
                 const marks = Number(m.marks);
                 marksBySubject[sub.id] = { marks };
                 markValues.push(marks);
-                const gradeLetter = normalizeGradeLetter(m.grade || (await (0, grade_service_1.gradeForMarks)(marks, maxMarks)));
-                if (gradeLetter)
-                    gradeCounts[gradeLetter] += 1;
+                if (!skipGradeCounts) {
+                    const gradeLetter = normalizeGradeLetter(m.grade || (await (0, grade_service_1.gradeForMarks)(marks, maxMarks)));
+                    if (gradeLetter)
+                        gradeCounts[gradeLetter] += 1;
+                }
                 if (isPassingMark(marks))
                     subjectsPassed += 1;
             }

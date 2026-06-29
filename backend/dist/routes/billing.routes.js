@@ -206,14 +206,23 @@ router.delete('/fees/:id', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async 
     const fee = await repo.findOne({ where: { id: req.params.id } });
     if (!fee)
         return res.status(404).json({ message: 'Fee not found' });
-    const inUse = await (0, fee_catalog_service_1.isFeeCodeInUse)(fee.code);
-    if (inUse) {
+    const force = req.query.force === 'true' || req.query.force === '1';
+    const usage = await (0, fee_catalog_service_1.countFeeCodeUsage)(fee.code);
+    const inUse = usage.invoices > 0 || usage.payments > 0;
+    if (inUse && !force) {
         return res.status(400).json({
             message: 'This fee is linked to invoices or payments. Deactivate it instead of deleting.',
+            linked: true,
+            usage,
         });
     }
     await repo.delete({ id: fee.id });
-    res.json({ message: 'Fee deleted' });
+    res.json({
+        message: inUse
+            ? `Fee deleted. ${usage.invoices} invoice(s) and ${usage.payments} payment(s) still reference code "${fee.code}".`
+            : 'Fee deleted',
+        forced: inUse,
+    });
 });
 router.get('/invoices', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.PARENT), async (req, res) => {
     const repo = data_source_1.AppDataSource.getRepository(entities_1.Invoice);
@@ -478,6 +487,7 @@ router.post('/payments', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (r
             paymentReference: payment.paymentReference,
             notes: notes || undefined,
             invoiceNumber: linkedInvoiceNumber,
+            invoiceBalance: await fetchStudentInvoiceBalance(studentId, queryRunner.manager),
             ...branding,
         });
         const receipt = await receiptRepo.save(receiptRepo.create({
@@ -546,6 +556,7 @@ router.get('/receipts/:id/pdf', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, en
         paymentReference: p.paymentReference,
         notes: p.notes || undefined,
         invoiceNumber: p.invoice?.invoiceNumber,
+        invoiceBalance: await fetchStudentInvoiceBalance(s.id),
         ...branding,
     });
     receipt.pdfPath = pdfPath;
@@ -842,6 +853,14 @@ router.get('/payments', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.Us
     });
     res.json(payments);
 });
+async function fetchStudentInvoiceBalance(studentId, manager = data_source_1.AppDataSource.manager) {
+    const result = await manager.query(`
+      SELECT COALESCE(SUM("totalAmount" - "amountPaid"), 0) as owed
+      FROM invoices
+      WHERE "studentId" = $1 AND status IN ('sent', 'partial', 'overdue')
+    `, [studentId]);
+    return (0, term_balance_service_1.roundMoney)(Math.max(0, Number(result[0]?.owed || 0)));
+}
 async function fetchBillingDebtors() {
     const result = await data_source_1.AppDataSource.query(`
     SELECT s.id, s."firstName", s."lastName", s."admissionNumber", s.gender, c.name as "className",

@@ -1,6 +1,7 @@
 import { AppDataSource } from '../config/data-source';
 import { ExamMark, ExamType, ReportCard, SchoolClass, Student, Term } from '../entities';
 import { gradeForMarks } from './grade.service';
+import { buildReportCardRemarks, sanitizeReportCardRemark } from './report-card-remarks.service';
 import { relations } from '../utils/typeorm-helpers';
 import { termReportDateRange } from '../utils/helpers';
 import { In } from 'typeorm';
@@ -551,6 +552,14 @@ export async function generateClassReportCards(params: ClassReportCardParams) {
     throw new Error('Exam type not found');
   }
 
+  const schoolClass = await AppDataSource.getRepository(SchoolClass).findOne({
+    where: { id: classId },
+    relations: relations('classTeacher', 'classTeacher.user'),
+  });
+  const classTeacherName = schoolClass?.classTeacher?.user
+    ? formatStaffSignature(schoolClass.classTeacher.user)
+    : null;
+
   const students = await studentRepo.find({
     where: { classId, isActive: true },
     relations: relations('schoolClass', 'schoolClass.form'),
@@ -636,6 +645,7 @@ export async function generateClassReportCards(params: ClassReportCardParams) {
 
   const saved: ReportCard[] = [];
   for (const row of scoreRows) {
+    const student = students.find((s) => s.id === row.studentId);
     let report = await reportRepo.findOne({
       where: { studentId: row.studentId, termId, examTypeId },
     });
@@ -652,6 +662,40 @@ export async function generateClassReportCards(params: ClassReportCardParams) {
     report.subjectsPassed = countSubjectsPassed(row.subjectResults, Number(examType.maxMarks));
     report.totalSubjects = row.subjectResults.length;
     report.isPublished = false;
+
+    if (student) {
+      const remarks = buildReportCardRemarks({
+        firstName: student.firstName,
+        lastName: student.lastName,
+        averageMark: report.averageMark,
+        overallGrade: report.overallGrade ?? undefined,
+        subjectsPassed: report.subjectsPassed,
+        totalSubjects: report.totalSubjects,
+        subjectResults: row.subjectResults,
+        classTeacherName,
+      });
+
+      if (!(report.classTeacherRemarks || '').trim()) {
+        report.classTeacherRemarks = remarks.classTeacherRemarks;
+      } else {
+        report.classTeacherRemarks = sanitizeReportCardRemark(
+          report.classTeacherRemarks,
+          student.firstName,
+          student.lastName,
+        );
+      }
+
+      if (!(report.principalRemarks || '').trim()) {
+        report.principalRemarks = remarks.principalRemarks;
+      } else {
+        report.principalRemarks = sanitizeReportCardRemark(
+          report.principalRemarks,
+          student.firstName,
+          student.lastName,
+        );
+      }
+    }
+
     await reportRepo.save(report);
 
     const full = await reportRepo.findOne({
@@ -669,4 +713,14 @@ export async function generateClassReportCards(params: ClassReportCardParams) {
     count: saved.length,
     reports: attachAttendanceToReports(saved, attendanceMap),
   };
+}
+
+function formatStaffSignature(user: { firstName?: string; lastName?: string }): string {
+  const first = (user.firstName || '').trim();
+  const last = (user.lastName || '').trim();
+  if (!first && !last) return '';
+  if (last && first) {
+    return `${last} ${first.charAt(0).toUpperCase()}.`;
+  }
+  return `${first} ${last}`.trim();
 }

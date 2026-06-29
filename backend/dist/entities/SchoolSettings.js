@@ -51,6 +51,26 @@ __decorate([
     __metadata("design:type", String)
 ], SchoolSettings.prototype, "currency", void 0);
 __decorate([
+    (0, typeorm_1.Column)({ nullable: true }),
+    __metadata("design:type", String)
+], SchoolSettings.prototype, "bankAccountName", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ nullable: true }),
+    __metadata("design:type", String)
+], SchoolSettings.prototype, "bankName", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ nullable: true }),
+    __metadata("design:type", String)
+], SchoolSettings.prototype, "bankBranch", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ nullable: true }),
+    __metadata("design:type", String)
+], SchoolSettings.prototype, "bankAccountNumber", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'text', nullable: true }),
+    __metadata("design:type", String)
+], SchoolSettings.prototype, "bankPaymentReferenceNote", void 0);
+__decorate([
     (0, typeorm_1.Column)({ type: 'text', nullable: true }),
     __metadata("design:type", String)
 ], SchoolSettings.prototype, "feeReminderTemplate", void 0);

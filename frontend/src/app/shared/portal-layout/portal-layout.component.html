@@ -1,4 +1,4 @@
-<div class="layout" [class.sidebar-open]="sidebarOpen()">
+<div class="layout" [class.sidebar-open]="sidebarOpen()" [class.sidebar-collapsed]="sidebarCollapsed()">
   @if (sidebarOpen()) {
     <button type="button" class="sidebar-backdrop no-print" (click)="closeSidebar()" aria-label="Close navigation menu"></button>
   }
@@ -21,68 +21,74 @@
 
     <nav class="sidebar-nav">
       @if (useSections) {
-        @for (section of navSections; track section.heading; let si = $index) {
-          <div class="nav-section" [class.expanded]="isExpanded(section.heading)" [class.has-active]="sectionHasActive(section)">
-            @if (!section.items.length) {
-              <a
-                class="nav-section-link"
-                [routerLink]="section.path || '/admin'"
-                routerLinkActive="active"
-                [routerLinkActiveOptions]="{ exact: true }"
-              >
-                <span class="menu-heading">
-                  <span class="menu-icon" aria-hidden="true">
-                    <ng-container *ngTemplateOutlet="navIcon; context: { $implicit: sectionIconKey(section.heading) }" />
-                  </span>
-                  <span class="nav-section-title">{{ section.heading }}</span>
-                </span>
-              </a>
-            } @else {
-              <button
-                type="button"
-                class="nav-section-toggle"
-                (click)="toggleSection(section.heading)"
-                [attr.aria-expanded]="isExpanded(section.heading)"
-                [attr.aria-controls]="'nav-section-' + si"
-              >
-                <span class="menu-heading">
-                  <span class="menu-icon" aria-hidden="true">
-                    <ng-container *ngTemplateOutlet="navIcon; context: { $implicit: sectionIconKey(section.heading) }" />
-                  </span>
-                  <span class="nav-section-title">{{ section.heading }}</span>
-                </span>
-                <span class="nav-toggle-chevron" [class.open]="isExpanded(section.heading)" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" fill="none">
-                    <path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-                  </svg>
-                </span>
-              </button>
+        @for (group of groupedNav; track group.label) {
+          <div class="nav-group">
+            @if (group.label !== 'Main') {
+              <div class="nav-group-label">{{ group.label }}</div>
             }
-            @if (section.items.length && isExpanded(section.heading)) {
-              <div class="nav-section-items" [id]="'nav-section-' + si">
-                @for (item of section.items; track item.path + item.label) {
-                  <div class="submenu-item">
-                    <a
-                      [routerLink]="item.path"
-                      routerLinkActive="active"
-                      [routerLinkActiveOptions]="{ exact: item.path === '/admin' || item.path === '/teacher' }"
-                    >
-                      <span class="sub-dot" aria-hidden="true"></span>
-                      <span class="nav-label">{{ item.label }}</span>
-                    </a>
+            @for (section of group.sections; track section.heading) {
+            <div
+              class="nav-section"
+              [class.expanded]="isExpanded(section.heading)"
+              [class.has-active]="sectionHasActive(section)"
+            >
+              @if (!section.items.length) {
+                <a
+                  class="nav-item"
+                  [routerLink]="section.path || '/admin'"
+                  routerLinkActive="active"
+                  [routerLinkActiveOptions]="{ exact: true }"
+                >
+                  <span class="nav-item-icon" aria-hidden="true">
+                    <ng-container *ngTemplateOutlet="navIcon; context: { $implicit: sectionIconKey(section.heading) }" />
+                  </span>
+                  <span class="nav-item-label">{{ section.heading }}</span>
+                </a>
+              } @else {
+                <button
+                  type="button"
+                  class="nav-menu-toggle"
+                  (click)="toggleSection(section.heading)"
+                  [attr.aria-expanded]="isExpanded(section.heading)"
+                  [attr.aria-controls]="'nav-submenu-' + sectionDomId(section.heading)"
+                >
+                  <span class="nav-item-icon" aria-hidden="true">
+                    <ng-container *ngTemplateOutlet="navIcon; context: { $implicit: sectionIconKey(section.heading) }" />
+                  </span>
+                  <span class="nav-item-label">{{ section.heading }}</span>
+                  <span class="nav-menu-chevron" [class.open]="isExpanded(section.heading)" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none">
+                      <path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                  </span>
+                </button>
+                @if (isExpanded(section.heading)) {
+                  <div class="nav-submenu" [id]="'nav-submenu-' + sectionDomId(section.heading)">
+                    @for (item of section.items; track item.path + item.label) {
+                      <a
+                        class="nav-subitem"
+                        [routerLink]="item.path"
+                        routerLinkActive="active"
+                        [routerLinkActiveOptions]="{ exact: true }"
+                      >
+                        <span class="nav-subitem-dot" aria-hidden="true"></span>
+                        <span class="nav-subitem-label">{{ item.label }}</span>
+                      </a>
+                    }
                   </div>
                 }
-              </div>
-            }
+              }
+            </div>
+          }
           </div>
         }
       } @else {
         @for (item of navItems; track item.path) {
-          <a class="nav-flat-link" [routerLink]="item.path" routerLinkActive="active">
+          <a class="nav-item" [routerLink]="item.path" routerLinkActive="active">
             @if (item.icon) {
-              <span class="nav-icon" aria-hidden="true">{{ item.icon }}</span>
+              <span class="nav-item-icon nav-item-icon--emoji" aria-hidden="true">{{ item.icon }}</span>
             }
-            <span class="nav-label">{{ item.label }}</span>
+            <span class="nav-item-label">{{ item.label }}</span>
           </a>
         }
       }
@@ -104,6 +110,22 @@
           <span class="user-name">{{ fullName }}</span>
           <span class="user-role">{{ userRoleLabel }}</span>
         </span>
+      </button>
+    </div>
+
+    <div class="sidebar-footer">
+      <button
+        type="button"
+        class="sidebar-collapse-btn"
+        (click)="toggleSidebarCollapsed()"
+        [attr.aria-label]="sidebarCollapsed() ? 'Expand sidebar' : 'Collapse sidebar'"
+      >
+        <span class="sidebar-collapse-chevron" [class.collapsed]="sidebarCollapsed()" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none">
+            <path d="M15 18l-6-6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </span>
+        <span class="sidebar-collapse-label">Collapse</span>
       </button>
     </div>
   </aside>

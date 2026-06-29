@@ -27,8 +27,14 @@ export class ApiService {
     return this.http.patch<T>(`${this.base}${path}`, body);
   }
 
-  delete<T>(path: string) {
-    return this.http.delete<T>(`${this.base}${path}`);
+  delete<T>(path: string, params?: Record<string, string>) {
+    let httpParams = new HttpParams();
+    if (params) {
+      Object.entries(params).forEach(([k, v]) => {
+        if (v != null && v !== '') httpParams = httpParams.set(k, v);
+      });
+    }
+    return this.http.delete<T>(`${this.base}${path}`, { params: httpParams });
   }
 
   uploadFile<T>(path: string, file: File, fieldName = 'file') {

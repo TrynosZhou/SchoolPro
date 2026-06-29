@@ -1335,6 +1335,40 @@
   margin-bottom: 0;
 }
 
+.bank-panel {
+  background: #f5f3ff;
+  border-top: 3px solid #7c3aed;
+  margin-bottom: 0;
+}
+
+.bank-panel-head {
+  margin-bottom: 1.25rem;
+
+  h3 {
+    margin: 0 0 0.35rem;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #5b21b6;
+  }
+}
+
+.bank-form-grid {
+  gap: 1rem;
+}
+
+.bank-form {
+  .field label {
+    font-weight: 600;
+    color: #334155;
+  }
+
+  input {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+  }
+}
+
 .security-panel-head {
   display: flex;
   justify-content: space-between;

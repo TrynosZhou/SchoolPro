@@ -571,7 +571,7 @@ export class AdminReportCardsComponent implements OnInit, OnDestroy {
 
   subjectsPassedLabel(passed?: number, total?: number): string {
     if (passed == null || !total) return '—';
-    return `${passed} Out Of ${total}`;
+    return `${passed}/${total}`;
   }
 
   subjectPositionLabel(pos?: number, total?: number): string {

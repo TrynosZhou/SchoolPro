@@ -18,8 +18,13 @@ import { loadSchoolBranding } from '../services/school-branding.service';
 import { DEFAULT_GRADE_BOUNDARIES } from '../types/grade-boundaries';
 import { generateMarkSheetPdf, generateRankingsPdf, generateReportCardPdf, generateResultsAnalysisPdf } from '../utils/pdf';
 import { buildMarkSheet } from '../services/mark-sheet.service';
-import { buildResultsAnalysis, buildStudentSubjectAnalysis } from '../services/results-analysis.service';
+import {
+  buildResultsAnalysis,
+  buildStudentSubjectAnalysis,
+  buildSubjectAnalysis,
+} from '../services/results-analysis.service';
 import { buildRankings, RankingType } from '../services/ranking.service';
+import { sanitizeReportCardRemark } from '../services/report-card-remarks.service';
 import { reportCardPdfFilename } from '../utils/helpers';
 import { relations } from '../utils/typeorm-helpers';
 import {
@@ -417,6 +422,33 @@ router.get(
     } catch (err) {
       return res.status(400).json({
         message: err instanceof Error ? err.message : 'Failed to build student subject analysis',
+      });
+    }
+  },
+);
+
+router.get(
+  '/results-analysis/subject',
+  authorize(UserRole.ADMIN, UserRole.PRINCIPAL, UserRole.DIRECTOR, UserRole.TEACHER),
+  async (req, res: Response) => {
+    const { examTypeId, termId, classId, subjectId, topN } = req.query;
+    if (!examTypeId || !termId || !classId || !subjectId) {
+      return res.status(400).json({
+        message: 'examTypeId, termId, classId, and subjectId are required',
+      });
+    }
+    try {
+      const analysis = await buildSubjectAnalysis({
+        examTypeId: examTypeId as string,
+        termId: termId as string,
+        classId: classId as string,
+        subjectId: subjectId as string,
+        topN: topN ? Number(topN) : undefined,
+      });
+      res.json(analysis);
+    } catch (err) {
+      return res.status(400).json({
+        message: err instanceof Error ? err.message : 'Failed to build subject analysis',
       });
     }
   },
@@ -852,10 +884,20 @@ router.patch(
     }
 
     if (classTeacherRemarks !== undefined) {
-      report.classTeacherRemarks = String(classTeacherRemarks || '').trim() || null;
+      const cleaned = sanitizeReportCardRemark(
+        String(classTeacherRemarks || ''),
+        report.student.firstName,
+        report.student.lastName,
+      );
+      report.classTeacherRemarks = cleaned.trim() || null;
     }
     if (principalRemarks !== undefined) {
-      report.principalRemarks = String(principalRemarks || '').trim() || null;
+      const cleaned = sanitizeReportCardRemark(
+        String(principalRemarks || ''),
+        report.student.firstName,
+        report.student.lastName,
+      );
+      report.principalRemarks = cleaned.trim() || null;
     }
 
     const saved = await repo.save(report);

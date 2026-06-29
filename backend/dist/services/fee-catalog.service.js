@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.DEFAULT_SCHOOL_FEES = void 0;
 exports.normalizeFeeCode = normalizeFeeCode;
 exports.ensureDefaultSchoolFees = ensureDefaultSchoolFees;
+exports.countFeeCodeUsage = countFeeCodeUsage;
 exports.isFeeCodeInUse = isFeeCodeInUse;
 const data_source_1 = require("../config/data-source");
 const entities_1 = require("../entities");
@@ -30,10 +31,14 @@ async function ensureDefaultSchoolFees() {
         return;
     await repo.save(exports.DEFAULT_SCHOOL_FEES.map((f) => repo.create(f)));
 }
-async function isFeeCodeInUse(code) {
-    const [invoiceCount, paymentCount] = await Promise.all([
+async function countFeeCodeUsage(code) {
+    const [invoices, payments] = await Promise.all([
         data_source_1.AppDataSource.getRepository(entities_1.Invoice).count({ where: { feeType: code } }),
         data_source_1.AppDataSource.getRepository(entities_1.Payment).count({ where: { feeType: code } }),
     ]);
-    return invoiceCount > 0 || paymentCount > 0;
+    return { invoices, payments };
+}
+async function isFeeCodeInUse(code) {
+    const { invoices, payments } = await countFeeCodeUsage(code);
+    return invoices > 0 || payments > 0;
 }

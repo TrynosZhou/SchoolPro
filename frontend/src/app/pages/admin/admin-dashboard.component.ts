@@ -1,3 +1,4 @@
+import { NgTemplateOutlet } from '@angular/common';
 import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { DecimalPipe } from '@angular/common';
@@ -7,10 +8,17 @@ import { ApiService } from '../../core/services/api.service';
 import { AuthService } from '../../core/services/auth.service';
 import { DashboardOverview } from '../../core/models';
 
+interface MajorMenu {
+  title: string;
+  icon: string;
+  primaryPath: string;
+  links: { label: string; path: string }[];
+}
+
 @Component({
   selector: 'app-admin-dashboard',
   standalone: true,
-  imports: [PortalLayoutComponent, DecimalPipe, RouterLink],
+  imports: [PortalLayoutComponent, RouterLink, DecimalPipe, NgTemplateOutlet],
   templateUrl: './admin-dashboard.component.html',
   styleUrl: './admin-dashboard.component.scss',
 })
@@ -18,9 +26,11 @@ export class AdminDashboardComponent implements OnInit {
   private api = inject(ApiService);
   private auth = inject(AuthService);
 
-  overview = signal<DashboardOverview | null>(null);
-  loading = signal(true);
   readonly adminNav = ADMIN_NAV_SECTIONS;
+  readonly selectedMenu = signal<string | null>(null);
+  readonly overview = signal<DashboardOverview | null>(null);
+  readonly loading = signal(true);
+
   readonly todayLabel = new Intl.DateTimeFormat('en-US', {
     weekday: 'long',
     month: 'long',
@@ -31,7 +41,7 @@ export class AdminDashboardComponent implements OnInit {
   readonly greetingName = computed(() => {
     const u = this.auth.user();
     const name = u ? `${u.firstName} ${u.lastName}`.trim() : '';
-    return name ? `${name}'s Dashboard` : 'School Operations Dashboard';
+    return name || 'Administrator';
   });
 
   readonly attendanceRows = computed(() => this.overview()?.attendanceToday ?? []);
@@ -60,110 +70,149 @@ export class AdminDashboardComponent implements OnInit {
         key: 'students',
         title: 'Students',
         value: String(o?.totalStudents ?? 0),
-        caption: 'Total enrolled learners',
-        icon: '🎓',
+        caption: 'Enrolled learners',
+        path: '/admin/students',
         tone: 'blue',
       },
       {
         key: 'staff',
         title: 'Staff',
         value: String(o?.totalStaff ?? 0),
-        caption: 'Teaching & support team',
-        icon: '👩‍🏫',
-        tone: 'purple',
+        caption: 'Teaching & support',
+        path: '/admin/staff',
+        tone: 'indigo',
       },
       {
         key: 'collections',
-        title: 'Collections (Month)',
-        value: `$${(o?.monthlyCollections ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-        caption: 'Payments received this month',
-        icon: '💰',
+        title: 'Collections',
+        value: `$${(o?.monthlyCollections ?? 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`,
+        caption: 'Received this month',
+        path: '/admin/payment',
         tone: 'green',
       },
       {
         key: 'debtors',
-        title: 'Debtors',
-        value: `$${(o?.totalDebtors ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-        caption: 'Outstanding balances',
-        icon: '📊',
-        tone: 'orange',
+        title: 'Outstanding',
+        value: `$${(o?.totalDebtors ?? 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`,
+        caption: 'Debtor balances',
+        path: '/admin/fin-reports/debtor-aging',
+        tone: 'amber',
       },
     ];
   });
 
-  readonly actionGroups = [
+  readonly majorMenus: MajorMenu[] = [
     {
-      title: 'Students & Staff',
+      title: 'Students',
+      icon: 'students',
+      primaryPath: '/admin/students',
       links: [
-        { label: 'Register Student', path: '/admin/students', icon: '📝' },
-        { label: 'Class Enrollment', path: '/admin/enrollment', icon: '🎓' },
-        { label: 'All Parents', path: '/admin/parents', icon: '👨‍👩‍👧' },
-        { label: 'Staff Management', path: '/admin/staff', icon: '👩‍🏫' },
+        { label: 'Students', path: '/admin/students' },
+        { label: 'Class Enrolment', path: '/admin/enrollment' },
+        { label: 'Class List', path: '/admin/class-list' },
+        { label: 'Class Promotion', path: '/admin/class-promotion' },
       ],
+    },
+    {
+      title: 'Parents',
+      icon: 'parents',
+      primaryPath: '/admin/parents',
+      links: [{ label: 'All Parents', path: '/admin/parents' }],
     },
     {
       title: 'Attendance',
+      icon: 'attendance',
+      primaryPath: '/admin/attendance/mark-register',
       links: [
-        { label: 'Mark Register', path: '/admin/attendance/mark-register', icon: '✅' },
-        { label: 'Attendance Report', path: '/admin/attendance/report', icon: '📊' },
+        { label: 'Mark Register', path: '/admin/attendance/mark-register' },
+        { label: 'Attendance Report', path: '/admin/attendance/report' },
       ],
     },
     {
-      title: 'Finance',
+      title: 'Staff',
+      icon: 'staff',
+      primaryPath: '/admin/staff',
       links: [
-        { label: 'Billing & Payments', path: '/admin/billing', icon: '💳' },
-        { label: 'Manage Fees', path: '/admin/manage-fees', icon: '💵' },
-        { label: 'Student Balance', path: '/admin/student-balance', icon: '🧮' },
-        { label: 'Financial Books', path: '/admin/finance', icon: '💰' },
-      ],
-    },
-    {
-      title: 'Fin.Reports',
-      links: [
-        { label: 'Student Ledger', path: '/admin/fin-reports/student-ledger', icon: '📒' },
-        { label: 'Outstanding Invoices', path: '/admin/fin-reports/outstanding-invoices', icon: '🧾' },
-        { label: 'Student Reconcilliation', path: '/admin/fin-reports/student-reconciliation', icon: '⚖️' },
-        { label: 'Debtor Aging', path: '/admin/fin-reports/debtor-aging', icon: '⏳' },
-        { label: 'Fee Collection & Revenue', path: '/admin/fin-reports/fee-collection-revenue', icon: '📊' },
-      ],
-    },
-    {
-      title: 'Communication',
-      links: [
-        { label: 'Announcements', path: '/admin/communication/send', icon: '✉️' },
-        { label: 'Messages', path: '/admin/communication/inbox', icon: '📥' },
-      ],
-    },
-    {
-      title: 'Timetable',
-      links: [
-        { label: 'Configure Periods', path: '/admin/timetable/configure-periods', icon: '⏱️' },
-        { label: 'Generate Timetable', path: '/admin/timetable/generate', icon: '📅' },
-        { label: 'View Timetable', path: '/admin/timetable/view', icon: '👁️' },
+        { label: 'Staff Directory', path: '/admin/staff' },
+        { label: 'Payroll', path: '/admin/payroll' },
       ],
     },
     {
       title: 'Examinations',
+      icon: 'examinations',
+      primaryPath: '/admin/exams',
       links: [
-        { label: 'Exam Marks', path: '/admin/exams', icon: '🧾' },
-        { label: 'Mark Sheet', path: '/admin/mark-sheet', icon: '📑' },
-        { label: 'Results Analysis', path: '/admin/results-analysis', icon: '📈' },
-        { label: 'Ranking', path: '/admin/ranking', icon: '🏆' },
-        { label: 'Report Cards', path: '/admin/report-cards', icon: '📄' },
+        { label: 'Exam Marks', path: '/admin/exams' },
+        { label: 'Report Cards', path: '/admin/report-cards' },
+        { label: 'Mark Sheet', path: '/admin/mark-sheet' },
+        { label: 'Results Analysis', path: '/admin/results-analysis' },
+        { label: 'Ranking', path: '/admin/ranking' },
       ],
     },
     {
-      title: 'System Administration',
+      title: 'Finance',
+      icon: 'finance',
+      primaryPath: '/admin/billing',
       links: [
-        { label: 'School Settings', path: '/admin/settings', icon: '⚙️' },
-        { label: 'Academic Settings', path: '/admin/academic-settings', icon: '📚' },
-        { label: 'User Management', path: '/admin/user-management', icon: '👤' },
-        { label: 'User Permissions', path: '/admin/user-permissions', icon: '🔐' },
+        { label: 'Billing', path: '/admin/billing' },
+        { label: 'Payment', path: '/admin/payment' },
+        { label: 'Manage Fees', path: '/admin/manage-fees' },
+        { label: 'Student Balance', path: '/admin/student-balance' },
+        { label: 'Financial Books', path: '/admin/finance' },
+      ],
+    },
+    {
+      title: 'Fin. Reports',
+      icon: 'fin-reports',
+      primaryPath: '/admin/fin-reports/student-ledger',
+      links: [
+        { label: 'Student Ledger', path: '/admin/fin-reports/student-ledger' },
+        { label: 'Outstanding Invoices', path: '/admin/fin-reports/outstanding-invoices' },
+        { label: 'Student Reconciliation', path: '/admin/fin-reports/student-reconciliation' },
+        { label: 'Debtor Aging', path: '/admin/fin-reports/debtor-aging' },
+        { label: 'Fee Collection & Revenue', path: '/admin/fin-reports/fee-collection-revenue' },
+      ],
+    },
+    {
+      title: 'Communication',
+      icon: 'communication',
+      primaryPath: '/admin/communication/inbox',
+      links: [
+        { label: 'Announcements', path: '/admin/communication/send' },
+        { label: 'Messages', path: '/admin/communication/inbox' },
+      ],
+    },
+    {
+      title: 'Timetable',
+      icon: 'timetable',
+      primaryPath: '/admin/timetable/view',
+      links: [
+        { label: 'Configure Periods', path: '/admin/timetable/configure-periods' },
+        { label: 'Generate Timetable', path: '/admin/timetable/generate' },
+        { label: 'View Timetable', path: '/admin/timetable/view' },
+      ],
+    },
+    {
+      title: 'System Admin',
+      icon: 'system-admin',
+      primaryPath: '/admin/settings',
+      links: [
+        { label: 'School Settings', path: '/admin/settings' },
+        { label: 'Academic Settings', path: '/admin/academic-settings' },
+        { label: 'User Management', path: '/admin/user-management' },
+        { label: 'User Permissions', path: '/admin/user-permissions' },
+        { label: 'Integrations', path: '/admin/integrations' },
       ],
     },
   ];
 
-  ngOnInit() {
+  selectedMenuLinks = computed(() => {
+    const key = this.selectedMenu();
+    if (!key) return [];
+    return this.majorMenus.find((m) => m.title === key)?.links ?? [];
+  });
+
+  ngOnInit(): void {
     this.api.get<DashboardOverview>('/dashboard/overview').subscribe({
       next: (d) => {
         this.overview.set(d);
@@ -171,6 +220,18 @@ export class AdminDashboardComponent implements OnInit {
       },
       error: () => this.loading.set(false),
     });
+  }
+
+  isSelected(title: string): boolean {
+    return this.selectedMenu() === title;
+  }
+
+  toggleMenu(title: string): void {
+    this.selectedMenu.update((current) => (current === title ? null : title));
+  }
+
+  primaryPathFor(title: string): string {
+    return this.majorMenus.find((m) => m.title === title)?.primaryPath ?? '/admin';
   }
 
   attendanceTone(status: string): string {

@@ -131,9 +131,9 @@
         <div class="results-meta">
           <span>
             @if (view() === 'pending') {
-              Showing <strong>{{ visiblePending().length }}</strong> of <strong>{{ pending().length }}</strong> pending
+              Showing <strong>{{ visiblePending().length }}</strong> of <strong>{{ pendingStudents().length }}</strong> pending
             } @else {
-              Showing <strong>{{ visibleEnrolled().length }}</strong> of <strong>{{ enrolled().length }}</strong> enrolled
+              Showing <strong>{{ visibleEnrolled().length }}</strong> of <strong>{{ enrolledStudents().length }}</strong> enrolled
             }
           </span>
           @if (hasActiveFilters()) {

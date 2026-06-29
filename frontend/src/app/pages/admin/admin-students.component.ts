@@ -1,5 +1,5 @@
 import { Component, inject, OnInit, signal, computed } from '@angular/core';
-import { NgTemplateOutlet } from '@angular/common';
+import { NgTemplateOutlet, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
@@ -42,7 +42,7 @@ interface RegisterStudentResponse extends Student {
 @Component({
   selector: 'app-admin-students',
   standalone: true,
-  imports: [PortalLayoutComponent, FormsModule, RouterLink, NgTemplateOutlet],
+  imports: [PortalLayoutComponent, FormsModule, RouterLink, NgTemplateOutlet, DatePipe],
   templateUrl: './admin-students.component.html',
   styleUrl: './admin-students.component.scss',
 })
@@ -61,6 +61,8 @@ export class AdminStudentsComponent implements OnInit {
   registerDrawerOpen = signal(false);
   editingStudent = signal<Student | null>(null);
   deleteTarget = signal<Student | null>(null);
+  detailStudent = signal<Student | null>(null);
+  idCardPdfLoading = signal<string | null>(null);
   toast = signal<{ type: 'success' | 'error'; msg: string } | null>(null);
 
   enrollmentFilter = signal<EnrollmentFilter>('all');
@@ -75,7 +77,7 @@ export class AdminStudentsComponent implements OnInit {
   readonly adminNav = ADMIN_NAV_SECTIONS;
 
   stats = computed(() => {
-    const rows = this.students();
+    const rows = this.studentRows();
     return {
       total: rows.length,
       enrolled: rows.filter((s) => this.enrollmentStatus(s) === 'enrolled').length,
@@ -86,7 +88,7 @@ export class AdminStudentsComponent implements OnInit {
   });
 
   visibleStudents = computed(() => {
-    let rows = [...this.students()];
+    let rows = [...this.studentRows()];
     const q = this.search().trim().toLowerCase();
 
     if (q) {
@@ -134,9 +136,24 @@ export class AdminStudentsComponent implements OnInit {
   ngOnInit() {
     this.load();
     this.api.get<FormOption[]>('/admin/forms').subscribe({
-      next: (f) => this.forms.set(f.sort((a, b) => a.level - b.level)),
+      next: (f) => {
+        const rows = this.asFormArray(f);
+        this.forms.set(rows.sort((a, b) => a.level - b.level));
+      },
       error: () => this.showToast('error', 'Could not load forms'),
     });
+  }
+
+  private studentRows(): Student[] {
+    return this.asStudentArray(this.students());
+  }
+
+  private asStudentArray(value: unknown): Student[] {
+    return Array.isArray(value) ? value : [];
+  }
+
+  private asFormArray(value: unknown): FormOption[] {
+    return Array.isArray(value) ? value : [];
   }
 
   private emptyForm(): StudentForm {
@@ -159,6 +176,10 @@ export class AdminStudentsComponent implements OnInit {
 
   formLabel(student: Student): string {
     return student.form?.name || student.schoolClass?.form?.name || '—';
+  }
+
+  classLabel(student: Student): string {
+    return student.schoolClass?.name || '—';
   }
 
   initials(student: Student): string {
@@ -188,7 +209,7 @@ export class AdminStudentsComponent implements OnInit {
 
     this.api.get<Student[]>('/students').subscribe({
       next: (s) => {
-        this.students.set(s);
+        this.students.set(this.asStudentArray(s));
         this.loading.set(false);
         this.refreshing.set(false);
       },
@@ -210,6 +231,7 @@ export class AdminStudentsComponent implements OnInit {
   }
 
   openEdit(student: Student) {
+    this.detailStudent.set(null);
     this.registerDrawerOpen.set(false);
     this.editingStudent.set(student);
     this.form = {
@@ -239,6 +261,35 @@ export class AdminStudentsComponent implements OnInit {
   confirmDelete(student: Student, event?: Event) {
     event?.stopPropagation();
     this.deleteTarget.set(student);
+  }
+
+  openStudentDetail(student: Student) {
+    this.detailStudent.set(student);
+  }
+
+  closeStudentDetail() {
+    this.detailStudent.set(null);
+  }
+
+  previewStudentIdPdf(student: Student, event?: Event) {
+    event?.stopPropagation();
+    this.idCardPdfLoading.set(student.id);
+    this.api.getBlob(`/students/${student.id}/id-card/pdf`, { preview: 'true' }).subscribe({
+      next: (blob) => {
+        this.idCardPdfLoading.set(null);
+        if (blob.type && !blob.type.includes('pdf')) {
+          this.showToast('error', 'Server did not return a PDF file');
+          return;
+        }
+        const url = URL.createObjectURL(blob);
+        window.open(url, '_blank', 'noopener,noreferrer');
+        setTimeout(() => URL.revokeObjectURL(url), 90_000);
+      },
+      error: (err) => {
+        this.idCardPdfLoading.set(null);
+        this.showToast('error', err.error?.message || 'Failed to generate student ID PDF');
+      },
+    });
   }
 
   cancelDelete() {

@@ -27,10 +27,15 @@ export async function ensureDefaultSchoolFees(): Promise<void> {
   await repo.save(DEFAULT_SCHOOL_FEES.map((f) => repo.create(f)));
 }
 
-export async function isFeeCodeInUse(code: string): Promise<boolean> {
-  const [invoiceCount, paymentCount] = await Promise.all([
+export async function countFeeCodeUsage(code: string): Promise<{ invoices: number; payments: number }> {
+  const [invoices, payments] = await Promise.all([
     AppDataSource.getRepository(Invoice).count({ where: { feeType: code } }),
     AppDataSource.getRepository(Payment).count({ where: { feeType: code } }),
   ]);
-  return invoiceCount > 0 || paymentCount > 0;
+  return { invoices, payments };
+}
+
+export async function isFeeCodeInUse(code: string): Promise<boolean> {
+  const { invoices, payments } = await countFeeCodeUsage(code);
+  return invoices > 0 || payments > 0;
 }

@@ -42,8 +42,8 @@ export class AdminEnrollmentComponent implements OnInit {
   readonly classSelectLabel = classSelectLabel;
 
   view = signal<EnrollmentView>('pending');
-  pending = signal<Student[]>([]);
-  enrolled = signal<Student[]>([]);
+  pendingStudents = signal<Student[]>([]);
+  enrolledStudents = signal<Student[]>([]);
   classes = signal<ClassOption[]>([]);
   search = signal('');
   formFilter = signal('all');
@@ -56,12 +56,12 @@ export class AdminEnrollmentComponent implements OnInit {
   toast = signal<{ type: 'success' | 'error'; msg: string } | null>(null);
 
   stats = computed(() => {
-    const classRows = this.classes();
+    const classRows = this.classRows();
     const fullClasses = classRows.filter((c) => this.classUsage(c).isFull).length;
     return {
-      pending: this.pending().length,
-      enrolled: this.enrolled().length,
-      total: this.pending().length + this.enrolled().length,
+      pending: this.pendingStudents().length,
+      enrolled: this.enrolledStudents().length,
+      total: this.pendingStudents().length + this.enrolledStudents().length,
       classes: classRows.length,
       fullClasses,
       openSeats: classRows.reduce((sum, c) => sum + Math.max(0, c.capacity - (c.students?.length ?? 0)), 0),
@@ -70,15 +70,15 @@ export class AdminEnrollmentComponent implements OnInit {
 
   formOptions = computed(() => {
     const names = new Set<string>();
-    for (const s of [...this.pending(), ...this.enrolled()]) {
+    for (const s of [...this.pendingStudents(), ...this.enrolledStudents()]) {
       const name = s.form?.name || s.schoolClass?.form?.name;
       if (name) names.add(name);
     }
     return [...names].sort();
   });
 
-  visiblePending = computed(() => this.filterAndSortStudents(this.pending()));
-  visibleEnrolled = computed(() => this.filterAndSortStudents(this.enrolled(), true));
+  visiblePending = computed(() => this.filterAndSortStudents(this.pendingStudents()));
+  visibleEnrolled = computed(() => this.filterAndSortStudents(this.enrolledStudents(), true));
 
   hasActiveFilters = computed(
     () => Boolean(this.search().trim()) || this.formFilter() !== 'all' || this.sortOrder() !== 'name-asc',
@@ -90,7 +90,10 @@ export class AdminEnrollmentComponent implements OnInit {
       this.studentsLink = '/teacher';
     }
     this.load();
-    this.api.get<ClassOption[]>('/admin/classes').subscribe((c) => this.classes.set(c));
+    this.api.get<ClassOption[]>('/admin/classes').subscribe({
+      next: (c) => this.classes.set(this.asClassArray(c)),
+      error: () => this.showToast('error', 'Could not load classes'),
+    });
   }
 
   setView(v: EnrollmentView) {
@@ -113,12 +116,12 @@ export class AdminEnrollmentComponent implements OnInit {
 
     this.api.get<Student[]>('/students', { unenrolled: 'true' }).subscribe({
       next: (s) => {
-        this.pending.set(s);
+        this.pendingStudents.set(this.asStudentArray(s));
         pendingDone = true;
         finish();
       },
       error: () => {
-        this.pending.set([]);
+        this.pendingStudents.set([]);
         pendingDone = true;
         finish();
         this.showToast('error', 'Failed to load pending students');
@@ -127,12 +130,12 @@ export class AdminEnrollmentComponent implements OnInit {
 
     this.api.get<Student[]>('/students', { enrolled: 'true' }).subscribe({
       next: (s) => {
-        this.enrolled.set(s);
+        this.enrolledStudents.set(this.asStudentArray(s));
         enrolledDone = true;
         finish();
       },
       error: () => {
-        this.enrolled.set([]);
+        this.enrolledStudents.set([]);
         enrolledDone = true;
         finish();
         this.showToast('error', 'Failed to load enrolled students');
@@ -159,7 +162,7 @@ export class AdminEnrollmentComponent implements OnInit {
   }
 
   classesForStudent(student: Student): ClassOption[] {
-    const all = this.classes();
+    const all = this.classRows();
     const formName = student.form?.name || student.schoolClass?.form?.name;
     if (!formName) return all;
     const matched = all.filter((c) => c.form?.name === formName);
@@ -181,7 +184,7 @@ export class AdminEnrollmentComponent implements OnInit {
       return;
     }
 
-    const selected = this.classes().find((c) => c.id === classId);
+    const selected = this.classRows().find((c) => c.id === classId);
     if (selected && this.classUsage(selected).isFull) {
       this.showToast('error', `${selected.name} is at full capacity`);
       return;
@@ -196,7 +199,9 @@ export class AdminEnrollmentComponent implements OnInit {
         const map = { ...this.selectedClassId() };
         delete map[student.id];
         this.selectedClassId.set(map);
-        this.api.get<ClassOption[]>('/admin/classes').subscribe((c) => this.classes.set(c));
+        this.api.get<ClassOption[]>('/admin/classes').subscribe({
+          next: (c) => this.classes.set(this.asClassArray(c)),
+        });
       },
       error: (e) => {
         this.submitting.set(null);
@@ -208,7 +213,7 @@ export class AdminEnrollmentComponent implements OnInit {
   changeClass(student: Student, classId: string) {
     if (!classId || classId === student.classId) return;
 
-    const selected = this.classes().find((c) => c.id === classId);
+    const selected = this.classRows().find((c) => c.id === classId);
     if (selected && this.classUsage(selected).isFull) {
       this.showToast('error', `${selected.name} is at full capacity`);
       return;
@@ -220,7 +225,9 @@ export class AdminEnrollmentComponent implements OnInit {
         this.submitting.set(null);
         this.showToast('success', 'Class updated');
         this.load(true);
-        this.api.get<ClassOption[]>('/admin/classes').subscribe((c) => this.classes.set(c));
+        this.api.get<ClassOption[]>('/admin/classes').subscribe({
+          next: (c) => this.classes.set(this.asClassArray(c)),
+        });
       },
       error: () => {
         this.submitting.set(null);
@@ -237,7 +244,9 @@ export class AdminEnrollmentComponent implements OnInit {
         this.submitting.set(null);
         this.showToast('success', 'Student moved to pending enrollment');
         this.load(true);
-        this.api.get<ClassOption[]>('/admin/classes').subscribe((c) => this.classes.set(c));
+        this.api.get<ClassOption[]>('/admin/classes').subscribe({
+          next: (c) => this.classes.set(this.asClassArray(c)),
+        });
       },
       error: () => {
         this.submitting.set(null);
@@ -287,5 +296,17 @@ export class AdminEnrollmentComponent implements OnInit {
   private showToast(type: 'success' | 'error', msg: string) {
     this.toast.set({ type, msg });
     setTimeout(() => this.toast.set(null), 4000);
+  }
+
+  private classRows(): ClassOption[] {
+    return this.asClassArray(this.classes());
+  }
+
+  private asStudentArray(value: unknown): Student[] {
+    return Array.isArray(value) ? value : [];
+  }
+
+  private asClassArray(value: unknown): ClassOption[] {
+    return Array.isArray(value) ? value : [];
   }
 }

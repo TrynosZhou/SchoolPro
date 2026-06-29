@@ -67,7 +67,7 @@
           <span class="invoice-note">{{ lastInvoiceInfo() }}</span>
         }
         <div class="success-links">
-          <a routerLink="/admin/billing">View billing</a>
+          <a routerLink="/admin/payment">Record payment</a>
           <a routerLink="/admin/enrollment">Enroll in a class</a>
         </div>
       </div>
@@ -209,40 +209,36 @@
         </div>
       } @else {
         <div class="table-wrap">
+          <p class="table-hint">Double-click a row to view student details and guardian contact.</p>
           <table class="data-table">
             <thead>
               <tr>
-                <th>Student</th>
-                <th>Form / Class</th>
+                <th>Student ID</th>
+                <th>Last Name</th>
+                <th>First Name</th>
+                <th>Gender</th>
+                <th>Class</th>
                 <th>Type</th>
                 <th>Status</th>
-                <th>Guardian</th>
-                <th></th>
+                <th class="col-actions">Action</th>
               </tr>
             </thead>
             <tbody>
               @for (s of visibleStudents(); track s.id) {
-                <tr>
+                <tr class="clickable-row" (dblclick)="openStudentDetail(s)" title="Double-click to view details">
+                  <td><code class="sid">{{ s.admissionNumber }}</code></td>
+                  <td>{{ s.lastName }}</td>
+                  <td>{{ s.firstName }}</td>
                   <td>
-                    <div class="user-cell">
-                      <span class="avatar">{{ initials(s) }}</span>
-                      <div>
-                        <strong>{{ s.firstName }} {{ s.lastName }}</strong>
-                        <code class="sid">{{ s.admissionNumber }}</code>
-                      </div>
-                    </div>
+                    @if (s.gender) {
+                      <span class="gender-tag">{{ s.gender }}</span>
+                    } @else {
+                      <span class="muted">—</span>
+                    }
                   </td>
-                  <td>
-                    <div class="form-class-cell">
-                      <span>{{ formLabel(s) }}</span>
-                      <span class="muted">{{ s.schoolClass?.name || 'No class assigned' }}</span>
-                    </div>
-                  </td>
+                  <td>{{ classLabel(s) }}</td>
                   <td>
                     <span class="type-tag" [class.boarder]="s.studentType === 'boarder'">{{ studentTypeLabel(s.studentType) }}</span>
-                    @if (s.gender) {
-                      <span class="gender-tag inline">{{ s.gender }}</span>
-                    }
                   </td>
                   <td>
                     @if (enrollmentStatus(s) === 'enrolled') {
@@ -251,22 +247,25 @@
                       <span class="status pending">Awaiting class</span>
                     }
                   </td>
-                  <td>
-                    <div class="guardian-cell">
-                      <span>{{ s.guardians?.[0]?.fullName || '—' }}</span>
-                      <span class="muted">{{ s.guardians?.[0]?.phone || '' }}</span>
-                    </div>
-                  </td>
                   <td class="col-actions">
                     <div class="action-btns">
-                      <button type="button" class="icon-btn edit" (click)="openEdit(s)" title="Edit student" aria-label="Edit student">
+                      <button
+                        type="button"
+                        class="icon-btn id-card"
+                        (click)="previewStudentIdPdf(s, $event)"
+                        [disabled]="idCardPdfLoading() === s.id"
+                        title="Preview Student ID PDF"
+                        aria-label="Preview Student ID PDF"
+                      >
+                        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                          <path fill="currentColor" d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm-1 2l5 5h-5V4zM8 12.5h8v1.5H8v-1.5zm0 3h8v1.5H8V15.5zm0 3h5v1.5H8V18.5z"/>
+                        </svg>
+                      </button>
+                      <button type="button" class="icon-btn edit" (click)="openEdit(s); $event.stopPropagation()" title="Edit student" aria-label="Edit student">
                         <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
                           <path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1.003 1.003 0 0 0 0-1.42l-2.34-2.34a1.003 1.003 0 0 0-1.42 0l-1.83 1.83 3.75 3.75 1.84-1.82z"/>
                         </svg>
                       </button>
-                      @if (enrollmentStatus(s) === 'pending') {
-                        <a routerLink="/admin/enrollment" class="icon-btn enroll" title="Enroll in class" aria-label="Enroll in class">🎓</a>
-                      }
                       <button type="button" class="icon-btn delete" (click)="confirmDelete(s, $event)" title="Delete student" aria-label="Delete student">
                         <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
                           <path fill="currentColor" d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
@@ -361,6 +360,101 @@
         <button type="button" class="btn-danger" [disabled]="saving()" (click)="deleteStudent()">
           {{ saving() ? 'Deleting…' : 'Delete' }}
         </button>
+      </div>
+    </div>
+  </div>
+}
+
+@if (detailStudent(); as student) {
+  <div class="modal-backdrop" (click)="closeStudentDetail()">
+    <div class="modal detail-modal" role="dialog" aria-labelledby="student-detail-title" (click)="$event.stopPropagation()">
+      <div class="detail-head">
+        <div>
+          <p class="eyebrow">Student details</p>
+          <h2 id="student-detail-title">{{ student.firstName }} {{ student.lastName }}</h2>
+          <code class="sid">{{ student.admissionNumber }}</code>
+        </div>
+        <button type="button" class="drawer-close" (click)="closeStudentDetail()" aria-label="Close">×</button>
+      </div>
+
+      <dl class="detail-grid">
+        <div>
+          <dt>Student ID</dt>
+          <dd><code class="sid">{{ student.admissionNumber }}</code></dd>
+        </div>
+        <div>
+          <dt>Last name</dt>
+          <dd>{{ student.lastName }}</dd>
+        </div>
+        <div>
+          <dt>First name</dt>
+          <dd>{{ student.firstName }}</dd>
+        </div>
+        <div>
+          <dt>Gender</dt>
+          <dd>{{ student.gender || '—' }}</dd>
+        </div>
+        <div>
+          <dt>Form</dt>
+          <dd>{{ formLabel(student) }}</dd>
+        </div>
+        <div>
+          <dt>Class</dt>
+          <dd>{{ classLabel(student) }}</dd>
+        </div>
+        <div>
+          <dt>Type</dt>
+          <dd>{{ studentTypeLabel(student.studentType) }}</dd>
+        </div>
+        <div>
+          <dt>Status</dt>
+          <dd>
+            @if (enrollmentStatus(student) === 'enrolled') {
+              <span class="status enrolled">Enrolled</span>
+            } @else {
+              <span class="status pending">Awaiting class</span>
+            }
+          </dd>
+        </div>
+        @if (student.dateOfBirth) {
+          <div>
+            <dt>Date of birth</dt>
+            <dd>{{ student.dateOfBirth | date: 'mediumDate' }}</dd>
+          </div>
+        }
+        @if (student.address) {
+          <div class="span-2">
+            <dt>Address</dt>
+            <dd>{{ student.address }}</dd>
+          </div>
+        }
+      </dl>
+
+      <section class="detail-guardian">
+        <h3>Guardian / parent</h3>
+        @if (student.guardians?.[0]; as guardian) {
+          <dl class="detail-grid">
+            <div>
+              <dt>Name</dt>
+              <dd>{{ guardian.fullName || '—' }}</dd>
+            </div>
+            <div>
+              <dt>Phone</dt>
+              <dd>{{ guardian.phone || '—' }}</dd>
+            </div>
+            <div>
+              <dt>Relationship</dt>
+              <dd>{{ guardian.relationship || '—' }}</dd>
+            </div>
+          </dl>
+        } @else {
+          <p class="muted">No guardian contact on file.</p>
+        }
+      </section>
+
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" (click)="closeStudentDetail()">Close</button>
+        <button type="button" class="btn-primary" (click)="openEdit(student); closeStudentDetail()">Edit student</button>
       </div>
     </div>
   </div>

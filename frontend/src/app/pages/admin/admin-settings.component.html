@@ -15,7 +15,7 @@
       <div class="hero-text">
         <p class="hero-eyebrow">Configuration</p>
         <h1 class="hero-title">{{ school()?.schoolName || 'School Settings' }}</h1>
-        <p class="hero-sub">{{ school()?.tagline || 'School profile, security, messaging, and tuckshop' }}</p>
+        <p class="hero-sub">{{ school()?.tagline || 'School profile, bank details, security, messaging, and tuckshop' }}</p>
         <p class="hero-sub hero-sub--link">
           Academic calendar, classes, subjects &amp; exams →
           <a routerLink="/admin/academic-settings">Academic Settings</a>
@@ -133,6 +133,73 @@
               <div class="form-actions">
                 <button type="submit" class="btn-primary" [disabled]="submitting()">
                   {{ submitting() ? 'Saving…' : 'Save Profile' }}
+                </button>
+              </div>
+            </form>
+          </section>
+        }
+
+        <!-- BANK DETAILS -->
+        @if (activeTab() === 'bank') {
+          <section class="panel panel-elevated bank-panel">
+            <div class="bank-panel-head">
+              <h3>Payment / Banking Details (PDFs)</h3>
+              <p class="panel-sub">
+                Shown on invoice statement and payment receipt PDFs to guide parents and students when paying fees by bank transfer.
+              </p>
+            </div>
+
+            <form class="settings-form bank-form" (ngSubmit)="saveBankDetails()">
+              <div class="form-grid bank-form-grid">
+                <div class="field span-2">
+                  <label for="bankAccountName">Account name</label>
+                  <input
+                    id="bankAccountName"
+                    [(ngModel)]="bankForm.bankAccountName"
+                    name="bankAccountName"
+                    placeholder="Junior Primary School"
+                  />
+                </div>
+                <div class="field span-2">
+                  <label for="bankName">Bank</label>
+                  <input
+                    id="bankName"
+                    [(ngModel)]="bankForm.bankName"
+                    name="bankName"
+                    placeholder="CBZ Bank"
+                  />
+                </div>
+                <div class="field span-2">
+                  <label for="bankBranch">Branch</label>
+                  <input
+                    id="bankBranch"
+                    [(ngModel)]="bankForm.bankBranch"
+                    name="bankBranch"
+                    placeholder="Masvingo"
+                  />
+                </div>
+                <div class="field span-2">
+                  <label for="bankAccountNumber">Account number</label>
+                  <input
+                    id="bankAccountNumber"
+                    [(ngModel)]="bankForm.bankAccountNumber"
+                    name="bankAccountNumber"
+                    placeholder="02526786630010"
+                  />
+                </div>
+                <div class="field span-2">
+                  <label for="bankPaymentReferenceNote">Payment reference note</label>
+                  <input
+                    id="bankPaymentReferenceNote"
+                    [(ngModel)]="bankForm.bankPaymentReferenceNote"
+                    name="bankPaymentReferenceNote"
+                    placeholder="Please use the account number as your payment reference."
+                  />
+                </div>
+              </div>
+              <div class="form-actions">
+                <button type="submit" class="btn-primary" [disabled]="submitting()">
+                  {{ submitting() ? 'Saving…' : 'Save Bank Details' }}
                 </button>
               </div>
             </form>

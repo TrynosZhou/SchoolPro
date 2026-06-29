@@ -9,143 +9,85 @@
     <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>
   }
 
-  <header class="admin-hero">
-    <div class="admin-hero-text">
-      <p class="eyebrow">Academics · Performance</p>
-      <h1 class="admin-hero-title">Results Analysis</h1>
-      <p class="admin-hero-sub">
-        Analyse class exam results or drill into a single student’s performance across all subjects for the selected term and exam type.
-      </p>
-    </div>
-    <div class="admin-hero-actions">
-      <a routerLink="/admin/exams" class="hero-link">Enter exam marks →</a>
-      <a routerLink="/admin/mark-sheet" class="hero-link">Mark sheet →</a>
-    </div>
-  </header>
+  <section class="card analysis-parameters">
+    <header class="analysis-parameters-head">
+      <span class="parameters-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+          <path d="M4 8h4v2H4V8zm0 6h4v2H4v-2zm6-6h10v2H10V8zm0 6h10v2H10v-2zM6 9a1 1 0 1 1 0-2 1 1 0 0 1 0 2zm0 8a1 1 0 1 1 0-2 1 1 0 0 1 0 2z"/>
+        </svg>
+      </span>
+      <h2>Analysis Parameters</h2>
+    </header>
 
-  <section class="filters-card card">
-    <h2 class="section-title">Class analysis</h2>
-    <p class="section-hint">Overall pass rate and top / bottom performers for the selected class.</p>
-    <div class="filters-row">
-      <label class="field">
-        <span>Term</span>
-        <select [(ngModel)]="filters.termId" name="term" (ngModelChange)="onFilterChange()">
+    <div class="parameters-grid">
+      <label class="param-field">
+        <span class="param-label">Choose Term<span class="req">*</span></span>
+        <select [(ngModel)]="filters.termId" name="term" (ngModelChange)="onParametersChange()">
           <option value="">— Select —</option>
           @for (t of terms(); track t.id) {
             <option [value]="t.id">{{ t.name }}</option>
           }
         </select>
       </label>
-      <label class="field">
-        <span>Exam type</span>
-        <select [(ngModel)]="filters.examTypeId" name="examType" (ngModelChange)="onFilterChange()">
+      <label class="param-field">
+        <span class="param-label">Choose Class<span class="req">*</span></span>
+        <select [(ngModel)]="filters.classId" name="class" (ngModelChange)="onParametersChange()">
+          <option value="">— Select —</option>
+          @for (c of classes(); track c.id) {
+            <option [value]="c.id">{{ c.name }}</option>
+          }
+        </select>
+      </label>
+      <label class="param-field">
+        <span class="param-label">Exam Type<span class="req">*</span></span>
+        <select [(ngModel)]="filters.examTypeId" name="examType" (ngModelChange)="onParametersChange()">
           <option value="">— Select —</option>
           @for (t of examTypes(); track t.id) {
             <option [value]="t.id">{{ t.name }}</option>
           }
         </select>
       </label>
-      <label class="field">
-        <span>Class</span>
-        <select [(ngModel)]="filters.classId" name="class" (ngModelChange)="onFilterChange()">
-          <option value="">— Select —</option>
-          @for (c of classes(); track c.id) {
-            <option [value]="c.id">{{ c.name }}</option>
-          }
-        </select>
-      </label>
+    </div>
+
+    @if (isClassTab()) {
       <button
         type="button"
-        class="btn-analyze"
+        class="btn-get-analysis"
         (click)="runAnalysis()"
         [disabled]="loading() || !filtersReady()"
       >
+        <span class="btn-icon" aria-hidden="true">📊</span>
         @if (loading()) {
-          Analysing…
+          Getting analysis…
         } @else {
-          Analysis
+          Get Analysis
         }
       </button>
-    </div>
-  </section>
-
-  <section class="filters-card card student-section">
-    <h2 class="section-title">Student analysis</h2>
-    <p class="section-hint">
-      Load students for a class, then click a student to view mark distribution across all subjects.
-      Exam type (above) is used when opening a student profile.
-    </p>
-    <div class="filters-row">
-      <label class="field">
-        <span>Term</span>
-        <select [(ngModel)]="studentFilters.termId" name="studentTerm" (ngModelChange)="onStudentFilterChange()">
-          <option value="">— Select —</option>
-          @for (t of terms(); track t.id) {
-            <option [value]="t.id">{{ t.name }}</option>
-          }
-        </select>
-      </label>
-      <label class="field">
-        <span>Class</span>
-        <select [(ngModel)]="studentFilters.classId" name="studentClass" (ngModelChange)="onStudentFilterChange()">
-          <option value="">— Select —</option>
-          @for (c of classes(); track c.id) {
-            <option [value]="c.id">{{ c.name }}</option>
-          }
-        </select>
-      </label>
-      <button
-        type="button"
-        class="btn-analyze btn-load-students"
-        (click)="loadStudents()"
-        [disabled]="studentsLoading() || !studentFiltersReady()"
-      >
-        @if (studentsLoading()) {
-          Loading…
-        } @else {
-          Load students
-        }
-      </button>
-    </div>
-
-    @if (studentsLoaded()) {
-      <div class="student-list-wrap">
-        <div class="student-list-head">
-          <h3>Class roster</h3>
-          @if (studentSessionLabel()) {
-            <p class="session-label">{{ studentSessionLabel() }}</p>
-          }
-        </div>
-        @if (classStudents().length) {
-          <table class="students-table">
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Student ID</th>
-                <th>Name</th>
-                <th>Gender</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              @for (s of classStudents(); track s.id; let i = $index) {
-                <tr class="student-row" tabindex="0" (click)="openStudentAnalysis(s)" (keyup.enter)="openStudentAnalysis(s)">
-                  <td>{{ i + 1 }}</td>
-                  <td><code>{{ s.admissionNumber }}</code></td>
-                  <td>{{ s.lastName }}, {{ s.firstName }}</td>
-                  <td>{{ s.gender || '—' }}</td>
-                  <td class="row-action">View marks →</td>
-                </tr>
-              }
-            </tbody>
-          </table>
-        } @else {
-          <p class="empty">No active students enrolled in this class.</p>
-        }
-      </div>
     }
   </section>
 
+  <nav class="tab-rail tab-rail--landscape" aria-label="Results analysis views">
+    @for (tab of analysisTabs; track tab.id) {
+      <button
+        type="button"
+        class="tab-item"
+        [class.active]="activeTab() === tab.id"
+        (click)="setTab(tab.id)"
+        [attr.aria-current]="activeTab() === tab.id ? 'page' : null"
+      >
+        <span class="tab-icon">{{ tab.icon }}</span>
+        <span class="tab-body">
+          <span class="tab-label">{{ tab.label }}</span>
+          <span class="tab-desc">{{ tab.desc }}</span>
+        </span>
+        @if (activeTab() === tab.id) {
+          <span class="tab-indicator" aria-hidden="true"></span>
+        }
+      </button>
+    }
+  </nav>
+
+  @if (isClassTab()) {
   @if (hasAnalyzed() && analysis(); as data) {
     <section class="card toolbar-card">
       <div class="toolbar-main">
@@ -195,69 +137,293 @@
       </article>
     </section>
 
-    <div class="performers-grid">
-      <section class="card performers-card top">
-        <h2>Top {{ topCount }} performers</h2>
-        <p class="table-hint">Ranked by average % (then subjects passed)</p>
-        @if (data.topPerformers.length) {
-          <table class="performers-table">
-            <thead>
-              <tr>
-                <th>Rank</th>
-                <th>Student ID</th>
-                <th>Name</th>
-                <th>Subj passed</th>
-                <th>Average %</th>
-              </tr>
-            </thead>
-            <tbody>
-              @for (s of data.topPerformers; track s.studentId) {
-                <tr>
-                  <td><span class="rank-badge top">{{ s.rank }}</span></td>
-                  <td><code>{{ s.admissionNumber }}</code></td>
-                  <td>{{ s.lastName }}, {{ s.firstName }}</td>
-                  <td>{{ s.subjectsPassed }} / {{ s.subjectCount }}</td>
-                  <td class="avg">{{ s.averagePercent | number:'1.2-2' }}</td>
-                </tr>
-              }
-            </tbody>
-          </table>
-        } @else {
-          <p class="empty">No ranked students with marks for this selection.</p>
-        }
-      </section>
+    <section class="performance-summary">
+      <header class="performance-summary-head">
+        <span class="summary-icon" aria-hidden="true">▦</span>
+        <h2>Overall Class Performance Summary</h2>
+      </header>
 
-      <section class="card performers-card bottom">
-        <h2>Bottom {{ topCount }} performers</h2>
-        <p class="table-hint">Lowest average % among students with marks</p>
-        @if (data.bottomPerformers.length) {
-          <table class="performers-table">
-            <thead>
-              <tr>
-                <th>Rank</th>
-                <th>Student ID</th>
-                <th>Name</th>
-                <th>Subj passed</th>
-                <th>Average %</th>
-              </tr>
-            </thead>
-            <tbody>
-              @for (s of data.bottomPerformers; track s.studentId) {
-                <tr>
-                  <td><span class="rank-badge bottom">{{ s.rank }}</span></td>
-                  <td><code>{{ s.admissionNumber }}</code></td>
-                  <td>{{ s.lastName }}, {{ s.firstName }}</td>
-                  <td>{{ s.subjectsPassed }} / {{ s.subjectCount }}</td>
-                  <td class="avg low">{{ s.averagePercent | number:'1.2-2' }}</td>
-                </tr>
+      <div class="performance-summary-grid">
+        <div class="summary-left">
+          <article class="summary-panel pass-rates">
+            <header class="panel-head">
+              <span class="panel-icon" aria-hidden="true">📈</span>
+              <h3>Subject Pass Rates</h3>
+            </header>
+            @if (data.subjectPassRates.length) {
+              <ul class="pass-rate-list">
+                @for (sub of data.subjectPassRates; track sub.subjectId) {
+                  <li>
+                    <span class="pass-rate-name">{{ sub.subjectName }}</span>
+                    <span class="pass-rate-badge">{{ sub.passRatePercent | number:'1.1-1' }}%</span>
+                  </li>
+                }
+              </ul>
+            } @else {
+              <p class="empty">No subjects configured for this class.</p>
+            }
+          </article>
+
+          <article class="summary-panel bottom-students">
+            <header class="panel-head">
+              <span class="panel-icon warn" aria-hidden="true">⚠</span>
+              <h3>Bottom {{ topCount }} Students</h3>
+            </header>
+            @if (data.bottomPerformers.length) {
+              <ul class="ranked-list">
+                @for (s of data.bottomPerformers; track s.studentId; let i = $index) {
+                  <li>
+                    <span class="rank-circle">{{ i + 1 }}</span>
+                    <span class="ranked-name">{{ performerName(s.firstName, s.lastName) }}</span>
+                    <span class="score-badge">{{ s.averagePercent | number:'1.1-1' }}%</span>
+                  </li>
+                }
+              </ul>
+            } @else {
+              <p class="empty">No ranked students with marks for this selection.</p>
+            }
+          </article>
+        </div>
+
+        <article class="summary-panel top-students">
+          <header class="panel-head">
+            <span class="panel-icon star" aria-hidden="true">★</span>
+            <h3>Top {{ topCount }} Students</h3>
+          </header>
+          @if (data.topPerformers.length) {
+            <ul class="ranked-list">
+              @for (s of data.topPerformers; track s.studentId) {
+                <li>
+                  <span class="rank-circle">{{ s.rank }}</span>
+                  <span class="ranked-name">{{ performerName(s.firstName, s.lastName) }}</span>
+                  <span class="score-badge">{{ s.averagePercent | number:'1.1-1' }}%</span>
+                </li>
               }
-            </tbody>
-          </table>
-        } @else {
-          <p class="empty">No ranked students with marks for this selection.</p>
+            </ul>
+          } @else {
+            <p class="empty">No ranked students with marks for this selection.</p>
+          }
+        </article>
+      </div>
+    </section>
+
+    <section class="card subject-analysis-section">
+      <header class="subject-analysis-head">
+        <span class="summary-icon" aria-hidden="true">☰</span>
+        <h2>Subject-Specific Analysis</h2>
+      </header>
+      <label class="subject-select field-outlined">
+        <span>Select Subject</span>
+        <select
+          [ngModel]="selectedSubjectId()"
+          (ngModelChange)="onSubjectSelect($event)"
+          name="subjectAnalysis"
+        >
+          <option value="">— Select a Subject —</option>
+          @for (sub of data.subjects; track sub.id) {
+            <option [value]="sub.id">{{ sub.name }} ({{ sub.code }})</option>
+          }
+        </select>
+      </label>
+
+      @if (subjectAnalysisLoading()) {
+        <p class="subject-loading">Loading subject analysis…</p>
+      } @else {
+        @if (subjectAnalysis(); as subjectData) {
+        <article class="subject-result-card">
+          <header class="subject-result-head">
+            <span class="panel-icon chart" aria-hidden="true">📊</span>
+            <h3>Analysis for Selected Subject</h3>
+          </header>
+          <div class="subject-result-grid">
+            <div class="subject-result-col">
+              <h4>Top {{ topCount }} Students</h4>
+              @if (subjectData.topStudents.length) {
+                <ul class="ranked-list compact">
+                  @for (s of subjectData.topStudents; track s.studentId) {
+                    <li>
+                      <span class="rank-circle">{{ s.rank }}</span>
+                      <span class="ranked-name">{{ performerName(s.firstName, s.lastName) }}</span>
+                      <span class="score-badge">{{ s.percent | number:'1.0-0' }}%</span>
+                    </li>
+                  }
+                </ul>
+              } @else {
+                <p class="empty">No marks recorded for this subject.</p>
+              }
+            </div>
+            <div class="subject-result-col">
+              <h4>Bottom {{ topCount }} Students</h4>
+              @if (subjectData.bottomStudents.length) {
+                <ul class="ranked-list compact">
+                  @for (s of subjectData.bottomStudents; track s.studentId; let i = $index) {
+                    <li>
+                      <span class="rank-circle">{{ i + 1 }}</span>
+                      <span class="ranked-name">{{ performerName(s.firstName, s.lastName) }}</span>
+                      <span class="score-badge">{{ s.percent | number:'1.0-0' }}%</span>
+                    </li>
+                  }
+                </ul>
+              } @else {
+                <p class="empty">No marks recorded for this subject.</p>
+              }
+            </div>
+          </div>
+        </article>
         }
-      </section>
-    </div>
+      }
+    </section>
+  }
+  }
+
+  @if (isIndividualTab()) {
+  <section class="card individual-section">
+    <header class="individual-head">
+      <span class="summary-icon" aria-hidden="true">👤</span>
+      <h2>Individual Student Performance</h2>
+    </header>
+
+    <label class="param-field student-select">
+      <span class="param-label">Select Student</span>
+      <select
+        [ngModel]="selectedStudentId()"
+        (ngModelChange)="onStudentSelect($event)"
+        name="studentSelect"
+        [disabled]="studentsLoading() || !filtersReady() || !classStudents().length"
+      >
+        <option value="">— Select a Student —</option>
+        @for (s of classStudents(); track s.id) {
+          <option [value]="s.id">{{ studentOptionLabel(s) }}</option>
+        }
+      </select>
+    </label>
+
+    @if (studentsLoading()) {
+      <p class="subject-loading">Loading students…</p>
+    } @else if (filtersReady() && !classStudents().length) {
+      <p class="empty">No active students enrolled in this class.</p>
+    }
+
+    @if (studentAnalysisLoading()) {
+      <p class="subject-loading">Loading subject performance…</p>
+    } @else {
+      @if (studentAnalysis(); as profile) {
+        <article class="student-chart-card">
+          <header class="student-chart-head">
+            <span class="panel-icon chart" aria-hidden="true">📈</span>
+            <h3>{{ studentChartTitle() }}</h3>
+          </header>
+
+          @if (studentChartSubjects().length) {
+            <div class="chart-wrap">
+              <svg
+                class="performance-chart"
+                [attr.viewBox]="'0 0 ' + chartRenderWidth() + ' ' + chartHeight"
+                preserveAspectRatio="xMinYMin meet"
+                role="img"
+                aria-label="Subject performance line chart"
+              >
+                @for (tick of chartYTicks(); track tick) {
+                  <line
+                    class="grid-line horizontal"
+                    [attr.x1]="chartPad.left"
+                    [attr.x2]="chartRenderWidth() - chartPad.right"
+                    [attr.y1]="chartPad.top + (chartHeight - chartPad.top - chartPad.bottom) * (1 - tick / 100)"
+                    [attr.y2]="chartPad.top + (chartHeight - chartPad.top - chartPad.bottom) * (1 - tick / 100)"
+                  />
+                  <text
+                    class="axis-label y-label"
+                    [attr.x]="chartPad.left - 8"
+                    [attr.y]="chartPad.top + (chartHeight - chartPad.top - chartPad.bottom) * (1 - tick / 100) + 4"
+                    text-anchor="end"
+                  >
+                    {{ tick }}
+                  </text>
+                }
+
+                @for (point of studentChartCoords(); track $index) {
+                  <line
+                    class="grid-line vertical"
+                    [attr.x1]="point.x"
+                    [attr.x2]="point.x"
+                    [attr.y1]="chartPlotTop()"
+                    [attr.y2]="studentChartBaselineY()"
+                  />
+                }
+
+                <line
+                  class="plot-border"
+                  [attr.x1]="chartPad.left"
+                  [attr.x2]="chartRenderWidth() - chartPad.right"
+                  [attr.y1]="studentChartBaselineY()"
+                  [attr.y2]="studentChartBaselineY()"
+                />
+                <line
+                  class="plot-border"
+                  [attr.x1]="chartPad.left"
+                  [attr.x2]="chartPad.left"
+                  [attr.y1]="chartPlotTop()"
+                  [attr.y2]="studentChartBaselineY()"
+                />
+                <line
+                  class="plot-border"
+                  [attr.x1]="chartRenderWidth() - chartPad.right"
+                  [attr.x2]="chartRenderWidth() - chartPad.right"
+                  [attr.y1]="chartPlotTop()"
+                  [attr.y2]="studentChartBaselineY()"
+                />
+                <line
+                  class="plot-border"
+                  [attr.x1]="chartPad.left"
+                  [attr.x2]="chartRenderWidth() - chartPad.right"
+                  [attr.y1]="chartPlotTop()"
+                  [attr.y2]="chartPlotTop()"
+                />
+
+                <text
+                  class="axis-title y-title"
+                  [attr.x]="16"
+                  [attr.y]="chartHeight / 2"
+                  [attr.transform]="'rotate(-90 16 ' + (chartHeight / 2) + ')'"
+                  text-anchor="middle"
+                >
+                  Mark (%)
+                </text>
+
+                <path class="chart-area" [attr.d]="studentChartAreaPath()"></path>
+                <path class="chart-line" [attr.d]="studentChartLinePath()"></path>
+
+                @for (point of studentChartCoords(); track $index) {
+                  <circle class="chart-point" [attr.cx]="point.x" [attr.cy]="point.y" r="4"></circle>
+                }
+
+                @for (subject of studentChartSubjects(); track subject.label) {
+                  <text
+                    class="axis-label x-label"
+                    [attr.transform]="studentChartLabelTransform($index)"
+                    text-anchor="middle"
+                  >
+                    {{ subject.label }}
+                  </text>
+                }
+
+                <text
+                  class="axis-title x-title"
+                  [attr.x]="chartXAxisTitleX()"
+                  [attr.y]="chartXAxisTitleY()"
+                  text-anchor="middle"
+                >
+                  Subject
+                </text>
+              </svg>
+            </div>
+          } @else {
+            <p class="empty">No exam marks recorded for this student in the selected term and exam type.</p>
+          }
+        </article>
+      }
+    }
+  </section>
   }
 </app-portal-layout>
 
@@ -282,114 +448,6 @@
         title="Results analysis PDF preview"
         scrolling="yes"
       ></iframe>
-    </div>
-  </div>
-}
-
-@if (studentModalOpen()) {
-  <div class="modal-backdrop" (click)="closeStudentModal()" role="presentation">
-    <div
-      class="modal student-analysis-modal"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="studentAnalysisTitle"
-      (click)="$event.stopPropagation()"
-    >
-      <header class="modal-head">
-        <div>
-          <p class="modal-eyebrow">Student performance</p>
-          <h2 id="studentAnalysisTitle" class="modal-title">
-            @if (selectedStudent(); as s) {
-              {{ s.lastName }}, {{ s.firstName }}
-            } @else {
-              Student analysis
-            }
-          </h2>
-          @if (studentAnalysis(); as profile) {
-            <p class="modal-sub">
-              {{ profile.examType.name }} · {{ profile.term.name }} · {{ profile.class.name }}
-              · ID {{ profile.student.admissionNumber }}
-            </p>
-          }
-        </div>
-        <button type="button" class="modal-close" (click)="closeStudentModal()" aria-label="Close">×</button>
-      </header>
-
-      @if (studentAnalysisLoading()) {
-        <div class="modal-loading">Loading mark distribution…</div>
-      } @else {
-        @if (studentAnalysis(); as profile) {
-          <div class="student-summary-grid">
-          <article class="summary-chip">
-            <span class="chip-label">Average</span>
-            <span class="chip-value">
-              @if (profile.summary.averagePercent != null) {
-                {{ profile.summary.averagePercent | number:'1.2-2' }}%
-              } @else {
-                —
-              }
-            </span>
-          </article>
-          <article class="summary-chip">
-            <span class="chip-label">Subjects passed</span>
-            <span class="chip-value">{{ profile.summary.subjectsPassed }} / {{ profile.summary.subjectsWithMarks }}</span>
-          </article>
-          <article class="summary-chip">
-            <span class="chip-label">Class position</span>
-            <span class="chip-value">
-              @if (profile.summary.classPosition != null) {
-                {{ profile.summary.classPosition }}
-              } @else {
-                —
-              }
-            </span>
-          </article>
-          <article class="summary-chip">
-            <span class="chip-label">Max marks</span>
-            <span class="chip-value">{{ profile.examType.maxMarks }}</span>
-          </article>
-        </div>
-
-        @if (profile.subjects.length) {
-          <div class="subject-distribution">
-            <h3>Mark distribution by subject</h3>
-            <p class="table-hint">Passed when mark is greater than 49</p>
-            <ul class="subject-bars">
-              @for (sub of profile.subjects; track sub.subjectId) {
-                <li class="subject-bar-row" [class.passed]="sub.passed" [class.no-mark]="sub.marks == null">
-                  <div class="subject-meta">
-                    <span class="subject-name">{{ sub.subjectName }}</span>
-                    <span class="subject-code">{{ sub.subjectCode }}</span>
-                  </div>
-                  <div class="bar-track" aria-hidden="true">
-                    <div
-                      class="bar-fill"
-                      [style.width]="subjectBarWidth(sub.percentOfMax)"
-                      [class.pass]="sub.passed"
-                      [class.fail]="sub.marks != null && !sub.passed"
-                    ></div>
-                  </div>
-                  <div class="subject-score">
-                    @if (sub.marks != null) {
-                      <strong>{{ sub.marks }}</strong>
-                      <span class="grade-pill" [class.pass]="sub.passed">{{ sub.grade }}</span>
-                    } @else {
-                      <span class="no-mark-label">No mark</span>
-                    }
-                  </div>
-                </li>
-              }
-            </ul>
-          </div>
-        } @else {
-          <p class="empty">No subjects configured for this class.</p>
-        }
-        }
-      }
-
-      <footer class="modal-actions">
-        <button type="button" class="btn-modal-close" (click)="closeStudentModal()">Close</button>
-      </footer>
     </div>
   </div>
 }

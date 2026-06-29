@@ -1,5 +1,6 @@
 import { Component, computed, inject, OnDestroy, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { DatePipe } from '@angular/common';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { Router, RouterLink } from '@angular/router';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
@@ -30,7 +31,7 @@ type ViewMode = 'table' | 'cards';
 @Component({
   selector: 'app-class-list',
   standalone: true,
-  imports: [PortalLayoutComponent, FormsModule, RouterLink],
+  imports: [PortalLayoutComponent, FormsModule, RouterLink, DatePipe],
   templateUrl: './class-list.component.html',
   styleUrl: './class-list.component.scss',
 })
@@ -145,7 +146,6 @@ export class ClassListComponent implements OnInit, OnDestroy {
         const current = ordered.find((t) => t.isCurrent);
         if (current) this.selectedTermId = current.id;
         this.loadingTerms.set(false);
-        this.tryAutoFetch();
       },
       error: () => {
         this.loadingTerms.set(false);
@@ -158,7 +158,6 @@ export class ClassListComponent implements OnInit, OnDestroy {
         next: (d) => {
           this.classes.set(d.assignedClasses || []);
           this.loadingClasses.set(false);
-          this.tryAutoFetch();
         },
         error: () => {
           this.loadingClasses.set(false);
@@ -172,7 +171,6 @@ export class ClassListComponent implements OnInit, OnDestroy {
       next: (c) => {
         this.classes.set(c);
         this.loadingClasses.set(false);
-        this.tryAutoFetch();
       },
       error: () => {
         this.loadingClasses.set(false);
@@ -241,6 +239,12 @@ export class ClassListComponent implements OnInit, OnDestroy {
     return `${student.firstName.charAt(0)}${student.lastName.charAt(0)}`.toUpperCase();
   }
 
+  studentTypeLabel(type?: string): string {
+    if (type === 'boarder') return 'Boarder';
+    if (type === 'day_scholar') return 'Day Scholar';
+    return '—';
+  }
+
   previewPdf(): void {
     this.fetchPdfBlob(true).then((blob) => {
       if (!blob) return;
@@ -274,13 +278,10 @@ export class ClassListComponent implements OnInit, OnDestroy {
     this.hasFetched.set(false);
     this.search.set('');
     this.closePdfPreview();
-    this.tryAutoFetch();
   }
 
   private tryAutoFetch(): void {
-    if (this.selectedTermId && this.selectedClassId && !this.loadingStudents()) {
-      this.fetchStudents();
-    }
+    // Auto-fetch disabled — roster only loads when user clicks "Load roster"
   }
 
   private fetchPdfBlob(preview: boolean): Promise<Blob | null> {

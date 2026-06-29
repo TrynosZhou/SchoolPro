@@ -9,6 +9,8 @@ export interface MarkSheetParams {
   examTypeId: string;
   termId: string;
   classId: string;
+  /** Skip per-cell grade lookups when only averages/ranks are needed. */
+  skipGradeCounts?: boolean;
 }
 
 export interface MarkSheetSubject {
@@ -80,7 +82,7 @@ function isPassingMark(marks: number): boolean {
 }
 
 export async function buildMarkSheet(params: MarkSheetParams): Promise<MarkSheetData> {
-  const { examTypeId, termId, classId } = params;
+  const { examTypeId, termId, classId, skipGradeCounts = false } = params;
 
   const examType = await AppDataSource.getRepository(ExamType).findOne({ where: { id: examTypeId } });
   if (!examType) throw new Error('Exam type not found');
@@ -166,10 +168,12 @@ export async function buildMarkSheet(params: MarkSheetParams): Promise<MarkSheet
         const marks = Number(m.marks);
         marksBySubject[sub.id] = { marks };
         markValues.push(marks);
-        const gradeLetter = normalizeGradeLetter(
-          m.grade || (await gradeForMarks(marks, maxMarks)),
-        );
-        if (gradeLetter) gradeCounts[gradeLetter] += 1;
+        if (!skipGradeCounts) {
+          const gradeLetter = normalizeGradeLetter(
+            m.grade || (await gradeForMarks(marks, maxMarks)),
+          );
+          if (gradeLetter) gradeCounts[gradeLetter] += 1;
+        }
         if (isPassingMark(marks)) subjectsPassed += 1;
       } else {
         marksBySubject[sub.id] = { marks: null };

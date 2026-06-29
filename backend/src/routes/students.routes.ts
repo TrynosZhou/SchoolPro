@@ -7,7 +7,8 @@ import { authenticate, authorize, AuthRequest } from '../middleware/auth';
 import bcrypt from 'bcryptjs';
 import { relations, param } from '../utils/typeorm-helpers';
 import { generateStudentId, today } from '../utils/helpers';
-import { generateClassListPdf } from '../utils/pdf';
+import { generateClassListPdf, generateStudentIdCardPdf } from '../utils/pdf';
+import { loadSchoolBranding } from '../services/school-branding.service';
 import { assertTeacherClassAccess } from '../utils/teacher-class-access';
 import { createRegistrationInvoiceForStudent } from '../services/registration-invoice.service';
 
@@ -65,7 +66,7 @@ router.get(
     const settings = await settingsRepo.findOne({ where: { id: 'default' } });
     const schoolName = settings?.schoolName || 'School Pro Academy';
     const cls = students[0].schoolClass;
-    const classLabel = cls?.form?.name ? `${cls.form.name} · ${cls.name}` : cls?.name || 'Class';
+    const classLabel = cls?.name || 'Class';
 
     const pdf = await generateClassListPdf({
       schoolName,
@@ -78,6 +79,8 @@ router.get(
         lastName: s.lastName,
         firstName: s.firstName,
         gender: s.gender || '—',
+        dateOfBirth: s.dateOfBirth ? String(s.dateOfBirth) : undefined,
+        studentType: s.studentType || undefined,
       })),
     });
 
@@ -189,6 +192,47 @@ router.post('/parent/link-child', authorize(UserRole.PARENT), async (req: AuthRe
     },
   });
 });
+
+router.get(
+  '/:id/id-card/pdf',
+  authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.TEACHER),
+  async (req: AuthRequest, res: Response) => {
+    const repo = AppDataSource.getRepository(Student);
+    const student = await repo.findOne({
+      where: { id: param(req.params.id), isActive: true },
+      relations: relations('schoolClass', 'schoolClass.form', 'form'),
+    });
+    if (!student) return res.status(404).json({ message: 'Student not found' });
+
+    if (student.classId && !(await assertTeacherClassAccess(req, student.classId))) {
+      return res.status(403).json({ message: 'You are not assigned to this class' });
+    }
+
+    const branding = await loadSchoolBranding();
+    const pdf = await generateStudentIdCardPdf({
+      ...branding,
+      admissionNumber: student.admissionNumber,
+      firstName: student.firstName,
+      lastName: student.lastName,
+      dateOfBirth: student.dateOfBirth || undefined,
+      studentAddress: student.address || undefined,
+      gender: student.gender || undefined,
+      studentType: student.studentType || undefined,
+      className: student.schoolClass?.name || undefined,
+      formName: student.form?.name || student.schoolClass?.form?.name || undefined,
+      generatedAt: new Date(),
+    });
+
+    const filename = `student-id-${student.admissionNumber}.pdf`;
+    const inline = req.query.preview === 'true';
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader(
+      'Content-Disposition',
+      `${inline ? 'inline' : 'attachment'}; filename="${filename}"`,
+    );
+    res.send(pdf);
+  },
+);
 
 router.get('/:id', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.TEACHER, UserRole.PARENT, UserRole.STUDENT), async (req: AuthRequest, res: Response) => {
   const repo = AppDataSource.getRepository(Student);

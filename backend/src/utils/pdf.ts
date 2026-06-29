@@ -4,6 +4,7 @@ import path from 'path';
 import QRCode from 'qrcode';
 import { formatSubjectAbbrev } from './subject-abbrev';
 import type { GradeBoundary } from '../types/grade-boundaries';
+import { generateReportCardPortalPdf } from './report-card-portal.pdf';
 
 const receiptsDir = path.join(process.cwd(), 'uploads', 'receipts');
 const invoicesDir = path.join(process.cwd(), 'uploads', 'invoices');
@@ -23,6 +24,11 @@ export interface SchoolBranding {
   phone?: string;
   email?: string;
   currency?: string;
+  bankAccountName?: string;
+  bankName?: string;
+  bankBranch?: string;
+  bankAccountNumber?: string;
+  bankPaymentReferenceNote?: string;
 }
 
 const BILL = {
@@ -291,6 +297,82 @@ function drawInvoiceWatermark(
   doc.restore();
 }
 
+type BillingPdfDoc = InstanceType<typeof PDFDocument>;
+
+const BILLING_PDF_COLORS = {
+  blueDark: '#1e3a8a',
+  ink: '#1a1a2e',
+  muted: '#64748b',
+  border: '#d1d5db',
+  white: '#ffffff',
+};
+
+function drawPdfBankingDetails(
+  doc: BillingPdfDoc,
+  branding: Pick<SchoolBranding, 'bankAccountName' | 'bankName' | 'bankBranch' | 'bankAccountNumber'>,
+  margin: number,
+  contentW: number,
+  y: number,
+  pageBottom: number,
+  onNewPage?: () => number,
+): number {
+  const hasBankDetails =
+    branding.bankAccountName || branding.bankName || branding.bankBranch || branding.bankAccountNumber;
+  if (!hasBankDetails) return y;
+
+  const C = BILLING_PDF_COLORS;
+  if (y + 90 > pageBottom && onNewPage) {
+    y = onNewPage();
+  }
+
+  doc.save().rect(margin, y, contentW, 18).fill(C.blueDark).restore();
+  doc.font('Helvetica-Bold').fontSize(8.5).fillColor(C.white)
+    .text('PAYMENT / BANKING DETAILS', margin + 10, y + 5, { lineBreak: false, characterSpacing: 0.5 });
+  y += 18;
+
+  const bankRows: { label: string; value: string }[] = [];
+  if (branding.bankAccountName) bankRows.push({ label: 'Account name', value: branding.bankAccountName });
+  if (branding.bankName) bankRows.push({ label: 'Bank', value: branding.bankName });
+  if (branding.bankBranch) bankRows.push({ label: 'Branch', value: branding.bankBranch });
+  if (branding.bankAccountNumber) bankRows.push({ label: 'Account number', value: branding.bankAccountNumber });
+
+  const bankRowH = 20;
+  const bankTableH = bankRows.length * bankRowH;
+  doc.save().rect(margin, y, contentW, bankTableH).fill(C.white)
+    .strokeColor(C.border).lineWidth(0.5).rect(margin, y, contentW, bankTableH).stroke().restore();
+
+  const labelColW = 100;
+  bankRows.forEach((row, idx) => {
+    if (idx > 0) {
+      doc.save().strokeColor(C.border).lineWidth(0.3)
+        .moveTo(margin, y).lineTo(margin + contentW, y).stroke().restore();
+    }
+    doc.font('Helvetica').fontSize(8.5).fillColor(C.muted)
+      .text(`${row.label}:`, margin + 10, y + 5, { width: labelColW, lineBreak: false });
+    doc.font('Helvetica-Bold').fontSize(8.5).fillColor(C.ink)
+      .text(row.value, margin + 10 + labelColW, y + 5, { width: contentW - labelColW - 20, lineBreak: false });
+    y += bankRowH;
+  });
+
+  return y + 10;
+}
+
+function drawPdfPaymentReferenceNote(
+  doc: BillingPdfDoc,
+  note: string | undefined,
+  margin: number,
+  contentW: number,
+  y: number,
+  pageBottom: number,
+): number {
+  const paymentNote = note?.trim() || 'Please use the account number as your payment reference.';
+  if (y + 20 >= pageBottom || !paymentNote) return y;
+
+  doc.font('Helvetica').fontSize(7.5).fillColor(BILLING_PDF_COLORS.muted)
+    .text(paymentNote, margin, y, { width: contentW, align: 'center', lineBreak: false });
+  return y + 14;
+}
+
 export async function generateReceiptPdf(
   data: {
     receiptNumber: string;
@@ -304,6 +386,7 @@ export async function generateReceiptPdf(
     paymentReference?: string;
     notes?: string;
     invoiceNumber?: string;
+    invoiceBalance?: number;
   } & SchoolBranding,
 ): Promise<string> {
   ensureUploadDirs();
@@ -319,10 +402,10 @@ export async function generateReceiptPdf(
     date: data.paidAt.toISOString(),
     school,
   });
-  const qrBuffer = await QRCode.toBuffer(verifyPayload, { margin: 1, width: 220, errorCorrectionLevel: 'M' });
+  const qrBuffer = await QRCode.toBuffer(verifyPayload, { margin: 1, width: 200, errorCorrectionLevel: 'M' });
 
   return new Promise((resolve, reject) => {
-    const margin = 50;
+    const margin = 40;
     const doc = new PDFDocument({ margin, size: 'A4' });
     const stream = fs.createWriteStream(filepath);
     doc.pipe(stream);
@@ -330,244 +413,261 @@ export async function generateReceiptPdf(
     const pageW = doc.page.width;
     const pageH = doc.page.height;
     const contentW = pageW - margin * 2;
-    drawPaidWatermark(doc, pageW, pageH);
 
-    let y = drawBillingDocHeader(doc, data, pageW, margin, 'OFFICIAL PAYMENT RECEIPT');
-
-    const metaTop = y;
-    const qrSize = 72;
-    const metaW = contentW - qrSize - 16;
-    const metaX = margin + 16;
-    const col2X = margin + metaW / 2 + 4;
-    const fieldW = metaW / 2 - 24;
-
-    const estimateLabelValueHeight = (label: string, value: string, valueSize = RECEIPT_LABEL.valueSize) => {
-      doc.font('Helvetica').fontSize(RECEIPT_LABEL.labelSize);
-      const labelH = doc.heightOfString(label, { width: fieldW });
-      doc.font('Helvetica-Bold').fontSize(valueSize);
-      const valueH = doc.heightOfString(value, { width: fieldW });
-      return labelH + RECEIPT_LABEL.gap + valueH;
+    // ── Colours (same as invoice) ──
+    const C = {
+      blue: '#1a56db',
+      blueDark: '#1e3a8a',
+      ink: '#1a1a2e',
+      muted: '#64748b',
+      border: '#d1d5db',
+      rowAlt: '#f9fafb',
+      white: '#ffffff',
+      gold: '#b8860b',
+      headerBg: '#f0f4ff',
+      green: '#16a34a',
+      greenBg: '#dcfce7',
     };
 
-    let metaY = metaTop + 14;
-    let metaContentBottom = metaTop + 14;
-    metaY += 34; // status pill
+    // ── Helpers ──
+    const hline = (yy: number, col = C.border, lw = 0.5) => {
+      doc.save().strokeColor(col).lineWidth(lw)
+        .moveTo(margin, yy).lineTo(margin + contentW, yy).stroke().restore();
+    };
 
-    const row1H = Math.max(
-      estimateLabelValueHeight('RECEIPT NO.', data.receiptNumber),
-      estimateLabelValueHeight('DATE & TIME', formatGeneratedTimestamp(data.paidAt)),
-    );
-    const row1Bottom = metaY + row1H;
-    metaContentBottom = Math.max(metaContentBottom, row1Bottom);
-    metaY = row1Bottom + 12;
+    const labelColW = 82;
+    const infoRow = (label: string, value: string, x: number, yy: number, w: number): number => {
+      doc.font('Helvetica').fontSize(8.5).fillColor(C.muted)
+        .text(label, x, yy, { width: labelColW, lineBreak: false });
+      doc.font('Helvetica-Bold').fontSize(8.5).fillColor(C.ink)
+        .text(value || '—', x + labelColW, yy, { width: Math.max(10, w - labelColW), lineBreak: false });
+      return yy + 16;
+    };
 
-    if (data.paymentReference || data.invoiceNumber) {
-      let row2H = 0;
-      if (data.paymentReference) {
-        row2H = Math.max(
-          row2H,
-          estimateLabelValueHeight('PAYMENT REF.', data.paymentReference, RECEIPT_LABEL.valueSizeSm),
-        );
-      }
-      if (data.invoiceNumber) {
-        row2H = Math.max(
-          row2H,
-          estimateLabelValueHeight('INVOICE NO.', data.invoiceNumber, RECEIPT_LABEL.valueSizeSm),
-        );
-      }
-      metaContentBottom = Math.max(metaContentBottom, metaY + row2H);
+    // ══════════════════════════════════════
+    // HEADER
+    // ══════════════════════════════════════
+    const headerTop = margin;
+    const logoPath = resolveUploadPath(data.logoUrl);
+    let logoRight = margin;
+
+    if (logoPath) {
+      const logoSize = 52;
+      try {
+        doc.save().circle(margin + logoSize / 2, headerTop + logoSize / 2, logoSize / 2 + 2).fill(C.border).restore();
+        doc.save().circle(margin + logoSize / 2, headerTop + logoSize / 2, logoSize / 2).fill(C.white).restore();
+        doc.image(logoPath, margin + 4, headerTop + 4, { fit: [logoSize - 8, logoSize - 8] });
+        logoRight = margin + logoSize + 12;
+      } catch { logoRight = margin; }
     }
 
-    const metaH = Math.max(108, metaContentBottom - metaTop + 14);
-    doc.save();
-    doc.roundedRect(margin, metaTop, metaW, metaH, 8).fill('#f8fafc');
-    doc.strokeColor(BILL.border).lineWidth(0.75);
-    doc.roundedRect(margin, metaTop, metaW, metaH, 8).stroke();
-    doc.restore();
-
-    const qrX = margin + metaW + 16;
-    doc.save();
-    doc.roundedRect(qrX, metaTop, qrSize, metaH, 8).fill(BILL.white);
-    doc.strokeColor(BILL.border).lineWidth(0.75);
-    doc.roundedRect(qrX, metaTop, qrSize, metaH, 8).stroke();
-    doc.restore();
-
-    metaY = metaTop + 14;
-    drawStatusPill(doc, metaX, metaY, 'PAID IN FULL', 'paid');
-    metaY += 34;
-
-    const row1DrawnBottom = Math.max(
-      drawReceiptLabelValue(doc, 'RECEIPT NO.', data.receiptNumber, metaX, metaY, { width: fieldW }),
-      drawReceiptLabelValue(doc, 'DATE & TIME', formatGeneratedTimestamp(data.paidAt), col2X, metaY, {
-        width: fieldW,
-      }),
-    );
-    metaContentBottom = Math.max(metaContentBottom, row1DrawnBottom);
-    metaY = row1DrawnBottom + 12;
-
-    if (data.paymentReference || data.invoiceNumber) {
-      let row2Bottom = metaY;
-      if (data.paymentReference) {
-        row2Bottom = Math.max(
-          row2Bottom,
-          drawReceiptLabelValue(doc, 'PAYMENT REF.', data.paymentReference, metaX, metaY, {
-            width: fieldW,
-            valueSize: RECEIPT_LABEL.valueSizeSm,
-          }),
-        );
-      }
-      if (data.invoiceNumber) {
-        row2Bottom = Math.max(
-          row2Bottom,
-          drawReceiptLabelValue(doc, 'INVOICE NO.', data.invoiceNumber, col2X, metaY, {
-            width: fieldW,
-            valueSize: RECEIPT_LABEL.valueSizeSm,
-          }),
-        );
-      }
-      metaContentBottom = Math.max(metaContentBottom, row2Bottom);
+    const schoolInfoW = contentW * 0.55;
+    doc.font('Helvetica-Bold').fontSize(14).fillColor(C.blueDark)
+      .text(school, logoRight, headerTop + 4, { width: schoolInfoW, lineBreak: false });
+    let schoolY = headerTop + 21;
+    const contactParts: string[] = [];
+    if (data.address) contactParts.push(data.address);
+    if (data.phone) contactParts.push(`Tel: ${data.phone}`);
+    if (data.email) contactParts.push(data.email);
+    if (contactParts.length) {
+      doc.font('Helvetica').fontSize(7.5).fillColor(C.muted)
+        .text(contactParts.join('  ·  '), logoRight, schoolY, { width: schoolInfoW });
+      schoolY += 14;
     }
 
-    try {
-      doc.image(qrBuffer, qrX + 8, metaTop + 8, { fit: [qrSize - 16, qrSize - 28] });
-    } catch {
-      /* skip invalid qr */
+    const docTypeX = margin + contentW * 0.62;
+    const docTypeW = contentW * 0.38;
+    doc.font('Helvetica').fontSize(8).fillColor(C.muted)
+      .text('OFFICIAL RECEIPT', docTypeX, headerTop + 6, { width: docTypeW, align: 'right', lineBreak: false });
+    doc.font('Helvetica-Bold').fontSize(26).fillColor(C.blue)
+      .text('Receipt', docTypeX, headerTop + 18, { width: docTypeW, align: 'right', lineBreak: false });
+
+    const headerBottom = Math.max(headerTop + 56, schoolY + 8);
+    let y = headerBottom + 4;
+
+    doc.save().strokeColor(C.gold).lineWidth(2)
+      .moveTo(margin, y).lineTo(margin + contentW, y).stroke().restore();
+    y += 8;
+
+    // ══════════════════════════════════════
+    // TWO-COLUMN INFO SECTION
+    // ══════════════════════════════════════
+    const colGap = 16;
+    const halfW = (contentW - colGap) / 2;
+    const col2X = margin + halfW + colGap;
+    const infoTop = y;
+
+    // Left box row count: Receipt Number, Date & Time, Invoice No. (optional)
+    const leftRowCount = data.invoiceNumber ? 3 : 2;
+    const leftBoxH = 24 + leftRowCount * 16 + 8;
+    // Right box: Student Name, Student No., Class — always 3 rows
+    const rightBoxH = 24 + 3 * 16 + 8;
+    const infoBoxH = Math.max(leftBoxH, rightBoxH);
+
+    // Left box — Receipt Details
+    doc.save().rect(margin, infoTop, halfW, infoBoxH).fill(C.headerBg)
+      .strokeColor(C.border).lineWidth(0.5).rect(margin, infoTop, halfW, infoBoxH).stroke().restore();
+    doc.font('Helvetica-Bold').fontSize(8).fillColor(C.blueDark)
+      .text('RECEIPT DETAILS', margin + 10, infoTop + 8, { characterSpacing: 0.5, lineBreak: false });
+    hline(infoTop + 20, C.border);
+
+    let leftY = infoTop + 26;
+    leftY = infoRow('Receipt Number', data.receiptNumber, margin + 10, leftY, halfW - 20);
+    leftY = infoRow('Date & Time', formatGeneratedTimestamp(data.paidAt), margin + 10, leftY, halfW - 20);
+    if (data.invoiceNumber) {
+      infoRow('Invoice No.', data.invoiceNumber, margin + 10, leftY, halfW - 20);
     }
-    doc.fillColor(BILL.muted).font('Helvetica').fontSize(6.5);
-    doc.text('Scan to verify', qrX, metaTop + metaH - 14, { width: qrSize, align: 'center', lineBreak: false });
 
-    y = metaContentBottom + 22;
+    // Right box — Received From
+    doc.save().rect(col2X, infoTop, halfW, infoBoxH).fill(C.headerBg)
+      .strokeColor(C.border).lineWidth(0.5).rect(col2X, infoTop, halfW, infoBoxH).stroke().restore();
+    doc.font('Helvetica-Bold').fontSize(8).fillColor(C.blueDark)
+      .text('RECEIVED FROM', col2X + 10, infoTop + 8, { characterSpacing: 0.5, lineBreak: false });
+    hline(infoTop + 20, C.border);
 
-    doc.font('Helvetica-Bold').fontSize(10).fillColor(BILL.ink).text('RECEIVED FROM', margin, y, {
-      characterSpacing: 0.5,
-    });
+    let rightY = infoTop + 26;
+    rightY = infoRow('Student Name', data.studentName, col2X + 10, rightY, halfW - 20);
+    rightY = infoRow('Student No.', data.admissionNumber, col2X + 10, rightY, halfW - 20);
+    infoRow('Class', formatReceiptClassLabel(data.className), col2X + 10, rightY, halfW - 20);
+
+    y = infoTop + infoBoxH + 12;
+
+    // ══════════════════════════════════════
+    // PAYMENT TABLE — 2 columns
+    // ══════════════════════════════════════
+    const descW = contentW * 0.72;
+    const amtW = contentW - descW;
+    const tableRowH = 22;
+
+    doc.save().rect(margin, y, contentW, 20).fill(C.blueDark).restore();
+    doc.font('Helvetica-Bold').fontSize(8.5).fillColor(C.white);
+    doc.text('DESCRIPTION', margin + 8, y + 6, { width: descW - 16, lineBreak: false });
+    doc.text('AMOUNT', margin + descW + 4, y + 6, { width: amtW - 8, align: 'right', lineBreak: false });
     y += 20;
-    const studentCardPad = 16;
-    const studentFieldW = contentW / 2 - studentCardPad - 8;
-    const studentCardH = 78;
-    doc.save();
-    doc.roundedRect(margin, y, contentW, studentCardH, 8).fill(BILL.white);
-    doc.strokeColor(BILL.border).lineWidth(0.75);
-    doc.roundedRect(margin, y, contentW, studentCardH, 8).stroke();
-    doc.restore();
 
-    const sY = y + studentCardPad;
-    drawReceiptLabelValue(doc, 'STUDENT NAME', data.studentName, margin + studentCardPad, sY, {
-      width: studentFieldW,
-    });
-    drawReceiptLabelValue(doc, 'STUDENT ID', data.admissionNumber, margin + contentW / 2 + 8, sY, {
-      width: studentFieldW,
-    });
-    drawReceiptLabelValue(
-      doc,
-      'CLASS',
-      formatReceiptClassLabel(data.className),
-      margin + studentCardPad,
-      sY + 38,
-      { width: contentW - studentCardPad * 2 },
-    );
+    // Payment row
+    doc.save().rect(margin, y, contentW, tableRowH).fill(C.rowAlt).restore();
+    doc.save().strokeColor(C.border).lineWidth(0.3)
+      .moveTo(margin, y + tableRowH).lineTo(margin + contentW, y + tableRowH).stroke().restore();
+    doc.font('Helvetica').fontSize(9).fillColor(C.ink)
+      .text(data.label || 'School Fees Payment', margin + 8, y + 6, { width: descW - 16, lineBreak: false });
+    doc.font('Helvetica-Bold').fontSize(9).fillColor(C.ink)
+      .text(formatMoney(data.amount, currency), margin + descW + 4, y + 6, {
+        width: amtW - 8, align: 'right', lineBreak: false,
+      });
+    y += tableRowH;
 
-    y += studentCardH + 20;
+    // Payment method row
+    doc.save().strokeColor(C.border).lineWidth(0.3)
+      .moveTo(margin, y + tableRowH).lineTo(margin + contentW, y + tableRowH).stroke().restore();
+    doc.font('Helvetica').fontSize(9).fillColor(C.muted)
+      .text('Payment Method', margin + 8, y + 6, { width: descW - 16, lineBreak: false });
+    doc.font('Helvetica-Bold').fontSize(9).fillColor(C.ink)
+      .text(formatPaymentMethod(data.method), margin + descW + 4, y + 6, {
+        width: amtW - 8, align: 'right', lineBreak: false,
+      });
+    y += tableRowH;
 
-    const tableHeaderH = 22;
-    const rowH = 24;
-    doc.save();
-    doc.rect(margin, y, contentW, tableHeaderH).fill(BILL.primary);
-    doc.fillColor(BILL.white).font('Helvetica-Bold').fontSize(8);
-    doc.text('DESCRIPTION', margin + 10, y + 7);
-    doc.text('QTY', margin + contentW * 0.58, y + 7, { width: 40, align: 'center' });
-    doc.text('UNIT PRICE', margin + contentW * 0.68, y + 7, { width: 72, align: 'right' });
-    doc.text('AMOUNT', margin + contentW * 0.82, y + 7, { width: contentW * 0.16 - 10, align: 'right' });
-    doc.restore();
-    y += tableHeaderH;
-
-    doc.save();
-    doc.rect(margin, y, contentW, rowH).fill(BILL.rowAlt);
-    doc.restore();
-    doc.strokeColor(BILL.border).lineWidth(0.5);
-    doc.moveTo(margin, y + rowH).lineTo(margin + contentW, y + rowH).stroke();
-    doc.fillColor(BILL.ink).font('Helvetica').fontSize(9);
-    doc.text(data.label, margin + 10, y + 7, { width: contentW * 0.55 - 12, lineBreak: false });
-    doc.text('1', margin + contentW * 0.58, y + 7, { width: 40, align: 'center' });
-    doc.text(formatMoney(data.amount, currency), margin + contentW * 0.68, y + 7, {
-      width: 72,
-      align: 'right',
-    });
-    doc.font('Helvetica-Bold');
-    doc.text(formatMoney(data.amount, currency), margin + contentW * 0.82, y + 7, {
-      width: contentW * 0.16 - 10,
-      align: 'right',
-    });
-    y += rowH + 2;
-
-    doc.save();
-    doc.rect(margin, y, contentW, rowH).fill('#f1f5f9');
-    doc.restore();
-    doc.fillColor(BILL.muted).font('Helvetica').fontSize(9);
-    doc.text('Payment method', margin + 10, y + 7);
-    doc.fillColor(BILL.ink).font('Helvetica-Bold').fontSize(9);
-    doc.text(formatPaymentMethod(data.method), margin + contentW * 0.58, y + 7, {
-      width: contentW * 0.4,
-      align: 'right',
-    });
-    y += rowH + 14;
-
-    const totalBoxH = 58;
-    doc.save();
-    doc.roundedRect(margin, y, contentW, totalBoxH, 8).fill('#eef2ff');
-    doc.strokeColor(BILL.primary).lineWidth(1);
-    doc.roundedRect(margin, y, contentW, totalBoxH, 8).stroke();
-    doc.restore();
-    doc.fillColor(BILL.muted).font('Helvetica').fontSize(9);
-    doc.text('TOTAL AMOUNT PAID', margin + 16, y + 10, { characterSpacing: RECEIPT_LABEL.tracking });
-    doc.fillColor(BILL.primary).font('Helvetica-Bold').fontSize(22);
-    doc.text(formatMoney(data.amount, currency), margin + 16, y + 28, {
-      width: contentW - 32,
-      align: 'right',
-    });
-    y += totalBoxH + 18;
-
-    if (data.notes?.trim()) {
-      y = drawReceiptLabelValue(doc, 'NOTES', data.notes.trim(), margin, y, {
-        width: contentW,
-        valueBold: false,
-        valueSize: RECEIPT_LABEL.valueSizeSm,
-        gap: 12,
-      }) + 10;
+    if (data.paymentReference) {
+      doc.save().strokeColor(C.border).lineWidth(0.3)
+        .moveTo(margin, y + tableRowH).lineTo(margin + contentW, y + tableRowH).stroke().restore();
+      doc.font('Helvetica').fontSize(9).fillColor(C.muted)
+        .text('Payment Reference', margin + 8, y + 6, { width: descW - 16, lineBreak: false });
+      doc.font('Helvetica').fontSize(9).fillColor(C.ink)
+        .text(data.paymentReference, margin + descW + 4, y + 6, {
+          width: amtW - 8, align: 'right', lineBreak: false,
+        });
+      y += tableRowH;
     }
 
-    const sigY = y;
-    const sigW = (contentW - 24) / 2;
-    const drawSigLine = (title: string, x: number) => {
-      doc.fillColor(BILL.muted).font('Helvetica').fontSize(8).text(title, x, sigY);
-      doc.strokeColor(BILL.border).lineWidth(0.75);
-      doc.moveTo(x, sigY + 36).lineTo(x + sigW, sigY + 36).stroke();
-      doc.fillColor(BILL.muted).font('Helvetica').fontSize(7).text('Signature', x, sigY + 40);
-    };
-    drawSigLine('Received by (Finance Office)', margin);
-    drawSigLine('Authorized signatory', margin + sigW + 24);
-    y = sigY + 58;
+    doc.save().strokeColor(C.border).lineWidth(0.3)
+      .moveTo(margin, y + tableRowH).lineTo(margin + contentW, y + tableRowH).stroke().restore();
+    doc.font('Helvetica').fontSize(9).fillColor(C.muted)
+      .text('Invoice Balance', margin + 8, y + 6, { width: descW - 16, lineBreak: false });
+    doc.font('Helvetica-Bold').fontSize(9).fillColor(C.ink)
+      .text(formatMoney(Number(data.invoiceBalance ?? 0), currency), margin + descW + 4, y + 6, {
+        width: amtW - 8, align: 'right', lineBreak: false,
+      });
+    y += tableRowH;
 
-    doc.fillColor(BILL.ink).font('Helvetica').fontSize(9);
-    doc.text(
-      'Thank you for your payment. Please retain this receipt for your records. For queries, contact the school finance office.',
-      margin,
-      y,
-      { width: contentW, align: 'center' },
-    );
-    y += 28;
+    // Table border
+    let bodyRows = 3;
+    if (data.paymentReference) bodyRows += 1;
+    const tableTop = y - tableRowH * bodyRows - 20;
+    doc.save().strokeColor(C.border).lineWidth(0.5)
+      .rect(margin, tableTop, contentW, y - tableTop).stroke().restore();
 
-    drawBillingContactFooter(doc, data, margin, contentW, y);
-    y += 16;
+    y += 4;
 
-    doc.fillColor(BILL.muted).font('Helvetica').fontSize(7.5);
-    doc.text(
-      'This is a computer-generated receipt and is valid without a physical signature when verified by QR code or receipt number.',
-      margin,
-      y,
-      { width: contentW, align: 'center' },
-    );
-    drawGeneratedFooter(doc, data.paidAt, margin, contentW);
+    // ══════════════════════════════════════
+    // TOTAL AMOUNT PAID (highlighted)
+    // ══════════════════════════════════════
+    const summaryW = 240;
+    const summaryX = margin + contentW - summaryW;
+
+    doc.save().rect(summaryX, y, summaryW, 26).fill(C.blueDark).restore();
+    doc.font('Helvetica-Bold').fontSize(9).fillColor(C.white)
+      .text('TOTAL AMOUNT PAID', summaryX + 10, y + 8, { width: summaryW * 0.55, lineBreak: false });
+    doc.font('Helvetica-Bold').fontSize(9).fillColor(C.white)
+      .text(formatMoney(data.amount, currency), summaryX + summaryW * 0.55, y + 8, {
+        width: summaryW * 0.42, align: 'right', lineBreak: false,
+      });
+    y += 34;
+
+    // ══════════════════════════════════════
+    // PAID STATUS INDICATOR
+    // ══════════════════════════════════════
+    doc.save()
+      .circle(margin + 12, y + 12, 9).fill(C.greenBg)
+      .circle(margin + 12, y + 12, 9).strokeColor(C.green).lineWidth(1).stroke()
+      .restore();
+    doc.save().strokeColor(C.green).lineWidth(1.5)
+      .moveTo(margin + 7, y + 12).lineTo(margin + 11, y + 16).lineTo(margin + 17, y + 8).stroke().restore();
+    doc.font('Helvetica-Bold').fontSize(9).fillColor(C.green)
+      .text('Payment received and recorded.', margin + 28, y + 7, { lineBreak: false });
+    y += 30;
+
+    const pageBottom = pageH - margin - 30;
+    y = drawPdfBankingDetails(doc, data, margin, contentW, y, pageBottom, () => {
+      doc.addPage({ size: 'A4', margin });
+      return margin;
+    });
+    y = drawPdfPaymentReferenceNote(doc, data.bankPaymentReferenceNote, margin, contentW, y, pageBottom);
+
+    // ══════════════════════════════════════
+    // QR CODE + NOTES
+    // ══════════════════════════════════════
+    const qrSize = 68;
+    const qrTop = y;
+    try {
+      doc.save().rect(margin, qrTop, qrSize, qrSize).fill(C.white)
+        .strokeColor(C.border).lineWidth(0.5).rect(margin, qrTop, qrSize, qrSize).stroke().restore();
+      doc.image(qrBuffer, margin + 4, qrTop + 4, { fit: [qrSize - 8, qrSize - 8] });
+    } catch { /* skip */ }
+    doc.font('Helvetica').fontSize(7).fillColor(C.muted)
+      .text('Scan to verify', margin, qrTop + qrSize + 3, { width: qrSize, align: 'center', lineBreak: false });
+
+    const noteX = margin + qrSize + 14;
+    const noteW = contentW - qrSize - 14;
+    let noteY = qrTop + 4;
+    doc.font('Helvetica').fontSize(8).fillColor(C.muted)
+      .text('Thank you for your payment. Please retain this receipt for your records.', noteX, noteY, { width: noteW });
+    noteY += 22;
+    if (data.notes?.trim()) {
+      doc.font('Helvetica-Bold').fontSize(8).fillColor(C.ink).text('Note:', noteX, noteY, { lineBreak: false });
+      doc.font('Helvetica').fontSize(8).fillColor(C.ink)
+        .text(data.notes.trim(), noteX + 28, noteY, { width: noteW - 28 });
+      noteY += 18;
+    }
+
+    // ══════════════════════════════════════
+    // FOOTER
+    // ══════════════════════════════════════
+    const genY = pageH - margin - 12;
+    doc.font('Helvetica').fontSize(7.5).fillColor(C.muted)
+      .text(`Generated on: ${formatGeneratedTimestamp(data.paidAt)}`, margin, genY, {
+        width: contentW, align: 'center', lineBreak: false,
+      });
 
     doc.end();
     stream.on('finish', () => resolve(filepath));
@@ -598,21 +698,10 @@ export async function generateInvoicePdf(
   const currency = data.currency || 'USD';
   const balance = Math.max(0, data.totalAmount - data.amountPaid);
   const school = data.schoolName || 'School Pro Academy';
-  const statusTone = invoiceStatusTone(data.status);
-  const statusLabel = String(data.status || 'sent').toUpperCase();
-
-  const verifyPayload = JSON.stringify({
-    invoice: data.invoiceNumber,
-    student: data.admissionNumber,
-    total: Number(data.totalAmount.toFixed(2)),
-    balance: Number(balance.toFixed(2)),
-    due: data.dueDate,
-    school,
-  });
-  const qrBuffer = await QRCode.toBuffer(verifyPayload, { margin: 1, width: 220, errorCorrectionLevel: 'M' });
+  const isPaid = String(data.status).toLowerCase() === 'paid';
 
   return new Promise((resolve, reject) => {
-    const margin = 50;
+    const margin = 40;
     const doc = new PDFDocument({ margin, size: 'A4' });
     const stream = fs.createWriteStream(filepath);
     doc.pipe(stream);
@@ -620,289 +709,246 @@ export async function generateInvoicePdf(
     const pageW = doc.page.width;
     const pageH = doc.page.height;
     const contentW = pageW - margin * 2;
-    const pageBottom = () => doc.page.height - margin - 24;
+    const pageBottom = pageH - margin - 30;
 
-    drawInvoiceWatermark(doc, pageW, pageH, data.status);
-    let y = drawBillingDocHeader(doc, data, pageW, margin, 'STUDENT FEE INVOICE');
-
-    const qrSize = 72;
-    const metaW = contentW - qrSize - 16;
-    const metaTop = y;
-    const metaX = margin + 16;
-    const col2X = margin + metaW / 2 + 4;
-    const fieldW = metaW / 2 - 24;
-
-    const estimateLabelValueHeight = (label: string, value: string, valueSize = RECEIPT_LABEL.valueSize) => {
-      doc.font('Helvetica').fontSize(RECEIPT_LABEL.labelSize);
-      const labelH = doc.heightOfString(label, { width: fieldW });
-      doc.font('Helvetica-Bold').fontSize(valueSize);
-      const valueH = doc.heightOfString(value, { width: fieldW });
-      return labelH + RECEIPT_LABEL.gap + valueH;
+    // ── Colours ──
+    const C = {
+      blue: '#1a56db',
+      blueDark: '#1e3a8a',
+      ink: '#1a1a2e',
+      muted: '#64748b',
+      border: '#d1d5db',
+      rowAlt: '#f9fafb',
+      white: '#ffffff',
+      gold: '#b8860b',
+      headerBg: '#f0f4ff',
     };
 
-    let metaY = metaTop + 14;
-    let metaContentBottom = metaTop + 14;
-    drawStatusPill(doc, metaX, metaY, statusLabel, statusTone);
-    metaY += 34;
+    // ── Helpers ──
+    const hline = (yy: number, col = C.border, lw = 0.5) => {
+      doc.save().strokeColor(col).lineWidth(lw)
+        .moveTo(margin, yy).lineTo(margin + contentW, yy).stroke().restore();
+    };
 
-    const row1H = Math.max(
-      estimateLabelValueHeight('INVOICE NO.', data.invoiceNumber),
-      estimateLabelValueHeight('ISSUED', formatInvoiceDate(data.issuedDate)),
-    );
-    const row1Bottom = metaY + row1H;
-    metaContentBottom = Math.max(metaContentBottom, row1Bottom);
-    metaY = row1Bottom + 12;
+    const labelColW = 82;
+    const infoRow = (label: string, value: string, x: number, yy: number, w: number): number => {
+      doc.font('Helvetica').fontSize(8.5).fillColor(C.muted)
+        .text(label, x, yy, { width: labelColW, lineBreak: false });
+      doc.font('Helvetica-Bold').fontSize(8.5).fillColor(C.ink)
+        .text(value || '—', x + labelColW, yy, { width: Math.max(10, w - labelColW), lineBreak: false });
+      return yy + 16;
+    };
 
-    let row2H = Math.max(
-      estimateLabelValueHeight('DUE DATE', formatInvoiceDate(data.dueDate), RECEIPT_LABEL.valueSizeSm),
-      data.termName
-        ? estimateLabelValueHeight('TERM', data.termName, RECEIPT_LABEL.valueSizeSm)
-        : 0,
-    );
-    metaContentBottom = Math.max(metaContentBottom, metaY + row2H);
+    // ══════════════════════════════════════
+    // HEADER — white background
+    // ══════════════════════════════════════
+    const headerTop = margin;
+    const logoPath = resolveUploadPath(data.logoUrl);
+    let logoRight = margin;
 
-    const metaH = Math.max(100, metaContentBottom - metaTop + 14);
-    doc.save();
-    doc.roundedRect(margin, metaTop, metaW, metaH, 8).fill('#f8fafc');
-    doc.strokeColor(BILL.border).lineWidth(0.75);
-    doc.roundedRect(margin, metaTop, metaW, metaH, 8).stroke();
-    doc.restore();
+    if (logoPath) {
+      const logoSize = 52;
+      try {
+        doc.save().circle(margin + logoSize / 2, headerTop + logoSize / 2, logoSize / 2 + 2)
+          .fill(C.border).restore();
+        doc.save().circle(margin + logoSize / 2, headerTop + logoSize / 2, logoSize / 2)
+          .fill(C.white).restore();
+        doc.image(logoPath, margin + 4, headerTop + 4, { fit: [logoSize - 8, logoSize - 8] });
+        logoRight = margin + logoSize + 12;
+      } catch { logoRight = margin; }
+    }
 
-    const qrX = margin + metaW + 16;
-    doc.save();
-    doc.roundedRect(qrX, metaTop, qrSize, metaH, 8).fill(BILL.white);
-    doc.strokeColor(BILL.border).lineWidth(0.75);
-    doc.roundedRect(qrX, metaTop, qrSize, metaH, 8).stroke();
-    doc.restore();
+    // School name + contact (left/center)
+    const schoolInfoW = contentW * 0.55;
+    doc.font('Helvetica-Bold').fontSize(14).fillColor(C.blueDark)
+      .text(school, logoRight, headerTop + 4, { width: schoolInfoW, lineBreak: false });
+    let schoolY = headerTop + 21;
+    const contactParts: string[] = [];
+    if (data.address) contactParts.push(data.address);
+    if (data.phone) contactParts.push(`Tel: ${data.phone}`);
+    if (data.email) contactParts.push(data.email);
+    if (contactParts.length) {
+      doc.font('Helvetica').fontSize(7.5).fillColor(C.muted)
+        .text(contactParts.join('  ·  '), logoRight, schoolY, { width: schoolInfoW });
+      schoolY += 14;
+    }
 
-    metaY = metaTop + 14;
-    drawStatusPill(doc, metaX, metaY, statusLabel, statusTone);
-    metaY += 34;
+    // Doc type (right side)
+    const docTypeX = margin + contentW * 0.62;
+    const docTypeW = contentW * 0.38;
+    doc.font('Helvetica').fontSize(8).fillColor(C.muted)
+      .text('STATEMENT OF ACCOUNT', docTypeX, headerTop + 6, { width: docTypeW, align: 'right', lineBreak: false });
+    doc.font('Helvetica-Bold').fontSize(26).fillColor(C.blue)
+      .text('Invoice', docTypeX, headerTop + 18, { width: docTypeW, align: 'right', lineBreak: false });
 
-    const row1DrawnBottom = Math.max(
-      drawReceiptLabelValue(doc, 'INVOICE NO.', data.invoiceNumber, metaX, metaY, { width: fieldW }),
-      drawReceiptLabelValue(doc, 'ISSUED', formatInvoiceDate(data.issuedDate), col2X, metaY, { width: fieldW }),
-    );
-    metaContentBottom = Math.max(metaContentBottom, row1DrawnBottom);
-    metaY = row1DrawnBottom + 12;
+    const headerBottom = Math.max(headerTop + 56, schoolY + 8);
+    let y = headerBottom + 4;
 
-    let row2Bottom = metaY;
-    row2Bottom = Math.max(
-      row2Bottom,
-      drawReceiptLabelValue(doc, 'DUE DATE', formatInvoiceDate(data.dueDate), metaX, metaY, {
-        width: fieldW,
-        valueSize: RECEIPT_LABEL.valueSizeSm,
-      }),
-    );
+    // Gold/blue accent line
+    doc.save().strokeColor(C.gold).lineWidth(2)
+      .moveTo(margin, y).lineTo(margin + contentW, y).stroke().restore();
+    y += 8;
+
+    // ══════════════════════════════════════
+    // TWO-COLUMN INFO SECTION
+    // ══════════════════════════════════════
+    const colGap = 16;
+    const halfW = (contentW - colGap) / 2;
+    const col2X = margin + halfW + colGap;
+    const infoTop = y;
+
+    // Calculate box height dynamically based on number of rows
+    const leftRowCount = data.termName ? 4 : 3;
+    const infoBoxH = 24 + leftRowCount * 16 + 8;
+
+    // Left box — Invoice Details
+    doc.save().rect(margin, infoTop, halfW, infoBoxH).fill(C.headerBg)
+      .strokeColor(C.border).lineWidth(0.5).rect(margin, infoTop, halfW, infoBoxH).stroke().restore();
+    doc.font('Helvetica-Bold').fontSize(8).fillColor(C.blueDark)
+      .text('INVOICE DETAILS', margin + 10, infoTop + 8, { characterSpacing: 0.5, lineBreak: false });
+    hline(infoTop + 20, C.border);
+
+    let leftY = infoTop + 26;
+    leftY = infoRow('Invoice Number', data.invoiceNumber, margin + 10, leftY, halfW - 20);
+    leftY = infoRow('Invoice Date', formatInvoiceDate(data.issuedDate), margin + 10, leftY, halfW - 20);
+    leftY = infoRow('Due Date', formatInvoiceDate(data.dueDate), margin + 10, leftY, halfW - 20);
     if (data.termName) {
-      row2Bottom = Math.max(
-        row2Bottom,
-        drawReceiptLabelValue(doc, 'TERM', data.termName, col2X, metaY, {
-          width: fieldW,
-          valueSize: RECEIPT_LABEL.valueSizeSm,
-        }),
-      );
+      infoRow('Term', data.termName, margin + 10, leftY, halfW - 20);
     }
-    metaContentBottom = Math.max(metaContentBottom, row2Bottom);
 
-    try {
-      doc.image(qrBuffer, qrX + 8, metaTop + 8, { fit: [qrSize - 16, qrSize - 28] });
-    } catch {
-      /* skip invalid qr */
-    }
-    doc.fillColor(BILL.muted).font('Helvetica').fontSize(6.5);
-    doc.text('Scan to verify', qrX, metaTop + metaH - 14, { width: qrSize, align: 'center', lineBreak: false });
+    // Right box — Billed To (always 3 rows)
+    const rightBoxH = 24 + 3 * 16 + 8;
+    doc.save().rect(col2X, infoTop, halfW, rightBoxH).fill(C.headerBg)
+      .strokeColor(C.border).lineWidth(0.5).rect(col2X, infoTop, halfW, rightBoxH).stroke().restore();
+    doc.font('Helvetica-Bold').fontSize(8).fillColor(C.blueDark)
+      .text('BILLED TO', col2X + 10, infoTop + 8, { characterSpacing: 0.5, lineBreak: false });
+    hline(infoTop + 20, C.border);
 
-    y = metaContentBottom + 18;
+    let rightY = infoTop + 26;
+    rightY = infoRow('Student Name', data.studentName, col2X + 10, rightY, halfW - 20);
+    rightY = infoRow('Student No.', data.admissionNumber, col2X + 10, rightY, halfW - 20);
+    infoRow('Class', formatReceiptClassLabel(data.className), col2X + 10, rightY, halfW - 20);
 
-    const gap = 8;
-    const cardW = (contentW - gap * 2) / 3;
-    const drawSummaryCard = (
-      x: number,
-      label: string,
-      value: string,
-      tone: 'neutral' | 'positive' | 'warn' | 'danger' = 'neutral',
-    ) => {
-      const bg = tone === 'positive' ? '#ecfdf3' : tone === 'warn' ? '#fff7ed' : tone === 'danger' ? '#fef2f2' : '#eff6ff';
-      const border = tone === 'positive' ? '#86efac' : tone === 'warn' ? '#fdba74' : tone === 'danger' ? '#fecaca' : '#bfdbfe';
-      const fg = tone === 'positive' ? '#166534' : tone === 'warn' ? '#9a3412' : tone === 'danger' ? '#991b1b' : '#1d4ed8';
-      doc.save();
-      doc.roundedRect(x, y, cardW, 42, 7).fillAndStroke(bg, border);
-      doc.restore();
-      doc.font('Helvetica').fontSize(7.5).fillColor(BILL.muted).text(label.toUpperCase(), x + 9, y + 8, {
-        width: cardW - 18,
-      });
-      doc.font('Helvetica-Bold').fontSize(11).fillColor(fg).text(value, x + 9, y + 21, { width: cardW - 18 });
-    };
-    drawSummaryCard(margin, 'Invoice Total', formatMoney(data.totalAmount, currency), 'neutral');
-    drawSummaryCard(margin + cardW + gap, 'Amount Paid', formatMoney(data.amountPaid, currency), 'positive');
-    drawSummaryCard(
-      margin + (cardW + gap) * 2,
-      'Balance Due',
-      formatMoney(balance, currency),
-      balance > 0 ? (statusTone === 'overdue' ? 'danger' : 'warn') : 'positive',
-    );
-    y += 52;
+    y = infoTop + Math.max(infoBoxH, rightBoxH) + 10;
 
-    doc.font('Helvetica-Bold').fontSize(10).fillColor(BILL.ink).text('BILL TO', margin, y, {
-      characterSpacing: 0.5,
-    });
+    // ══════════════════════════════════════
+    // LINE ITEMS TABLE — 2 columns only
+    // ══════════════════════════════════════
+    const descW = contentW * 0.72;
+    const amtW = contentW - descW;
+    const tableRowH = 22;
+
+    // Table header
+    doc.save().rect(margin, y, contentW, 20).fill(C.blueDark).restore();
+    doc.font('Helvetica-Bold').fontSize(8.5).fillColor(C.white);
+    doc.text('DESCRIPTION', margin + 8, y + 6, { width: descW - 16, lineBreak: false });
+    doc.text('AMOUNT', margin + descW + 4, y + 6, { width: amtW - 8, align: 'right', lineBreak: false });
     y += 20;
-    const billPad = 16;
-    const billFieldW = contentW / 2 - billPad - 8;
-    const studentCardH = 78;
-    doc.save();
-    doc.roundedRect(margin, y, contentW, studentCardH, 8).fill(BILL.white);
-    doc.strokeColor(BILL.border).lineWidth(0.75);
-    doc.roundedRect(margin, y, contentW, studentCardH, 8).stroke();
-    doc.restore();
 
-    const bY = y + billPad;
-    drawReceiptLabelValue(doc, 'STUDENT NAME', data.studentName, margin + billPad, bY, { width: billFieldW });
-    drawReceiptLabelValue(doc, 'STUDENT ID', data.admissionNumber, margin + contentW / 2 + 8, bY, {
-      width: billFieldW,
-    });
-    drawReceiptLabelValue(doc, 'CLASS', formatReceiptClassLabel(data.className), margin + billPad, bY + 38, {
-      width: billFieldW,
-    });
-    drawReceiptLabelValue(doc, 'FEE TYPE', formatFeeTypeLabel(data.feeType), margin + contentW / 2 + 8, bY + 38, {
-      width: billFieldW,
-    });
-    y += studentCardH + 18;
+    const lineItems = data.lines?.length > 0
+      ? data.lines
+      : [{ description: data.description, quantity: 1, unitPrice: data.totalAmount, amount: data.totalAmount }];
 
-    if (data.description?.trim()) {
-      y =
-        drawReceiptLabelValue(doc, 'DESCRIPTION', data.description.trim(), margin, y, {
-          width: contentW,
-          valueBold: false,
-          valueSize: RECEIPT_LABEL.valueSizeSm,
-        }) + 12;
-    }
-
-    doc.font('Helvetica-Bold').fontSize(10).fillColor(BILL.ink).text('LINE ITEMS', margin, y, {
-      characterSpacing: 0.5,
-    });
-    y += 16;
-
-    const colWeights = [0.46, 0.1, 0.2, 0.24];
-    const cols = colWeights.map((w) => ({ w: Math.floor(contentW * w) }));
-    const tableW = cols.reduce((s, c) => s + c.w, 0);
-    const used = cols.reduce((s, c) => s + c.w, 0);
-    cols[cols.length - 1].w += contentW - used;
-    const colHeaders = ['DESCRIPTION', 'QTY', 'UNIT PRICE', 'AMOUNT'];
-    const colAligns: Array<'left' | 'right' | 'center'> = ['left', 'center', 'right', 'right'];
-
-    const drawTableHeader = () => {
-      doc.save();
-      doc.roundedRect(margin, y, tableW, 20, 5).fill(BILL.primary);
-      doc.restore();
-      let x = margin;
-      doc.font('Helvetica-Bold').fontSize(8).fillColor(BILL.white);
-      colHeaders.forEach((label, i) => {
-        doc.text(label, x + 6, y + 6, { width: cols[i].w - 12, align: colAligns[i], lineBreak: false });
-        x += cols[i].w;
-      });
-      y += 22;
-    };
-    drawTableHeader();
-
-    const lines =
-      data.lines?.length > 0
-        ? data.lines
-        : [{ description: data.description, quantity: 1, unitPrice: data.totalAmount, amount: data.totalAmount }];
-
-    let rowIndex = 0;
-    lines.forEach((line) => {
-      const vals = [
-        line.description || '—',
-        String(line.quantity),
-        formatMoney(Number(line.unitPrice), currency),
-        formatMoney(Number(line.amount), currency),
-      ];
-      doc.font('Helvetica').fontSize(9);
-      let rowH = 0;
-      for (let i = 0; i < cols.length; i++) {
-        rowH = Math.max(rowH, doc.heightOfString(vals[i], { width: cols[i].w - 12, align: colAligns[i] }));
-      }
-      rowH = Math.max(20, Math.ceil(rowH) + 8);
-
-      if (y + rowH > pageBottom()) {
+    lineItems.forEach((line, idx) => {
+      if (y + tableRowH > pageBottom) {
         doc.addPage({ size: 'A4', margin });
         y = margin;
-        drawTableHeader();
+        doc.save().rect(margin, y, contentW, 20).fill(C.blueDark).restore();
+        doc.font('Helvetica-Bold').fontSize(8.5).fillColor(C.white);
+        doc.text('DESCRIPTION', margin + 8, y + 6, { width: descW - 16, lineBreak: false });
+        doc.text('AMOUNT', margin + descW + 4, y + 6, { width: amtW - 8, align: 'right', lineBreak: false });
+        y += 20;
       }
-      if (rowIndex % 2 === 1) {
-        doc.save();
-        doc.rect(margin, y, tableW, rowH).fill(BILL.rowAlt);
-        doc.restore();
+      if (idx % 2 === 1) {
+        doc.save().rect(margin, y, contentW, tableRowH).fill(C.rowAlt).restore();
       }
-      doc.fillColor(BILL.ink).font('Helvetica').fontSize(9);
-      let x = margin;
-      for (let i = 0; i < cols.length; i++) {
-        if (i === cols.length - 1) doc.font('Helvetica-Bold');
-        doc.text(vals[i], x + 6, y + 4, { width: cols[i].w - 12, align: colAligns[i] });
-        if (i === cols.length - 1) doc.font('Helvetica');
-        x += cols[i].w;
+      doc.save().strokeColor(C.border).lineWidth(0.3)
+        .moveTo(margin, y + tableRowH).lineTo(margin + contentW, y + tableRowH).stroke().restore();
+      doc.font('Helvetica').fontSize(9).fillColor(C.ink);
+      doc.text(line.description || '—', margin + 8, y + 6, { width: descW - 16, lineBreak: false });
+      doc.font('Helvetica-Bold').fontSize(9).fillColor(C.ink);
+      doc.text(formatMoney(Number(line.amount), currency), margin + descW + 4, y + 6, {
+        width: amtW - 8, align: 'right', lineBreak: false,
+      });
+      y += tableRowH;
+    });
+
+    // Outer table border
+    doc.save().strokeColor(C.border).lineWidth(0.5)
+      .rect(margin, y - tableRowH * lineItems.length - 20, contentW, tableRowH * lineItems.length + 20).stroke().restore();
+
+    y += 4;
+
+    // ══════════════════════════════════════
+    // SUMMARY TOTALS (right-aligned)
+    // ══════════════════════════════════════
+    const summaryW = 240;
+    const summaryX = margin + contentW - summaryW;
+
+    const drawSummaryRow = (label: string, value: string, highlight = false, isTotal = false) => {
+      const rowH = isTotal ? 24 : 20;
+      if (highlight) {
+        doc.save().rect(summaryX, y, summaryW, rowH).fill(C.blueDark).restore();
+        doc.font('Helvetica-Bold').fontSize(isTotal ? 10 : 9).fillColor(C.white);
+      } else {
+        doc.save().strokeColor(C.border).lineWidth(0.3)
+          .moveTo(summaryX, y + rowH).lineTo(summaryX + summaryW, y + rowH).stroke().restore();
+        doc.font(isTotal ? 'Helvetica-Bold' : 'Helvetica').fontSize(9).fillColor(C.ink);
       }
+      doc.text(label, summaryX + 10, y + (rowH - 9) / 2, { width: summaryW * 0.55, lineBreak: false });
+      doc.font('Helvetica-Bold').fontSize(9).fillColor(highlight ? C.white : C.ink);
+      doc.text(value, summaryX + summaryW * 0.55, y + (rowH - 9) / 2, {
+        width: summaryW * 0.42, align: 'right', lineBreak: false,
+      });
       y += rowH;
-      rowIndex += 1;
-    });
+    };
+
+    doc.save().rect(summaryX, y, summaryW, 20 + 20 + 24).fill('#f8fafc')
+      .strokeColor(C.border).lineWidth(0.5).rect(summaryX, y, summaryW, 20 + 20 + 24).stroke().restore();
+
+    drawSummaryRow('Amount Paid', formatMoney(data.amountPaid, currency));
+    drawSummaryRow('Remaining Balance', formatMoney(balance, currency));
+    drawSummaryRow('Total Amount Due', formatMoney(data.totalAmount, currency), true, true);
 
     y += 14;
-    const summaryBoxW = 220;
-    const summaryX = margin + contentW - summaryBoxW;
-    const summaryRows = [
-      { label: 'Subtotal', value: formatMoney(data.totalAmount, currency), bold: false },
-      { label: 'Paid', value: formatMoney(data.amountPaid, currency), bold: false },
-      { label: 'Balance Due', value: formatMoney(balance, currency), bold: true },
-    ];
-    const boxH = 14 + summaryRows.length * 18 + 12;
-    doc.save();
-    doc.roundedRect(summaryX, y, summaryBoxW, boxH, 8).fill('#f8fafc');
-    doc.strokeColor(BILL.border).lineWidth(0.75);
-    doc.roundedRect(summaryX, y, summaryBoxW, boxH, 8).stroke();
-    doc.restore();
 
-    let sy = y + 12;
-    summaryRows.forEach((row) => {
-      if (row.bold) doc.font('Helvetica-Bold').fontSize(11).fillColor(BILL.primary);
-      else doc.font('Helvetica').fontSize(10).fillColor(BILL.ink);
-      doc.text(row.label, summaryX + 12, sy, { width: 90 });
-      doc.text(row.value, summaryX + 110, sy, { width: summaryBoxW - 122, align: 'right' });
-      sy += 18;
+    // ══════════════════════════════════════
+    // ACCOUNT STATUS
+    // ══════════════════════════════════════
+    const statusText = isPaid ? 'Account Status: Paid in Full' : `Account Status: ${String(data.status).charAt(0).toUpperCase() + String(data.status).slice(1)}`;
+    const statusColor = isPaid ? '#16a34a' : balance > 0 ? '#dc2626' : '#1d4ed8';
+    const statusBg = isPaid ? '#dcfce7' : balance > 0 ? '#fee2e2' : '#dbeafe';
+
+    doc.save()
+      .circle(margin + 12, y + 12, 9).fill(statusBg)
+      .circle(margin + 12, y + 12, 9).strokeColor(statusColor).lineWidth(1).stroke()
+      .restore();
+    if (isPaid) {
+      doc.save().strokeColor(statusColor).lineWidth(1.5)
+        .moveTo(margin + 7, y + 12).lineTo(margin + 11, y + 16).lineTo(margin + 17, y + 8).stroke().restore();
+    }
+    doc.font('Helvetica-Bold').fontSize(9).fillColor(statusColor)
+      .text(statusText, margin + 28, y + 7, { lineBreak: false });
+    y += 30;
+
+    // ══════════════════════════════════════
+    // PAYMENT / BANKING DETAILS
+    // ══════════════════════════════════════
+    y = drawPdfBankingDetails(doc, data, margin, contentW, y, pageBottom, () => {
+      doc.addPage({ size: 'A4', margin });
+      return margin;
     });
-    y += boxH + 18;
 
-    const payBoxH = 48;
-    doc.save();
-    doc.roundedRect(margin, y, contentW, payBoxH, 8).fill('#eef2ff');
-    doc.strokeColor(BILL.primary).lineWidth(0.75);
-    doc.roundedRect(margin, y, contentW, payBoxH, 8).stroke();
-    doc.restore();
-    doc.fillColor(BILL.primary).font('Helvetica-Bold').fontSize(9).text('PAYMENT INSTRUCTIONS', margin + 14, y + 10);
-    doc.fillColor(BILL.ink).font('Helvetica').fontSize(9);
-    doc.text(
-      `Please settle the balance of ${formatMoney(balance, currency)} by ${formatInvoiceDate(data.dueDate)}. ` +
-        'Payments may be made at the finance office (cash, bank transfer, EcoCash, OneMoney, or InnBucks). ' +
-        'Quote invoice number when paying.',
-      margin + 14,
-      y + 24,
-      { width: contentW - 28 },
-    );
-    y += payBoxH + 16;
+    // ══════════════════════════════════════
+    // NOTE & FOOTER
+    // ══════════════════════════════════════
+    y = drawPdfPaymentReferenceNote(doc, data.bankPaymentReferenceNote, margin, contentW, y, pageBottom);
 
-    doc.fillColor(BILL.muted).font('Helvetica').fontSize(8);
-    doc.text(
-      'This is a computer-generated tax invoice. Retain for your records. Verify authenticity using the QR code or invoice number.',
-      margin,
-      y,
-      { width: contentW, align: 'center' },
-    );
-    y += 22;
-
-    drawBillingContactFooter(doc, data, margin, contentW, y);
-    y += 14;
-    drawGeneratedFooter(doc, new Date(), margin, contentW);
+    const genY = pageH - margin - 12;
+    doc.font('Helvetica').fontSize(7.5).fillColor(C.muted)
+      .text(`Generated on: ${formatGeneratedTimestamp(new Date())}`, margin, genY, {
+        width: contentW, align: 'center', lineBreak: false,
+      });
 
     doc.end();
     stream.on('finish', () => resolve(filepath));
@@ -954,7 +1000,7 @@ function formatPositionOutOf(position?: number, total?: number): string {
 
 function formatSubjectsPassed(passed?: number, total?: number): string {
   if (passed == null || !total) return '—';
-  return `${passed} Out Of ${total}`;
+  return `${passed}/${total}`;
 }
 
 export async function generateReportCardPdf(data: {
@@ -1003,302 +1049,7 @@ export async function generateReportCardPdf(data: {
   gradeBoundaries?: GradeBoundary[];
   reportCardId?: string;
 }): Promise<Buffer> {
-  return new Promise((resolve, reject) => {
-    const pageW = 595.28;
-    const pageH = 841.89;
-    const outerMargin = 28;
-    const cardX = outerMargin;
-    const cardY = 20;
-    const cardW = pageW - outerMargin * 2;
-    const cardH = pageH - 40;
-    const contentX = cardX + 14;
-    const contentW = cardW - 28;
-    const doc = new PDFDocument({ margin: 0, size: 'A4' });
-    const chunks: Buffer[] = [];
-    doc.on('data', (c) => chunks.push(c));
-    doc.on('end', () => resolve(Buffer.concat(chunks)));
-    doc.on('error', reject);
-
-    const school = (data.schoolName || 'SCHOOL PRO ACADEMY').toUpperCase();
-    const studentName = data.studentName || 'Tamslie Zhou';
-    const className = data.className || 'Grade 2A';
-    const examName = data.examTypeName || 'Term 1 Exam';
-    const classBadge = `${data.classPosition || 1}/${data.classTotal || 3}`;
-    const formBadge = `${data.formPosition || 1}/${data.formTotal || 4}`;
-    const avgScore = data.averageMark != null ? `${Number(data.averageMark).toFixed(1)}%` : '91.4%';
-    const attendanceRate =
-      data.attendance?.attendancePercent != null ? `${data.attendance.attendancePercent}%` : '100%';
-
-    const teacherRemarks =
-      (data.classTeacherRemarks || '').trim()
-      || 'Tamslie continues to demonstrate exceptional academic performance and leadership qualities. Highly motivated and consistent across all subjects. Recommended for advanced programs.';
-    const principalRemarks =
-      (data.principalRemarks || '').trim()
-      || 'Excellent student with outstanding academic achievement, character, and conduct. Demonstrates strong commitment to excellence and serves as a model for peers. Highly recommended for advanced academic pathways.';
-
-    const rows =
-      data.subjectResults?.length
-        ? data.subjectResults.slice(0, 5).map((r) => ({
-          subject: (r.subjectName || r.subject || '').split(' — ')[0] || 'Subject',
-          code: r.subjectCode || '—',
-          marks: `${r.marks ?? '—'}`,
-          grade: r.grade || 'A',
-          remarks: r.remarks || 'Good work',
-        }))
-        : [
-          { subject: 'Biology', code: 'BIO', marks: '92', grade: 'A', remarks: 'Good work' },
-          { subject: 'Chemistry', code: 'CHEM', marks: '88', grade: 'A', remarks: 'Good work' },
-          { subject: 'Mathematics', code: 'MATH', marks: '95', grade: 'A', remarks: 'Excellent' },
-          { subject: 'English', code: 'ENG', marks: '85', grade: 'A', remarks: 'Good work' },
-          { subject: 'Physics', code: 'PHYS', marks: '97', grade: 'A', remarks: 'Excellent' },
-        ];
-
-    doc.rect(0, 0, pageW, pageH).fill('#f3f4f8');
-    doc.roundedRect(cardX, cardY, cardW, cardH, 12).fill('#ffffff');
-    doc.lineWidth(0.5).strokeColor('#e0e0e0').roundedRect(cardX, cardY, cardW, cardH, 12).stroke();
-
-    const headerH = 210;
-    doc.rect(cardX, cardY, cardW, headerH).fill('#667eea');
-    doc.moveTo(cardX + cardW * 0.35, cardY)
-      .lineTo(cardX + cardW, cardY)
-      .lineTo(cardX + cardW, cardY + headerH * 0.75)
-      .closePath()
-      .fill('#764ba2');
-
-    const headerPadX = cardX + 16;
-    const brandTop = cardY + 20;
-    const logoSize = 64;
-    const logoPath = resolveUploadPath(data.logoUrl);
-
-    // Logo — anchored left
-    doc.roundedRect(headerPadX, brandTop, logoSize, logoSize, 10).fill('#ffffff');
-    if (logoPath) {
-      try {
-        doc.image(logoPath, headerPadX + 6, brandTop + 6, { fit: [logoSize - 12, logoSize - 12] });
-      } catch {
-        doc.fillColor('#667eea').font('Helvetica-Bold').fontSize(28).text('S', headerPadX, brandTop + 18, {
-          width: logoSize,
-          align: 'center',
-          lineBreak: false,
-        });
-      }
-    } else {
-      doc.fillColor('#667eea').font('Helvetica-Bold').fontSize(28).text('S', headerPadX, brandTop + 18, {
-        width: logoSize,
-        align: 'center',
-        lineBreak: false,
-      });
-    }
-
-    // School identity — centered across full header width
-    const addressLine = (data.address || '123 Education Street, Harare, Zimbabwe 4012').trim();
-    const phonePart = data.phone ? `Tel: ${data.phone}` : 'Tel: +263 4 123 4567';
-    const webPart = data.website || 'www.schoolpro.edu.zw';
-    const contactLine = `${phonePart} | ${webPart}`;
-
-    const textBlockX = cardX + 16;
-    const textBlockW = cardW - 32;
-    const textStartY = brandTop + 6;
-
-    doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(16).text(school, textBlockX, textStartY, {
-      width: textBlockW,
-      align: 'center',
-      lineBreak: false,
-      characterSpacing: 0.5,
-    });
-    doc.font('Helvetica').fontSize(11).fillColor('#ffffff');
-    doc.text(addressLine, textBlockX, textStartY + 24, {
-      width: textBlockW,
-      align: 'center',
-      lineBreak: false,
-    });
-    doc.text(contactLine, textBlockX, textStartY + 42, {
-      width: textBlockW,
-      align: 'center',
-      lineBreak: false,
-    });
-
-    const infoY = brandTop + logoSize + 18;
-    const infoH = 58;
-    const infoX = contentX;
-    const infoW = contentW;
-    const infoPad = 16;
-
-    // Frosted student card on gradient (semi-transparent, not solid white)
-    doc.save();
-    doc.roundedRect(infoX, infoY, infoW, infoH, 10);
-    doc.fillColor('#ffffff').opacity(0.18).fill();
-    doc.restore();
-    doc.lineWidth(1).strokeColor('#ffffff').opacity(0.28).roundedRect(infoX, infoY, infoW, infoH, 10).stroke();
-    doc.opacity(1);
-
-    doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(16).text(studentName, infoX + infoPad, infoY + 11, {
-      width: infoW - 200,
-      lineBreak: false,
-    });
-    const metaLine = `${className} | Form Position: ${positionSuffix(data.formPosition || 1)} | ${examName}`;
-    doc.font('Helvetica').fontSize(11).fillColor('#ffffff').opacity(0.92).text(metaLine, infoX + infoPad, infoY + 33, {
-      width: infoW - 200,
-      lineBreak: false,
-    });
-    doc.opacity(1);
-
-    const badgeH = 28;
-    const badgePadX = 14;
-    const badge1Text = `Class Position ${classBadge}`;
-    const badge2Text = `Form Position ${formBadge}`;
-    doc.font('Helvetica-Bold').fontSize(11);
-    const badge1W = Math.max(110, doc.widthOfString(badge1Text) + badgePadX * 2);
-    const badge2W = Math.max(110, doc.widthOfString(badge2Text) + badgePadX * 2);
-    const badgeGap = 10;
-    const badge2X = infoX + infoW - infoPad - badge2W;
-    const badge1X = badge2X - badgeGap - badge1W;
-    const badgeY = infoY + (infoH - badgeH) / 2;
-
-    const drawPillBadge = (x: number, w: number, text: string) => {
-      doc.roundedRect(x, badgeY, w, badgeH, badgeH / 2).fill('#ffffff');
-      doc.fillColor('#7b68ee').font('Helvetica-Bold').fontSize(11).text(text, x, badgeY + 9, {
-        width: w,
-        align: 'center',
-        lineBreak: false,
-      });
-    };
-    drawPillBadge(badge1X, badge1W, badge1Text);
-    drawPillBadge(badge2X, badge2W, badge2Text);
-
-    let y = cardY + headerH + 12;
-
-    // Metrics section
-    const metricsH = 120;
-    doc.rect(cardX, y, cardW, metricsH).fill('#f8f9ff');
-    const metricGap = 12;
-    const metricW = (contentW - metricGap) / 2;
-    const metricH = 46;
-    const metrics = [
-      { label: 'Attendance Rate', value: attendanceRate },
-      { label: 'Class Participation', value: 'Excellent' },
-      { label: 'Homework Submission', value: '100%' },
-      { label: 'Average Score', value: avgScore },
-    ];
-    metrics.forEach((m, i) => {
-      const col = i % 2;
-      const row = Math.floor(i / 2);
-      const mx = contentX + col * (metricW + metricGap);
-      const my = y + 14 + row * (metricH + 10);
-      doc.roundedRect(mx, my, metricW, metricH, 8).fill('#ffffff');
-      doc.rect(mx, my, 4, metricH).fill('#667eea');
-      doc.fillColor('#999999').font('Helvetica-Bold').fontSize(10).text(m.label.toUpperCase(), mx + 12, my + 8, {
-        width: metricW - 18,
-        lineBreak: false,
-        characterSpacing: 0.3,
-      });
-      doc.fillColor('#333333').font('Helvetica-Bold').fontSize(18).text(m.value, mx + 12, my + 22, {
-        width: metricW - 18,
-        lineBreak: false,
-      });
-    });
-    y += metricsH;
-
-    // Academic performance table — two-tier header (title row + column row)
-    const tableX = contentX;
-    const tableW = contentW;
-    const cols = [tableW * 0.38, tableW * 0.14, tableW * 0.14, tableW * 0.14, tableW * 0.20];
-    const titleRowH = 30;
-    const colHeaderRowH = 26;
-    const headerBlockH = titleRowH + colHeaderRowH;
-    const rowH = 30;
-    const border = '#d8d8d8';
-    const headerBlue = '#3b5bdb';
-    const headerBlueDark = '#2a4abc';
-    const startY = y;
-
-    // Tier 1 — section title (colspan)
-    doc.rect(tableX, y, tableW, titleRowH).fill(headerBlue);
-    doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(11).text(
-      'ACADEMIC PERFORMANCE BY SUBJECT',
-      tableX + 12,
-      y + 10,
-      { width: tableW - 24, lineBreak: false, characterSpacing: 0.4 },
-    );
-    doc.lineWidth(1).strokeColor('#5a72d4')
-      .moveTo(tableX, y + titleRowH).lineTo(tableX + tableW, y + titleRowH).stroke();
-    y += titleRowH;
-
-    // Tier 2 — column headers
-    doc.rect(tableX, y, tableW, colHeaderRowH).fill(headerBlue);
-    const headers = ['SUBJECT', 'CODE', 'MARKS', 'GRADE', 'REMARKS'];
-    let cx = tableX;
-    doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(10);
-    headers.forEach((h, i) => {
-      doc.text(h, cx + 10, y + 8, { width: cols[i] - 20, lineBreak: false, characterSpacing: 0.3 });
-      if (i < headers.length - 1) {
-        doc.lineWidth(1).strokeColor('#8fa3e8')
-          .moveTo(cx + cols[i], y + 4).lineTo(cx + cols[i], y + colHeaderRowH - 4).stroke();
-      }
-      cx += cols[i];
-    });
-    doc.lineWidth(2).strokeColor(headerBlueDark)
-      .moveTo(tableX, y + colHeaderRowH).lineTo(tableX + tableW, y + colHeaderRowH).stroke();
-    y += colHeaderRowH;
-
-    rows.forEach((r, i) => {
-      const bg = i % 2 === 0 ? '#f8f8f8' : '#ffffff';
-      doc.rect(tableX, y, tableW, rowH).fill(bg);
-      const cells = [r.subject, r.code, r.marks, r.grade, r.remarks];
-      let xx = tableX;
-      cells.forEach((c, j) => {
-        doc.fillColor('#333333').font(j === 0 ? 'Helvetica-Bold' : 'Helvetica').fontSize(12)
-          .text(c, xx + 10, y + 10, { width: cols[j] - 20, lineBreak: false });
-        xx += cols[j];
-      });
-      y += rowH;
-    });
-
-    // Grid borders
-    const tableBottom = y;
-    doc.lineWidth(1).strokeColor(border).rect(tableX, startY, tableW, tableBottom - startY).stroke();
-    let gx = tableX;
-    cols.forEach((w) => {
-      gx += w;
-      doc.moveTo(gx, startY + titleRowH).lineTo(gx, tableBottom).stroke();
-    });
-    let gy = startY + headerBlockH;
-    for (let i = 0; i < rows.length; i++) {
-      doc.moveTo(tableX, gy).lineTo(tableX + tableW, gy).stroke();
-      gy += rowH;
-    }
-
-    // Remarks section
-    const remarksY = tableBottom;
-    const remarksH = cardY + cardH - remarksY;
-    doc.rect(cardX, remarksY, cardW, remarksH).fill('#f9f9f9');
-    doc.lineWidth(1).strokeColor('#f0f0f0').moveTo(cardX, remarksY).lineTo(cardX + cardW, remarksY).stroke();
-
-    let ry = remarksY + 18;
-    const drawRemarkBlock = (title: string, text: string) => {
-      const labelW = 190;
-      doc.roundedRect(contentX, ry, labelW, 24, 4).fill('#3b5bdb');
-      doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(11).text(title, contentX + 8, ry + 8, {
-        width: labelW - 16,
-        lineBreak: false,
-        characterSpacing: 0.3,
-      });
-      ry += 32;
-      const textH = Math.max(56, doc.heightOfString(text, { width: contentW - 28, lineGap: 3 }) + 18);
-      doc.roundedRect(contentX, ry, contentW, textH, 6).fill('#ffffff');
-      doc.rect(contentX, ry, 3, textH).fill('#3b5bdb');
-      doc.fillColor('#333333').font('Helvetica').fontSize(13).text(text, contentX + 12, ry + 10, {
-        width: contentW - 22,
-        lineGap: 3,
-      });
-      ry += textH + 14;
-    };
-
-    drawRemarkBlock("CLASS TEACHER'S REMARKS", teacherRemarks);
-    drawRemarkBlock("PRINCIPAL'S REMARKS", principalRemarks);
-
-    doc.end();
-  });
+  return generateReportCardPortalPdf(data);
 }
 
 export async function generateClassListPdf(data: {
@@ -1307,7 +1058,7 @@ export async function generateClassListPdf(data: {
   logoUrl?: string;
   classLabel: string;
   generatedAt: Date;
-  students: { admissionNumber: string; lastName: string; firstName: string; gender: string }[];
+  students: { admissionNumber: string; lastName: string; firstName: string; gender: string; dateOfBirth?: string; studentType?: string }[];
 }): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ margin: 40, size: 'A4' });
@@ -1336,10 +1087,25 @@ export async function generateClassListPdf(data: {
     const contentW = pageW - margin * 2;
     const rowH = 22;
     const headerRowH = 24;
-    const colWidths = [32, 98, 138, 138, 109];
+    // #, Student ID, Last Name, First Name, Gender, DOB, Type
+    const colWidths = [28, 80, 110, 110, 60, 72, 75];
     const tableW = colWidths.reduce((a, b) => a + b, 0);
     const tableX = margin + (contentW - tableW) / 2;
     const pageBottom = () => doc.page.height - 58;
+
+    const formatDob = (dob?: string): string => {
+      if (!dob) return '—';
+      const d = new Date(dob);
+      if (Number.isNaN(d.getTime())) return '—';
+      const p = (n: number) => String(n).padStart(2, '0');
+      return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()}`;
+    };
+
+    const typeLabel = (t?: string): string => {
+      if (t === 'boarder') return 'Boarder';
+      if (t === 'day_scholar') return 'Day Scholar';
+      return '—';
+    };
 
     const colX = (index: number) => {
       let x = tableX;
@@ -1397,7 +1163,7 @@ export async function generateClassListPdf(data: {
 
     const drawTableHeader = () => {
       const y = doc.y;
-      const headers = ['#', 'Student ID', 'Last Name', 'First Name', 'Gender'];
+      const headers = ['#', 'Student ID', 'Last Name', 'First Name', 'Gender', 'DOB', 'Type'];
 
       doc.rect(tableX, y, tableW, headerRowH).fill(CL.primary);
       doc.fillColor(CL.headerText).font('Helvetica-Bold').fontSize(8.5);
@@ -1424,6 +1190,8 @@ export async function generateClassListPdf(data: {
         student.lastName,
         student.firstName,
         student.gender || '—',
+        formatDob(student.dateOfBirth),
+        typeLabel(student.studentType),
       ];
 
       doc.rect(tableX, y, tableW, rowH).fill(bg);
@@ -1467,6 +1235,181 @@ export async function generateClassListPdf(data: {
     );
 
     drawGeneratedFooter(doc, data.generatedAt, margin, contentW);
+    doc.end();
+  });
+}
+
+function formatDobDisplay(dob?: string | Date): string {
+  if (!dob) return '—';
+  const d = new Date(dob);
+  if (Number.isNaN(d.getTime())) return '—';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
+}
+
+function hexToRgb(hex: string): { r: number; g: number; b: number } {
+  const h = hex.replace('#', '');
+  const full = h.length === 3 ? h.split('').map((c) => c + c).join('') : h;
+  const n = parseInt(full, 16);
+  return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+}
+
+function drawHorizontalGradient(
+  doc: InstanceType<typeof PDFDocument>,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  leftHex: string,
+  rightHex: string,
+) {
+  const left = hexToRgb(leftHex);
+  const right = hexToRgb(rightHex);
+  const steps = 48;
+  const stepW = w / steps;
+  for (let i = 0; i < steps; i++) {
+    const t = i / Math.max(steps - 1, 1);
+    const r = Math.round(left.r + (right.r - left.r) * t);
+    const g = Math.round(left.g + (right.g - left.g) * t);
+    const b = Math.round(left.b + (right.b - left.b) * t);
+    doc.rect(x + i * stepW, y, stepW + 0.5, h).fill([r, g, b]);
+  }
+}
+
+function drawBarcodeStrip(
+  doc: InstanceType<typeof PDFDocument>,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  payload: string,
+) {
+  doc.rect(x, y, w, h).fill('#ffffff');
+  const seed = payload.split('').reduce((sum, ch) => sum + ch.charCodeAt(0), 0);
+  const bars = 72;
+  const padX = 6;
+  const unitW = (w - padX * 2) / bars;
+  let bx = x + padX;
+  for (let i = 0; i < bars; i++) {
+    const wide = ((seed + i * 11) % 7) === 0;
+    const on = ((seed * (i + 4) + i * 13) % 5) !== 0;
+    if (on) {
+      doc.rect(bx, y + 4, unitW * (wide ? 0.92 : 0.48), h - 8).fill('#111827');
+    }
+    bx += unitW;
+  }
+}
+
+export async function generateStudentIdCardPdf(data: {
+  schoolName: string;
+  tagline?: string;
+  logoUrl?: string;
+  address?: string;
+  phone?: string;
+  admissionNumber: string;
+  firstName: string;
+  lastName: string;
+  dateOfBirth?: string | Date;
+  studentAddress?: string;
+  gender?: string;
+  studentType?: string;
+  className?: string;
+  formName?: string;
+  generatedAt: Date;
+}): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    // CR80 standard ID card: 3.375" × 2.125" at 72 pt/in
+    const cardW = 243;
+    const cardH = 153;
+    const radius = 10;
+    const barcodeH = 28;
+    const mainH = cardH - barcodeH;
+    const leftW = Math.round(cardW * 0.35);
+    const rightW = cardW - leftW;
+    const rightX = leftW;
+
+    const doc = new PDFDocument({ size: [cardW, cardH], margin: 0 });
+    const chunks: Buffer[] = [];
+    doc.on('data', (c) => chunks.push(c));
+    doc.on('end', () => resolve(Buffer.concat(chunks)));
+    doc.on('error', reject);
+
+    const schoolName = data.schoolName || 'School Pro Academy';
+    const fullName = `${data.firstName} ${data.lastName}`.trim();
+    const initials = `${data.firstName.charAt(0) || ''}${data.lastName.charAt(0) || ''}`.toUpperCase();
+    const displayAddress = data.studentAddress?.trim() || data.address?.trim() || '—';
+
+    doc.save();
+    doc.roundedRect(0, 0, cardW, cardH, radius);
+    doc.clip();
+
+    drawHorizontalGradient(doc, 0, 0, cardW, mainH, '#1d4ed8', '#0f172a');
+    doc.rect(0, mainH, cardW, barcodeH).fill('#ffffff');
+
+    // Right section — title
+    doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(13);
+    doc.text('Student ID Card', rightX + 10, 10, { width: rightW - 16, lineBreak: false });
+
+    // Right section — white detail panel
+    const panelX = rightX + 8;
+    const panelY = 28;
+    const panelW = rightW - 14;
+    const panelH = mainH - panelY - 8;
+    doc.roundedRect(panelX, panelY, panelW, panelH, 6).fill('#f8fafc');
+
+    const labelX = panelX + 8;
+    const valueX = panelX + panelW * 0.42;
+    const valueW = panelW - (valueX - panelX) - 8;
+    let rowY = panelY + 9;
+
+    const detailRows: [string, string][] = [
+      ['Name', fullName],
+      ['Student ID', data.admissionNumber],
+      ['D.O.B', formatDobDisplay(data.dateOfBirth)],
+      ['Address', displayAddress],
+    ];
+
+    detailRows.forEach(([label, value]) => {
+      doc.fillColor('#64748b').font('Helvetica').fontSize(7);
+      doc.text(label, labelX, rowY, { width: valueX - labelX - 4, lineBreak: false });
+      doc.fillColor('#0f172a').font('Helvetica-Bold').fontSize(7);
+      doc.text(value, valueX, rowY, { width: valueW, lineGap: 0.5 });
+      rowY += label === 'Address' ? 22 : 17;
+    });
+
+    // Left section — school logo + name (bottom-left of left column)
+    const logoPath = resolveUploadPath(data.logoUrl);
+    const logoSize = 12;
+    const brandY = mainH - 22;
+    const brandX = 8;
+    let nameX = brandX;
+    if (logoPath) {
+      try {
+        doc.image(logoPath, brandX, brandY, { fit: [logoSize, logoSize] });
+        nameX = brandX + logoSize + 4;
+      } catch {
+        /* skip invalid logo */
+      }
+    }
+    doc.fillColor('#ffffff').font('Helvetica').fontSize(6);
+    doc.text(schoolName, nameX, brandY + 2, { width: leftW - nameX - 6, lineBreak: false });
+
+    // Circular photo — overlaps top edge
+    const photoCx = leftW / 2;
+    const photoCy = 22;
+    const photoR = 20;
+    const photoBorder = 3;
+    doc.circle(photoCx, photoCy, photoR + photoBorder).fill('#ffffff');
+    doc.circle(photoCx, photoCy, photoR).fill('#94a3b8');
+    doc.circle(photoCx, photoCy, photoR - 4).fill('#64748b');
+    doc.fillColor('#f8fafc').font('Helvetica-Bold').fontSize(14);
+    doc.text(initials || '—', photoCx - photoR, photoCy - 7, { width: photoR * 2, align: 'center', lineBreak: false });
+
+    drawBarcodeStrip(doc, 0, mainH, cardW, barcodeH, data.admissionNumber);
+
+    doc.restore();
+    doc.roundedRect(0, 0, cardW, cardH, radius).strokeColor('#cbd5e1').lineWidth(0.5).stroke();
+
     doc.end();
   });
 }

@@ -9,7 +9,7 @@ import { UserRole, InvoiceStatus, PaymentMethod } from '../entities/enums';
 import { authenticate, authorize, AuthRequest } from '../middleware/auth';
 import { generateNumber, today } from '../utils/helpers';
 import { generateInvoicePdf, generateReceiptPdf, SchoolBranding } from '../utils/pdf';
-import { ensureDefaultSchoolFees, isFeeCodeInUse, normalizeFeeCode } from '../services/fee-catalog.service';
+import { ensureDefaultSchoolFees, countFeeCodeUsage, isFeeCodeInUse, normalizeFeeCode } from '../services/fee-catalog.service';
 import { ensureRegistrationSchoolFees } from '../services/registration-invoice.service';
 import { loadSchoolBranding } from '../services/school-branding.service';
 import { sendWhatsAppReminder } from '../services/whatsapp.service';
@@ -253,15 +253,25 @@ router.delete('/fees/:id', authorize(UserRole.ADMIN), async (req, res: Response)
   const fee = await repo.findOne({ where: { id: req.params.id } });
   if (!fee) return res.status(404).json({ message: 'Fee not found' });
 
-  const inUse = await isFeeCodeInUse(fee.code);
-  if (inUse) {
+  const force = req.query.force === 'true' || req.query.force === '1';
+  const usage = await countFeeCodeUsage(fee.code);
+  const inUse = usage.invoices > 0 || usage.payments > 0;
+
+  if (inUse && !force) {
     return res.status(400).json({
       message: 'This fee is linked to invoices or payments. Deactivate it instead of deleting.',
+      linked: true,
+      usage,
     });
   }
 
   await repo.delete({ id: fee.id });
-  res.json({ message: 'Fee deleted' });
+  res.json({
+    message: inUse
+      ? `Fee deleted. ${usage.invoices} invoice(s) and ${usage.payments} payment(s) still reference code "${fee.code}".`
+      : 'Fee deleted',
+    forced: inUse,
+  });
 });
 
 router.get('/invoices', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.PARENT), async (req: AuthRequest, res: Response) => {
@@ -545,6 +555,7 @@ router.post('/payments', authorize(UserRole.ADMIN), async (req: AuthRequest, res
       paymentReference: payment.paymentReference,
       notes: notes || undefined,
       invoiceNumber: linkedInvoiceNumber,
+      invoiceBalance: await fetchStudentInvoiceBalance(studentId, queryRunner.manager),
       ...branding,
     });
 
@@ -629,6 +640,7 @@ router.get('/receipts/:id/pdf', authorize(UserRole.ADMIN, UserRole.DIRECTOR, Use
     paymentReference: p.paymentReference,
     notes: p.notes || undefined,
     invoiceNumber: p.invoice?.invoiceNumber,
+    invoiceBalance: await fetchStudentInvoiceBalance(s.id),
     ...branding,
   });
   receipt.pdfPath = pdfPath;
@@ -966,6 +978,18 @@ router.get('/payments', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PR
   });
   res.json(payments);
 });
+
+async function fetchStudentInvoiceBalance(studentId: string, manager = AppDataSource.manager): Promise<number> {
+  const result = await manager.query(
+    `
+      SELECT COALESCE(SUM("totalAmount" - "amountPaid"), 0) as owed
+      FROM invoices
+      WHERE "studentId" = $1 AND status IN ('sent', 'partial', 'overdue')
+    `,
+    [studentId],
+  );
+  return roundMoney(Math.max(0, Number(result[0]?.owed || 0)));
+}
 
 async function fetchBillingDebtors() {
   const result = await AppDataSource.query(`

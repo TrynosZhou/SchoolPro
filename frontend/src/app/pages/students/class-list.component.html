@@ -250,6 +250,8 @@
                     <th>Last Name</th>
                     <th>First Name</th>
                     <th>Gender</th>
+                    <th>DOB</th>
+                    <th>Type</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -259,6 +261,12 @@
                       <td>{{ s.lastName }}</td>
                       <td>{{ s.firstName }}</td>
                       <td>{{ s.gender || '—' }}</td>
+                      <td>{{ s.dateOfBirth ? (s.dateOfBirth | date:'dd/MM/yyyy') : '—' }}</td>
+                      <td>
+                        <span class="type-tag" [class.boarder]="s.studentType === 'boarder'">
+                          {{ studentTypeLabel(s.studentType) }}
+                        </span>
+                      </td>
                     </tr>
                   }
                 </tbody>

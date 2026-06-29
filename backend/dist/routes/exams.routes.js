@@ -16,6 +16,7 @@ const pdf_1 = require("../utils/pdf");
 const mark_sheet_service_1 = require("../services/mark-sheet.service");
 const results_analysis_service_1 = require("../services/results-analysis.service");
 const ranking_service_1 = require("../services/ranking.service");
+const report_card_remarks_service_1 = require("../services/report-card-remarks.service");
 const helpers_1 = require("../utils/helpers");
 const typeorm_helpers_1 = require("../utils/typeorm-helpers");
 const publish_results_service_1 = require("../services/publish-results.service");
@@ -346,6 +347,29 @@ router.get('/results-analysis/student', (0, auth_1.authorize)(enums_1.UserRole.A
     catch (err) {
         return res.status(400).json({
             message: err instanceof Error ? err.message : 'Failed to build student subject analysis',
+        });
+    }
+});
+router.get('/results-analysis/subject', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.DIRECTOR, enums_1.UserRole.TEACHER), async (req, res) => {
+    const { examTypeId, termId, classId, subjectId, topN } = req.query;
+    if (!examTypeId || !termId || !classId || !subjectId) {
+        return res.status(400).json({
+            message: 'examTypeId, termId, classId, and subjectId are required',
+        });
+    }
+    try {
+        const analysis = await (0, results_analysis_service_1.buildSubjectAnalysis)({
+            examTypeId: examTypeId,
+            termId: termId,
+            classId: classId,
+            subjectId: subjectId,
+            topN: topN ? Number(topN) : undefined,
+        });
+        res.json(analysis);
+    }
+    catch (err) {
+        return res.status(400).json({
+            message: err instanceof Error ? err.message : 'Failed to build subject analysis',
         });
     }
 });
@@ -707,10 +731,12 @@ router.patch('/report-cards/:id/remarks', (0, auth_1.authorize)(enums_1.UserRole
         }
     }
     if (classTeacherRemarks !== undefined) {
-        report.classTeacherRemarks = String(classTeacherRemarks || '').trim() || null;
+        const cleaned = (0, report_card_remarks_service_1.sanitizeReportCardRemark)(String(classTeacherRemarks || ''), report.student.firstName, report.student.lastName);
+        report.classTeacherRemarks = cleaned.trim() || null;
     }
     if (principalRemarks !== undefined) {
-        report.principalRemarks = String(principalRemarks || '').trim() || null;
+        const cleaned = (0, report_card_remarks_service_1.sanitizeReportCardRemark)(String(principalRemarks || ''), report.student.firstName, report.student.lastName);
+        report.principalRemarks = cleaned.trim() || null;
     }
     const saved = await repo.save(report);
     const full = await repo.findOne({

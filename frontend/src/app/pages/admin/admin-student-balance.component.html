@@ -11,7 +11,7 @@
         <p class="hero-sub">
           Search by student ID, first name, or last name to view invoiced amounts, payments, and outstanding balance.
           Record payments on
-          <a routerLink="/admin/billing">Billing</a>
+          <a routerLink="/admin/payment">Payment</a>
           or review the full ledger on
           <a routerLink="/admin/fin-reports/student-ledger">Student Ledger</a>.
         </p>
@@ -75,6 +75,7 @@
           <div class="search-wrap">
             <span class="search-icon" aria-hidden="true">🔍</span>
             <input
+              #balanceSearchInput
               type="search"
               class="search-input"
               [(ngModel)]="query"
