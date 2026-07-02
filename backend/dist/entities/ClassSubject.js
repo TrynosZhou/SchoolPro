@@ -12,6 +12,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.ClassSubject = void 0;
 const typeorm_1 = require("typeorm");
 const constraints_1 = require("./constraints");
+const enums_1 = require("./enums");
 const SchoolClass_1 = require("./SchoolClass");
 const Subject_1 = require("./Subject");
 const Staff_1 = require("./Staff");
@@ -49,6 +50,14 @@ __decorate([
     (0, typeorm_1.Column)({ nullable: true }),
     __metadata("design:type", String)
 ], ClassSubject.prototype, "teacherId", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'int', default: 0 }),
+    __metadata("design:type", Number)
+], ClassSubject.prototype, "weeklyPeriods", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'varchar', length: 16, default: enums_1.LessonLength.SINGLE }),
+    __metadata("design:type", String)
+], ClassSubject.prototype, "lessonLength", void 0);
 exports.ClassSubject = ClassSubject = __decorate([
     (0, typeorm_1.Entity)('class_subjects'),
     (0, typeorm_1.Unique)(['classId', 'subjectId'])

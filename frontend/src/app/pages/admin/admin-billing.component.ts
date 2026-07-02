@@ -9,9 +9,10 @@ import { ApiService } from '../../core/services/api.service';
 import { AuthService } from '../../core/services/auth.service';
 import { environment } from '../../../environments/environment';
 import { Student } from '../../core/models';
+import { formatGenderLabel, formatStudentClassLabel } from '../../core/utils/class-display';
 
 type FinanceMode = 'billing' | 'payment';
-type BillingTab = 'single-invoice' | 'bulk-invoice' | 'invoices';
+type BillingTab = 'single-invoice' | 'bulk-invoice' | 'invoices' | 'get-invoice' | 'credit-note' | 'debit-note';
 type PaymentTab = 'payment' | 'receipts' | 'debtors';
 type Tab = BillingTab | PaymentTab;
 type ViewMode = 'table' | 'cards';
@@ -103,6 +104,16 @@ interface BulkTuitionResult extends BulkTuitionPreview {
   message?: string;
 }
 
+interface AdjustmentStudentRow {
+  id: string;
+  admissionNumber: string;
+  firstName: string;
+  lastName: string;
+  gender?: string;
+  className?: string;
+  invoiceBalance: number;
+}
+
 @Component({
   selector: 'app-admin-billing',
   standalone: true,
@@ -154,6 +165,22 @@ export class AdminBillingComponent implements OnInit {
   });
 
   invoiceStudentSearch = signal('');
+  getInvoiceStudentSearch = signal('');
+  getInvoiceSearchAttempted = signal(false);
+  getInvoiceSearchResults = signal<Student[]>([]);
+  getInvoiceStudentId = signal('');
+  getInvoiceLoading = signal(false);
+
+  noteSearch = signal('');
+  noteSearchAttempted = signal(false);
+  noteSearchResults = signal<AdjustmentStudentRow[]>([]);
+  noteSelectedStudent = signal<AdjustmentStudentRow | null>(null);
+  noteSearchLoading = signal(false);
+  noteSubmitting = signal(false);
+  creditNoteAmount = 0;
+  debitNoteAmount = 0;
+  noteReason = '';
+
   filteredStudentsForInvoice = computed(() => {
     const q = this.invoiceStudentSearch().toLowerCase();
     if (!q) return this.students();
@@ -172,6 +199,10 @@ export class AdminBillingComponent implements OnInit {
 
   selectedInvoiceStudent = computed(() =>
     this.students().find((s) => s.id === this.invoiceStudentId()) ?? null
+  );
+
+  selectedGetInvoiceStudent = computed(() =>
+    this.students().find((s) => s.id === this.getInvoiceStudentId()) ?? null
   );
 
   studentTotalBalance = computed(() =>
@@ -310,7 +341,7 @@ export class AdminBillingComponent implements OnInit {
 
       if (tab === 'payment' || tab === 'receipts' || tab === 'debtors') {
         this.setTab(tab as PaymentTab);
-      } else if (tab === 'single-invoice' || tab === 'bulk-invoice' || tab === 'invoices') {
+      } else if (tab === 'single-invoice' || tab === 'bulk-invoice' || tab === 'invoices' || tab === 'get-invoice' || tab === 'credit-note' || tab === 'debit-note') {
         this.setTab(tab as BillingTab);
       } else if (tab === 'invoice') {
         this.setTab('single-invoice');
@@ -338,7 +369,14 @@ export class AdminBillingComponent implements OnInit {
       if (this.activeTab() === 'payment') {
         this.schedulePaymentSearchFocus();
       }
-    } else if (tab !== 'single-invoice' && tab !== 'bulk-invoice' && tab !== 'invoices') {
+    } else if (
+      tab !== 'single-invoice' &&
+      tab !== 'bulk-invoice' &&
+      tab !== 'invoices' &&
+      tab !== 'get-invoice' &&
+      tab !== 'credit-note' &&
+      tab !== 'debit-note'
+    ) {
       this.activeTab.set('single-invoice');
     }
   }
@@ -351,10 +389,27 @@ export class AdminBillingComponent implements OnInit {
     return this.pageMode() === 'payment';
   }
 
+  isInvoicesTab(): boolean {
+    return this.isBillingMode() && this.activeTab() === 'invoices';
+  }
+
   setTab(tab: Tab) {
-    if (this.pageMode() === 'billing' && tab !== 'single-invoice' && tab !== 'bulk-invoice' && tab !== 'invoices') return;
+    if (
+      this.pageMode() === 'billing' &&
+      tab !== 'single-invoice' &&
+      tab !== 'bulk-invoice' &&
+      tab !== 'invoices' &&
+      tab !== 'get-invoice' &&
+      tab !== 'credit-note' &&
+      tab !== 'debit-note'
+    ) {
+      return;
+    }
     if (this.pageMode() === 'payment' && tab !== 'payment' && tab !== 'receipts' && tab !== 'debtors') return;
     this.activeTab.set(tab);
+    if (tab === 'invoices') {
+      this.viewMode.set('table');
+    }
     if (tab === 'bulk-invoice' && !this.bulkPreview() && !this.bulkPreviewLoading()) {
       this.loadBulkPreview();
     }
@@ -423,6 +478,63 @@ export class AdminBillingComponent implements OnInit {
   clearInvoiceStudent() {
     this.setInvoiceStudentId('');
     this.invoiceStudentSearch.set('');
+  }
+
+  pickStudentForGetInvoice(studentId: string) {
+    this.getInvoiceStudentId.set(studentId);
+    this.getInvoiceStudentSearch.set('');
+    this.getInvoiceSearchAttempted.set(false);
+    this.getInvoiceSearchResults.set([]);
+    this.openStudentInvoicePdf(studentId);
+  }
+
+  clearGetInvoiceStudent() {
+    this.getInvoiceStudentId.set('');
+    this.getInvoiceStudentSearch.set('');
+    this.getInvoiceSearchAttempted.set(false);
+    this.getInvoiceSearchResults.set([]);
+  }
+
+  getInvoice() {
+    const selected = this.selectedGetInvoiceStudent();
+    if (selected) {
+      this.openStudentInvoicePdf(selected.id);
+      return;
+    }
+
+    const q = this.getInvoiceStudentSearch().trim().toLowerCase();
+    if (!q) {
+      this.showToast('error', 'Please enter a Student ID, First Name, or Last Name');
+      return;
+    }
+
+    const matches = this.students().filter((s) =>
+      `${s.firstName} ${s.lastName} ${s.admissionNumber}`.toLowerCase().includes(q)
+    );
+    this.getInvoiceSearchAttempted.set(true);
+    this.getInvoiceSearchResults.set(matches);
+
+    if (matches.length === 1) {
+      this.getInvoiceStudentId.set(matches[0].id);
+      this.getInvoiceStudentSearch.set('');
+      this.getInvoiceSearchAttempted.set(false);
+      this.getInvoiceSearchResults.set([]);
+      this.openStudentInvoicePdf(matches[0].id);
+    }
+  }
+
+  private openStudentInvoicePdf(studentId: string) {
+    this.getInvoiceLoading.set(true);
+    this.api.get<{ id: string }>('/billing/invoices/resolve', { studentId }).subscribe({
+      next: ({ id }) => {
+        this.getInvoiceLoading.set(false);
+        this.previewInvoice(id);
+      },
+      error: (e) => {
+        this.getInvoiceLoading.set(false);
+        this.showToast('error', e.error?.message || 'No invoice found for this student');
+      },
+    });
   }
 
   initials(first: string, last: string): string {
@@ -863,6 +975,145 @@ export class AdminBillingComponent implements OnInit {
 
   formatFee(f: string): string {
     return this.feePresets().find((p) => p.type === f)?.label || f;
+  }
+
+  searchNoteStudent() {
+    const q = this.noteSearch().trim();
+    if (!q) {
+      this.showToast('error', 'Enter Student ID, first name, or last name.');
+      return;
+    }
+
+    this.noteSearchLoading.set(true);
+    this.noteSearchAttempted.set(true);
+    this.api.get<AdjustmentStudentRow[]>('/billing/invoice-adjustments/student-lookup', { q }).subscribe({
+      next: (rows) => {
+        this.noteSearchResults.set(rows);
+        this.noteSearchLoading.set(false);
+        if (rows.length === 1) {
+          this.pickNoteStudent(rows[0]);
+        } else if (!rows.length) {
+          this.showToast('error', 'No matching student found.');
+        }
+      },
+      error: (e) => {
+        this.noteSearchLoading.set(false);
+        this.noteSearchResults.set([]);
+        this.showToast('error', e.error?.message || 'Student search failed.');
+      },
+    });
+  }
+
+  pickNoteStudent(row: AdjustmentStudentRow) {
+    this.noteSelectedStudent.set(row);
+    this.noteSearch.set('');
+    this.noteSearchAttempted.set(false);
+    this.noteSearchResults.set([]);
+  }
+
+  clearNoteStudent() {
+    this.noteSelectedStudent.set(null);
+    this.noteSearch.set('');
+    this.noteSearchAttempted.set(false);
+    this.noteSearchResults.set([]);
+    this.creditNoteAmount = 0;
+    this.debitNoteAmount = 0;
+    this.noteReason = '';
+  }
+
+  refreshNoteStudentBalance() {
+    const selected = this.noteSelectedStudent();
+    if (!selected) return;
+    this.api.get<AdjustmentStudentRow[]>('/billing/invoice-adjustments/student-lookup', {
+      q: selected.admissionNumber,
+    }).subscribe({
+      next: (rows) => {
+        const match = rows.find((r) => r.id === selected.id) || rows[0];
+        if (match) this.noteSelectedStudent.set(match);
+      },
+    });
+  }
+
+  submitCreditNote() {
+    const student = this.noteSelectedStudent();
+    if (!student) {
+      this.showToast('error', 'Search and select a student first.');
+      return;
+    }
+    if (!this.creditNoteAmount || this.creditNoteAmount <= 0) {
+      this.showToast('error', 'Enter a credit note amount greater than zero.');
+      return;
+    }
+    if (this.creditNoteAmount > student.invoiceBalance + 0.005) {
+      this.showToast('error', `Amount cannot exceed current invoice balance of $${student.invoiceBalance.toFixed(2)}.`);
+      return;
+    }
+
+    this.noteSubmitting.set(true);
+    this.api.post<{ message: string; noteNumber: string; invoiceBalanceAfter: number }>(
+      '/billing/invoice-adjustments/credit-note',
+      {
+        studentId: student.id,
+        amount: Number(this.creditNoteAmount),
+        reason: this.noteReason.trim() || undefined,
+      },
+    ).subscribe({
+      next: (res) => {
+        this.noteSubmitting.set(false);
+        this.showToast('success', res.message || `Credit note ${res.noteNumber} applied.`);
+        this.creditNoteAmount = 0;
+        this.noteReason = '';
+        this.refreshNoteStudentBalance();
+        this.loadData();
+      },
+      error: (e) => {
+        this.noteSubmitting.set(false);
+        this.showToast('error', e.error?.message || 'Failed to apply credit note.');
+      },
+    });
+  }
+
+  submitDebitNote() {
+    const student = this.noteSelectedStudent();
+    if (!student) {
+      this.showToast('error', 'Search and select a student first.');
+      return;
+    }
+    if (!this.debitNoteAmount || this.debitNoteAmount <= 0) {
+      this.showToast('error', 'Enter a debit note amount greater than zero.');
+      return;
+    }
+
+    this.noteSubmitting.set(true);
+    this.api.post<{ message: string; noteNumber: string; invoiceBalanceAfter: number }>(
+      '/billing/invoice-adjustments/debit-note',
+      {
+        studentId: student.id,
+        amount: Number(this.debitNoteAmount),
+        reason: this.noteReason.trim() || undefined,
+      },
+    ).subscribe({
+      next: (res) => {
+        this.noteSubmitting.set(false);
+        this.showToast('success', res.message || `Debit note ${res.noteNumber} applied.`);
+        this.debitNoteAmount = 0;
+        this.noteReason = '';
+        this.refreshNoteStudentBalance();
+        this.loadData();
+      },
+      error: (e) => {
+        this.noteSubmitting.set(false);
+        this.showToast('error', e.error?.message || 'Failed to apply debit note.');
+      },
+    });
+  }
+
+  genderLabel(gender?: string): string {
+    return formatGenderLabel(gender);
+  }
+
+  classDisplay(className?: string | null): string {
+    return formatStudentClassLabel(className);
   }
 
   private showToast(type: 'success' | 'error', msg: string) {

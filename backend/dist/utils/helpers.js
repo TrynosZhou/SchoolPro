@@ -5,6 +5,7 @@ exports.generateEmployeeNumber = generateEmployeeNumber;
 exports.generateNumber = generateNumber;
 exports.calculateGrade = calculateGrade;
 exports.today = today;
+exports.invoiceDescriptionWithTerm = invoiceDescriptionWithTerm;
 exports.toDateOnly = toDateOnly;
 exports.termReportDateRange = termReportDateRange;
 exports.reportCardPdfFilename = reportCardPdfFilename;
@@ -52,6 +53,17 @@ function calculateGrade(marks, max = 100) {
 }
 function today() {
     return new Date().toISOString().split('T')[0];
+}
+/** Append the billing term name when missing, e.g. "Term fees" -> "Term fees (Term 3)". */
+function invoiceDescriptionWithTerm(description, termName) {
+    const base = (description || '').trim();
+    const term = (termName || '').trim();
+    if (!base || !term)
+        return description;
+    const suffix = ` (${term})`;
+    if (base.endsWith(suffix))
+        return base;
+    return `${base}${suffix}`;
 }
 /** Normalize DB/entity dates to YYYY-MM-DD for SQL date comparisons. */
 function toDateOnly(value) {

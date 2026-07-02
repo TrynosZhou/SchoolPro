@@ -15,9 +15,12 @@ const exams_routes_1 = __importDefault(require("./routes/exams.routes"));
 const billing_routes_1 = __importDefault(require("./routes/billing.routes"));
 const finance_routes_1 = __importDefault(require("./routes/finance.routes"));
 const academics_routes_1 = __importDefault(require("./routes/academics.routes"));
+const timetable_routes_1 = __importDefault(require("./routes/timetable.routes"));
 const admin_routes_1 = __importDefault(require("./routes/admin.routes"));
 const dashboard_routes_1 = __importDefault(require("./routes/dashboard.routes"));
 const payroll_routes_1 = __importDefault(require("./routes/payroll.routes"));
+const general_ledger_routes_1 = __importDefault(require("./routes/general-ledger.routes"));
+const chart_of_accounts_routes_1 = __importDefault(require("./routes/chart-of-accounts.routes"));
 const app = (0, express_1.default)();
 app.use((0, helmet_1.default)({
     // Allow frontend (different origin) to load /uploads images (school logo, etc.)
@@ -50,9 +53,12 @@ app.use('/api/exams', exams_routes_1.default);
 app.use('/api/billing', billing_routes_1.default);
 app.use('/api/finance', finance_routes_1.default);
 app.use('/api/academics', academics_routes_1.default);
+app.use('/api/timetable', timetable_routes_1.default);
 app.use('/api/admin', admin_routes_1.default);
 app.use('/api/dashboard', dashboard_routes_1.default);
 app.use('/api/payroll', payroll_routes_1.default);
+app.use('/api/general-ledger', general_ledger_routes_1.default);
+app.use('/api/chart-of-accounts', chart_of_accounts_routes_1.default);
 app.use((err, _req, res, _next) => {
     console.error(err);
     res.status(500).json({ message: 'Internal server error', error: env_1.env.nodeEnv === 'development' ? err.message : undefined });

@@ -1,9 +1,14 @@
 <app-portal-layout portalTitle="Admin Portal" [pageTitle]="pageTitle()" [navSections]="adminNav">
-  <div class="billing-page" [class.billing-mode]="isBillingMode()">
+  <div
+    class="billing-page"
+    [class.billing-mode]="isBillingMode()"
+    [class.invoices-expanded]="isInvoicesTab()"
+  >
     @if (toast(); as t) {
       <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>
     }
 
+    @if (!isInvoicesTab()) {
     <header class="hero">
       <div class="hero-copy">
         <p class="eyebrow">Finance</p>
@@ -73,6 +78,7 @@
         }
       </div>
     </header>
+    }
 
     @if (isPaymentMode() && debtors().length) {
       <div class="alert-banner">
@@ -99,11 +105,14 @@
               }
             </button>
           } @else {
-            <button type="button" [class.active]="activeTab() === 'single-invoice'" (click)="setTab('single-invoice')">Single Invoice</button>
+            <button type="button" [class.active]="activeTab() === 'single-invoice'" (click)="setTab('single-invoice')">Create Invoice</button>
             <button type="button" [class.active]="activeTab() === 'bulk-invoice'" (click)="setTab('bulk-invoice')">Bulk Invoice</button>
             <button type="button" [class.active]="activeTab() === 'invoices'" (click)="setTab('invoices')">
               Invoices ({{ invoices().length }})
             </button>
+            <button type="button" [class.active]="activeTab() === 'get-invoice'" (click)="setTab('get-invoice')">Single Invoice</button>
+            <button type="button" [class.active]="activeTab() === 'credit-note'" (click)="setTab('credit-note')">Credit Note</button>
+            <button type="button" [class.active]="activeTab() === 'debit-note'" (click)="setTab('debit-note')">Debit Note</button>
           }
         </nav>
         <div class="tab-actions">
@@ -170,13 +179,12 @@
                       <div class="stu-detail-item">
                         <span class="stu-detail-label">Gender</span>
                         <span class="stu-detail-value gender-value" [attr.data-gender]="stu.gender">
-                          {{ stu.gender === 'male' ? 'Male' : stu.gender === 'female' ? 'Female' : '—' }}
+                          {{ genderLabel(stu.gender) }}
                         </span>
                       </div>
                       @if (stu.schoolClass?.name) {
-                        <div class="stu-detail-item">
-                          <span class="stu-detail-label">Class</span>
-                          <span class="stu-detail-value">{{ stu.schoolClass!.name }}</span>
+                        <div class="stu-detail-item stu-detail-item--class">
+                          <span class="stu-detail-value">{{ classDisplay(stu.schoolClass?.name) }}</span>
                         </div>
                       }
                     </div>
@@ -255,7 +263,7 @@
                               <strong>{{ s.firstName }} {{ s.lastName }}</strong>
                               <code class="sid">{{ s.admissionNumber }}</code>
                               @if (s.schoolClass?.name) {
-                                <span class="match-class">{{ s.schoolClass!.name }}</span>
+                                <span class="match-class">{{ classDisplay(s.schoolClass?.name) }}</span>
                               }
                             </div>
                           </button>
@@ -330,7 +338,7 @@
         <div class="panel-body">
           <div class="panel-head">
             <div>
-              <h3>Single invoice</h3>
+              <h3>Create invoice</h3>
               <p class="subtitle">Bill a student for tuition, levies, uniform, or other fees.</p>
             </div>
           </div>
@@ -530,6 +538,7 @@
           }
         </div>
       } @else if (isBillingMode() && activeTab() === 'invoices') {
+        <div class="invoices-panel">
         <div class="list-toolbar">
           <div class="search-wrap">
             <span class="search-icon" aria-hidden="true">🔍</span>
@@ -592,7 +601,7 @@
                 </div>
                 <div class="card-title">
                   <strong>{{ inv.student?.firstName }} {{ inv.student?.lastName }}</strong>
-                  <span class="pill">{{ inv.student?.schoolClass?.name || '—' }}</span>
+                  <span class="pill">{{ classDisplay(inv.student?.schoolClass?.name) }}</span>
                 </div>
                 <p class="desc">{{ inv.description }}</p>
                 <div class="card-amounts">
@@ -612,31 +621,38 @@
             }
           </div>
         } @else {
-          <div class="table-wrap">
-            <table class="data-table">
+          <div class="table-wrap invoices-table-wrap">
+            <table class="data-table invoices-table">
               <thead>
                 <tr>
-                  <th>Invoice #</th><th>Student</th><th>Class</th><th>Description</th>
-                  <th class="num">Total</th><th class="num">Paid</th><th>Due</th><th>Status</th><th></th>
+                  <th class="col-inv">Invoice #</th>
+                  <th class="col-student">Student</th>
+                  <th class="col-class">Class</th>
+                  <th class="col-desc">Description</th>
+                  <th class="num col-total">Total</th>
+                  <th class="num col-paid">Paid</th>
+                  <th class="col-due">Due</th>
+                  <th class="col-status">Status</th>
+                  <th class="col-actions"></th>
                 </tr>
               </thead>
               <tbody>
                 @for (inv of filteredInvoices(); track inv.id) {
                   <tr>
-                    <td><code class="inv-no">{{ inv.invoiceNumber }}</code></td>
-                    <td>
+                    <td class="col-inv"><code class="inv-no">{{ inv.invoiceNumber }}</code></td>
+                    <td class="col-student">
                       <div class="user-cell">
                         <span class="avatar">{{ initials(inv.student?.firstName || '', inv.student?.lastName || '') }}</span>
                         <strong>{{ inv.student?.firstName }} {{ inv.student?.lastName }}</strong>
                       </div>
                     </td>
-                    <td><span class="pill">{{ inv.student?.schoolClass?.name || '—' }}</span></td>
-                    <td>{{ inv.description }}</td>
-                    <td class="num">{{ '$' + (inv.totalAmount | number:'1.2-2') }}</td>
-                    <td class="num paid">{{ '$' + (inv.amountPaid | number:'1.2-2') }}</td>
-                    <td>{{ inv.dueDate }}</td>
-                    <td><span class="status" [attr.data-s]="inv.status">{{ statusLabel(inv.status) }}</span></td>
-                    <td class="actions">
+                    <td class="col-class"><span class="pill">{{ classDisplay(inv.student?.schoolClass?.name) }}</span></td>
+                    <td class="col-desc">{{ inv.description }}</td>
+                    <td class="num col-total">{{ '$' + (inv.totalAmount | number:'1.2-2') }}</td>
+                    <td class="num paid col-paid">{{ '$' + (inv.amountPaid | number:'1.2-2') }}</td>
+                    <td class="col-due">{{ inv.dueDate }}</td>
+                    <td class="col-status"><span class="status" [attr.data-s]="inv.status">{{ statusLabel(inv.status) }}</span></td>
+                    <td class="actions col-actions">
                       <button type="button" class="btn-outline btn-sm" (click)="previewInvoice(inv.id)" [disabled]="previewingInvoiceId() === inv.id">
                         {{ previewingInvoiceId() === inv.id ? '…' : 'Preview' }}
                       </button>
@@ -650,6 +666,252 @@
             </table>
           </div>
         }
+        </div>
+      } @else if (isBillingMode() && activeTab() === 'get-invoice') {
+        <div class="panel-body">
+          <div class="panel-head">
+            <div>
+              <h3>Single invoice</h3>
+              <p class="subtitle">Look up a student and open their latest invoice as a PDF.</p>
+            </div>
+          </div>
+
+          <div class="student-search-field max-width">
+            <label class="field-label">Student <span class="required-star">*</span></label>
+            <p class="field-hint">Enter Student ID, First Name, or Last Name, then click Get Invoice</p>
+
+            @if (selectedGetInvoiceStudent(); as stu) {
+              <div class="selected-student-card">
+                <span class="avatar">{{ initials(stu.firstName, stu.lastName) }}</span>
+                <div class="stu-info">
+                  <strong>{{ stu.firstName }} {{ stu.lastName }}</strong>
+                  <code class="sid">{{ stu.admissionNumber }}</code>
+                  @if (stu.schoolClass?.name) {
+                    <span class="match-class">{{ classDisplay(stu.schoolClass?.name) }}</span>
+                  }
+                </div>
+                <button type="button" class="remove-student-btn" (click)="clearGetInvoiceStudent()" aria-label="Change student">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+              </div>
+              <button
+                type="button"
+                class="btn-primary btn-lg get-invoice-action"
+                (click)="getInvoice()"
+                [disabled]="getInvoiceLoading() || previewingInvoiceId() !== null"
+              >
+                {{ getInvoiceLoading() || previewingInvoiceId() !== null ? 'Opening PDF…' : 'Get Invoice' }}
+              </button>
+            } @else {
+              <div class="search-row">
+                <div class="search-wrap">
+                  <span class="search-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                  </span>
+                  <input
+                    type="text"
+                    class="search-input"
+                    placeholder="Student ID, First Name, or Last Name…"
+                    [ngModel]="getInvoiceStudentSearch()"
+                    (ngModelChange)="getInvoiceStudentSearch.set($event); getInvoiceSearchAttempted.set(false)"
+                    (keydown.enter)="getInvoice()"
+                    name="getInvStuSearch"
+                    autocomplete="off"
+                  />
+                  @if (getInvoiceStudentSearch()) {
+                    <button type="button" class="clear-search" (click)="getInvoiceStudentSearch.set(''); getInvoiceSearchAttempted.set(false); getInvoiceSearchResults.set([])" aria-label="Clear">×</button>
+                  }
+                </div>
+                <button
+                  type="button"
+                  class="btn-get-balance"
+                  (click)="getInvoice()"
+                  [disabled]="!getInvoiceStudentSearch().trim() || getInvoiceLoading() || previewingInvoiceId() !== null"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                  {{ getInvoiceLoading() || previewingInvoiceId() !== null ? 'Opening…' : 'Get Invoice' }}
+                </button>
+              </div>
+
+              @if (getInvoiceSearchAttempted()) {
+                @if (getInvoiceSearchResults().length === 0) {
+                  <div class="search-no-result">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="24" height="24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                    <span>No student found matching <strong>"{{ getInvoiceStudentSearch() }}"</strong>. Check the spelling and try again.</span>
+                  </div>
+                } @else if (getInvoiceSearchResults().length > 1) {
+                  <div class="search-multi-hint">
+                    <strong>{{ getInvoiceSearchResults().length }}</strong> students found — select one to open their invoice PDF:
+                  </div>
+                  <div class="match-grid">
+                    @for (s of getInvoiceSearchResults().slice(0, 10); track s.id) {
+                      <button type="button" class="match-card" (click)="pickStudentForGetInvoice(s.id)" [disabled]="getInvoiceLoading()">
+                        <span class="avatar">{{ initials(s.firstName, s.lastName) }}</span>
+                        <div>
+                          <strong>{{ s.firstName }} {{ s.lastName }}</strong>
+                          <code class="sid">{{ s.admissionNumber }}</code>
+                          @if (s.schoolClass?.name) {
+                            <span class="match-class">{{ classDisplay(s.schoolClass?.name) }}</span>
+                          }
+                        </div>
+                      </button>
+                    }
+                  </div>
+                }
+              }
+            }
+          </div>
+        </div>
+      } @else if (isBillingMode() && (activeTab() === 'credit-note' || activeTab() === 'debit-note')) {
+        <div class="panel-body">
+          <div class="panel-head">
+            <div>
+              <h3>{{ activeTab() === 'credit-note' ? 'Credit note' : 'Debit note' }}</h3>
+              <p class="subtitle">
+                @if (activeTab() === 'credit-note') {
+                  Correct an overcharge — reduces the student's invoice balance.
+                } @else {
+                  Correct an undercharge — increases the student's invoice balance.
+                }
+              </p>
+            </div>
+          </div>
+
+          <div class="student-search-field max-width">
+            <label class="field-label">Student <span class="required-star">*</span></label>
+            <p class="field-hint">Enter Student ID, First Name, or Last Name to search</p>
+
+            @if (noteSelectedStudent(); as stu) {
+              <div class="stu-profile-card">
+                <div class="stu-card-header">
+                  <div class="stu-card-header-left">
+                    <span class="stu-avatar-lg">{{ initials(stu.firstName, stu.lastName) }}</span>
+                    <div>
+                      <p class="stu-card-title">{{ stu.lastName }}, {{ stu.firstName }}</p>
+                      <code class="stu-card-id">{{ stu.admissionNumber }}</code>
+                    </div>
+                  </div>
+                  <button type="button" class="remove-student-btn" (click)="clearNoteStudent()" aria-label="Change student">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    Change
+                  </button>
+                </div>
+
+                <div class="stu-detail-grid">
+                  <div class="stu-detail-item stu-detail-item--class">
+                    <span class="stu-detail-value">{{ classDisplay(stu.className) }}</span>
+                  </div>
+                  <div class="stu-detail-item">
+                    <span class="stu-detail-label">Gender</span>
+                    <span class="stu-detail-value gender-value" [attr.data-gender]="stu.gender">{{ genderLabel(stu.gender) }}</span>
+                  </div>
+                </div>
+
+                <div class="stu-balance-row">
+                  <div class="balance-block">
+                    <div class="balance-info">
+                      <span class="balance-label">Current invoice balance</span>
+                      <span class="balance-sub">Before {{ activeTab() === 'credit-note' ? 'credit' : 'debit' }} note</span>
+                    </div>
+                    <span class="balance-amount" [class.zero]="stu.invoiceBalance === 0" [class.owed]="stu.invoiceBalance > 0">
+                      ${{ stu.invoiceBalance | number:'1.2-2' }}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <form class="pay-form note-form" (ngSubmit)="activeTab() === 'credit-note' ? submitCreditNote() : submitDebitNote()">
+                <div class="field">
+                  <label>{{ activeTab() === 'credit-note' ? 'Amount to reduce ($)' : 'Amount to increase ($)' }}</label>
+                  <input
+                    type="number"
+                    [ngModel]="activeTab() === 'credit-note' ? creditNoteAmount : debitNoteAmount"
+                    (ngModelChange)="activeTab() === 'credit-note' ? (creditNoteAmount = $event) : (debitNoteAmount = $event)"
+                    [name]="activeTab() === 'credit-note' ? 'creditAmount' : 'debitAmount'"
+                    min="0.01"
+                    [max]="activeTab() === 'credit-note' ? stu.invoiceBalance : null"
+                    step="0.01"
+                    required
+                  />
+                  @if (activeTab() === 'credit-note' && stu.invoiceBalance <= 0) {
+                    <small class="field-warn">This student has no outstanding balance to credit.</small>
+                  }
+                </div>
+
+                <div class="field">
+                  <label>Reason (optional)</label>
+                  <input [(ngModel)]="noteReason" name="noteReason" placeholder="e.g. Overcharged on tuition" />
+                </div>
+
+                <div class="form-actions">
+                  <button
+                    type="submit"
+                    class="btn-primary"
+                    [disabled]="noteSubmitting() || (activeTab() === 'credit-note' && stu.invoiceBalance <= 0)"
+                  >
+                    {{ noteSubmitting() ? 'Applying…' : (activeTab() === 'credit-note' ? 'Apply credit note' : 'Apply debit note') }}
+                  </button>
+                </div>
+              </form>
+            } @else {
+              <div class="search-row">
+                <div class="search-wrap">
+                  <span class="search-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                  </span>
+                  <input
+                    type="text"
+                    class="search-input"
+                    placeholder="Student ID, First Name, or Last Name…"
+                    [ngModel]="noteSearch()"
+                    (ngModelChange)="noteSearch.set($event); noteSearchAttempted.set(false)"
+                    (keydown.enter)="searchNoteStudent()"
+                    name="noteStudentSearch"
+                    autocomplete="off"
+                  />
+                  @if (noteSearch()) {
+                    <button type="button" class="clear-search" (click)="noteSearch.set(''); noteSearchAttempted.set(false); noteSearchResults.set([])" aria-label="Clear">×</button>
+                  }
+                </div>
+                <button type="button" class="btn-get-balance" (click)="searchNoteStudent()" [disabled]="noteSearchLoading()">
+                  {{ noteSearchLoading() ? 'Searching…' : 'Search' }}
+                </button>
+              </div>
+
+              @if (noteSearchAttempted()) {
+                @if (noteSearchLoading()) {
+                  <p class="field-hint">Searching students…</p>
+                } @else if (!noteSearchResults().length) {
+                  <div class="search-no-result">
+                    <span>No student found matching your search.</span>
+                  </div>
+                } @else if (noteSearchResults().length > 1) {
+                  <div class="search-multi-hint">
+                    <strong>{{ noteSearchResults().length }}</strong> students found — select one:
+                  </div>
+                  <div class="match-grid">
+                    @for (row of noteSearchResults(); track row.id) {
+                      <button type="button" class="match-card" (click)="pickNoteStudent(row)">
+                        <span class="avatar">{{ initials(row.firstName, row.lastName) }}</span>
+                        <div>
+                          <strong>{{ row.lastName }}, {{ row.firstName }}</strong>
+                          <code class="sid">{{ row.admissionNumber }}</code>
+                          @if (row.className) {
+                            <span class="match-class">{{ classDisplay(row.className) }}</span>
+                          }
+                          @if (row.gender) {
+                            <span class="match-class">{{ genderLabel(row.gender) }}</span>
+                          }
+                          <span class="match-balance">Balance: ${{ row.invoiceBalance | number:'1.2-2' }}</span>
+                        </div>
+                      </button>
+                    }
+                  </div>
+                }
+              }
+            }
+          </div>
+        </div>
       } @else if (isPaymentMode() && activeTab() === 'receipts') {
         <div class="list-toolbar">
           <div class="search-wrap">
@@ -691,7 +953,7 @@
                 </div>
                 <div class="card-title">
                   <strong>{{ p.student?.firstName }} {{ p.student?.lastName }}</strong>
-                  <span class="pill">{{ p.student?.schoolClass?.name || '—' }}</span>
+                  <span class="pill">{{ classDisplay(p.student?.schoolClass?.name) }}</span>
                 </div>
                 <div class="card-meta">
                   <span>{{ p.label }}</span>
@@ -728,7 +990,7 @@
                         <strong>{{ p.student?.firstName }} {{ p.student?.lastName }}</strong>
                       </div>
                     </td>
-                    <td><span class="pill">{{ p.student?.schoolClass?.name || '—' }}</span></td>
+                    <td><span class="pill">{{ classDisplay(p.student?.schoolClass?.name) }}</span></td>
                     <td>{{ p.label }}</td>
                     <td><span class="method">{{ formatMethod(p.method) }}</span></td>
                     <td class="num paid">{{ '$' + (p.amount | number:'1.2-2') }}</td>
@@ -795,7 +1057,7 @@
                   <strong class="amount owed">{{ '$' + (d.owed | number:'1.2-2') }}</strong>
                 </div>
                 <div class="card-meta">
-                  <span class="pill">{{ d.className || '—' }}</span>
+                  <span class="pill">{{ classDisplay(d.className) }}</span>
                   @if (d.oldestDue) {
                     <span>Oldest due: {{ d.oldestDue }}</span>
                   }
@@ -822,7 +1084,7 @@
                       </div>
                     </td>
                     <td>{{ d.admissionNumber || '—' }}</td>
-                    <td><span class="pill">{{ d.className || '—' }}</span></td>
+                    <td><span class="pill">{{ classDisplay(d.className) }}</span></td>
                     <td>{{ d.oldestDue || '—' }}</td>
                     <td class="num owed"><strong>{{ '$' + (d.owed | number:'1.2-2') }}</strong></td>
                     <td class="actions">

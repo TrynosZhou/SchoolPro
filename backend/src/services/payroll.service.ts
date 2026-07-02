@@ -1,4 +1,5 @@
 import { AppDataSource } from '../config/data-source';
+import { postPayrollPaymentToGl } from './gl-posting.service';
 import { PayrollRun, Payslip, Staff, StaffLeaveBalance, StaffPayrollProfile } from '../entities';
 import { PayrollRunStatus, PayslipStatus } from '../entities/enums';
 import { relations } from '../utils/typeorm-helpers';
@@ -412,6 +413,7 @@ export async function markRunPaid(runId: string, userId?: string) {
     { payrollRunId: runId, status: PayslipStatus.PENDING },
     { status: PayslipStatus.PAID },
   );
+  await postPayrollPaymentToGl(run, userId || '');
   return getRunWithPayslips(runId);
 }
 

@@ -63,6 +63,10 @@
           Attendance
           <span class="tab-count">{{ stats().active }}</span>
         </button>
+        <button type="button" [class.active]="activeTab() === 'teacherLoad'" (click)="setTab('teacherLoad')">
+          Teacher Load
+          <span class="tab-count">{{ teacherLoadSummary().teachersWithAssignments }}</span>
+        </button>
       </nav>
 
       @if (activeTab() === 'directory') {
@@ -103,15 +107,13 @@
               <button type="button" class="chip" [class.active]="roleFilter() === 'principal'" (click)="setRoleFilter('principal')">
                 Principals
               </button>
-              @if (departments().length) {
-                <span class="chip-divider"></span>
-                <select class="dept-select" [ngModel]="departmentFilter()" (ngModelChange)="departmentFilter.set($event)" name="deptF">
-                  <option value="">All departments</option>
-                  @for (d of departments(); track d) {
-                    <option [value]="d">{{ d }}</option>
-                  }
-                </select>
-              }
+              <span class="chip-divider"></span>
+              <select class="dept-select" [ngModel]="departmentFilter()" (ngModelChange)="departmentFilter.set($event)" name="deptF">
+                <option value="">All departments</option>
+                @for (d of activeDepartments(); track d.id) {
+                  <option [value]="d.name">{{ d.name }}</option>
+                }
+              </select>
             </div>
             <div class="toolbar-actions">
               <select class="sort-select" [ngModel]="sortBy()" (ngModelChange)="sortBy.set($event)" name="sort">
@@ -159,7 +161,7 @@
                 <div class="card-top">
                   <span class="avatar" [attr.data-role]="s.user.role">{{ initials(s) }}</span>
                   <div class="card-head-text">
-                    <strong>{{ fullName(s) }}</strong>
+                    <strong>{{ directoryName(s) }}</strong>
                     <code class="emp-id">{{ s.employeeNumber }}</code>
                   </div>
                   @if (s.isActive) {
@@ -196,14 +198,14 @@
               @for (s of sortedStaff(); track s.id) {
                 <li class="staff-list-item" [class.inactive]="!s.isActive">
                   <div class="col-avatar">
-                    <button type="button" class="avatar-btn" (click)="openProfile(s)" [attr.aria-label]="'View ' + fullName(s)">
+                    <button type="button" class="avatar-btn" (click)="openProfile(s)" [attr.aria-label]="'View ' + directoryName(s)">
                       <span class="avatar" [attr.data-role]="s.user.role">{{ initials(s) }}</span>
                     </button>
                   </div>
                   <div class="col-id"><code class="emp-id">{{ s.employeeNumber }}</code></div>
                   <div class="col-name">
                     <button type="button" class="name-link" (click)="openProfile(s)">
-                      <strong class="list-name">{{ fullName(s) }}</strong>
+                      <strong class="list-name">{{ directoryName(s) }}</strong>
                     </button>
                     @if (s.qualification) {
                       <small class="list-sub">{{ s.qualification }}</small>
@@ -319,7 +321,7 @@
                   <span class="avatar sm" [attr.data-role]="s.user.role">{{ initials(s) }}</span>
                   <div>
                     <code>{{ s.employeeNumber }}</code>
-                    <strong>{{ fullName(s) }}</strong>
+                    <strong>{{ directoryName(s) }}</strong>
                     <small>{{ roleLabel(s.user.role) }} · {{ s.department || '—' }}</small>
                   </div>
                 </div>
@@ -341,6 +343,182 @@
               <p class="empty-inline">No active staff to mark attendance for.</p>
             }
           </div>
+        </div>
+      }
+
+      @if (activeTab() === 'teacherLoad') {
+        <div class="panel teacher-load-panel">
+          <div class="teacher-load-head">
+            <div>
+              <h3>Teacher load</h3>
+              <p class="subtitle">
+                Subjects assigned per teacher, weekly timetable periods per class, and total teaching load.
+              </p>
+            </div>
+            <div class="teacher-load-actions">
+              <button
+                type="button"
+                class="btn-primary"
+                (click)="previewTeacherLoadPdf()"
+                [disabled]="teacherLoadPdfLoading() || teacherLoadLoading()"
+              >
+                {{ teacherLoadPdfLoading() ? 'Generating…' : 'Preview PDF' }}
+              </button>
+              <button
+                type="button"
+                class="btn-primary"
+                (click)="downloadTeacherLoadPdf()"
+                [disabled]="teacherLoadPdfLoading() || teacherLoadLoading()"
+              >
+                Download PDF
+              </button>
+              <button
+                type="button"
+                class="btn-primary"
+                (click)="loadTeacherLoad(true)"
+                [disabled]="teacherLoadLoading() || teacherLoadPdfLoading()"
+              >
+                {{ teacherLoadLoading() ? 'Refreshing…' : 'Refresh' }}
+              </button>
+            </div>
+          </div>
+
+          <div class="load-summary">
+            <div class="load-stat">
+              <strong>{{ teacherLoadSummary().teacherCount }}</strong>
+              <span>Teachers</span>
+            </div>
+            <div class="load-stat">
+              <strong>{{ teacherLoadSummary().teachersWithAssignments }}</strong>
+              <span>With assignments</span>
+            </div>
+            <div class="load-stat accent">
+              <strong>{{ teacherLoadSummary().teachersWithTimetableLoad }}</strong>
+              <span>On timetable</span>
+            </div>
+            <div class="load-stat ok">
+              <strong>{{ teacherLoadSummary().totalPeriods }}</strong>
+              <span>Total periods / week</span>
+            </div>
+          </div>
+
+          <div class="search-wrap compact">
+            <span class="search-icon" aria-hidden="true">🔍</span>
+            <input
+              type="search"
+              class="search-input"
+              placeholder="Search teacher, class, or subject…"
+              [ngModel]="teacherLoadSearch()"
+              (ngModelChange)="teacherLoadSearch.set($event)"
+              name="teacherLoadQ"
+            />
+          </div>
+
+          @if (teacherLoadLoading()) {
+            <div class="loading-panel compact">
+              <div class="spinner"></div>
+              <p>Loading teacher workload…</p>
+            </div>
+          } @else if (!teacherLoadGridRows().length) {
+            <div class="empty-state compact">
+              <span class="empty-icon">📚</span>
+              <h3>No teacher load data</h3>
+              <p>
+                @if (teacherLoadSearch()) {
+                  No rows match your search.
+                } @else {
+                  Assign teachers to class subjects in Academic Settings, then build timetables to populate weekly periods.
+                }
+              </p>
+            </div>
+          } @else {
+            <div class="teacher-load-table-wrap">
+              <table class="teacher-load-table">
+                <thead>
+                  <tr>
+                    <th>Teacher</th>
+                    <th>Employee ID</th>
+                    <th>Class to teach</th>
+                    <th>Subject</th>
+                    <th class="num">Periods</th>
+                    <th class="num">Total load</th>
+                    <th class="actions-col">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (row of teacherLoadGridRows(); track row.teacherId + (row.classSubjectId || 'empty')) {
+                    <tr>
+                      @if (row.isFirstRow) {
+                        <td [attr.rowspan]="row.rowSpan" class="teacher-cell">
+                          <div class="teacher-cell-inner">
+                            <span class="avatar sm" data-role="teacher">{{ initialsFromName(row.teacherName) }}</span>
+                            <div class="teacher-meta">
+                              <strong>{{ row.teacherName }}</strong>
+                              @if (row.assignedClassLabels.length) {
+                                <div class="assigned-classes">
+                                  <span class="assigned-classes-label">Classes assigned</span>
+                                  <div class="assigned-class-chips">
+                                    @for (label of row.assignedClassLabels; track label) {
+                                      <span class="class-chip">{{ label }}</span>
+                                    }
+                                  </div>
+                                </div>
+                              } @else {
+                                <small class="no-classes">No classes assigned</small>
+                              }
+                            </div>
+                          </div>
+                        </td>
+                        <td [attr.rowspan]="row.rowSpan" class="mono">{{ row.employeeNumber }}</td>
+                      }
+                      <td>
+                        @if (row.hasAssignment) {
+                          <span class="class-badge">{{ row.classLabel }}</span>
+                        } @else {
+                          <span class="muted-cell">—</span>
+                        }
+                      </td>
+                      <td>{{ row.subjectLabel }}</td>
+                      <td class="num">
+                        <span class="load-pill" [class.zero]="row.periods === 0" [title]="formatLoadPeriods(row)">
+                          {{ formatLoadPeriods(row) }}
+                        </span>
+                      </td>
+                      @if (row.isFirstRow) {
+                        <td [attr.rowspan]="row.rowSpan" class="num total-cell">
+                          <strong class="total-load">{{ row.totalLoad }}</strong>
+                          <small>periods / week</small>
+                        </td>
+                      }
+                      <td class="actions-col">
+                        <div class="load-actions">
+                          <button
+                            type="button"
+                            class="load-action-btn add"
+                            (click)="openAddLoadModal(row)"
+                            title="Add lesson assignment"
+                            [attr.aria-label]="'Add lesson for ' + row.teacherName"
+                          >
+                            +
+                          </button>
+                          <button
+                            type="button"
+                            class="load-action-btn remove"
+                            (click)="requestRemoveLoadRow(row)"
+                            [disabled]="!row.hasAssignment"
+                            title="Remove this assignment"
+                            [attr.aria-label]="'Remove ' + row.subjectLabel + ' for ' + row.classLabel"
+                          >
+                            −
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
         </div>
       }
     </section>
@@ -382,6 +560,15 @@
 
       <div class="form-grid drawer-form-grid">
         <div class="field">
+          <label>Title</label>
+          <select [(ngModel)]="newStaff.title" name="ntitle">
+            <option value="">— None —</option>
+            @for (t of teacherTitleOptions; track t) {
+              <option [value]="t">{{ t }}</option>
+            }
+          </select>
+        </div>
+        <div class="field">
           <label>First name *</label>
           <input [(ngModel)]="newStaff.firstName" name="nfn" required placeholder="Enter first name" autocomplete="given-name" />
         </div>
@@ -407,12 +594,12 @@
         </div>
         <div class="field">
           <label>Department</label>
-          <input [(ngModel)]="newStaff.department" name="ndept" placeholder="e.g. Sciences" list="dept-suggestions-register" />
-          <datalist id="dept-suggestions-register">
-            @for (d of departments(); track d) {
-              <option [value]="d"></option>
+          <select [(ngModel)]="newStaff.department" name="ndept">
+            <option value="">— None —</option>
+            @for (d of activeDepartments(); track d.id) {
+              <option [value]="d.name">{{ d.name }}</option>
             }
-          </datalist>
+          </select>
         </div>
         <div class="field">
           <label>Qualification</label>
@@ -455,13 +642,14 @@
           <header class="drawer-head">
             <span class="avatar lg" [attr.data-role]="s.user.role">{{ initials(s) }}</span>
             <div>
-              <h2 id="profile-title">{{ fullName(s) }}</h2>
+              <h2 id="profile-title">{{ directoryName(s) }}</h2>
               <code class="emp-id">{{ s.employeeNumber }}</code>
             </div>
             <button type="button" class="modal-close" (click)="closeProfile()" aria-label="Close">×</button>
           </header>
           <div class="drawer-body">
             <div class="detail-grid">
+              <div><span class="lbl">Title</span><strong>{{ s.title || '—' }}</strong></div>
               <div><span class="lbl">Role</span><span class="role-badge" [attr.data-role]="s.user.role">{{ roleLabel(s.user.role) }}</span></div>
               <div><span class="lbl">Status</span>
                 @if (s.isActive) { <span class="status-pill active">Active</span> }
@@ -498,6 +686,15 @@
           <form class="edit-form modal-form" (ngSubmit)="saveEdit()">
             <div class="form-grid">
               <div class="field">
+                <label>Title</label>
+                <select [(ngModel)]="editForm.title" name="etitle">
+                  <option value="">— None —</option>
+                  @for (t of teacherTitleOptions; track t) {
+                    <option [value]="t">{{ t }}</option>
+                  }
+                </select>
+              </div>
+              <div class="field">
                 <label>First name *</label>
                 <input [(ngModel)]="editForm.firstName" name="efn" required />
               </div>
@@ -523,12 +720,15 @@
               </div>
               <div class="field">
                 <label>Department</label>
-                <input [(ngModel)]="editForm.department" name="edept" list="dept-suggestions-edit" />
-                <datalist id="dept-suggestions-edit">
-                  @for (d of departments(); track d) {
-                    <option [value]="d"></option>
+                <select [(ngModel)]="editForm.department" name="edept">
+                  <option value="">— None —</option>
+                  @if (editForm.department && !isKnownDepartment(editForm.department)) {
+                    <option [value]="editForm.department">{{ editForm.department }} (current)</option>
                   }
-                </datalist>
+                  @for (d of activeDepartments(); track d.id) {
+                    <option [value]="d.name">{{ d.name }}</option>
+                  }
+                </select>
               </div>
               <div class="field">
                 <label>Qualification</label>
@@ -559,11 +759,125 @@
         <div class="modal modal-sm confirm-modal" role="alertdialog" (click)="$event.stopPropagation()">
           <h2>Deactivate staff member?</h2>
           <p>
-            <strong>{{ fullName(target) }}</strong> ({{ target.employeeNumber }}) will lose portal access until reactivated.
+            <strong>{{ directoryName(target) }}</strong> ({{ target.employeeNumber }}) will lose portal access until reactivated.
           </p>
           <div class="modal-actions">
             <button type="button" class="btn-ghost" (click)="cancelDeactivate()">Cancel</button>
             <button type="button" class="btn-danger" (click)="confirmDeactivate()">Deactivate</button>
+          </div>
+        </div>
+      </div>
+    }
+
+    @if (loadModalOpen()) {
+      <div class="modal-backdrop" (click)="closeAddLoadModal()">
+        <div class="modal" role="dialog" aria-labelledby="add-load-title" (click)="$event.stopPropagation()">
+          <header class="modal-head">
+            <div>
+              <h2 id="add-load-title">Add lesson assignment</h2>
+              <p class="modal-sub">Assign a class and subject to <strong>{{ loadForm.teacherName }}</strong></p>
+            </div>
+            <button type="button" class="modal-close" (click)="closeAddLoadModal()" aria-label="Close">×</button>
+          </header>
+          <form class="modal-form" (ngSubmit)="saveLoadAssignment()">
+            <div class="form-grid">
+              <div class="field span-2">
+                <label>Teacher</label>
+                <input type="text" [ngModel]="loadForm.teacherName" name="loadTeacherName" readonly />
+              </div>
+              <div class="field">
+                <label>Class *</label>
+                <select [(ngModel)]="loadForm.classId" name="loadClassId" required>
+                  <option value="">Select class</option>
+                  @for (c of loadClasses(); track c.id) {
+                    <option [value]="c.id">{{ classOptionLabel(c) }}</option>
+                  }
+                </select>
+              </div>
+              <div class="field">
+                <label>Subject *</label>
+                <select [(ngModel)]="loadForm.subjectId" name="loadSubjectId" required>
+                  <option value="">Select subject</option>
+                  @for (s of loadSubjects(); track s.id) {
+                    <option [value]="s.id">{{ loadSubjectLabel(s.id) || s.name }}</option>
+                  }
+                </select>
+              </div>
+              <div class="field">
+                <label>Periods per week *</label>
+                <input
+                  type="number"
+                  min="1"
+                  max="40"
+                  [(ngModel)]="loadForm.weeklyPeriods"
+                  name="loadWeeklyPeriods"
+                  required
+                />
+                <small class="field-hint">Number of lessons scheduled each week for this class.</small>
+              </div>
+              <div class="field span-2">
+                <label>Lesson length *</label>
+                <div class="lesson-length-options" role="radiogroup" aria-label="Lesson length">
+                  @for (opt of lessonLengthOptions; track opt.value) {
+                    <label class="lesson-length-option" [class.selected]="loadForm.lessonLength === opt.value">
+                      <input
+                        type="radio"
+                        name="loadLessonLength"
+                        [value]="opt.value"
+                        [(ngModel)]="loadForm.lessonLength"
+                      />
+                      <span class="lesson-length-label">{{ opt.label }}</span>
+                      <span class="lesson-length-meta">{{ opt.multiplier }} period{{ opt.multiplier === 1 ? '' : 's' }}</span>
+                    </label>
+                  }
+                </div>
+                <p class="load-preview">
+                  Total timetable periods:
+                  <strong>{{ loadFormEffectivePeriods() }}</strong>
+                  / week
+                </p>
+              </div>
+            </div>
+            <div class="modal-actions">
+              <button type="button" class="btn-ghost" (click)="closeAddLoadModal()">Cancel</button>
+              <button type="submit" class="btn-primary" [disabled]="submitting()">
+                {{ submitting() ? 'Saving…' : 'Save' }}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    }
+
+    @if (loadReassignOpen()) {
+      <div class="modal-backdrop reassign-layer" (click)="cancelReassignLoad()">
+        <div class="modal modal-sm confirm-modal" role="alertdialog" (click)="$event.stopPropagation()">
+          <h2>Reassign this class/subject?</h2>
+          <p>{{ loadConflictMessage() }}</p>
+          <p>Reassign it to <strong>{{ loadForm.teacherName }}</strong> instead?</p>
+          <div class="modal-actions">
+            <button type="button" class="btn-ghost" (click)="cancelReassignLoad()">Cancel</button>
+            <button type="button" class="btn-primary" (click)="confirmReassignLoad()" [disabled]="submitting()">
+              {{ submitting() ? 'Reassigning…' : 'Reassign' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    }
+
+    @if (loadRemoveTarget(); as row) {
+      <div class="modal-backdrop" (click)="cancelRemoveLoadRow()">
+        <div class="modal modal-sm confirm-modal" role="alertdialog" (click)="$event.stopPropagation()">
+          <h2>Remove assignment?</h2>
+          <p>
+            Remove <strong>{{ row.subjectLabel }}</strong> for <strong>{{ row.classLabel }}</strong>
+            from <strong>{{ row.teacherName }}</strong>?
+          </p>
+          <div class="modal-actions">
+            <button type="button" class="btn-ghost" (click)="cancelRemoveLoadRow()">Cancel</button>
+            <button type="button" class="btn-danger" (click)="confirmRemoveLoadRow()" [disabled]="submitting()">
+              {{ submitting() ? 'Removing…' : 'Remove' }}
+            </button>
           </div>
         </div>
       </div>

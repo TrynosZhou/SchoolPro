@@ -9,13 +9,10 @@
         <p class="eyebrow">Timetable</p>
         <h2>Configure periods &amp; breaks</h2>
         <p class="hero-sub">
-          Define lesson slots and breaks for the school day. Each day must have
-          <strong>{{ minBreaks }} to {{ maxBreaks }} breaks</strong> between lessons.
-          After saving, generate class timetables or view existing schedules.
+          Set how many lesson periods you need per day (e.g. 12 or 13), generate a daily template,
+          then fine-tune start/end times and breaks. After saving, auto-generate class timetables.
         </p>
         <div class="hero-actions">
-          <a routerLink="/admin/timetable/generate" class="primary-action">Generate Timetable →</a>
-          <a routerLink="/admin/timetable/view" class="secondary-action">View Timetable</a>
           <button type="button" class="refresh-action" (click)="resetDefaults()">Reset defaults</button>
         </div>
       </div>
@@ -63,11 +60,100 @@
       </div>
     }
 
+    <section class="list-shell template-panel">
+      <div class="template-panel-inner">
+        <div class="template-copy">
+          <h3>Day template generator</h3>
+          <p>
+            Enter the total number of <strong>lesson periods per day</strong> and set
+            <strong>minutes for each break</strong> individually. The system builds Period 1, Period 2, …
+            with breaks spaced through the day. You can edit every slot afterward.
+          </p>
+        </div>
+        <form class="template-form" (ngSubmit)="generateDayTemplate()">
+          <div class="template-fields">
+            <div class="field">
+              <label>Periods per day *</label>
+              <input
+                type="number"
+                [(ngModel)]="templateSettings.periodsPerDay"
+                name="periodsPerDay"
+                [min]="minLessonsPerDay"
+                [max]="maxLessonsPerDay"
+                required
+              />
+              <small class="field-hint">{{ minLessonsPerDay }}–{{ maxLessonsPerDay }}</small>
+            </div>
+            <div class="field">
+              <label>Day starts</label>
+              <input type="time" [(ngModel)]="templateSettings.dayStart" name="dayStart" />
+            </div>
+            <div class="field">
+              <label>Lesson length (min)</label>
+              <input
+                type="number"
+                [(ngModel)]="templateSettings.lessonMinutes"
+                name="lessonMinutes"
+                min="15"
+                max="120"
+              />
+            </div>
+            <div class="field">
+              <label>Breaks per day</label>
+              <select
+                [(ngModel)]="templateSettings.breakCount"
+                name="breakCount"
+                (ngModelChange)="onTemplateBreakCountChange()"
+              >
+                @for (n of breakCountOptions; track n) {
+                  <option [ngValue]="n">{{ n }} breaks</option>
+                }
+              </select>
+            </div>
+          </div>
+
+          <div class="break-minutes-section">
+            <span class="section-label">Break durations (minutes each)</span>
+            <div class="break-minutes-grid">
+              @for (mins of templateSettings.breakMinutes; track $index) {
+                <div class="field break-minute-field">
+                  <label>{{ breakTemplateLabel($index) }}</label>
+                  <input
+                    type="number"
+                    [(ngModel)]="templateSettings.breakMinutes[$index]"
+                    [name]="'breakMin' + $index"
+                    min="5"
+                    max="120"
+                  />
+                  <small class="field-hint">5–120 min</small>
+                </div>
+              }
+            </div>
+          </div>
+
+          <div class="template-preview">
+            <span class="preview-label">Preview</span>
+            <strong>{{ templateDayPreview().lessonCount }} lessons</strong>
+            · {{ templateDayPreview().breakCount }} breaks
+            · {{ templateDayPreview().start }}–{{ templateDayPreview().end }}
+            @if (templateDayPreview().breakSummary !== '—') {
+              <span class="preview-breaks">({{ templateDayPreview().breakSummary }})</span>
+            }
+          </div>
+          <div class="template-actions">
+            <button type="submit" class="btn-primary" [disabled]="generatingTemplate()">
+              {{ generatingTemplate() ? 'Generating…' : 'Generate day template' }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </section>
+
     <section class="list-shell">
       <div class="list-toolbar">
         <div class="toolbar-head">
           <h3>Daily schedule</h3>
-          <p>{{ lessonCount() }} lessons · {{ breakCount() }} breaks · sorted by start time · edit break names/times inline or use Edit</p>
+          <p>{{ lessonCount() }} lessons · {{ breakCount() }} breaks · adjust names and times below, then save</p>
         </div>
 
         <div class="toolbar-row">
@@ -202,8 +288,8 @@
         <div class="empty-state">
           <span class="empty-icon">⏱</span>
           <h3>No periods configured</h3>
-          <p>Add lesson periods and breaks to build your school day schedule.</p>
-          <button type="button" class="btn-primary" (click)="toggleAddPanel('lesson')">Add first lesson</button>
+          <p>Enter periods per day above and click <strong>Generate day template</strong>, or add slots manually.</p>
+          <button type="button" class="btn-primary" (click)="generateDayTemplate()">Generate template</button>
         </div>
       } @else if (!filteredPeriods().length) {
         <div class="empty-state">

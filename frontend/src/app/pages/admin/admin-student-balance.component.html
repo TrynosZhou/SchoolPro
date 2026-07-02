@@ -170,7 +170,7 @@
                 }
               </div>
 
-              <div class="class-meta">{{ r.className || 'No class' }}</div>
+              <div class="class-meta">{{ classLabel(r) }}@if (r.gender) { · {{ genderLabel(r.gender) }} }</div>
 
               <div class="amount-grid">
                 <div>
@@ -233,7 +233,7 @@
                       </div>
                     </div>
                   </td>
-                  <td><span class="pill">{{ r.className || '—' }}</span></td>
+                  <td><span class="pill">{{ classLabel(r) }}</span></td>
                   <td class="num">${{ r.totalInvoiced | number:'1.2-2' }}</td>
                   <td class="num paid">${{ r.totalPaid | number:'1.2-2' }}</td>
                   <td>

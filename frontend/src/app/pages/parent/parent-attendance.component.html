@@ -70,10 +70,10 @@
         <p class="meta">
           Student ID: <strong>{{ r.student.admissionNumber }}</strong>
           @if (r.student.className) {
-            · Class: {{ r.student.className }}
+            · {{ formatStudentClassLabel(r.student.className) }}
           }
-          @if (r.student.formName) {
-            · Form: {{ r.student.formName }}
+          @if (r.student.gender) {
+            · Gender: {{ formatGenderLabel(r.student.gender) }}
           }
         </p>
         <p class="meta">

@@ -46,5 +46,8 @@ export class Timetable {
 
   @Column({ nullable: true })
   room?: string;
+
+  @Column({ type: 'boolean', default: false })
+  isLocked!: boolean;
 }
 

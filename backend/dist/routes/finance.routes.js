@@ -7,6 +7,7 @@ const entities_1 = require("../entities");
 const enums_1 = require("../entities/enums");
 const auth_1 = require("../middleware/auth");
 const typeorm_helpers_1 = require("../utils/typeorm-helpers");
+const gl_posting_service_1 = require("../services/gl-posting.service");
 const router = (0, express_1.Router)();
 router.use(auth_1.authenticate);
 router.get('/cashbook', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), async (req, res) => {
@@ -27,9 +28,21 @@ router.post('/cashbook', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (r
         moneyIn,
         moneyOut,
         balance: prevBalance + Number(moneyIn) - Number(moneyOut),
+        recordedById: req.user?.userId,
     });
-    await repo.save(entry);
-    res.status(201).json(entry);
+    const saved = await repo.save(entry);
+    try {
+        if (Number(moneyOut) > 0) {
+            await (0, gl_posting_service_1.postCashbookExpenseToGl)(saved, req.user.userId);
+        }
+        else if (Number(moneyIn) > 0 && !saved.studentId) {
+            await (0, gl_posting_service_1.postCashbookReceiptToGl)(saved, req.user.userId);
+        }
+    }
+    catch (glErr) {
+        console.error('GL posting failed for cashbook entry:', glErr);
+    }
+    res.status(201).json(saved);
 });
 router.get('/balance-sheet', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), async (_req, res) => {
     const cashbook = await (0, typeorm_helpers_1.findLatest)(data_source_1.AppDataSource.getRepository(entities_1.CashbookEntry));

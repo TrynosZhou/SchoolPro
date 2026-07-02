@@ -352,57 +352,115 @@
                   [attr.id]="'report-' + report.studentId"
                 >
                   <header class="report-card-head" (click)="toggleExpanded(report.id)">
-                    <div class="report-head-main">
-                      <div class="report-brand-row">
-                        <div class="report-card-brand">
-                          @if (logoFullUrl()) {
-                            <img [src]="logoFullUrl()!" alt="School logo" class="report-school-logo" />
-                          } @else {
-                            <div class="report-school-logo placeholder" aria-hidden="true">🏫</div>
+                    <div class="report-school-banner">
+                      <button
+                        type="button"
+                        class="banner-download-btn"
+                        title="Download report card PDF"
+                        aria-label="Download report card PDF"
+                        (click)="$event.stopPropagation(); downloadPdf(report)"
+                      >
+                        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                          <path
+                            d="M12 4v9"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="3.4"
+                            stroke-linecap="round"
+                          />
+                          <path
+                            d="M7.25 11.75 12 16.5 16.75 11.75"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="3.4"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                          />
+                          <path
+                            d="M5.5 19.25h13"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="3.4"
+                            stroke-linecap="round"
+                          />
+                        </svg>
+                      </button>
+                      <div class="banner-top-line" aria-hidden="true"></div>
+                      <div class="banner-inner">
+                        <div class="banner-left">
+                          <h3 class="banner-school-name">{{ schoolName() }}</h3>
+                          @if (schoolBranding()?.address) {
+                            <p class="banner-line">{{ schoolBranding()!.address }}</p>
+                          }
+                          @if (schoolBranding()?.tagline) {
+                            <p class="banner-line">{{ schoolBranding()!.tagline }}</p>
+                          }
+                          @if (schoolBranding()?.email) {
+                            <p class="banner-line banner-email">
+                              <span class="banner-email-label">Email.</span>
+                              <span class="banner-email-value">{{ schoolBranding()!.email }}</span>
+                            </p>
                           }
                         </div>
-                        <div class="report-brand-text">
-                          <h3 class="report-school-name">{{ schoolName() }}</h3>
-                        </div>
-                        @if (report.classPosition) {
-                          <span class="position-pill" [class.top]="report.classPosition <= 3">
-                            #{{ report.classPosition }}
-                          </span>
-                        }
-                      </div>
-                      <div class="report-head-lower">
-                        <div class="student-block">
-                          <h2>{{ report.student?.firstName }} {{ report.student?.lastName }}</h2>
-                          <p class="meta">
-                            <span class="chip student-id-chip">Student ID: {{ report.student?.admissionNumber }}</span>
-                            <span class="chip">Class: {{ report.student?.schoolClass?.name || '—' }}</span>
-                            @if (report.averageMark != null) {
-                              <span class="chip avg-chip" [ngClass]="'tier-' + averageTier(report.averageMark)">
-                                Avg: {{ report.averageMark | number:'1.1-1' }}%
-                              </span>
-                            }
-                            @if (report.overallGrade) {
-                              <span class="chip grade-chip" [ngClass]="gradePillClass(report.overallGrade)">{{ report.overallGrade }}</span>
-                            }
-                            @if (report.classPosition) {
-                              <span class="chip grade-chip">Class Position: {{ positionOutOfLabel(report.classPosition, report.classTotal) }}</span>
-                            }
-                            @if (report.formPosition) {
-                              <span class="chip form-chip">Form Position: {{ positionOutOfLabel(report.formPosition, report.formTotal) }}</span>
-                            }
-                            @if (report.subjectsPassed != null && report.totalSubjects) {
-                              <span class="chip pass-chip">Subjects Passed {{ subjectsPassedLabel(report.subjectsPassed, report.totalSubjects) }}</span>
-                            }
-                          </p>
+                        <div class="banner-right">
+                          @if (logoFullUrl()) {
+                            <img [src]="logoFullUrl()!" alt="School logo" class="banner-logo" />
+                          } @else {
+                            <div class="banner-logo placeholder" aria-hidden="true">🏫</div>
+                          }
+                          @if (websiteDisplay()) {
+                            <p class="banner-website">{{ websiteDisplay() }}</p>
+                          }
                         </div>
                       </div>
                     </div>
-                    <div class="head-actions" (click)="$event.stopPropagation()">
-                      <button type="button" class="btn-primary-sm" (click)="previewPdf(report)">
-                        Preview PDF
-                      </button>
-                      <button type="button" class="btn-primary-sm" (click)="downloadPdf(report)">Download</button>
-                      <span class="chevron" [class.open]="isExpanded(report.id)">▼</span>
+                    <div class="report-head-row">
+                      <div class="report-classic-header">
+                        <div class="classic-title-bar">
+                          <hr class="classic-line top" />
+                          <div class="classic-title-row">
+                            <h4 class="classic-title">
+                              {{ report.examType?.name }}{{ report.examType?.name && report.term?.name ? ', ' : '' }}{{ report.term?.name }} Report Card
+                            </h4>
+                            <span class="chevron" [class.open]="isExpanded(report.id)" aria-hidden="true">▼</span>
+                          </div>
+                          <hr class="classic-line bottom" />
+                        </div>
+                          <div class="classic-info-grid">
+                            <div class="classic-col left">
+                              <div class="classic-field">
+                                <span class="classic-label">Student Number:</span>
+                                <span class="classic-value">{{ report.student?.admissionNumber || '—' }}</span>
+                              </div>
+                              <div class="classic-field">
+                                <span class="classic-label">Position in Class:</span>
+                                <span class="classic-value">{{ classPositionSlash(report.classPosition, report.classTotal) }}</span>
+                              </div>
+                            </div>
+                            <div class="classic-col center">
+                              <div class="classic-field">
+                                <span class="classic-label">Name:</span>
+                                <span class="classic-value name">{{ report.student?.firstName }} {{ report.student?.lastName }}</span>
+                              </div>
+                              <div class="classic-field">
+                                <span class="classic-label">Form Position:</span>
+                                <span class="classic-value">{{ classPositionSlash(report.formPosition, report.formTotal) }}</span>
+                              </div>
+                            </div>
+                            <div class="classic-col right">
+                              <div class="classic-field">
+                                <span class="classic-label">Class:</span>
+                                <span class="classic-value">{{ reportCardClassValue(report.student?.schoolClass?.name) }}</span>
+                              </div>
+                              @if (report.subjectsPassed != null && report.totalSubjects) {
+                                <div class="classic-field">
+                                  <span class="classic-label">Subjects Passed:</span>
+                                  <span class="classic-value">{{ subjectsPassedLabel(report.subjectsPassed, report.totalSubjects) }}</span>
+                                </div>
+                              }
+                            </div>
+                          </div>
+                        </div>
                     </div>
                   </header>
 
@@ -442,6 +500,9 @@
                               <th class="col-code">Code</th>
                               <th class="col-mark">Mark</th>
                               <th class="col-grade">Grade</th>
+                              @if (isALevelReport(report)) {
+                                <th class="col-points">Points</th>
+                              }
                               <th class="col-rank nowrap">Rank</th>
                               <th class="col-avg nowrap">Mean</th>
                               <th>Remarks</th>
@@ -456,6 +517,9 @@
                                 <td class="grade-cell">
                                   <span class="grade-pill" [ngClass]="gradePillClass(row.grade)">{{ row.grade }}</span>
                                 </td>
+                                @if (isALevelReport(report)) {
+                                  <td class="points-cell col-points">{{ pointsForGrade(row.grade) }}</td>
+                                }
                                 <td class="rank col-rank">{{ subjectPositionLabel(row.subjectPosition, row.subjectPositionTotal) }}</td>
                                 <td class="mean col-avg">{{ row.mean != null ? (row.mean | number:'1.1-1') : '—' }}</td>
                                 <td class="remarks">{{ row.remarks || '—' }}</td>
@@ -464,14 +528,23 @@
                           </tbody>
                           <tfoot>
                             <tr class="average-row">
-                              <td colspan="5" class="avg-label-cell">Average Mark</td>
-                              <td colspan="2" class="avg-value-cell">
+                              <td colspan="2" class="avg-label-cell">Average Mark</td>
+                              <td class="avg-value-cell mark-cell">
                                 @if (report.averageMark != null) {
-                                  {{ report.averageMark | number:'1.1-1' }}%
+                                  {{ report.averageMark | number:'1.1-1' }}
                                 } @else {
                                   —
                                 }
                               </td>
+                              <td class="grade-cell footer-total-label">
+                                @if (isALevelReport(report)) {
+                                  Total
+                                }
+                              </td>
+                              @if (isALevelReport(report)) {
+                                <td class="points-cell col-points footer-points">{{ totalPointsForReport(report) }}</td>
+                              }
+                              <td [attr.colspan]="3"></td>
                             </tr>
                           </tfoot>
                         </table>

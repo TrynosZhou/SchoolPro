@@ -3,9 +3,17 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 import { DecimalPipe } from '@angular/common';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { ApiService } from '../../core/services/api.service';
+import { formatStudentClassLabel, isALevelForm, reportCardClassValue } from '../../core/utils/class-display';
 import { environment } from '../../../environments/environment';
 import { PARENT_NAV_ITEMS } from '../../core/config/parent-nav';
 import { reportCardPdfFilename } from '../../core/utils/report-card-filename';
+
+interface GradeBoundaryRow {
+  grade: string;
+  label?: string;
+  minPercent: number;
+  points?: number;
+}
 
 interface SubjectResult {
   subject: string;
@@ -38,7 +46,7 @@ interface ReportCardDto {
     firstName: string;
     lastName: string;
     admissionNumber: string;
-    schoolClass?: { name: string; form?: { name: string } };
+    schoolClass?: { name: string; form?: { name: string; level?: number } };
   };
   term?: { name: string };
 }
@@ -58,10 +66,21 @@ export class ParentReportCardComponent implements OnInit {
   terms = signal<{ id: string; name: string; isCurrent?: boolean }[]>([]);
   selectedTermId = signal('');
   report = signal<ReportCardDto | null>(null);
+  gradeBoundaries = signal<GradeBoundaryRow[]>([]);
+  schoolBranding = signal<{
+    schoolName?: string;
+    tagline?: string;
+    logoUrl?: string;
+    address?: string;
+    email?: string;
+    website?: string;
+  } | null>(null);
   loading = signal(false);
   notFound = signal(false);
 
   readonly nav = PARENT_NAV_ITEMS;
+  readonly formatStudentClassLabel = formatStudentClassLabel;
+  readonly reportCardClassValue = reportCardClassValue;
 
   ngOnInit() {
     this.studentId = this.route.snapshot.paramMap.get('studentId') || '';
@@ -76,6 +95,35 @@ export class ParentReportCardComponent implements OnInit {
         this.loadReport(termId);
       }
     });
+    this.api.get<GradeBoundaryRow[]>('/exams/grade-boundaries').subscribe((b) => this.gradeBoundaries.set(b));
+    this.api.get<{
+      schoolName?: string;
+      tagline?: string;
+      logoUrl?: string;
+      address?: string;
+      email?: string;
+      website?: string;
+    }>('/exams/school-branding').subscribe({
+      next: (b) => this.schoolBranding.set(b),
+      error: () => this.schoolBranding.set({ schoolName: 'School Pro Academy' }),
+    });
+  }
+
+  schoolName(): string {
+    return this.schoolBranding()?.schoolName || 'School Pro Academy';
+  }
+
+  logoFullUrl(): string | null {
+    const url = this.schoolBranding()?.logoUrl;
+    if (!url) return null;
+    const origin = environment.apiUrl.replace(/\/api$/, '');
+    return `${origin}${url}`;
+  }
+
+  websiteDisplay(): string {
+    const url = this.schoolBranding()?.website?.trim();
+    if (!url) return '';
+    return url.replace(/^https?:\/\//i, '').replace(/\/$/, '');
   }
 
   onTermChange(termId: string) {
@@ -114,6 +162,33 @@ export class ParentReportCardComponent implements OnInit {
   subjectPositionLabel(pos?: number, total?: number): string {
     if (!pos || !total) return '—';
     return `${pos}/${total}`;
+  }
+
+  showGradePoints(): boolean {
+    return isALevelForm(this.report()?.student?.schoolClass?.form);
+  }
+
+  pointsForGrade(grade?: string | null): string {
+    if (!grade?.trim()) return '—';
+    const key = grade.trim().toUpperCase();
+    const row = this.gradeBoundaries().find((b) => b.grade.trim().toUpperCase() === key);
+    if (row?.points == null || Number.isNaN(Number(row.points))) return '—';
+    return String(row.points);
+  }
+
+  totalPointsForReport(): string {
+    const report = this.report();
+    if (!report || !this.showGradePoints()) return '—';
+    let total = 0;
+    let hasAny = false;
+    for (const row of report.subjectResults) {
+      const pts = this.pointsForGrade(row.grade);
+      if (pts !== '—') {
+        total += Number(pts);
+        hasAny = true;
+      }
+    }
+    return hasAny ? String(total) : '—';
   }
 
   downloadPdf() {

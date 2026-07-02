@@ -3,6 +3,7 @@ import { RouterLink } from '@angular/router';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { TEACHER_NAV_SECTIONS } from '../../core/config/teacher-nav';
 import { ApiService } from '../../core/services/api.service';
+import { formatStudentClassLabel } from '../../core/utils/class-display';
 import { AuthService } from '../../core/services/auth.service';
 
 interface TeacherAssignment {
@@ -135,7 +136,7 @@ export class TeacherDashboardComponent implements OnInit {
     const map = new Map<string, { classId: string; classLabel: string; subjects: TeacherAssignment[]; studentCount: number; isClassTeacher: boolean }>();
     for (const a of this.data()?.assignments ?? []) {
       const key = a.classId;
-      const classLabel = `${a.formName} ${a.className}`.trim();
+      const classLabel = formatStudentClassLabel(a.className);
       if (!map.has(key)) {
         map.set(key, {
           classId: a.classId,
@@ -186,8 +187,8 @@ export class TeacherDashboardComponent implements OnInit {
     });
   }
 
-  classLabel(row: ClassTeacherRow | TeacherAssignment): string {
-    return `${row.formName} ${row.className}`.trim();
+  classLabel(row: ClassTeacherRow | TeacherAssignment | ScheduleSlot): string {
+    return formatStudentClassLabel(row.className);
   }
 
   attendanceTone(status: string): string {

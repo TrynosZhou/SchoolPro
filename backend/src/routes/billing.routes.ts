@@ -7,12 +7,14 @@ import { AppDataSource } from '../config/data-source';
 import { Invoice, Payment, Receipt, LedgerEntry, Student, Notification, CashbookEntry, SchoolSettings, Term, SchoolFee, Guardian, Message, User } from '../entities';
 import { UserRole, InvoiceStatus, PaymentMethod } from '../entities/enums';
 import { authenticate, authorize, AuthRequest } from '../middleware/auth';
-import { generateNumber, today } from '../utils/helpers';
+import { generateNumber, today, invoiceDescriptionWithTerm } from '../utils/helpers';
+import { formatGenderLabel, formatStudentClassLabel } from '../utils/class-display';
 import { generateInvoicePdf, generateReceiptPdf, SchoolBranding } from '../utils/pdf';
 import { ensureDefaultSchoolFees, countFeeCodeUsage, isFeeCodeInUse, normalizeFeeCode } from '../services/fee-catalog.service';
 import { ensureRegistrationSchoolFees } from '../services/registration-invoice.service';
 import { loadSchoolBranding } from '../services/school-branding.service';
 import { sendWhatsAppReminder } from '../services/whatsapp.service';
+import { postFeePaymentToGl } from '../services/gl-posting.service';
 import { findLatest, relations } from '../utils/typeorm-helpers';
 import {
   buildOutstandingInvoicesReport,
@@ -40,10 +42,22 @@ import {
   reverseBulkTuitionInvoices,
 } from '../services/bulk-tuition-invoice.service';
 import {
+  listTuitionExemptions,
+  removeTuitionExemption,
+  searchStudentsForExemption,
+  upsertTuitionExemption,
+} from '../services/tuition-exemption.service';
+import {
+  applyCreditNote,
+  applyDebitNote,
+  lookupStudentForAdjustment,
+} from '../services/invoice-adjustment.service';
+import {
   buildFeeCollectionRevenueReport,
   feeCollectionReportToCsv,
 } from '../services/fee-collection-revenue.service';
 import { generateReconciliationPdf } from '../utils/pdf';
+import { resolveStudentInvoiceForLookup } from '../services/invoice-lookup.service';
 
 const router = Router();
 router.use(authenticate);
@@ -299,6 +313,34 @@ router.get('/invoices', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PR
   res.json(await qb.orderBy('i.createdAt', 'DESC').getMany());
 });
 
+router.get('/invoices/resolve', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.PARENT), async (req: AuthRequest, res: Response) => {
+  const studentId = String(req.query.studentId || '').trim();
+  if (!studentId) {
+    return res.status(400).json({ message: 'studentId is required' });
+  }
+
+  if (req.user!.role === UserRole.PARENT) {
+    const accessError = await assertParentStudentAccess(req, studentId);
+    if (accessError) {
+      return res.status(403).json({ message: accessError });
+    }
+  }
+
+  const invoice = await resolveStudentInvoiceForLookup(studentId);
+  if (!invoice) {
+    return res.status(404).json({ message: 'No invoice found for this student' });
+  }
+
+  res.json({
+    id: invoice.id,
+    invoiceNumber: invoice.invoiceNumber,
+    termId: invoice.termId,
+    termName: invoice.term?.name,
+    description: invoice.description,
+    status: invoice.status,
+  });
+});
+
 router.get('/invoices/bulk-tuition/preview', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (_req, res: Response) => {
   try {
     res.json(await previewBulkTuitionInvoices());
@@ -332,6 +374,200 @@ router.post('/invoices/bulk-tuition/reverse', authorize(UserRole.ADMIN), async (
   }
 });
 
+const financeStaff = [UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL];
+
+router.get('/tuition-exemptions', authorize(...financeStaff), async (_req, res: Response) => {
+  res.json(await listTuitionExemptions());
+});
+
+router.get('/tuition-exemptions/student-search', authorize(...financeStaff), async (req, res: Response) => {
+  const rawQ = String(req.query.q || '').trim();
+  if (!rawQ) {
+    return res.status(400).json({ message: 'Query is required' });
+  }
+  res.json(await searchStudentsForExemption(rawQ));
+});
+
+router.post('/tuition-exemptions', authorize(...financeStaff), async (req, res: Response) => {
+  try {
+    const row = await upsertTuitionExemption({
+      studentId: String(req.body?.studentId || '').trim(),
+      exemptionType: String(req.body?.exemptionType || '').trim(),
+      value: Number(req.body?.value),
+      reason: typeof req.body?.reason === 'string' ? req.body.reason : undefined,
+    });
+    res.status(201).json(row);
+  } catch (err) {
+    return res.status(400).json({ message: err instanceof Error ? err.message : 'Failed to save exemption' });
+  }
+});
+
+router.delete('/tuition-exemptions/:id', authorize(...financeStaff), async (req, res: Response) => {
+  try {
+    await removeTuitionExemption(req.params.id);
+    res.json({ ok: true });
+  } catch (err) {
+    return res.status(400).json({ message: err instanceof Error ? err.message : 'Failed to remove exemption' });
+  }
+});
+
+router.get('/tuition-exemptions/export.pdf', authorize(...financeStaff), async (req, res: Response) => {
+  const rows = await listTuitionExemptions();
+  const inline = String(req.query.preview || '') === 'true';
+  const doc = new PDFDocument({ size: 'A4', layout: 'landscape', margin: 34 });
+  const chunks: Buffer[] = [];
+  doc.on('data', (c) => chunks.push(c));
+  doc.on('end', () => {
+    const pdf = Buffer.concat(chunks);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader(
+      'Content-Disposition',
+      `${inline ? 'inline' : 'attachment'}; filename="tuition-exemptions.pdf"`,
+    );
+    res.send(pdf);
+  });
+
+  const margin = 34;
+  const contentW = doc.page.width - margin * 2;
+  const pageBottom = () => doc.page.height - margin - 20;
+  const exemptionLabel = (row: (typeof rows)[number]) => {
+    if (row.exemptionType === 'staff_child') {
+      return 'Staff child — all fees waived';
+    }
+    if (row.exemptionType === 'percentage') {
+      return `${row.value}% off tuition`;
+    }
+    return `$${Number(row.value).toFixed(2)} off tuition`;
+  };
+
+  let y = margin;
+  await renderPdfHeaderWithLogo(doc, 'Tuition Exemptions Report', {
+    margin,
+    subtitle: `${rows.length} active exemption${rows.length === 1 ? '' : 's'}`,
+  });
+  y = Math.max(doc.y + 4, y + 52);
+
+  const cols = [
+    { label: 'STUDENT ID', w: 88 },
+    { label: 'NAME', w: 150 },
+    { label: 'CLASS', w: 100 },
+    { label: 'GENDER', w: 72 },
+    { label: 'EXEMPTION', w: 120 },
+    { label: 'REASON', w: 200 },
+  ];
+  const tableW = cols.reduce((s, c) => s + c.w, 0);
+  const scaledCols = scalePdfTableCols(cols, Math.min(tableW, contentW));
+
+  const drawHeader = () => {
+    let x = margin;
+    doc.save();
+    doc.roundedRect(margin, y, scaledCols.reduce((s, c) => s + c.w, 0), 18, 5).fill('#1e40af');
+    doc.restore();
+    doc.font('Helvetica-Bold').fontSize(8).fillColor('#ffffff');
+    for (const c of scaledCols) {
+      doc.text(c.label, x + 4, y + 6, { width: c.w - 8, lineBreak: false });
+      x += c.w;
+    }
+    y += 20;
+  };
+
+  if (!rows.length) {
+    doc.font('Helvetica').fontSize(10).fillColor('#64748b');
+    doc.text('No students on the exemption list.', margin, y + 8, { width: contentW, align: 'center' });
+    renderGeneratedFooter(doc, new Date(), margin);
+    doc.end();
+    return;
+  }
+
+  drawHeader();
+
+  let rowIndex = 0;
+  for (const row of rows) {
+    const vals = [
+      String(row.admissionNumber || '—'),
+      `${row.lastName || ''}, ${row.firstName || ''}`.trim() || '—',
+      row.className || '—',
+      row.gender || '—',
+      exemptionLabel(row),
+      row.reason || '—',
+    ];
+
+    doc.font('Helvetica').fontSize(8);
+    let rowH = 0;
+    for (let i = 0; i < scaledCols.length; i++) {
+      rowH = Math.max(rowH, doc.heightOfString(vals[i], { width: scaledCols[i].w - 8 }));
+    }
+    rowH = Math.max(17, Math.ceil(rowH) + 6);
+
+    if (y + rowH > pageBottom()) {
+      doc.addPage({ size: 'A4', layout: 'landscape', margin });
+      y = margin;
+      drawHeader();
+    }
+
+    const tableWidth = scaledCols.reduce((s, c) => s + c.w, 0);
+    if (rowIndex % 2 === 1) {
+      doc.save();
+      doc.rect(margin, y, tableWidth, rowH).fill('#f8fafc');
+      doc.restore();
+    }
+
+    doc.fillColor('#0f172a').font('Helvetica').fontSize(8);
+    let x = margin;
+    for (let i = 0; i < scaledCols.length; i++) {
+      doc.text(vals[i], x + 4, y + 3, { width: scaledCols[i].w - 8 });
+      x += scaledCols[i].w;
+    }
+    y += rowH;
+    rowIndex += 1;
+  }
+
+  renderGeneratedFooter(doc, new Date(), margin);
+  doc.end();
+});
+
+router.get('/invoice-adjustments/student-lookup', authorize(...financeStaff), async (req, res: Response) => {
+  const rawQ = String(req.query.q || '').trim();
+  if (!rawQ) {
+    return res.status(400).json({ message: 'Query is required' });
+  }
+  res.json(await lookupStudentForAdjustment(rawQ));
+});
+
+router.post('/invoice-adjustments/credit-note', authorize(...financeStaff), async (req: AuthRequest, res: Response) => {
+  try {
+    const result = await applyCreditNote({
+      studentId: String(req.body?.studentId || '').trim(),
+      amount: Number(req.body?.amount),
+      reason: typeof req.body?.reason === 'string' ? req.body.reason : undefined,
+      recordedById: req.user?.userId,
+    });
+    res.status(201).json({
+      message: `Credit note ${result.noteNumber} applied. Invoice balance reduced by $${result.amount.toFixed(2)}.`,
+      ...result,
+    });
+  } catch (err) {
+    return res.status(400).json({ message: err instanceof Error ? err.message : 'Failed to apply credit note' });
+  }
+});
+
+router.post('/invoice-adjustments/debit-note', authorize(...financeStaff), async (req: AuthRequest, res: Response) => {
+  try {
+    const result = await applyDebitNote({
+      studentId: String(req.body?.studentId || '').trim(),
+      amount: Number(req.body?.amount),
+      reason: typeof req.body?.reason === 'string' ? req.body.reason : undefined,
+      recordedById: req.user?.userId,
+    });
+    res.status(201).json({
+      message: `Debit note ${result.noteNumber} applied. Invoice balance increased by $${result.amount.toFixed(2)}.`,
+      ...result,
+    });
+  } catch (err) {
+    return res.status(400).json({ message: err instanceof Error ? err.message : 'Failed to apply debit note' });
+  }
+});
+
 router.post('/invoices', authorize(UserRole.ADMIN), async (req, res: Response) => {
   const repo = AppDataSource.getRepository(Invoice);
   const ledgerRepo = AppDataSource.getRepository(LedgerEntry);
@@ -343,6 +579,23 @@ router.post('/invoices', authorize(UserRole.ADMIN), async (req, res: Response) =
     relations: relations('schoolClass'),
   });
   if (!student) return res.status(404).json({ message: 'Student not found' });
+
+  let termName: string | undefined;
+  if (data.termId) {
+    const term = await AppDataSource.getRepository(Term).findOne({ where: { id: data.termId } });
+    termName = term?.name;
+  }
+
+  if (termName && data.description) {
+    data.description = invoiceDescriptionWithTerm(data.description, termName);
+  }
+  if (termName && lines?.length) {
+    for (const line of lines) {
+      if (line.description) {
+        line.description = invoiceDescriptionWithTerm(line.description, termName);
+      }
+    }
+  }
 
   const totalAmount = lines?.reduce((s: number, l: { amount: number }) => s + Number(l.amount), 0) || data.totalAmount;
   const created = repo.create({
@@ -373,11 +626,6 @@ router.post('/invoices', authorize(UserRole.ADMIN), async (req, res: Response) =
   }));
 
   const branding = await loadSchoolBranding();
-  let termName: string | undefined;
-  if (data.termId) {
-    const term = await AppDataSource.getRepository(Term).findOne({ where: { id: data.termId } });
-    termName = term?.name;
-  }
 
   const invoiceLines =
     lines?.map((l: { description: string; quantity?: number; unitPrice?: number; amount: number }) => ({
@@ -535,6 +783,8 @@ router.post('/payments', authorize(UserRole.ADMIN), async (req: AuthRequest, res
         recordedById: req.user!.userId,
       }),
     );
+
+    await postFeePaymentToGl(queryRunner.manager, payment, req.user!.userId);
 
     const branding = await loadSchoolBranding();
     const receiptNumber = generateNumber('RCP');
@@ -822,7 +1072,7 @@ router.get('/statement/:studentId/pdf', authorize(UserRole.ADMIN, UserRole.DIREC
   doc.text(studentName, margin + 12, y + 11, { width: contentW - 24, lineBreak: false });
   doc.font('Helvetica').fontSize(9).fillColor('#475569');
   doc.text(`Student ID: ${studentCode}`, margin + 12, y + 30, { lineBreak: false });
-  doc.text(`Class: ${student?.schoolClass?.name || '—'}`, margin + contentW / 2, y + 30, { lineBreak: false });
+  doc.text(formatStudentClassLabel(student?.schoolClass?.name), margin + contentW / 2, y + 30, { lineBreak: false });
   y += 72;
 
   // Summary cards
@@ -982,13 +1232,15 @@ router.get('/payments', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PR
 async function fetchStudentInvoiceBalance(studentId: string, manager = AppDataSource.manager): Promise<number> {
   const result = await manager.query(
     `
-      SELECT COALESCE(SUM("totalAmount" - "amountPaid"), 0) as owed
-      FROM invoices
-      WHERE "studentId" = $1 AND status IN ('sent', 'partial', 'overdue')
+      SELECT COALESCE(SUM(i."totalAmount" - i."amountPaid"), 0) as owed
+      FROM invoices i
+      WHERE i."studentId" = $1
+        AND (i."totalAmount" - i."amountPaid") > 0.005
+        AND i.status NOT IN ('cancelled', 'draft', 'paid')
     `,
     [studentId],
   );
-  return roundMoney(Math.max(0, Number(result[0]?.owed || 0)));
+  return roundMoney(Number(result[0]?.owed || 0));
 }
 
 async function fetchBillingDebtors() {
@@ -998,7 +1250,8 @@ async function fetchBillingDebtors() {
       MAX(i."dueDate") as "oldestDue"
     FROM students s
     LEFT JOIN classes c ON c.id = s."classId"
-    LEFT JOIN invoices i ON i."studentId" = s.id AND i.status IN ('sent', 'partial', 'overdue')
+    LEFT JOIN invoices i ON i."studentId" = s.id
+      AND i.status IN ('sent', 'partial', 'overdue')
     WHERE s."isActive" = true
     GROUP BY s.id, s."firstName", s."lastName", s."admissionNumber", s.gender, c.name
     HAVING COALESCE(SUM(i."totalAmount" - i."amountPaid"), 0) > 0
@@ -1344,10 +1597,17 @@ router.get('/reports/student-ledger/export.pdf', authorize(UserRole.ADMIN, UserR
   y = Math.max(y, doc.y + 2);
 
   const studentName = `${report.student.firstName || ''} ${report.student.lastName || ''}`.trim() || 'Unknown Student';
-  const classLabel = `${report.student.formName || ''} ${report.student.className || ''}`.trim() || '—';
+  const classLabel = report.student.classLabel || formatStudentClassLabel(report.student.className) || '—';
+  const genderLabel = formatGenderLabel(report.student.gender);
   const fmtMoney = (value: number) => `$${Number(value || 0).toFixed(2)}`;
-  const typeLabel = (type: string) =>
-    type === 'invoice' ? 'INVOICE' : type === 'payment' ? 'PAYMENT' : 'OPENING';
+  const typeLabel = (type: string) => {
+    if (type === 'invoice') return 'INVOICE';
+    if (type === 'payment') return 'PAYMENT';
+    if (type === 'debit_note') return 'DEBIT NOTE';
+    if (type === 'credit_note') return 'CREDIT NOTE';
+    if (type === 'tuition_exemption') return 'EXEMPTION';
+    return 'OPENING';
+  };
 
   doc.save();
   doc.roundedRect(margin, y, contentW, 44, 8).fillAndStroke('#f8fafc', '#e2e8f0');
@@ -1355,8 +1615,9 @@ router.get('/reports/student-ledger/export.pdf', authorize(UserRole.ADMIN, UserR
   doc.font('Helvetica-Bold').fontSize(11).fillColor('#0f172a').text(studentName, margin + 10, y + 8);
   doc.font('Helvetica').fontSize(8.5).fillColor('#334155');
   doc.text(`Student ID: ${report.student.admissionNumber || '—'}`, margin + 10, y + 24);
-  doc.text(`Class: ${classLabel}`, margin + 170, y + 24);
-  doc.text(`Term: ${report.term.name}`, margin + 300, y + 24);
+  doc.text(classLabel, margin + 170, y + 24);
+  doc.text(`Gender: ${genderLabel}`, margin + 300, y + 24);
+  doc.text(`Term: ${report.term.name}`, margin + 420, y + 24);
   y += 54;
 
   const cardGap = 8;
@@ -1373,15 +1634,35 @@ router.get('/reports/student-ledger/export.pdf', authorize(UserRole.ADMIN, UserR
   };
 
   drawSummaryCard(margin, 'Opening', fmtMoney(report.summary.openingBalance), 'neutral');
-  drawSummaryCard(margin + cardW + cardGap, 'Debits', fmtMoney(report.summary.totalDebits), 'neutral');
+  drawSummaryCard(margin + cardW + cardGap, 'Term debits', fmtMoney(report.summary.totalDebits), 'neutral');
   drawSummaryCard(margin + (cardW + cardGap) * 2, 'Credits', fmtMoney(report.summary.totalCredits), 'positive');
   drawSummaryCard(
     margin + (cardW + cardGap) * 3,
-    'Closing',
-    fmtMoney(report.summary.closingBalance),
-    report.summary.closingBalance > 0 ? 'warn' : 'positive',
+    'Invoice balance',
+    fmtMoney(report.invoiceBalance),
+    report.invoiceBalance > 0 ? 'warn' : 'positive',
   );
   y += 52;
+
+  const reconParts = [
+    `Opening ${fmtMoney(report.summary.openingBalance)} + term debits ${fmtMoney(report.summary.totalDebits)}`,
+    `= ${fmtMoney(report.summary.termCharges)} term charges`,
+    `· payments ${fmtMoney(report.summary.totalCredits)}`,
+  ];
+  if (report.summary.termOverpayment > 0) {
+    reconParts.push(`· term overpayment ${fmtMoney(report.summary.termOverpayment)}`);
+  } else if (report.summary.termNetMovement > 0) {
+    reconParts.push(`· term balance ${fmtMoney(report.summary.termNetMovement)}`);
+  } else {
+    reconParts.push('· term settled');
+  }
+  reconParts.push(`· open invoices ${fmtMoney(report.invoiceBalance)}`);
+  doc.save();
+  doc.roundedRect(margin, y, contentW, 28, 6).fillAndStroke('#f8fafc', '#e2e8f0');
+  doc.restore();
+  doc.font('Helvetica-Bold').fontSize(7.5).fillColor('#475569').text('TERM RECONCILIATION', margin + 8, y + 6);
+  doc.font('Helvetica').fontSize(8).fillColor('#334155').text(reconParts.join(' '), margin + 8, y + 16, { width: contentW - 16 });
+  y += 36;
 
   const colX = {
     date: margin + 4,
@@ -1413,7 +1694,7 @@ router.get('/reports/student-ledger/export.pdf', authorize(UserRole.ADMIN, UserR
     doc.text('DESCRIPTION', colX.desc, y + 6, { width: colW.desc });
     doc.text('DEBIT', colX.debit, y + 6, { width: colW.debit, align: 'right' });
     doc.text('CREDIT', colX.credit, y + 6, { width: colW.credit, align: 'right' });
-    doc.text('BALANCE', colX.balance, y + 6, { width: colW.balance, align: 'right' });
+    doc.text('AMT OWED', colX.balance, y + 6, { width: colW.balance, align: 'right' });
     y += 20;
   };
 
@@ -1461,8 +1742,20 @@ router.get('/reports/student-ledger/export.pdf', authorize(UserRole.ADMIN, UserR
     const pillX = colX.type;
     const pillY = y + 4;
     const pillW = Math.min(colW.type - 6, Math.max(32, doc.widthOfString(typeLabel(type)) + 12));
-    const pillTone = type === 'payment' ? '#dcfce7' : type === 'invoice' ? '#fee2e2' : '#e0e7ff';
-    const pillText = type === 'payment' ? '#166534' : type === 'invoice' ? '#991b1b' : '#3730a3';
+    const pillTone =
+      type === 'payment' ? '#dcfce7'
+        : type === 'invoice' ? '#fee2e2'
+          : type === 'debit_note' ? '#ffedd5'
+            : type === 'credit_note' ? '#dbeafe'
+              : type === 'tuition_exemption' ? '#ede9fe'
+                : '#e0e7ff';
+    const pillText =
+      type === 'payment' ? '#166534'
+        : type === 'invoice' ? '#991b1b'
+          : type === 'debit_note' ? '#c2410c'
+            : type === 'credit_note' ? '#1d4ed8'
+              : type === 'tuition_exemption' ? '#6d28d9'
+                : '#3730a3';
     doc.save();
     doc.roundedRect(pillX, pillY, pillW, 11, 5).fill(pillTone);
     doc.restore();
@@ -2230,7 +2523,8 @@ router.get('/reports/debtor-aging/reminder-letter.pdf', authorize(UserRole.ADMIN
   await renderPdfHeaderWithLogo(doc, 'Fee Reminder Letter', { margin: 48 });
   doc.moveDown(0.7);
   doc.fontSize(11).text(`Student: ${s.firstName} ${s.lastName} (${s.admissionNumber})`);
-  doc.text(`Class: ${s.formName || ''} ${s.className || ''}`);
+  doc.text(s.classLabel || formatStudentClassLabel(s.className));
+  doc.text(`Gender: ${formatGenderLabel(s.gender)}`);
   doc.text(`Guardian: ${s.guardianName || 'N/A'}  Phone: ${s.guardianPhone || 'N/A'}`);
   doc.moveDown(0.6);
   doc.text(`Outstanding balance: $${s.outstandingBalance.toFixed(2)}`);
@@ -2253,22 +2547,23 @@ async function fetchStudentBalances(rawQ: string) {
         s."admissionNumber",
         s."firstName",
         s."lastName",
+        s.gender,
         c.name as "className",
         COALESCE(inv."totalInvoiced", 0) as "totalInvoiced",
-        COALESCE(pay."totalPaid", 0) as "totalPaid",
-        COALESCE(inv."totalInvoiced", 0) - COALESCE(pay."totalPaid", 0) as balance
+        COALESCE(inv."totalPaid", 0) as "totalPaid",
+        COALESCE(inv.balance, 0) as balance
       FROM students s
       LEFT JOIN classes c ON c.id = s."classId"
       LEFT JOIN (
-        SELECT "studentId", COALESCE(SUM("totalAmount"), 0) as "totalInvoiced"
+        SELECT
+          "studentId",
+          COALESCE(SUM("totalAmount"), 0) AS "totalInvoiced",
+          COALESCE(SUM("amountPaid"), 0) AS "totalPaid",
+          COALESCE(SUM(GREATEST("totalAmount" - "amountPaid", 0)), 0) AS balance
         FROM invoices
+        WHERE status NOT IN ('cancelled', 'draft')
         GROUP BY "studentId"
       ) inv ON inv."studentId" = s.id
-      LEFT JOIN (
-        SELECT "studentId", COALESCE(SUM(amount), 0) as "totalPaid"
-        FROM payments
-        GROUP BY "studentId"
-      ) pay ON pay."studentId" = s.id
       WHERE
         s."isActive" = true
         AND (
@@ -2278,7 +2573,7 @@ async function fetchStudentBalances(rawQ: string) {
           OR s."lastName" ILIKE $2
           OR CONCAT(s."firstName", ' ', s."lastName") ILIKE $2
         )
-      GROUP BY s.id, c.name, inv."totalInvoiced", pay."totalPaid"
+      GROUP BY s.id, s.gender, c.name, inv."totalInvoiced", inv."totalPaid", inv.balance
       ORDER BY balance DESC, s."lastName" ASC, s."firstName" ASC
       LIMIT 20
     `,
@@ -2287,9 +2582,11 @@ async function fetchStudentBalances(rawQ: string) {
 
   return result.map((r: any) => ({
     ...r,
-    totalInvoiced: Number(r.totalInvoiced || 0),
-    totalPaid: Number(r.totalPaid || 0),
-    balance: Number(r.balance || 0),
+    classLabel: formatStudentClassLabel(r.className),
+    gender: formatGenderLabel(r.gender),
+    totalInvoiced: roundMoney(Number(r.totalInvoiced || 0)),
+    totalPaid: roundMoney(Number(r.totalPaid || 0)),
+    balance: roundMoney(Math.max(0, Number(r.balance || 0))),
   }));
 }
 

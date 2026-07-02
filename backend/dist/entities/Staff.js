@@ -24,6 +24,10 @@ __decorate([
     __metadata("design:type", String)
 ], Staff.prototype, "employeeNumber", void 0);
 __decorate([
+    (0, typeorm_1.Column)({ type: 'varchar', length: 16, nullable: true }),
+    __metadata("design:type", String)
+], Staff.prototype, "title", void 0);
+__decorate([
     (0, typeorm_1.OneToOne)(() => User_1.User, { onDelete: 'CASCADE' }),
     (0, typeorm_1.JoinColumn)({ name: 'userId' }),
     __metadata("design:type", User_1.User)

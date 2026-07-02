@@ -3,6 +3,7 @@ import { RouterLink } from '@angular/router';
 import { DecimalPipe, DatePipe } from '@angular/common';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { ApiService } from '../../core/services/api.service';
+import { formatStudentClassLabel } from '../../core/utils/class-display';
 import { AuthService } from '../../core/services/auth.service';
 import { executivePortalForRole, executiveActionGroups } from '../../core/utils/executive-portal.util';
 
@@ -66,6 +67,8 @@ interface DirectorDashboardData {
 export class DirectorDashboardComponent implements OnInit {
   private api = inject(ApiService);
   private auth = inject(AuthService);
+
+  readonly formatStudentClassLabel = formatStudentClassLabel;
 
   readonly portal = computed(() => executivePortalForRole(this.auth.user()?.role));
   readonly actionGroups = computed(() => executiveActionGroups(this.portal().basePath));
@@ -176,6 +179,10 @@ export class DirectorDashboardComponent implements OnInit {
     if (s.includes('late')) return 'late';
     if (s.includes('excus')) return 'excused';
     return '';
+  }
+
+  classLabel(row: { className?: string }): string {
+    return formatStudentClassLabel(row.className);
   }
 
   financeHealthClass(): string {

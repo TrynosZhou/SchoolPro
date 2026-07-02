@@ -50,8 +50,15 @@ $card-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
   width: 100%;
 
   &.billing-mode {
-    max-width: 680px;
+    max-width: 920px;
     margin-inline: auto;
+
+    &.invoices-expanded {
+      max-width: none;
+      margin-inline: 0;
+      width: 100%;
+      gap: 0.75rem;
+    }
   }
 }
 
@@ -242,6 +249,91 @@ $card-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
   &:hover { background: $blue-light; }
 }
 
+// ── Invoices full-page list ──
+.billing-page.invoices-expanded {
+  .list-shell {
+    flex: 1;
+    min-height: calc(100vh - 7.5rem);
+  }
+
+  .invoices-panel {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+  }
+
+  .list-toolbar {
+    flex-shrink: 0;
+  }
+
+  .search-wrap {
+    max-width: none;
+  }
+
+  .invoices-table-wrap {
+    flex: 1;
+    overflow: auto;
+  }
+}
+
+.invoices-table {
+  min-width: 960px;
+
+  thead th {
+    color: #2563eb;
+  }
+
+  .col-inv {
+    min-width: 11.5rem;
+    white-space: nowrap;
+  }
+
+  .col-student {
+    min-width: 10rem;
+    white-space: nowrap;
+  }
+
+  .col-class {
+    width: 5rem;
+    white-space: nowrap;
+  }
+
+  .col-desc {
+    min-width: 16rem;
+    white-space: normal;
+    word-break: break-word;
+    line-height: 1.45;
+    color: #334155;
+  }
+
+  .col-total,
+  .col-paid {
+    min-width: 6rem;
+    white-space: nowrap;
+  }
+
+  .col-due {
+    min-width: 6.5rem;
+    white-space: nowrap;
+  }
+
+  .col-status {
+    min-width: 5.5rem;
+    white-space: nowrap;
+  }
+
+  .col-actions {
+    min-width: 9rem;
+  }
+
+  .inv-no {
+    display: inline-block;
+    max-width: none;
+    white-space: nowrap;
+  }
+}
+
 // ── Main shell ──
 .list-shell {
   display: flex;
@@ -259,15 +351,18 @@ $card-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  padding: 0 1.25rem;
+  padding: 0 1rem 0 1.25rem;
   border-bottom: 1px solid $border;
   background: #fafbfc;
   flex-wrap: wrap;
+  overflow-x: auto;
 }
 
 .tab-nav {
   display: flex;
   gap: 0;
+  flex: 1 1 auto;
+  min-width: 0;
 
   button {
     position: relative;
@@ -275,8 +370,8 @@ $card-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
     background: transparent;
     padding: 0.85rem 1rem;
     font-size: 0.875rem;
-    font-weight: 500;
-    color: $muted;
+    font-weight: 700;
+    color: #000000;
     cursor: pointer;
     white-space: nowrap;
     transition: color 0.15s ease;
@@ -294,10 +389,10 @@ $card-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
       border-radius: 2px 2px 0 0;
     }
 
-    &:hover { color: $text; }
+    &:hover { color: #000000; }
 
     &.active {
-      color: $blue;
+      color: #000000;
       font-weight: 700;
 
       &::after { transform: scaleX(1); }
@@ -325,6 +420,7 @@ $card-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
   align-items: center;
   gap: 0.5rem;
   padding: 0.5rem 0;
+  flex-shrink: 0;
 
   .btn-primary {
     background: $blue;
@@ -558,6 +654,18 @@ $card-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
   gap: 0.85rem;
 
   &.max-width { max-width: 560px; }
+}
+
+.layout-split .pay-form {
+  padding: 1.15rem 1.25rem;
+  border: 1.5px solid $blue;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.get-invoice-action {
+  margin-top: 0.5rem;
+  width: fit-content;
 }
 
 .billing-page.billing-mode .pay-form.max-width {
@@ -957,6 +1065,25 @@ $card-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
   font-size: 0.68rem;
   color: $muted;
   margin-top: 0.1rem;
+}
+
+.match-balance {
+  display: block;
+  font-size: 0.68rem;
+  color: #b45309;
+  font-weight: 600;
+  margin-top: 0.15rem;
+}
+
+.field-warn {
+  display: block;
+  margin-top: 0.35rem;
+  color: #b45309;
+  font-size: 0.82rem;
+}
+
+.note-form {
+  margin-top: 1rem;
 }
 
 // ── Student match cards ──

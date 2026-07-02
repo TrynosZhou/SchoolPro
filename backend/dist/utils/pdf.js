@@ -13,11 +13,13 @@ exports.generateMarkSheetPdf = generateMarkSheetPdf;
 exports.generateRankingsPdf = generateRankingsPdf;
 exports.generateResultsAnalysisPdf = generateResultsAnalysisPdf;
 exports.generateReconciliationPdf = generateReconciliationPdf;
+exports.generateGeneralLedgerPdf = generateGeneralLedgerPdf;
 const pdfkit_1 = __importDefault(require("pdfkit"));
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
 const qrcode_1 = __importDefault(require("qrcode"));
 const subject_abbrev_1 = require("./subject-abbrev");
+const class_display_1 = require("./class-display");
 const report_card_portal_pdf_1 = require("./report-card-portal.pdf");
 const receiptsDir = path_1.default.join(process.cwd(), 'uploads', 'receipts');
 const invoicesDir = path_1.default.join(process.cwd(), 'uploads', 'invoices');
@@ -110,14 +112,6 @@ function formatSubjectLabel(r) {
     const name = (r.subjectName || r.subject.split(' — ')[0] || r.subject).trim();
     const code = r.subjectCode?.trim();
     return code ? `${name} (${code})` : name;
-}
-function formatReceiptClassLabel(raw) {
-    const cls = String(raw || '').trim();
-    if (!cls || cls === 'N/A')
-        return '—';
-    if (/^class\s+/i.test(cls))
-        return cls.replace(/\s+/g, ' ').trim();
-    return `Class ${cls.replace(/\s+/g, '')}`;
 }
 function formatPaymentMethod(method) {
     const map = {
@@ -424,7 +418,7 @@ async function generateReceiptPdf(data) {
         let rightY = infoTop + 26;
         rightY = infoRow('Student Name', data.studentName, col2X + 10, rightY, halfW - 20);
         rightY = infoRow('Student No.', data.admissionNumber, col2X + 10, rightY, halfW - 20);
-        infoRow('Class', formatReceiptClassLabel(data.className), col2X + 10, rightY, halfW - 20);
+        infoRow('', (0, class_display_1.formatStudentClassLabel)(data.className), col2X + 10, rightY, halfW - 20);
         y = infoTop + infoBoxH + 12;
         // ══════════════════════════════════════
         // PAYMENT TABLE — 2 columns
@@ -680,7 +674,7 @@ async function generateInvoicePdf(data) {
         let rightY = infoTop + 26;
         rightY = infoRow('Student Name', data.studentName, col2X + 10, rightY, halfW - 20);
         rightY = infoRow('Student No.', data.admissionNumber, col2X + 10, rightY, halfW - 20);
-        infoRow('Class', formatReceiptClassLabel(data.className), col2X + 10, rightY, halfW - 20);
+        infoRow('', (0, class_display_1.formatStudentClassLabel)(data.className), col2X + 10, rightY, halfW - 20);
         y = infoTop + Math.max(infoBoxH, rightBoxH) + 10;
         // ══════════════════════════════════════
         // LINE ITEMS TABLE — 2 columns only
@@ -1324,7 +1318,7 @@ async function generateMarkSheetPdf(data) {
             return bannerH;
         };
         const drawMeta = (y) => {
-            const line = `Exam: ${data.examTypeName}    Term: ${data.termName}    Class: ${data.className}    ` +
+            const line = `Exam: ${data.examTypeName}    Term: ${data.termName}    ${(0, class_display_1.formatStudentClassLabel)(data.className)}    ` +
                 `Max Marks: ${data.maxMarks}    Students: ${data.students.length}`;
             doc.fillColor(MS.meta).font('Helvetica').fontSize(8.5);
             doc.text(line, margin, y + 4, { width: contentW, lineBreak: false });
@@ -1808,7 +1802,7 @@ async function generateResultsAnalysisPdf(data) {
         };
         let y = drawBanner() + 12;
         doc.fillColor(MS.meta).font('Helvetica').fontSize(8.5);
-        const meta = `Exam: ${data.examTypeName}    Term: ${data.termName}    Class: ${data.className}    Max marks: ${data.maxMarks}`;
+        const meta = `Exam: ${data.examTypeName}    Term: ${data.termName}    ${(0, class_display_1.formatStudentClassLabel)(data.className)}    Max marks: ${data.maxMarks}`;
         doc.text(meta, margin, y, { width: contentW });
         y += 18;
         doc.roundedRect(margin, y, contentW, 68, 8).stroke(MS.border);
@@ -2019,6 +2013,132 @@ async function generateReconciliationPdf(data) {
                 doc.text(`Note: ${row.discrepancies.join(' · ')}`, margin + 4, y, { width: tableW - 8 });
                 y += noteH;
             }
+        }
+        drawGeneratedFooter(doc, new Date(data.generatedAt), margin, contentW);
+        doc.end();
+    });
+}
+async function generateGeneralLedgerPdf(data) {
+    return new Promise((resolve, reject) => {
+        const doc = new pdfkit_1.default({ size: 'A4', layout: 'landscape', margin: 36 });
+        const chunks = [];
+        doc.on('data', (c) => chunks.push(c));
+        doc.on('end', () => resolve(Buffer.concat(chunks)));
+        doc.on('error', reject);
+        const pageW = doc.page.width;
+        const margin = 36;
+        const contentW = pageW - margin * 2;
+        const branding = {
+            schoolName: data.schoolName,
+            tagline: data.tagline,
+            logoUrl: data.logoUrl,
+        };
+        const periodLabel = (() => {
+            const from = String(data.dateFrom || '').trim();
+            const to = String(data.dateTo || '').trim();
+            if (from && to)
+                return `${from} to ${to}`;
+            if (from)
+                return `From ${from}`;
+            if (to)
+                return `Through ${to}`;
+            return 'All dates';
+        })();
+        const refLabel = (ref, reversed) => {
+            const map = {
+                FEE_PAYMENT: 'Fee payment',
+                SALARY: 'Salary',
+                EXPENSE: 'Expense',
+                REFUND: 'Refund',
+                MANUAL_ADJUSTMENT: 'Manual adj.',
+                OTHER: 'Other',
+            };
+            const base = map[ref] || ref.replace(/_/g, ' ').toLowerCase();
+            return reversed ? `${base} (reversed)` : base;
+        };
+        let y = drawBillingDocHeader(doc, branding, pageW, margin, 'General Ledger Report');
+        doc.fillColor(BILL.muted).font('Helvetica').fontSize(9);
+        doc.text(`Period: ${periodLabel}`, margin, y, { width: contentW });
+        y += 14;
+        doc.text(`Debits: ${formatMoney(data.summary.totalDebits)}   Credits: ${formatMoney(data.summary.totalCredits)}   Variance: ${formatMoney(data.summary.variance)}`, margin, y, { width: contentW });
+        y += 20;
+        const cols = [
+            { label: 'Date', w: 68 },
+            { label: 'Account', w: 128 },
+            { label: 'Description', w: 262 },
+            { label: 'Debit', w: 68, align: 'right' },
+            { label: 'Credit', w: 68, align: 'right' },
+            { label: 'Balance', w: 72, align: 'right' },
+            { label: 'Reference', w: 104 },
+        ];
+        const tableW = cols.reduce((s, c) => s + c.w, 0);
+        const pageBottom = () => doc.page.height - margin - 28;
+        const cellPadX = 5;
+        const cellPadY = 4;
+        const fontSize = 7.5;
+        const drawTableHeader = () => {
+            let x = margin;
+            doc.save();
+            doc.rect(margin, y, tableW, 18).fill('#f0f4ff');
+            doc.strokeColor(BILL.border).lineWidth(0.5).rect(margin, y, tableW, 18).stroke();
+            doc.restore();
+            doc.fillColor('#0f172a').font('Helvetica-Bold').fontSize(fontSize);
+            for (const col of cols) {
+                doc.text(col.label, x + cellPadX, y + 5, {
+                    width: col.w - cellPadX * 2,
+                    align: col.align || 'left',
+                    lineBreak: false,
+                });
+                x += col.w;
+            }
+            y += 20;
+        };
+        drawTableHeader();
+        let rowIndex = 0;
+        for (const row of data.rows) {
+            const values = [
+                row.transactionDate,
+                row.accountLabel,
+                row.description,
+                row.debitAmount > 0 ? formatMoney(row.debitAmount) : '-',
+                row.creditAmount > 0 ? formatMoney(row.creditAmount) : '-',
+                formatMoney(row.runningBalance),
+                refLabel(row.referenceType, row.isReversed),
+            ];
+            doc.font('Helvetica').fontSize(fontSize);
+            let contentH = 0;
+            for (let i = 0; i < cols.length; i++) {
+                const cellHeight = doc.heightOfString(String(values[i]), {
+                    width: Math.max(8, cols[i].w - cellPadX * 2),
+                    align: cols[i].align || 'left',
+                });
+                contentH = Math.max(contentH, cellHeight);
+            }
+            const rowH = Math.max(16, Math.ceil(contentH) + cellPadY * 2);
+            if (y + rowH > pageBottom()) {
+                doc.addPage({ size: 'A4', layout: 'landscape', margin });
+                y = margin;
+                drawTableHeader();
+            }
+            const rowY = y;
+            if (rowIndex % 2 === 1) {
+                doc.save();
+                doc.rect(margin, rowY, tableW, rowH).fill(BILL.rowAlt);
+                doc.restore();
+            }
+            doc.strokeColor(BILL.border).lineWidth(0.35);
+            doc.moveTo(margin, rowY + rowH).lineTo(margin + tableW, rowY + rowH).stroke();
+            let x = margin;
+            doc.fillColor(BILL.ink).font('Helvetica').fontSize(fontSize);
+            for (let i = 0; i < cols.length; i++) {
+                doc.text(String(values[i]), x + cellPadX, rowY + cellPadY, {
+                    width: cols[i].w - cellPadX * 2,
+                    align: cols[i].align || 'left',
+                });
+                x += cols[i].w;
+            }
+            y += rowH;
+            rowIndex += 1;
         }
         drawGeneratedFooter(doc, new Date(data.generatedAt), margin, contentW);
         doc.end();

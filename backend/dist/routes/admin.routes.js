@@ -22,6 +22,9 @@ const integrations_service_1 = require("../services/integrations.service");
 const integrations_config_1 = require("../types/integrations-config");
 const whatsapp_service_1 = require("../services/whatsapp.service");
 const term_balance_service_1 = require("../services/term-balance.service");
+const teacher_load_service_1 = require("../services/teacher-load.service");
+const school_branding_service_1 = require("../services/school-branding.service");
+const teacher_load_pdf_1 = require("../utils/teacher-load.pdf");
 const permissions_routes_1 = __importDefault(require("./permissions.routes"));
 const multer_1 = __importDefault(require("multer"));
 const path_1 = __importDefault(require("path"));
@@ -107,6 +110,9 @@ router.patch('/settings', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (
             grade: String(b.grade).trim(),
             label: b.label?.trim() || undefined,
             minPercent: Number(b.minPercent),
+            points: b.points !== undefined && b.points !== null && b.points !== ''
+                ? Number(b.points)
+                : undefined,
         }));
         (0, grade_service_1.invalidateGradeBoundariesCache)();
     }
@@ -222,6 +228,19 @@ router.post('/school-years', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), asyn
 });
 router.post('/terms', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (req, res) => {
     const repo = data_source_1.AppDataSource.getRepository(entities_1.Term);
+    if (req.body.schoolYearId && req.body.termNumber != null) {
+        const duplicate = await repo.findOne({
+            where: {
+                schoolYearId: req.body.schoolYearId,
+                termNumber: Number(req.body.termNumber),
+            },
+        });
+        if (duplicate) {
+            return res.status(409).json({
+                message: `Term ${req.body.termNumber} already exists for this school year. Edit the existing term instead of creating another.`,
+            });
+        }
+    }
     if (req.body.isCurrent) {
         await repo.update({ isCurrent: true }, { isCurrent: false });
     }
@@ -252,6 +271,21 @@ router.patch('/terms/:id', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async 
     const term = await repo.findOne({ where: { id: req.params.id } });
     if (!term)
         return res.status(404).json({ message: 'Term not found' });
+    const nextTermNumber = req.body.termNumber != null ? Number(req.body.termNumber) : term.termNumber;
+    const nextSchoolYearId = req.body.schoolYearId || term.schoolYearId;
+    if (nextTermNumber !== term.termNumber || nextSchoolYearId !== term.schoolYearId) {
+        const duplicate = await repo.findOne({
+            where: {
+                schoolYearId: nextSchoolYearId,
+                termNumber: nextTermNumber,
+            },
+        });
+        if (duplicate && duplicate.id !== term.id) {
+            return res.status(409).json({
+                message: `Term ${nextTermNumber} already exists for this school year.`,
+            });
+        }
+    }
     if (req.body.isCurrent) {
         await repo.update({ isCurrent: true }, { isCurrent: false });
     }
@@ -314,9 +348,35 @@ router.get('/classes', async (_req, res) => {
         order: { name: 'ASC' },
     }));
 });
+async function resolveClassTeacherAssignment(repo, classId, classTeacherId) {
+    if (classTeacherId === undefined)
+        return {};
+    const teacherId = classTeacherId ? String(classTeacherId).trim() : '';
+    if (!teacherId)
+        return { classTeacherId: undefined };
+    const staff = await data_source_1.AppDataSource.getRepository(entities_1.Staff).findOne({ where: { id: teacherId } });
+    if (!staff)
+        return { error: 'Class teacher not found' };
+    const existing = await repo.findOne({ where: { classTeacherId: teacherId } });
+    if (existing && existing.id !== classId) {
+        return {
+            error: `This staff member is already the class teacher of ${existing.name}. Each class can have only one class teacher.`,
+        };
+    }
+    return { classTeacherId: teacherId };
+}
 router.post('/classes', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (req, res) => {
-    const cls = await data_source_1.AppDataSource.getRepository(entities_1.SchoolClass).save(data_source_1.AppDataSource.getRepository(entities_1.SchoolClass).create(req.body));
-    res.status(201).json(cls);
+    const repo = data_source_1.AppDataSource.getRepository(entities_1.SchoolClass);
+    const { classTeacherId, ...rest } = req.body;
+    const assignment = await resolveClassTeacherAssignment(repo, undefined, classTeacherId);
+    if (assignment.error)
+        return res.status(409).json({ message: assignment.error });
+    const cls = repo.create({
+        ...rest,
+        ...(assignment.classTeacherId !== undefined ? { classTeacherId: assignment.classTeacherId } : {}),
+    });
+    const saved = await repo.save(cls);
+    res.status(201).json(saved);
 });
 router.get('/subjects', async (_req, res) => {
     res.json(await data_source_1.AppDataSource.getRepository(entities_1.Subject).find({ order: { name: 'ASC' } }));
@@ -330,7 +390,7 @@ router.patch('/subjects/:id', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), asy
     const subject = await repo.findOne({ where: { id: req.params.id } });
     if (!subject)
         return res.status(404).json({ message: 'Subject not found' });
-    const { code, name, description } = req.body;
+    const { code, name, description, short } = req.body;
     if (code !== undefined) {
         const normalized = String(code).trim().toUpperCase();
         if (!normalized)
@@ -349,6 +409,13 @@ router.patch('/subjects/:id', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), asy
     }
     if (description !== undefined)
         subject.description = description?.trim() || undefined;
+    if (short !== undefined) {
+        const trimmed = short == null ? '' : String(short).trim();
+        if (trimmed.length > 16) {
+            return res.status(400).json({ message: 'Subject short label must be 16 characters or fewer.' });
+        }
+        subject.short = trimmed || null;
+    }
     res.json(await repo.save(subject));
 });
 router.get('/departments', async (_req, res) => {
@@ -419,8 +486,19 @@ router.get('/class-subjects', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enum
     res.json(await qb.getMany());
 });
 router.post('/class-subjects', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (req, res) => {
-    const cs = await data_source_1.AppDataSource.getRepository(entities_1.ClassSubject).save(data_source_1.AppDataSource.getRepository(entities_1.ClassSubject).create(req.body));
-    res.status(201).json(cs);
+    try {
+        const repo = data_source_1.AppDataSource.getRepository(entities_1.ClassSubject);
+        const entity = repo.create(req.body);
+        const cs = await repo.save(entity);
+        res.status(201).json(cs);
+    }
+    catch (err) {
+        const e = err;
+        if (e?.code === '23505') {
+            return res.status(409).json({ message: 'This subject is already allocated to the selected class.' });
+        }
+        res.status(400).json({ message: e?.message || 'Failed to create class subject assignment.' });
+    }
 });
 router.patch('/class-subjects/:id', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (req, res) => {
     const repo = data_source_1.AppDataSource.getRepository(entities_1.ClassSubject);
@@ -453,8 +531,12 @@ router.patch('/classes/:id', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), asyn
         cls.formId = formId;
     if (capacity !== undefined)
         cls.capacity = Number(capacity) || cls.capacity;
-    if (classTeacherId !== undefined)
-        cls.classTeacherId = classTeacherId || undefined;
+    if (classTeacherId !== undefined) {
+        const assignment = await resolveClassTeacherAssignment(repo, cls.id, classTeacherId);
+        if (assignment.error)
+            return res.status(409).json({ message: assignment.error });
+        cls.classTeacherId = assignment.classTeacherId;
+    }
     const saved = await repo.save(cls);
     const full = await repo.findOne({
         where: { id: saved.id },
@@ -671,6 +753,84 @@ router.get('/staff/next-employee-id', (0, auth_1.authorize)(enums_1.UserRole.ADM
     const employeeNumber = await (0, helpers_1.generateEmployeeNumber)();
     res.json({ employeeNumber });
 });
+router.get('/staff/teacher-load/pdf', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), async (req, res) => {
+    try {
+        const preview = String(req.query.preview || '').toLowerCase() === 'true';
+        const report = await (0, teacher_load_service_1.getTeacherLoadReport)();
+        const branding = await (0, school_branding_service_1.loadSchoolBranding)();
+        const pdf = await (0, teacher_load_pdf_1.generateTeacherLoadPdf)({
+            schoolName: branding.schoolName || 'School Pro Academy',
+            tagline: branding.tagline,
+            logoUrl: branding.logoUrl,
+            generatedAt: new Date(),
+            summary: {
+                teacherCount: report.summary.teacherCount,
+                teachersWithAssignments: report.summary.teachersWithAssignments,
+                totalPeriods: report.summary.totalPeriods,
+            },
+            rows: (0, teacher_load_pdf_1.mapTeacherLoadReportToPdfRows)(report.teachers),
+        });
+        const filename = 'teacher-load-report.pdf';
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `${preview ? 'inline' : 'attachment'}; filename="${filename}"`);
+        res.send(pdf);
+    }
+    catch (err) {
+        const e = err;
+        res.status(500).json({ message: e.message || 'Failed to generate teacher load PDF.' });
+    }
+});
+router.get('/staff/teacher-load', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), async (_req, res) => {
+    try {
+        res.json(await (0, teacher_load_service_1.getTeacherLoadReport)());
+    }
+    catch (err) {
+        const e = err;
+        res.status(500).json({ message: e.message || 'Failed to load teacher workload report.' });
+    }
+});
+router.post('/staff/teacher-load', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), async (req, res) => {
+    try {
+        const { teacherId, classId, subjectId, weeklyPeriods, lessonLength, forceReassign } = req.body || {};
+        if (!teacherId || !classId || !subjectId) {
+            return res.status(400).json({ message: 'teacherId, classId, and subjectId are required.' });
+        }
+        if (!weeklyPeriods || Number(weeklyPeriods) < 1) {
+            return res.status(400).json({ message: 'weeklyPeriods must be at least 1.' });
+        }
+        const result = await (0, teacher_load_service_1.addTeacherLoadAssignment)({
+            teacherId,
+            classId,
+            subjectId,
+            weeklyPeriods: Number(weeklyPeriods),
+            lessonLength,
+            forceReassign: Boolean(forceReassign),
+        });
+        res.status(201).json(result.report);
+    }
+    catch (err) {
+        const e = err;
+        res.status(e.statusCode || 400).json({ message: e.message || 'Failed to add teacher assignment.' });
+    }
+});
+router.delete('/staff/teacher-load', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), async (req, res) => {
+    try {
+        const classSubjectId = String(req.query.classSubjectId || '').trim();
+        if (classSubjectId) {
+            return res.json(await (0, teacher_load_service_1.removeTeacherLoadAssignment)(classSubjectId));
+        }
+        const teacherId = String(req.query.teacherId || '').trim();
+        const classId = String(req.query.classId || '').trim();
+        if (!teacherId || !classId) {
+            return res.status(400).json({ message: 'classSubjectId or teacherId and classId are required.' });
+        }
+        res.json(await (0, teacher_load_service_1.removeTeacherLoadClassAssignments)(teacherId, classId));
+    }
+    catch (err) {
+        const e = err;
+        res.status(400).json({ message: e.message || 'Failed to remove teacher assignment.' });
+    }
+});
 router.get('/staff', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), async (req, res) => {
     const { search, role, status } = req.query;
     const qb = data_source_1.AppDataSource.getRepository(entities_1.Staff).createQueryBuilder('s')
@@ -699,7 +859,7 @@ router.get('/staff/:id', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.U
     res.json(staff);
 });
 router.post('/staff', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (req, res) => {
-    const { email, password, firstName, lastName, phone, role = enums_1.UserRole.TEACHER, department, qualification, hireDate, employeeNumber: _ignored, } = req.body;
+    const { email, password, firstName, lastName, phone, role = enums_1.UserRole.TEACHER, department, qualification, hireDate, title, employeeNumber: _ignored, } = req.body;
     const userRepo = data_source_1.AppDataSource.getRepository(entities_1.User);
     const staffRepo = data_source_1.AppDataSource.getRepository(entities_1.Staff);
     const existing = await userRepo.findOne({ where: { email: email?.toLowerCase() } });
@@ -725,6 +885,7 @@ router.post('/staff', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (req,
     const staff = await staffRepo.save(staffRepo.create({
         userId: user.id,
         employeeNumber,
+        title: title ? String(title).trim() : null,
         department,
         qualification,
         hireDate: hireDate || (0, helpers_1.today)(),
@@ -745,7 +906,7 @@ router.patch('/staff/:id', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async 
     });
     if (!staff)
         return res.status(404).json({ message: 'Staff member not found' });
-    const { email, password, firstName, lastName, phone, role, department, qualification, hireDate, employeeNumber: _ignored, isActive, } = req.body;
+    const { email, password, firstName, lastName, phone, role, department, qualification, hireDate, title, employeeNumber: _ignored, isActive, } = req.body;
     if (email && email.toLowerCase() !== staff.user.email) {
         const dup = await userRepo.findOne({ where: { email: email.toLowerCase() } });
         if (dup)
@@ -772,8 +933,12 @@ router.patch('/staff/:id', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async 
         staff.department = department;
     if (qualification !== undefined)
         staff.qualification = qualification;
-    if (hireDate !== undefined)
-        staff.hireDate = hireDate;
+    if (hireDate !== undefined) {
+        const trimmedHireDate = String(hireDate || '').trim();
+        staff.hireDate = trimmedHireDate || null;
+    }
+    if (title !== undefined)
+        staff.title = title ? String(title).trim() : null;
     if (isActive !== undefined) {
         staff.isActive = isActive;
         staff.user.isActive = isActive;

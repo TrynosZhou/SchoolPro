@@ -6,7 +6,7 @@ import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
 import { TEACHER_NAV_SECTIONS } from '../../core/config/teacher-nav';
 import { ApiService } from '../../core/services/api.service';
-import { classSelectLabel } from '../../core/utils/class-display';
+import { classSelectLabel, formatGenderLabel, formatStudentClassLabel } from '../../core/utils/class-display';
 import { Student } from '../../core/models';
 
 interface ClassOption {
@@ -291,6 +291,14 @@ export class AdminEnrollmentComponent implements OnInit {
     });
 
     return list;
+  }
+
+  studentClassLabel(className?: string | null): string {
+    return formatStudentClassLabel(className);
+  }
+
+  studentGenderLabel(gender?: string | null): string {
+    return formatGenderLabel(gender);
   }
 
   private showToast(type: 'success' | 'error', msg: string) {

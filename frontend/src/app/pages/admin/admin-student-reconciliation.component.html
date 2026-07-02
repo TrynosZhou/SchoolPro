@@ -183,7 +183,10 @@
                 <div>
                   <strong>{{ m.firstName }} {{ m.lastName }}</strong>
                   <code class="sid">{{ m.admissionNumber }}</code>
-                  <span class="class-meta">{{ m.formName || '—' }} {{ m.className || '' }}</span>
+                  <span class="class-meta">{{ classLabel(m) }}</span>
+                  @if (m.gender) {
+                    <span class="class-meta">{{ genderLabel(m.gender) }}</span>
+                  }
                 </div>
               </button>
             }

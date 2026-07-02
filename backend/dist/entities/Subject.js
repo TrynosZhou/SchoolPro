@@ -29,6 +29,10 @@ __decorate([
     __metadata("design:type", String)
 ], Subject.prototype, "name", void 0);
 __decorate([
+    (0, typeorm_1.Column)({ nullable: true, length: 16 }),
+    __metadata("design:type", String)
+], Subject.prototype, "short", void 0);
+__decorate([
     (0, typeorm_1.Column)({ nullable: true }),
     __metadata("design:type", String)
 ], Subject.prototype, "description", void 0);

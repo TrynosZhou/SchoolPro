@@ -1,0 +1,165 @@
+<app-portal-layout portalTitle="Admin Portal" pageTitle="Teacher Schedule" [navSections]="adminNav">
+  <div class="teacher-schedule-page">
+    <header class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">Timetable</p>
+        <h2>Teacher schedule</h2>
+        <p class="hero-sub">
+          View a teacher's full weekly timetable across all classes and subjects.
+          Spot gaps, overloads, and conflicts before allocating on
+          <a routerLink="/admin/timetable/generate">Generate Timetable</a>.
+        </p>
+        <div class="hero-actions">
+          <a routerLink="/admin/timetable/generate" class="secondary-action">← Generate Timetable</a>
+          <a routerLink="/admin/timetable/view" class="primary-action">View by Class →</a>
+        </div>
+      </div>
+      <div class="kpi-grid">
+        <article class="kpi accent">
+          <span class="kpi-icon">👩‍🏫</span>
+          <div>
+            <strong>{{ loadingStaff() ? '…' : staff().length }}</strong>
+            <span>Teachers</span>
+          </div>
+        </article>
+        <article class="kpi">
+          <span class="kpi-icon">📅</span>
+          <div>
+            <strong>{{ teacherId ? stats().slotCount : '—' }}</strong>
+            <span>{{ teacherId ? 'Weekly slots' : 'Select teacher' }}</span>
+          </div>
+        </article>
+        <article class="kpi">
+          <span class="kpi-icon">🏫</span>
+          <div>
+            <strong>{{ teacherId ? stats().classCount : '—' }}</strong>
+            <span>Classes taught</span>
+          </div>
+        </article>
+        <article class="kpi">
+          <span class="kpi-icon">📖</span>
+          <div>
+            <strong>{{ teacherId ? stats().subjectCount : '—' }}</strong>
+            <span>Subjects</span>
+          </div>
+        </article>
+      </div>
+    </header>
+
+    <section class="list-shell">
+      <div class="list-toolbar">
+        <div class="toolbar-head">
+          <h3>Select teacher</h3>
+          <p>Load the weekly grid for one teacher.</p>
+        </div>
+        <div class="picker-row">
+          <div class="field">
+            <label>Teacher</label>
+            <select [(ngModel)]="teacherId" name="teacherPick" (ngModelChange)="loadSchedule()">
+              <option value="">Select teacher</option>
+              @for (t of staff(); track t.id) {
+                <option [value]="t.id">
+                  {{ t.user ? t.user.firstName + ' ' + t.user.lastName : t.id }}
+                  @if (t.employeeNumber) { ({{ t.employeeNumber }}) }
+                </option>
+              }
+            </select>
+          </div>
+          <button type="button" class="btn-primary" (click)="loadSchedule()" [disabled]="!teacherId || loading()">
+            {{ loading() ? 'Loading…' : 'Refresh' }}
+          </button>
+        </div>
+      </div>
+    </section>
+
+    @if (teacherId && !loading() && !allocations().length) {
+      <div class="alert-banner">
+        <span>{{ selectedTeacherName() }} has no timetable allocations yet.</span>
+        <a routerLink="/admin/timetable/generate" class="link-btn">Allocate on Generate</a>
+      </div>
+    }
+
+    @if (teacherId) {
+      <section class="list-shell">
+        <div class="list-toolbar">
+          <div class="toolbar-head">
+            <h3>{{ selectedTeacherName() }}</h3>
+            <p>
+              {{ stats().slotCount }} slots · {{ stats().daysFilled }}/5 days ·
+              {{ stats().classCount }} classes · {{ stats().subjectCount }} subjects
+            </p>
+          </div>
+        </div>
+
+        @if (loading()) {
+          <div class="loading-panel">
+            <div class="spinner"></div>
+            <p>Loading teacher schedule…</p>
+          </div>
+        } @else if (!periods().length) {
+          <div class="empty-state">
+            <p>Configure lesson periods first.</p>
+            <a routerLink="/admin/timetable/configure-periods" class="btn-outline">Configure periods</a>
+          </div>
+        } @else {
+          <div class="timetable-sheet classic">
+            <h2 class="timetable-sheet-title">Teacher {{ selectedTeacherName() }}</h2>
+            <div class="grid-wrap classic-wrap">
+              <table class="timetable-grid classic">
+                <thead>
+                  <tr>
+                    <th class="corner" rowspan="2"></th>
+                    @for (p of periods(); track p.id; let pi = $index) {
+                      <th class="period-index" [class.period-break]="isBreakPeriod(p)">
+                        @if (isBreakPeriod(p)) {
+                          {{ breakPeriodLabel(p) }}
+                        } @else {
+                          {{ lessonPeriodNumber(periods(), pi) }}
+                        }
+                      </th>
+                    }
+                  </tr>
+                  <tr>
+                    @for (p of periods(); track p.id) {
+                      <th class="period-range" [class.period-break]="isBreakPeriod(p)">{{ formatPeriodRange(p) }}</th>
+                    }
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (d of days; track d.value) {
+                    <tr>
+                      <td class="day-col-classic">{{ dayGridLabel(d.value) }}</td>
+                      @for (p of periods(); track p.id) {
+                        <td class="slot-cell" [class.break-slot]="isBreakPeriod(p)">
+                          @if (isBreakPeriod(p)) {
+                            <div class="break-cell">{{ p.name }}</div>
+                          } @else {
+                            @if (allocationAt(d.value, p); as a) {
+                              <div class="lesson-cell teacher-lesson">
+                                <span class="lesson-corner tl">{{ subjectShortLabel(a) }}</span>
+                                <span class="lesson-corner tr">{{ classShort(a) }}</span>
+                                <span class="lesson-main">{{ classShort(a) }}</span>
+                              </div>
+                            }
+                          }
+                        </td>
+                      }
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          </div>
+        }
+      </section>
+    } @else if (!loadingStaff()) {
+      <section class="list-shell">
+        <div class="empty-state padded">
+          <span class="empty-icon">👩‍🏫</span>
+          <h3>Select a teacher</h3>
+          <p>Choose a teacher above to view their complete weekly teaching schedule.</p>
+        </div>
+      </section>
+    }
+  </div>
+</app-portal-layout>

@@ -6,6 +6,17 @@ import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
 import { ApiService } from '../../core/services/api.service';
 import { TimetablePeriod, TimetablePeriodsService } from '../../core/services/timetable-periods.service';
 import { classHeaderLabel, classHeaderLabelById } from '../../core/utils/class-display';
+import { buildTimetableTermVersionLabel } from '../../core/utils/timetable-term-label';
+import {
+  breakPeriodLabel,
+  dayGridLabel,
+  formatPeriodRange,
+  isBreakPeriod,
+  lessonPeriodNumber,
+  shortClassCode,
+  teacherInitials,
+  timetableSubjectShort,
+} from '../../core/utils/timetable-grid-display';
 
 interface ClassRow { id: string; name: string; form?: { name: string }; }
 interface TimetableEntry {
@@ -14,7 +25,7 @@ interface TimetableEntry {
   startTime: string;
   endTime: string;
   room?: string;
-  subject?: { name: string; code?: string };
+  subject?: { name: string; code?: string; short?: string | null };
   teacher?: { user?: { firstName: string; lastName: string } };
 }
 
@@ -42,6 +53,14 @@ export class AdminTimetableViewComponent implements OnInit {
   private route = inject(ActivatedRoute);
   readonly adminNav = ADMIN_NAV_SECTIONS;
   readonly days = DAYS;
+  readonly dayGridLabel = dayGridLabel;
+  readonly formatPeriodRange = formatPeriodRange;
+  readonly shortClassCode = shortClassCode;
+  readonly timetableSubjectShort = timetableSubjectShort;
+  readonly teacherInitials = teacherInitials;
+  readonly isBreakPeriod = isBreakPeriod;
+  readonly breakPeriodLabel = breakPeriodLabel;
+  readonly lessonPeriodNumber = lessonPeriodNumber;
 
   periods = signal<TimetablePeriod[]>([]);
   classes = signal<ClassRow[]>([]);
@@ -52,6 +71,7 @@ export class AdminTimetableViewComponent implements OnInit {
   dayFilter = signal<DayFilter>('all');
   entriesSearch = signal('');
   classSearch = signal('');
+  termVersionLabel = signal(buildTimetableTermVersionLabel());
 
   classId = '';
 
@@ -96,7 +116,8 @@ export class AdminTimetableViewComponent implements OnInit {
   });
 
   ngOnInit() {
-    this.periods.set(this.periodsSvc.loadLessons());
+    this.periods.set(this.periodsSvc.load());
+    this.loadTimetableContext();
     this.api.get<ClassRow[]>('/admin/classes').subscribe({
       next: (rows) => {
         this.classes.set(rows);
@@ -118,6 +139,19 @@ export class AdminTimetableViewComponent implements OnInit {
     this.entriesSearch.set('');
     this.dayFilter.set('all');
     this.loadTimetable();
+  }
+
+  private loadTimetableContext() {
+    this.api.get<{ termVersionLabel?: string }>('/timetable/context').subscribe({
+      next: (ctx) => {
+        if (ctx.termVersionLabel) {
+          this.termVersionLabel.set(ctx.termVersionLabel);
+        }
+      },
+      error: () => {
+        this.termVersionLabel.set(buildTimetableTermVersionLabel());
+      },
+    });
   }
 
   loadTimetable() {

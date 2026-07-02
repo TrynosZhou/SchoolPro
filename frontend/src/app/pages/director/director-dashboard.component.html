@@ -160,7 +160,7 @@
                     <strong>{{ d.firstName }} {{ d.lastName }}</strong>
                     <span class="sub">{{ d.admissionNumber }}</span>
                   </td>
-                  <td>{{ d.formName ? d.formName + ' ' : '' }}{{ d.className || '—' }}</td>
+                  <td>{{ classLabel(d) }}</td>
                   <td class="num owed">{{ '$' + (d.owed | number:'1.2-2') }}</td>
                 </tr>
               } @empty {
@@ -213,7 +213,7 @@
             <tbody>
               @for (c of data()?.classDebtSummary ?? []; track c.id) {
                 <tr>
-                  <td>{{ c.formName ? c.formName + ' ' : '' }}{{ c.name }}</td>
+                  <td>{{ formatStudentClassLabel(c.name) }}</td>
                   <td>{{ c.studentsOwing }}</td>
                   <td class="num owed">{{ '$' + (c.owed | number:'1.2-2') }}</td>
                 </tr>

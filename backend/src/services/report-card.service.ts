@@ -262,6 +262,27 @@ export async function computeFormPositionMap(
   return positionMap;
 }
 
+/** Apply form-wide rankings (by average mark across the stream) to loaded report cards. */
+export async function applyFormRankingsToReports(
+  reports: ReportCard[],
+  examTypeId: string,
+  termId: string,
+): Promise<void> {
+  if (!reports.length || !examTypeId || !termId) return;
+  const student = reports[0].student;
+  if (!student) return;
+  const formId = resolveFormId(student);
+  if (!formId) return;
+
+  const formPosMap = await computeFormPositionMap(examTypeId, termId, formId);
+  const { formTotal } = await getEnrollmentTotals(undefined, formId);
+  for (const report of reports) {
+    const pos = formPosMap.get(report.studentId);
+    if (pos != null) report.formPosition = pos;
+    if (formTotal > 0) report.formTotal = formTotal;
+  }
+}
+
 function attachRankingToRow(
   row: SubjectResultRow,
   studentId: string,
@@ -344,9 +365,9 @@ export async function getReportCardPdfMetrics(
   let formPosition = report.formPosition ?? undefined;
   let classPosition = report.classPosition ?? undefined;
 
-  if (report.examTypeId && formId && !formPosition) {
+  if (report.examTypeId && formId) {
     const formPosMap = await computeFormPositionMap(report.examTypeId, report.termId, formId);
-    formPosition = formPosMap.get(report.studentId);
+    formPosition = formPosMap.get(report.studentId) ?? formPosition;
   }
 
   const attendance = await getStudentTermAttendance(

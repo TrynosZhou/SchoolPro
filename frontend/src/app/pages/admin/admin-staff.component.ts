@@ -4,8 +4,12 @@ import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
 import { ApiService } from '../../core/services/api.service';
 
-type Tab = 'directory' | 'attendance';
+import { classHeaderLabel } from '../../core/utils/class-display';
+import { formatTeacherTimetableName, TEACHER_TITLE_OPTIONS } from '../../core/utils/teacher-display';
+
+type Tab = 'directory' | 'attendance' | 'teacherLoad';
 type StaffRole = 'teacher' | 'admin' | 'principal';
+type LessonLength = 'single' | 'double' | 'triple';
 type AttendanceStatus = 'present' | 'absent' | 'late' | 'excused';
 type ViewMode = 'table' | 'cards';
 type SortKey = 'name-asc' | 'name-desc' | 'hire-desc' | 'hire-asc' | 'id-asc';
@@ -24,6 +28,7 @@ export interface StaffMember {
   id: string;
   employeeNumber: string;
   userId: string;
+  title?: string | null;
   department?: string;
   qualification?: string;
   hireDate?: string;
@@ -41,6 +46,83 @@ interface StaffAttendanceRow {
   staff?: StaffMember;
 }
 
+interface TeacherLoadSubjectRow {
+  classSubjectId: string;
+  subjectId: string;
+  subjectName: string;
+  subjectCode: string | null;
+  weeklyPeriods: number;
+  lessonLength: LessonLength;
+  periods: number;
+  timetablePeriods: number;
+}
+
+interface TeacherLoadClassGroup {
+  classId: string;
+  className: string;
+  subjects: TeacherLoadSubjectRow[];
+  classLoad: number;
+}
+
+interface TeacherLoadEntry {
+  teacherId: string;
+  employeeNumber: string;
+  firstName: string;
+  lastName: string;
+  classes: TeacherLoadClassGroup[];
+  totalLoad: number;
+}
+
+interface TeacherLoadReport {
+  teachers: TeacherLoadEntry[];
+  summary: {
+    teacherCount: number;
+    teachersWithAssignments: number;
+    teachersWithTimetableLoad: number;
+    totalPeriods: number;
+  };
+}
+
+interface TeacherLoadGridRow {
+  teacherId: string;
+  employeeNumber: string;
+  teacherName: string;
+  classSubjectId: string;
+  classId: string;
+  classLabel: string;
+  subjectId: string;
+  subjectLabel: string;
+  weeklyPeriods: number;
+  lessonLength: LessonLength;
+  periods: number;
+  totalLoad: number;
+  assignedClassLabels: string[];
+  isFirstRow: boolean;
+  rowSpan: number;
+  hasAssignment: boolean;
+}
+
+interface LoadClassOption {
+  id: string;
+  name: string;
+  form?: { name: string };
+}
+
+interface LoadSubjectOption {
+  id: string;
+  name: string;
+  code?: string;
+}
+
+interface DepartmentRow {
+  id: string;
+  code: string;
+  name: string;
+  description?: string;
+  isActive: boolean;
+  sortOrder: number;
+}
+
 @Component({
   selector: 'app-admin-staff',
   standalone: true,
@@ -52,6 +134,7 @@ export class AdminStaffComponent implements OnInit {
   private api = inject(ApiService);
 
   readonly adminNav = ADMIN_NAV_SECTIONS;
+  readonly teacherTitleOptions = TEACHER_TITLE_OPTIONS;
   readonly attendanceStatuses: AttendanceStatus[] = ['present', 'late', 'absent', 'excused'];
   readonly sortOptions: { value: SortKey; label: string }[] = [
     { value: 'name-asc', label: 'Name A–Z' },
@@ -63,6 +146,7 @@ export class AdminStaffComponent implements OnInit {
 
   activeTab = signal<Tab>('directory');
   staff = signal<StaffMember[]>([]);
+  departmentCatalog = signal<DepartmentRow[]>([]);
   loading = signal(true);
   refreshing = signal(false);
   submitting = signal(false);
@@ -86,7 +170,34 @@ export class AdminStaffComponent implements OnInit {
   attendanceSearch = signal('');
   showInitialPassword = signal(false);
 
+  teacherLoadReport = signal<TeacherLoadReport | null>(null);
+  teacherLoadLoading = signal(false);
+  teacherLoadSearch = signal('');
+  loadClasses = signal<LoadClassOption[]>([]);
+  loadSubjects = signal<LoadSubjectOption[]>([]);
+  loadModalOpen = signal(false);
+  loadRemoveTarget = signal<TeacherLoadGridRow | null>(null);
+  loadReassignOpen = signal(false);
+  loadConflictMessage = signal('');
+  teacherLoadPdfLoading = signal(false);
+
+  readonly lessonLengthOptions: { value: LessonLength; label: string; multiplier: number }[] = [
+    { value: 'single', label: 'Single', multiplier: 1 },
+    { value: 'double', label: 'Double', multiplier: 2 },
+    { value: 'triple', label: 'Triple', multiplier: 3 },
+  ];
+
+  loadForm = {
+    teacherId: '',
+    teacherName: '',
+    classId: '',
+    subjectId: '',
+    weeklyPeriods: 1,
+    lessonLength: 'single' as LessonLength,
+  };
+
   newStaff = {
+    title: '' as string,
     firstName: '',
     lastName: '',
     email: '',
@@ -99,6 +210,7 @@ export class AdminStaffComponent implements OnInit {
   };
 
   editForm = {
+    title: '' as string,
     firstName: '',
     lastName: '',
     email: '',
@@ -110,14 +222,9 @@ export class AdminStaffComponent implements OnInit {
     password: '',
   };
 
-  departments = computed(() => {
-    const set = new Set<string>();
-    for (const s of this.staff()) {
-      const d = s.department?.trim();
-      if (d) set.add(d);
-    }
-    return [...set].sort((a, b) => a.localeCompare(b));
-  });
+  activeDepartments = computed(() =>
+    this.departmentCatalog().filter((d) => d.isActive),
+  );
 
   filteredStaff = computed(() => {
     const q = this.search().toLowerCase().trim();
@@ -196,8 +303,97 @@ export class AdminStaffComponent implements OnInit {
     return { ...counts, total, marked: total };
   });
 
+  teacherLoadSummary = computed(() => {
+    return (
+      this.teacherLoadReport()?.summary ?? {
+        teacherCount: 0,
+        teachersWithAssignments: 0,
+        teachersWithTimetableLoad: 0,
+        totalPeriods: 0,
+      }
+    );
+  });
+
+  teacherLoadGridRows = computed((): TeacherLoadGridRow[] => {
+    const q = this.teacherLoadSearch().trim().toLowerCase();
+    const teachers = this.teacherLoadReport()?.teachers ?? [];
+    const rows: TeacherLoadGridRow[] = [];
+
+    for (const teacher of teachers) {
+      const teacherName = `${teacher.firstName} ${teacher.lastName}`.trim();
+      const haystack = `${teacherName} ${teacher.employeeNumber}`.toLowerCase();
+      const assignedClassLabels = teacher.classes
+        .map((cg) => (cg.className ? classHeaderLabel({ name: cg.className }) : ''))
+        .filter(Boolean);
+
+      const assignmentRows: Omit<TeacherLoadGridRow, 'isFirstRow' | 'rowSpan'>[] = [];
+
+      if (!teacher.classes.length) {
+        assignmentRows.push({
+          teacherId: teacher.teacherId,
+          employeeNumber: teacher.employeeNumber,
+          teacherName,
+          classSubjectId: '',
+          classId: '',
+          classLabel: '—',
+          subjectId: '',
+          subjectLabel: '—',
+          weeklyPeriods: 0,
+          lessonLength: 'single' as LessonLength,
+          periods: 0,
+          totalLoad: teacher.totalLoad,
+          assignedClassLabels: [],
+          hasAssignment: false,
+        });
+      } else {
+        for (const cg of teacher.classes) {
+          const classLabel = cg.className ? classHeaderLabel({ name: cg.className }) : '—';
+          for (const sub of cg.subjects) {
+            assignmentRows.push({
+              teacherId: teacher.teacherId,
+              employeeNumber: teacher.employeeNumber,
+              teacherName,
+              classSubjectId: sub.classSubjectId,
+              classId: cg.classId,
+              classLabel,
+              subjectId: sub.subjectId,
+              subjectLabel: sub.subjectCode ? `${sub.subjectName} (${sub.subjectCode})` : sub.subjectName,
+              weeklyPeriods: sub.weeklyPeriods,
+              lessonLength: sub.lessonLength || 'single',
+              periods: sub.periods,
+              totalLoad: teacher.totalLoad,
+              assignedClassLabels,
+              hasAssignment: true,
+            });
+          }
+        }
+      }
+
+      const visibleRows = assignmentRows.filter((row) => {
+        if (!q) return true;
+        if (haystack.includes(q)) return true;
+        const classes = row.assignedClassLabels.join(' ').toLowerCase();
+        return `${classes} ${row.classLabel} ${row.subjectLabel}`.toLowerCase().includes(q);
+      });
+
+      if (!visibleRows.length) continue;
+
+      visibleRows.forEach((row, index) => {
+        rows.push({
+          ...row,
+          isFirstRow: index === 0,
+          rowSpan: visibleRows.length,
+        });
+      });
+    }
+
+    return rows;
+  });
+
   ngOnInit() {
     this.loadStaff();
+    this.loadDepartments();
+    this.loadTeacherLoad(true);
   }
 
   setTab(tab: Tab) {
@@ -206,6 +402,10 @@ export class AdminStaffComponent implements OnInit {
     if (tab === 'attendance') {
       this.initAttendanceMarks();
     }
+    if (tab === 'teacherLoad') {
+      this.loadTeacherLoad();
+      this.loadTeacherLoadCatalog();
+    }
   }
 
   openRegister() {
@@ -213,6 +413,7 @@ export class AdminStaffComponent implements OnInit {
     this.profileStaff.set(null);
     this.resetNewForm();
     this.registerDrawerOpen.set(true);
+    this.loadDepartments();
     this.fetchNextEmployeeId();
   }
 
@@ -245,8 +446,222 @@ export class AdminStaffComponent implements OnInit {
     });
   }
 
+  loadDepartments() {
+    this.api.get<DepartmentRow[]>('/admin/departments').subscribe({
+      next: (list) => this.departmentCatalog.set(list),
+      error: () => this.departmentCatalog.set([]),
+    });
+  }
+
+  isKnownDepartment(name: string): boolean {
+    const trimmed = String(name || '').trim();
+    if (!trimmed) return true;
+    return this.departmentCatalog().some((d) => d.name === trimmed);
+  }
+
   refreshList() {
     this.loadStaff(true);
+    this.loadTeacherLoad(true);
+  }
+
+  loadTeacherLoad(silent = false) {
+    if (!silent) this.teacherLoadLoading.set(true);
+    this.api.get<TeacherLoadReport>('/admin/staff/teacher-load').subscribe({
+      next: (report) => {
+        this.teacherLoadReport.set(report);
+        this.teacherLoadLoading.set(false);
+      },
+      error: () => {
+        this.teacherLoadReport.set(null);
+        this.teacherLoadLoading.set(false);
+        this.showToast('error', 'Failed to load teacher workload');
+      },
+    });
+  }
+
+  loadTeacherLoadCatalog() {
+    this.api.get<LoadClassOption[]>('/admin/classes').subscribe({
+      next: (rows) => this.loadClasses.set(rows),
+      error: () => this.loadClasses.set([]),
+    });
+    this.api.get<LoadSubjectOption[]>('/admin/subjects').subscribe({
+      next: (rows) => this.loadSubjects.set(rows),
+      error: () => this.loadSubjects.set([]),
+    });
+  }
+
+  openAddLoadModal(row: TeacherLoadGridRow) {
+    this.loadForm = {
+      teacherId: row.teacherId,
+      teacherName: row.teacherName,
+      classId: row.hasAssignment ? row.classId : '',
+      subjectId: row.hasAssignment ? row.subjectId : '',
+      weeklyPeriods: row.hasAssignment && row.weeklyPeriods > 0 ? row.weeklyPeriods : 1,
+      lessonLength: row.hasAssignment ? row.lessonLength : 'single',
+    };
+    if (!this.loadClasses().length || !this.loadSubjects().length) {
+      this.loadTeacherLoadCatalog();
+    }
+    this.loadModalOpen.set(true);
+  }
+
+  closeAddLoadModal() {
+    this.loadModalOpen.set(false);
+    this.loadReassignOpen.set(false);
+    this.loadConflictMessage.set('');
+  }
+
+  saveLoadAssignment(forceReassign = false) {
+    if (!this.loadForm.teacherId || !this.loadForm.classId || !this.loadForm.subjectId) {
+      this.showToast('error', 'Select class and subject.');
+      return;
+    }
+    if (!this.loadForm.weeklyPeriods || this.loadForm.weeklyPeriods < 1) {
+      this.showToast('error', 'Enter at least 1 period per week.');
+      return;
+    }
+    this.submitting.set(true);
+    this.api
+      .post<TeacherLoadReport>('/admin/staff/teacher-load', {
+        teacherId: this.loadForm.teacherId,
+        classId: this.loadForm.classId,
+        subjectId: this.loadForm.subjectId,
+        weeklyPeriods: this.loadForm.weeklyPeriods,
+        lessonLength: this.loadForm.lessonLength,
+        forceReassign,
+      })
+      .subscribe({
+        next: (report) => {
+          this.teacherLoadReport.set(report);
+          this.submitting.set(false);
+          this.loadModalOpen.set(false);
+          this.loadReassignOpen.set(false);
+          this.loadConflictMessage.set('');
+          this.showToast('success', forceReassign ? 'Assignment reassigned.' : 'Lesson assignment added.');
+        },
+        error: (e) => {
+          this.submitting.set(false);
+          const msg = e.error?.message || 'Failed to add assignment';
+          if (e.status === 409 && !forceReassign) {
+            this.loadConflictMessage.set(msg);
+            this.loadReassignOpen.set(true);
+            return;
+          }
+          this.showToast('error', msg);
+        },
+      });
+  }
+
+  cancelReassignLoad() {
+    this.loadReassignOpen.set(false);
+    this.loadConflictMessage.set('');
+  }
+
+  confirmReassignLoad() {
+    this.saveLoadAssignment(true);
+  }
+
+  previewTeacherLoadPdf() {
+    this.exportTeacherLoadPdf(true);
+  }
+
+  downloadTeacherLoadPdf() {
+    this.exportTeacherLoadPdf(false);
+  }
+
+  private exportTeacherLoadPdf(preview: boolean) {
+    this.teacherLoadPdfLoading.set(true);
+    const params: Record<string, string> = {};
+    if (preview) params['preview'] = 'true';
+
+    this.api.getBlob('/admin/staff/teacher-load/pdf', params).subscribe({
+      next: (blob) => {
+        this.teacherLoadPdfLoading.set(false);
+        if (blob.type && !blob.type.includes('pdf')) {
+          this.showToast('error', 'Server did not return a PDF file.');
+          return;
+        }
+        const url = URL.createObjectURL(blob);
+        if (preview) {
+          window.open(url, '_blank', 'noopener,noreferrer');
+          setTimeout(() => URL.revokeObjectURL(url), 90_000);
+          return;
+        }
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'teacher-load-report.pdf';
+        a.click();
+        URL.revokeObjectURL(url);
+      },
+      error: (e) => {
+        this.teacherLoadPdfLoading.set(false);
+        this.showToast('error', e.error?.message || 'Failed to generate teacher load PDF.');
+      },
+    });
+  }
+
+  requestRemoveLoadRow(row: TeacherLoadGridRow) {
+    if (!row.hasAssignment) return;
+    this.loadRemoveTarget.set(row);
+  }
+
+  cancelRemoveLoadRow() {
+    this.loadRemoveTarget.set(null);
+  }
+
+  confirmRemoveLoadRow() {
+    const row = this.loadRemoveTarget();
+    if (!row?.hasAssignment || !row.classSubjectId) return;
+    this.submitting.set(true);
+    this.api
+      .delete<TeacherLoadReport>('/admin/staff/teacher-load', {
+        classSubjectId: row.classSubjectId,
+      })
+      .subscribe({
+        next: (report) => {
+          this.teacherLoadReport.set(report);
+          this.loadRemoveTarget.set(null);
+          this.submitting.set(false);
+          this.showToast('success', 'Assignment removed from teacher.');
+        },
+        error: (e) => {
+          this.submitting.set(false);
+          this.showToast('error', e.error?.message || 'Failed to remove assignment');
+        },
+      });
+  }
+
+  loadClassLabel(classId: string): string {
+    const c = this.loadClasses().find((x) => x.id === classId);
+    return c ? classHeaderLabel(c) : '';
+  }
+
+  loadSubjectLabel(subjectId: string): string {
+    const s = this.loadSubjects().find((x) => x.id === subjectId);
+    if (!s) return '';
+    return s.code ? `${s.name} (${s.code})` : s.name;
+  }
+
+  lessonLengthMultiplier(length: LessonLength): number {
+    return this.lessonLengthOptions.find((o) => o.value === length)?.multiplier ?? 1;
+  }
+
+  loadFormEffectivePeriods(): number {
+    const count = Math.max(0, Number(this.loadForm.weeklyPeriods) || 0);
+    return count * this.lessonLengthMultiplier(this.loadForm.lessonLength);
+  }
+
+  formatLoadPeriods(row: Pick<TeacherLoadGridRow, 'weeklyPeriods' | 'lessonLength' | 'periods'>): string {
+    if (!row.periods) return '0';
+    const lengthLabel = this.lessonLengthOptions.find((o) => o.value === row.lessonLength)?.label ?? 'Single';
+    if (row.lessonLength === 'single') {
+      return `${row.weeklyPeriods || row.periods}`;
+    }
+    return `${row.weeklyPeriods} × ${lengthLabel} (${row.periods})`;
+  }
+
+  classOptionLabel(c: LoadClassOption): string {
+    return classHeaderLabel(c);
   }
 
   clearFilters() {
@@ -331,7 +746,9 @@ export class AdminStaffComponent implements OnInit {
     this.registerDrawerOpen.set(false);
     this.profileStaff.set(null);
     this.editingStaff.set(s);
+    this.loadDepartments();
     this.editForm = {
+      title: s.title || '',
       firstName: s.user.firstName,
       lastName: s.user.lastName,
       email: s.user.email,
@@ -493,11 +910,30 @@ export class AdminStaffComponent implements OnInit {
   }
 
   fullName(s: StaffMember): string {
-    return `${s.user.firstName} ${s.user.lastName}`;
+    return formatTeacherTimetableName({
+      title: s.title,
+      firstName: s.user.firstName,
+      lastName: s.user.lastName,
+    });
+  }
+
+  directoryName(s: StaffMember): string {
+    const title = String(s.title || '').trim();
+    const base = `${s.user.firstName} ${s.user.lastName}`.trim();
+    return title ? `${title} ${base}` : base;
   }
 
   initials(s: StaffMember): string {
     return `${(s.user.firstName || '').charAt(0)}${(s.user.lastName || '').charAt(0)}`.toUpperCase() || '?';
+  }
+
+  initialsFromName(name: string): string {
+    return name
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((p) => p[0]?.toUpperCase() || '')
+      .join('') || '?';
   }
 
   roleLabel(role: string): string {
@@ -521,6 +957,7 @@ export class AdminStaffComponent implements OnInit {
 
   resetNewForm() {
     this.newStaff = {
+      title: '',
       firstName: '',
       lastName: '',
       email: '',

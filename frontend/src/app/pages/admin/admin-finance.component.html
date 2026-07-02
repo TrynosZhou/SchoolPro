@@ -158,7 +158,7 @@
                           <strong>{{ p.firstName }} {{ p.lastName }}</strong>
                         </div>
                       </td>
-                      <td><span class="pill">{{ p.className || '—' }}</span></td>
+                      <td><span class="pill">{{ classDisplay(p.className) }}</span></td>
                       <td>{{ p.label }}</td>
                       <td><span class="method-badge">{{ formatMethod(p.method) }}</span></td>
                       <td class="num paid">${{ p.amount | number:'1.2-2' }}</td>
@@ -346,7 +346,7 @@
                   <strong class="amount owed">${{ d.owed | number:'1.2-2' }}</strong>
                 </div>
                 <div class="card-meta">
-                  <span class="pill">{{ d.className || '—' }}</span>
+                  <span class="pill">{{ classDisplay(d.className) }}</span>
                   @if (d.oldestDue) { <span>Due since {{ d.oldestDue }}</span> }
                 </div>
                 <div class="card-actions">
@@ -374,7 +374,7 @@
                       </div>
                     </td>
                     <td>{{ d.admissionNumber || '—' }}</td>
-                    <td><span class="pill">{{ d.className || '—' }}</span></td>
+                    <td><span class="pill">{{ classDisplay(d.className) }}</span></td>
                     <td class="num owed"><strong>${{ d.owed | number:'1.2-2' }}</strong></td>
                     <td class="actions">
                       <button type="button" class="btn-ghost btn-sm" (click)="viewDebtorStatement(d.id)">Statement</button>

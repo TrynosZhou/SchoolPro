@@ -40,7 +40,7 @@ export const ADMIN_NAV_SECTIONS: NavSection[] = [
   {
     heading: 'Examinations',
     items: [
-      { label: 'Exam Marks', path: '/admin/exams', icon: '📝' },
+      { label: 'Record Marks', path: '/admin/exams', icon: '📝' },
       { label: 'Report Cards', path: '/admin/report-cards', icon: '📄' },
       { label: 'Mark Sheet', path: '/admin/mark-sheet', icon: '📑' },
       { label: 'Results Analysis', path: '/admin/results-analysis', icon: '📈' },
@@ -54,6 +54,7 @@ export const ADMIN_NAV_SECTIONS: NavSection[] = [
       { label: 'Payment', path: '/admin/payment', icon: '💳' },
       { label: 'Manage Fees', path: '/admin/manage-fees', icon: '💵' },
       { label: 'Student Balance', path: '/admin/student-balance', icon: '🧮' },
+      { label: 'Exemption', path: '/admin/exemptions', icon: '🎫' },
       { label: 'Financial Books', path: '/admin/finance', icon: '📚' },
     ],
   },
@@ -65,6 +66,7 @@ export const ADMIN_NAV_SECTIONS: NavSection[] = [
       { label: 'Student Reconciliation', path: '/admin/fin-reports/student-reconciliation', icon: '⚖' },
       { label: 'Debtor Aging', path: '/admin/fin-reports/debtor-aging', icon: '⏳' },
       { label: 'Fee Collection & Revenue', path: '/admin/fin-reports/fee-collection-revenue', icon: '📉' },
+      { label: 'General Ledger', path: '/admin/fin-reports/general-ledger', icon: '📗' },
     ],
   },
   {
@@ -80,6 +82,7 @@ export const ADMIN_NAV_SECTIONS: NavSection[] = [
       { label: 'Configure Periods', path: '/admin/timetable/configure-periods', icon: '⏱' },
       { label: 'Generate Timetable', path: '/admin/timetable/generate', icon: '📅' },
       { label: 'View Timetable', path: '/admin/timetable/view', icon: '👁' },
+      { label: 'Teacher Schedule', path: '/admin/timetable/teacher-schedule', icon: '👨‍🏫' },
     ],
   },
   {

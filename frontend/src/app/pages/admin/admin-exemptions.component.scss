@@ -1,0 +1,380 @@
+:host {
+  display: block;
+}
+
+.exemptions-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.toast {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  z-index: 4000;
+  padding: 0.85rem 1.25rem;
+  border-radius: 10px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+
+  &.success {
+    background: #ecfdf5;
+    color: #047857;
+    border: 1px solid #a7f3d0;
+  }
+
+  &.error {
+    background: #fef2f2;
+    color: #b91c1c;
+    border: 1px solid #fecaca;
+  }
+}
+
+.hero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+  padding: 1.35rem 1.45rem;
+  border-radius: 18px;
+
+  .eyebrow {
+    margin: 0 0 0.35rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  h1 {
+    margin: 0 0 0.45rem;
+    font-size: 1.65rem;
+  }
+
+  .hero-sub {
+    margin: 0;
+    max-width: 44rem;
+    color: #64748b;
+    font-size: 0.92rem;
+    line-height: 1.55;
+  }
+}
+
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.panel {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 1.2rem 1.25rem;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.04);
+
+  h2 {
+    margin: 0 0 0.35rem;
+    font-size: 1.1rem;
+    color: #0f172a;
+  }
+}
+
+.panel-sub {
+  margin: 0 0 1rem;
+  color: #64748b;
+  font-size: 0.92rem;
+}
+
+.panel-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.search-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  align-items: center;
+}
+
+.search-input {
+  flex: 1 1 280px;
+  min-width: 0;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  padding: 0.7rem 0.9rem;
+  font-size: 0.95rem;
+}
+
+.btn-primary,
+.btn-ghost,
+.btn-danger {
+  border-radius: 10px;
+  padding: 0.65rem 1rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-primary {
+  border: 0;
+  background: #4f46e5;
+  color: #fff;
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+}
+
+.btn-ghost {
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #334155;
+}
+
+.btn-danger {
+  border: 0;
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.muted {
+  color: #64748b;
+
+  &.warn {
+    color: #b45309;
+  }
+}
+
+.result-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.result-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #f8fafc;
+}
+
+.result-main strong {
+  display: block;
+  color: #0f172a;
+  margin-bottom: 0.25rem;
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  color: #64748b;
+  font-size: 0.88rem;
+
+  code {
+    background: #e2e8f0;
+    padding: 0.1rem 0.35rem;
+    border-radius: 6px;
+    color: #334155;
+  }
+}
+
+.badge {
+  background: #dbeafe;
+  color: #1d4ed8;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.add-btn {
+  width: 2.5rem;
+  height: 2.5rem;
+  border: 0;
+  border-radius: 999px;
+  background: #4f46e5;
+  color: #fff;
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+
+  &:hover {
+    background: #4338ca;
+  }
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+
+  th,
+  td {
+    padding: 0.75rem 0.65rem;
+    border-bottom: 1px solid #e2e8f0;
+    text-align: left;
+    vertical-align: top;
+  }
+
+  th {
+    color: #64748b;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+}
+
+.actions {
+  display: flex;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  z-index: 3000;
+}
+
+.modal {
+  width: min(100%, 540px);
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.2);
+  overflow: hidden;
+}
+
+.modal-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.1rem;
+  border-bottom: 1px solid #e2e8f0;
+
+  h3 {
+    margin: 0 0 0.25rem;
+    font-size: 1.1rem;
+  }
+
+  p {
+    margin: 0;
+    color: #64748b;
+    font-size: 0.9rem;
+  }
+}
+
+.close-btn {
+  border: 0;
+  background: transparent;
+  font-size: 1.5rem;
+  line-height: 1;
+  color: #64748b;
+  cursor: pointer;
+}
+
+.modal-form {
+  padding: 1rem 1.1rem 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.field label {
+  display: block;
+  margin-bottom: 0.35rem;
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: #334155;
+}
+
+.field input[type='number'],
+.field input[type='text'],
+.field textarea {
+  width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  padding: 0.65rem 0.8rem;
+  font: inherit;
+  line-height: 1.45;
+}
+
+.field textarea {
+  min-height: 7.5rem;
+  resize: vertical;
+}
+
+.field-reason textarea {
+  min-height: 8.5rem;
+}
+
+.field-hint {
+  display: block;
+  margin-top: 0.35rem;
+  color: #64748b;
+  font-size: 0.82rem;
+}
+
+.type-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.radio-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  font-size: 0.88rem;
+  cursor: pointer;
+
+  &.staff-child:has(input:checked) {
+    border-color: #7c3aed;
+    background: #f5f3ff;
+    color: #5b21b6;
+  }
+}
+
+.staff-child-note {
+  margin: 0.65rem 0 0;
+  padding: 0.65rem 0.75rem;
+  border-radius: 10px;
+  background: #f5f3ff;
+  border: 1px solid #ddd6fe;
+  color: #5b21b6;
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.55rem;
+  margin-top: 0.25rem;
+}

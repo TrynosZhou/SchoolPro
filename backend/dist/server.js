@@ -41,6 +41,31 @@ const app_1 = __importDefault(require("./app"));
 const data_source_1 = require("./config/data-source");
 const env_1 = require("./config/env");
 const pdf_1 = require("./utils/pdf");
+async function runDeferredStartup() {
+    try {
+        const { backfillGeneralLedgerFromHistory } = await Promise.resolve().then(() => __importStar(require('./services/gl-backfill.service')));
+        const backfill = await backfillGeneralLedgerFromHistory();
+        const posted = backfill.paymentsPosted +
+            backfill.cashbookExpensesPosted +
+            backfill.cashbookReceiptsPosted +
+            backfill.payrollRunsPosted;
+        if (posted > 0) {
+            console.log(`[GL] Backfilled ${posted} journal batches from historical records ` +
+                `(payments: ${backfill.paymentsPosted}, expenses: ${backfill.cashbookExpensesPosted}, ` +
+                `receipts: ${backfill.cashbookReceiptsPosted}, payroll: ${backfill.payrollRunsPosted})`);
+        }
+        if (backfill.errors.length) {
+            console.warn(`[GL] Backfill warnings: ${backfill.errors.slice(0, 3).join('; ')}`);
+        }
+        const integrity = await (await Promise.resolve().then(() => __importStar(require('./services/ledger.service')))).checkSystemGlBalance();
+        if (!integrity.balanced) {
+            console.warn(`[GL] System debit/credit imbalance detected: variance $${integrity.variance.toFixed(2)}`);
+        }
+    }
+    catch (err) {
+        console.error('[startup] Deferred GL tasks failed:', err);
+    }
+}
 async function bootstrap() {
     try {
         (0, pdf_1.ensureUploadDirs)();
@@ -50,9 +75,12 @@ async function bootstrap() {
         await seedDatabase();
         const { ensureDefaultRoles } = await Promise.resolve().then(() => __importStar(require('./services/role-permissions.service')));
         await ensureDefaultRoles();
+        const { ensureChartOfAccountsSeeded } = await Promise.resolve().then(() => __importStar(require('./services/ledger.service')));
+        await ensureChartOfAccountsSeeded();
         app_1.default.listen(env_1.env.port, () => {
             console.log(`School Pro API running on http://localhost:${env_1.env.port}`);
         });
+        void runDeferredStartup();
     }
     catch (err) {
         console.error('Failed to start server:', err);

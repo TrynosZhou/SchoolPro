@@ -177,8 +177,8 @@
 
               <div class="card-meta">
                 <div><span>Form</span><strong>{{ formLabel(s) }}</strong></div>
-                <div><span>Class</span><strong>{{ s.schoolClass?.name || '—' }}</strong></div>
-                <div><span>Gender</span><strong>{{ s.gender || '—' }}</strong></div>
+                <div><strong>{{ classLabel(s) }}</strong></div>
+                <div><span>Gender</span><strong>{{ genderLabel(s) }}</strong></div>
                 <div><span>Type</span><strong>{{ studentTypeLabel(s.studentType) }}</strong></div>
               </div>
 
@@ -193,7 +193,7 @@
               <div class="card-badges">
                 <span class="type-tag" [class.boarder]="s.studentType === 'boarder'">{{ studentTypeLabel(s.studentType) }}</span>
                 @if (s.gender) {
-                  <span class="gender-tag">{{ s.gender }}</span>
+                  <span class="gender-tag">{{ genderLabel(s) }}</span>
                 }
               </div>
 
@@ -231,7 +231,7 @@
                   <td>{{ s.firstName }}</td>
                   <td>
                     @if (s.gender) {
-                      <span class="gender-tag">{{ s.gender }}</span>
+                      <span class="gender-tag">{{ genderLabel(s) }}</span>
                     } @else {
                       <span class="muted">—</span>
                     }
@@ -392,16 +392,15 @@
         </div>
         <div>
           <dt>Gender</dt>
-          <dd>{{ student.gender || '—' }}</dd>
+          <dd>{{ genderLabel(student) }}</dd>
         </div>
         <div>
           <dt>Form</dt>
           <dd>{{ formLabel(student) }}</dd>
         </div>
-        <div>
-          <dt>Class</dt>
-          <dd>{{ classLabel(student) }}</dd>
-        </div>
+                <div>
+                  <dd>{{ classLabel(student) }}</dd>
+                </div>
         <div>
           <dt>Type</dt>
           <dd>{{ studentTypeLabel(student.studentType) }}</dd>

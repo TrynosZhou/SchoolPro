@@ -2,6 +2,9 @@
   display: block;
 }
 
+@import './timetable-classic-grid.scss';
+@import './timetable-term-banner.scss';
+
 .view-page {
   display: flex;
   flex-direction: column;
@@ -395,10 +398,11 @@
     text-align: center;
   }
 
-  .period-col {
+  .day-col {
     background: #f8fafc;
-    min-width: 7rem;
+    min-width: 5.5rem;
     white-space: nowrap;
+    vertical-align: middle;
 
     strong {
       display: block;
@@ -411,6 +415,30 @@
       font-size: 0.72rem;
       color: #64748b;
       margin-top: 0.1rem;
+    }
+  }
+
+  .period-head {
+    min-width: 6.5rem;
+    text-align: center;
+    vertical-align: bottom;
+
+    strong,
+    .period-name {
+      display: block;
+      color: inherit;
+      font-size: 0.78rem;
+      font-weight: 700;
+      line-height: 1.3;
+    }
+
+    span,
+    .period-time {
+      display: block;
+      font-size: 0.68rem;
+      font-weight: 500;
+      opacity: 0.85;
+      margin-top: 0.15rem;
     }
   }
 }

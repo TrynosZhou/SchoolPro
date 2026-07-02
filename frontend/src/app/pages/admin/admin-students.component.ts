@@ -5,6 +5,7 @@ import { RouterLink } from '@angular/router';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
 import { ApiService } from '../../core/services/api.service';
+import { formatGenderLabel, formatStudentClassLabel } from '../../core/utils/class-display';
 import { Student } from '../../core/models';
 
 interface FormOption {
@@ -179,7 +180,11 @@ export class AdminStudentsComponent implements OnInit {
   }
 
   classLabel(student: Student): string {
-    return student.schoolClass?.name || '—';
+    return formatStudentClassLabel(student.schoolClass?.name);
+  }
+
+  genderLabel(student: Student): string {
+    return formatGenderLabel(student.gender);
   }
 
   initials(student: Student): string {

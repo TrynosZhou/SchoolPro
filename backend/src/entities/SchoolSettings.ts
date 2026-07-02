@@ -31,6 +31,9 @@ export class SchoolSettings {
   @Column({ nullable: true })
   website?: string;
 
+  @Column({ nullable: true })
+  facebookPageUrl?: string;
+
   /** Public path e.g. /uploads/logos/school-logo.png */
   @Column({ nullable: true })
   logoUrl?: string;
@@ -67,6 +70,10 @@ export class SchoolSettings {
   /** Third-party API integrations (WhatsApp, email, webhooks, payments, etc.). */
   @Column({ type: 'jsonb', nullable: true })
   integrationsConfig?: IntegrationsConfig;
+
+  /** Label shown on timetables, e.g. "1" in "Term 2 (2026) Version 1". */
+  @Column({ type: 'varchar', length: 32, default: '1' })
+  timetableVersion!: string;
 
   @UpdateDateColumn()
   updatedAt!: Date;

@@ -11,13 +11,7 @@
         </p>
         <div class="hero-actions">
           <a routerLink="/admin/timetable/configure-periods" class="secondary-action">Configure Periods</a>
-          <a
-            [routerLink]="['/admin/timetable/generate']"
-            [queryParams]="classId ? { class: classId } : null"
-            class="primary-action"
-          >
-            Generate Timetable →
-          </a>
+          <a routerLink="/admin/timetable/generate" class="secondary-action">Generate Timetable</a>
         </div>
       </div>
       <div class="kpi-grid">
@@ -51,6 +45,10 @@
         </article>
       </div>
     </header>
+
+    <section class="timetable-term-banner view-term-banner">
+      <h2 class="timetable-term-version">{{ termVersionLabel() }}</h2>
+    </section>
 
     <section class="list-shell">
       <div class="list-toolbar">
@@ -162,42 +160,52 @@
             <a [routerLink]="['/admin/timetable/generate']" [queryParams]="{ class: classId }" class="btn-primary">Generate timetable</a>
           </div>
         } @else if (viewMode() === 'grid') {
-          <div class="grid-wrap">
-            <table class="timetable-grid">
-              <thead>
-                <tr>
-                  <th class="period-col">Period</th>
-                  @for (d of days; track d.value) {
-                    <th>{{ d.short }}</th>
-                  }
-                </tr>
-              </thead>
-              <tbody>
-                @for (p of periods(); track p.id) {
+          <div class="timetable-sheet classic">
+            <h2 class="timetable-sheet-title">{{ shortClassCode(selectedClassLabel()) }}</h2>
+            <div class="grid-wrap classic-wrap">
+              <table class="timetable-grid classic">
+                <thead>
                   <tr>
-                    <td class="period-col">
-                      <strong>{{ p.name }}</strong>
-                      <span>{{ p.startTime }}–{{ p.endTime }}</span>
-                    </td>
-                    @for (d of days; track d.value) {
-                      <td>
-                        @if (entryAt(d.value, p); as e) {
-                          <div class="grid-cell filled">
-                            <strong>{{ e.subject?.name || 'Subject' }}</strong>
-                            <span>{{ teacherName(e) }}</span>
-                            @if (e.room) {
-                              <span class="room-tag">{{ e.room }}</span>
-                            }
-                          </div>
+                    <th class="corner" rowspan="2"></th>
+                    @for (p of periods(); track p.id; let pi = $index) {
+                      <th class="period-index" [class.period-break]="isBreakPeriod(p)">
+                        @if (isBreakPeriod(p)) {
+                          {{ breakPeriodLabel(p) }}
                         } @else {
-                          <div class="grid-cell empty-cell">—</div>
+                          {{ lessonPeriodNumber(periods(), pi) }}
                         }
-                      </td>
+                      </th>
                     }
                   </tr>
-                }
-              </tbody>
-            </table>
+                  <tr>
+                    @for (p of periods(); track p.id) {
+                      <th class="period-range" [class.period-break]="isBreakPeriod(p)">{{ formatPeriodRange(p) }}</th>
+                    }
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (d of days; track d.value) {
+                    <tr>
+                      <td class="day-col-classic">{{ dayGridLabel(d.value) }}</td>
+                      @for (p of periods(); track p.id) {
+                        <td class="slot-cell" [class.break-slot]="isBreakPeriod(p)">
+                          @if (isBreakPeriod(p)) {
+                            <div class="break-cell">{{ p.name }}</div>
+                          } @else {
+                            @if (entryAt(d.value, p); as e) {
+                              <div class="lesson-cell class-lesson">
+                                <span class="lesson-main">{{ timetableSubjectShort(e.subject?.code, e.subject?.name || 'Subject', e.subject?.short) }}</span>
+                                <span class="lesson-corner br">{{ teacherInitials(teacherName(e)) }}</span>
+                              </div>
+                            }
+                          }
+                        </td>
+                      }
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
           </div>
         } @else if (viewMode() === 'days') {
           <div class="days-grid">

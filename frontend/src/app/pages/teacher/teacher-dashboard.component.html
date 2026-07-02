@@ -106,7 +106,7 @@
               </div>
               <div class="schedule-detail">
                 <strong>{{ slot.subjectName }}</strong>
-                <span>{{ slot.formName }} {{ slot.className }}</span>
+                <span>{{ classLabel(slot) }}</span>
                 @if (slot.room) { <span class="room">{{ slot.room }}</span> }
               </div>
             </div>

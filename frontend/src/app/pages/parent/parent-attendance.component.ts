@@ -5,6 +5,7 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { PARENT_NAV_ITEMS } from '../../core/config/parent-nav';
 import { ApiService } from '../../core/services/api.service';
+import { formatGenderLabel, formatStudentClassLabel } from '../../core/utils/class-display';
 import { AuthService } from '../../core/services/auth.service';
 
 interface LinkedChild {
@@ -42,6 +43,7 @@ interface ParentAttendanceReport {
     lastName: string;
     className?: string;
     formName?: string;
+    gender?: string;
   };
   summary: {
     daysMarked: number;
@@ -67,6 +69,8 @@ export class ParentAttendanceComponent implements OnInit {
   private route = inject(ActivatedRoute);
 
   readonly nav = PARENT_NAV_ITEMS;
+  readonly formatStudentClassLabel = formatStudentClassLabel;
+  readonly formatGenderLabel = formatGenderLabel;
 
   children = signal<LinkedChild[]>([]);
   terms = signal<TermOption[]>([]);

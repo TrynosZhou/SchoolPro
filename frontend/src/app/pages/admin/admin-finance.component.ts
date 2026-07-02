@@ -7,6 +7,7 @@ import { forkJoin } from 'rxjs';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
 import { ApiService } from '../../core/services/api.service';
+import { formatStudentClassLabel } from '../../core/utils/class-display';
 import { Student } from '../../core/models';
 
 type Tab = 'overview' | 'cashbook' | 'debtors' | 'statements';
@@ -368,6 +369,10 @@ export class AdminFinanceComponent implements OnInit, OnDestroy {
       cash: 'Cash', bank: 'Bank', ecocash: 'EcoCash', onemoney: 'OneMoney', innbucks: 'InnBucks', other: 'Other',
     };
     return map[m] || m;
+  }
+
+  classDisplay(className?: string): string {
+    return formatStudentClassLabel(className);
   }
 
   private showToast(type: 'success' | 'error', msg: string) {

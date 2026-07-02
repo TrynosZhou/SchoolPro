@@ -64,6 +64,10 @@ __decorate([
     (0, typeorm_1.Column)({ nullable: true }),
     __metadata("design:type", String)
 ], Timetable.prototype, "room", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'boolean', default: false }),
+    __metadata("design:type", Boolean)
+], Timetable.prototype, "isLocked", void 0);
 exports.Timetable = Timetable = __decorate([
     (0, typeorm_1.Entity)('timetables')
 ], Timetable);

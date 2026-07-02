@@ -11,7 +11,21 @@ exports.debtorAgingToCsv = debtorAgingToCsv;
 const data_source_1 = require("../config/data-source");
 const entities_1 = require("../entities");
 const typeorm_helpers_1 = require("../utils/typeorm-helpers");
+const class_display_1 = require("../utils/class-display");
 const term_balance_service_1 = require("./term-balance.service");
+function mapStudentSearchRow(r) {
+    const className = r.className || undefined;
+    return {
+        id: r.id,
+        admissionNumber: r.admissionNumber,
+        firstName: r.firstName,
+        lastName: r.lastName,
+        gender: (0, class_display_1.formatGenderLabel)(r.gender),
+        className,
+        classLabel: (0, class_display_1.formatStudentClassLabel)(className),
+        formName: r.formName || undefined,
+    };
+}
 async function searchStudents(q, limit = 20) {
     const rawQ = String(q || '').trim();
     if (!rawQ)
@@ -23,6 +37,7 @@ async function searchStudents(q, limit = 20) {
         s."admissionNumber",
         s."firstName",
         s."lastName",
+        s.gender,
         c.name as "className",
         f.name as "formName"
       FROM students s
@@ -40,14 +55,57 @@ async function searchStudents(q, limit = 20) {
       ORDER BY s."lastName" ASC, s."firstName" ASC
       LIMIT $3
     `, [rawQ, pattern, limit]);
-    return rows.map((r) => ({
-        id: r.id,
-        admissionNumber: r.admissionNumber,
-        firstName: r.firstName,
-        lastName: r.lastName,
-        className: r.className || undefined,
-        formName: r.formName || undefined,
-    }));
+    return rows.map((r) => mapStudentSearchRow(r));
+}
+function noteReference(description) {
+    const match = String(description || '').match(/(CN|DN)-[A-Z0-9-]+/i);
+    return match ? match[0].toUpperCase() : '—';
+}
+function isTuitionExemptionLedgerEntry(entry) {
+    if (entry.referenceType === 'tuition_exemption')
+        return true;
+    const desc = String(entry.description || '').toLowerCase();
+    return desc.includes('tuition exemption') || desc.includes('staff child exemption');
+}
+function buildTuitionExemptionNarrative(entry, inv, amount, isCredit) {
+    const desc = String(entry.description || '').trim();
+    if (desc.includes('%') && desc.includes('$') && desc.length > 24) {
+        return desc;
+    }
+    const invNum = inv?.invoiceNumber || '—';
+    const exemptionLine = inv?.lines?.find((line) => Number(line.amount) < 0 && (String(line.description).toLowerCase().includes('tuition exemption')
+        || String(line.description).toLowerCase().includes('staff child exemption')));
+    if (isCredit) {
+        const discount = exemptionLine
+            ? (0, term_balance_service_1.roundMoney)(Math.abs(Number(exemptionLine.amount)))
+            : (0, term_balance_service_1.roundMoney)(amount);
+        const label = exemptionLine?.description?.trim() || 'Tuition exemption';
+        return `${label} — $${discount.toFixed(2)} tuition discount applied on ${invNum}. Gross tuition was invoiced at full amount before this exemption.`;
+    }
+    return `Tuition exemption removed or reduced — $${(0, term_balance_service_1.roundMoney)(amount).toFixed(2)} restored to ${invNum}.`;
+}
+async function fetchStudentInvoiceBalance(studentId) {
+    const result = await data_source_1.AppDataSource.query(`
+      SELECT COALESCE(SUM(i."totalAmount" - i."amountPaid"), 0) as owed
+      FROM invoices i
+      WHERE i."studentId" = $1
+        AND (i."totalAmount" - i."amountPaid") > 0.005
+        AND i.status NOT IN ('cancelled', 'draft', 'paid')
+    `, [studentId]);
+    return (0, term_balance_service_1.roundMoney)(Number(result[0]?.owed || 0));
+}
+async function findBalanceTerm(studentId) {
+    const rows = await data_source_1.AppDataSource.query(`
+      SELECT stb."termId" as "termId", t.name as "termName", stb."closingBalance" as "closingBalance"
+      FROM student_term_balances stb
+      JOIN terms t ON t.id = stb."termId"
+      WHERE stb."studentId" = $1 AND stb."closingBalance" > 0
+      ORDER BY stb."closingBalance" DESC, t."termNumber" DESC
+      LIMIT 1
+    `, [studentId]);
+    if (!rows.length)
+        return null;
+    return { termId: String(rows[0].termId), termName: String(rows[0].termName) };
 }
 async function buildStudentLedgerReport(studentId, termId) {
     const termRepo = data_source_1.AppDataSource.getRepository(entities_1.Term);
@@ -69,8 +127,6 @@ async function buildStudentLedgerReport(studentId, termId) {
     const prevTerm = await (0, term_balance_service_1.findPreviousTerm)(term);
     const termStartDate = toDateKey(term.startDate);
     const termEndDate = toDateKey(term.endDate);
-    const termStart = `${termStartDate}T00:00:00.000Z`;
-    const termEnd = `${termEndDate}T23:59:59.999Z`;
     const ledgerRepo = data_source_1.AppDataSource.getRepository(entities_1.LedgerEntry);
     const termLedgerPaymentRows = await ledgerRepo
         .createQueryBuilder('l')
@@ -89,13 +145,8 @@ async function buildStudentLedgerReport(studentId, termId) {
     });
     const termInvoiceIds = termInvoices.map((i) => i.id);
     let termPayments = [];
-    const termPaymentQb = paymentRepo
-        .createQueryBuilder('p')
-        .where('p.studentId = :studentId', { studentId });
-    const termPaymentConditions = [
-        '(p."paidAt" >= :termStart AND p."paidAt" <= :termEnd)',
-    ];
-    const termPaymentParams = { studentId, termStart, termEnd };
+    const termPaymentConditions = [];
+    const termPaymentParams = { studentId };
     if (termInvoiceIds.length) {
         termPaymentConditions.push('p."invoiceId" IN (:...ids)');
         termPaymentParams.ids = termInvoiceIds;
@@ -104,25 +155,89 @@ async function buildStudentLedgerReport(studentId, termId) {
         termPaymentConditions.push('p.id IN (:...termLedgerPaymentIds)');
         termPaymentParams.termLedgerPaymentIds = termLedgerPaymentIds;
     }
-    termPayments = await termPaymentQb
-        .andWhere(`(${termPaymentConditions.join(' OR ')})`, termPaymentParams)
-        .orderBy('p.paidAt', 'ASC')
-        .getMany();
+    if (termPaymentConditions.length) {
+        termPayments = await paymentRepo
+            .createQueryBuilder('p')
+            .where('p.studentId = :studentId', { studentId })
+            .andWhere(`(${termPaymentConditions.join(' OR ')})`, termPaymentParams)
+            .orderBy('p.paidAt', 'ASC')
+            .getMany();
+    }
     const openingBalance = termBalance ? Number(termBalance.openingBalance) : 0;
     const prepaidAvailable = termBalance ? await (0, term_balance_service_1.getAvailablePrepaidCredit)(termBalance) : 0;
     const txns = [];
-    for (const inv of termInvoices) {
-        if (inv.feeType === term_balance_service_1.BALANCE_FORWARD_FEE_TYPE)
+    const invoiceById = new Map(termInvoices.map((inv) => [inv.id, inv]));
+    const invoiceLedgerRows = await ledgerRepo.find({
+        where: [
+            { studentId, termId, referenceType: 'invoice' },
+            { studentId, termId, referenceType: 'tuition_exemption' },
+        ],
+        order: { entryDate: 'ASC', createdAt: 'ASC' },
+    });
+    for (const entry of invoiceLedgerRows) {
+        const inv = entry.referenceId ? invoiceById.get(entry.referenceId) : undefined;
+        if (inv?.feeType === term_balance_service_1.BALANCE_FORWARD_FEE_TYPE)
             continue;
-        const date = inv.issuedDate || inv.dueDate;
+        const debit = (0, term_balance_service_1.roundMoney)(Number(entry.debit));
+        const credit = (0, term_balance_service_1.roundMoney)(Number(entry.credit));
+        const date = toDateKey(entry.entryDate);
+        const sortAt = new Date(entry.createdAt || entry.entryDate).getTime();
+        if (debit > 0) {
+            txns.push({
+                date,
+                sortAt,
+                type: 'invoice',
+                reference: inv?.invoiceNumber || '—',
+                description: inv?.description || entry.description,
+                debit,
+                credit: 0,
+            });
+            continue;
+        }
+        if (credit > 0 && isTuitionExemptionLedgerEntry(entry)) {
+            txns.push({
+                date,
+                sortAt,
+                type: 'tuition_exemption',
+                reference: inv?.invoiceNumber || '—',
+                description: buildTuitionExemptionNarrative(entry, inv, credit, true),
+                debit: 0,
+                credit,
+            });
+            continue;
+        }
+        if (debit > 0 && isTuitionExemptionLedgerEntry(entry)) {
+            txns.push({
+                date,
+                sortAt,
+                type: 'tuition_exemption',
+                reference: inv?.invoiceNumber || '—',
+                description: buildTuitionExemptionNarrative(entry, inv, debit, false),
+                debit,
+                credit: 0,
+            });
+        }
+    }
+    const adjustmentRows = await ledgerRepo.find({
+        where: { studentId, termId },
+        order: { entryDate: 'ASC', createdAt: 'ASC' },
+    });
+    for (const entry of adjustmentRows) {
+        if (entry.referenceType !== 'debit_note' && entry.referenceType !== 'credit_note')
+            continue;
+        const debit = roundMoney(Number(entry.debit));
+        const credit = roundMoney(Number(entry.credit));
+        if (debit <= 0 && credit <= 0)
+            continue;
+        const date = toDateKey(entry.entryDate);
         txns.push({
             date,
             sortAt: new Date(date).getTime(),
-            type: 'invoice',
-            reference: inv.invoiceNumber,
-            description: inv.description,
-            debit: Number(inv.totalAmount),
-            credit: 0,
+            type: entry.referenceType === 'credit_note' ? 'credit_note' : 'debit_note',
+            reference: noteReference(entry.description),
+            description: entry.description,
+            debit,
+            credit,
         });
     }
     for (const pay of termPayments) {
@@ -141,7 +256,7 @@ async function buildStudentLedgerReport(studentId, termId) {
     }
     txns.sort((a, b) => a.sortAt - b.sortAt || a.reference.localeCompare(b.reference));
     const lines = [];
-    let running = openingBalance;
+    let owedRunning = Math.max(0, openingBalance);
     if (openingBalance !== 0 || prepaidAvailable > 0) {
         const prevLabel = prevTerm?.name || 'previous term';
         const description = openingBalance > 0
@@ -154,13 +269,13 @@ async function buildStudentLedgerReport(studentId, termId) {
             description,
             debit: openingBalance > 0 ? openingBalance : 0,
             credit: openingBalance < 0 ? Math.abs(openingBalance) : 0,
-            balance: running,
+            balance: owedRunning,
         });
     }
     let totalDebits = 0;
     let totalCredits = 0;
     for (const txn of txns) {
-        running = running + txn.debit - txn.credit;
+        owedRunning = roundMoney(Math.max(0, owedRunning + txn.debit - txn.credit));
         totalDebits += txn.debit;
         totalCredits += txn.credit;
         lines.push({
@@ -170,16 +285,30 @@ async function buildStudentLedgerReport(studentId, termId) {
             description: txn.description,
             debit: txn.debit,
             credit: txn.credit,
-            balance: running,
+            balance: owedRunning,
         });
     }
+    totalDebits = roundMoney(totalDebits);
+    totalCredits = roundMoney(totalCredits);
+    const termCharges = roundMoney(openingBalance + totalDebits);
+    const termNetMovement = roundMoney(termCharges - totalCredits);
+    const termOverpayment = roundMoney(Math.max(0, totalCredits - termCharges));
+    const invoiceBalance = await fetchStudentInvoiceBalance(studentId);
+    // Invoice balance is authoritative (matches Outstanding Invoices report).
+    const closingBalance = invoiceBalance;
+    if (lines.length && Math.abs(owedRunning - invoiceBalance) > 0.01) {
+        lines[lines.length - 1].balance = invoiceBalance;
+    }
+    const balanceTerm = await findBalanceTerm(studentId);
     return {
         student: {
             id: student.id,
             admissionNumber: student.admissionNumber,
             firstName: student.firstName,
             lastName: student.lastName,
+            gender: (0, class_display_1.formatGenderLabel)(student.gender),
             className: student.schoolClass?.name,
+            classLabel: (0, class_display_1.formatStudentClassLabel)(student.schoolClass?.name),
             formName: student.form?.name,
         },
         term: {
@@ -189,11 +318,17 @@ async function buildStudentLedgerReport(studentId, termId) {
             endDate: term.endDate,
         },
         lines,
+        invoiceBalance,
+        balanceTermId: balanceTerm?.termId,
+        balanceTermName: balanceTerm?.termName,
         summary: {
             openingBalance,
             totalDebits,
             totalCredits,
-            closingBalance: running,
+            closingBalance,
+            termCharges,
+            termNetMovement,
+            termOverpayment,
         },
     };
 }
@@ -204,6 +339,7 @@ async function buildOutstandingInvoicesReport() {
         s."admissionNumber",
         s."firstName",
         s."lastName",
+        s.gender,
         s."classId",
         c.name as "className",
         f.name as "formName",
@@ -222,6 +358,7 @@ async function buildOutstandingInvoicesReport() {
       LEFT JOIN forms f ON f.id = s."formId"
       WHERE s."isActive" = true
         AND (i."totalAmount" - i."amountPaid") > 0.005
+        AND i.status NOT IN ('cancelled', 'draft', 'paid')
       ORDER BY balance DESC, s."lastName" ASC, s."firstName" ASC
     `);
     const byClass = new Map();
@@ -233,10 +370,12 @@ async function buildOutstandingInvoicesReport() {
         invoiceCount += 1;
         const classId = r.classId || '__unassigned__';
         const className = r.className || 'Unassigned';
+        const classLabel = (0, class_display_1.formatStudentClassLabel)(className === 'Unassigned' ? '' : className);
         if (!byClass.has(classId)) {
             byClass.set(classId, {
                 classId,
                 className,
+                classLabel: classLabel === '—' ? 'Unassigned' : classLabel,
                 formName: r.formName || undefined,
                 classTotal: 0,
                 students: [],
@@ -250,8 +389,10 @@ async function buildOutstandingInvoicesReport() {
                 admissionNumber: r.admissionNumber,
                 firstName: r.firstName,
                 lastName: r.lastName,
+                gender: (0, class_display_1.formatGenderLabel)(r.gender),
                 classId: r.classId || undefined,
                 className,
+                classLabel,
                 formName: r.formName || undefined,
                 invoiceBalance: 0,
                 invoices: [],
@@ -370,6 +511,7 @@ async function getFilteredStudentIds(filters) {
         s."admissionNumber",
         s."firstName",
         s."lastName",
+        s.gender,
         s."classId",
         s."formId",
         c.name as "className",
@@ -382,14 +524,9 @@ async function getFilteredStudentIds(filters) {
       LIMIT 500
     `, params);
     return rows.map((r) => ({
-        id: r.id,
-        admissionNumber: r.admissionNumber,
-        firstName: r.firstName,
-        lastName: r.lastName,
+        ...mapStudentSearchRow(r),
         classId: r.classId || undefined,
         formId: r.formId || undefined,
-        className: r.className || undefined,
-        formName: r.formName || undefined,
     }));
 }
 async function reconcileStudent(student, dateFrom, dateTo, feeType, includeTransactions = true, termId) {
@@ -701,7 +838,7 @@ function reconciliationReportToCsv(report, detailed) {
             lines.push([
                 esc(r.student.admissionNumber),
                 esc(`${r.student.firstName} ${r.student.lastName}`),
-                esc(`${r.student.formName || ''} ${r.student.className || ''}`.trim()),
+                esc(r.student.classLabel || (0, class_display_1.formatStudentClassLabel)(r.student.className)),
                 esc(r.status),
                 r.studentModule.openingBalance,
                 r.studentModule.totalBilled,
@@ -748,7 +885,7 @@ function reconciliationReportToCsv(report, detailed) {
             lines.push([
                 esc(r.student.admissionNumber),
                 esc(`${r.student.firstName} ${r.student.lastName}`),
-                esc(`${r.student.formName || ''} ${r.student.className || ''}`.trim()),
+                esc(r.student.classLabel || (0, class_display_1.formatStudentClassLabel)(r.student.className)),
                 esc(r.status),
                 r.studentModule.totalBilled,
                 r.studentModule.totalCollected,
@@ -904,8 +1041,10 @@ async function buildDebtorAgingReport(params) {
             admissionNumber: s.admissionNumber,
             firstName: s.firstName,
             lastName: s.lastName,
+            gender: (0, class_display_1.formatGenderLabel)(s.gender),
             formName: s.formName,
             className: s.className,
+            classLabel: (0, class_display_1.formatStudentClassLabel)(s.className),
             guardianName: guardianMap.get(s.id)?.guardianName,
             guardianPhone: guardianMap.get(s.id)?.guardianPhone,
             guardianEmail: guardianMap.get(s.id)?.guardianEmail,
@@ -993,7 +1132,7 @@ function debtorAgingToCsv(report, detailed) {
         lines.push([
             esc(s.admissionNumber),
             esc(`${s.firstName} ${s.lastName}`),
-            esc(`${s.formName || ''} ${s.className || ''}`.trim()),
+            esc(s.classLabel || (0, class_display_1.formatStudentClassLabel)(s.className)),
             esc(s.guardianName || ''),
             esc(s.guardianPhone || ''),
             s.originalCharged,

@@ -211,7 +211,10 @@
                 <div>
                   <strong>{{ m.firstName }} {{ m.lastName }}</strong>
                   <code class="sid">{{ m.admissionNumber }}</code>
-                  <span class="class-meta">{{ m.formName || '—' }} {{ m.className || '' }}</span>
+                  <span class="class-meta">{{ studentClassLabel(m) }}</span>
+                  @if (m.gender) {
+                    <span class="class-meta">{{ studentGenderLabel(m.gender) }}</span>
+                  }
                 </div>
               </button>
             }
@@ -340,7 +343,7 @@
                       @for (p of day.payments; track $index) {
                         <tr [class.reversed]="$any(p).reversed">
                           <td>{{ $any(p).studentName }}<div class="sub-id">{{ $any(p).admissionNumber }}</div></td>
-                          <td>{{ $any(p).formName }} {{ $any(p).className }}</td>
+                          <td>{{ studentClassLabel($any(p)) }}</td>
                           <td>{{ $any(p).feeTypeLabel }}</td>
                           <td class="num">${{ $any(p).amountExpected | number:'1.2-2' }}</td>
                           <td class="num paid">${{ $any(p).amountPaid | number:'1.2-2' }}</td>
@@ -518,7 +521,7 @@
                     <tr>
                       <td><span class="flag">{{ exceptionLabel(e.type) }}</span></td>
                       <td>{{ e.studentName }}<div class="sub-id">{{ e.admissionNumber }}</div></td>
-                      <td>{{ e.className || '—' }}</td>
+                      <td>{{ studentClassLabel({ className: e.className }) }}</td>
                       <td>{{ e.description }}</td>
                       <td class="num">@if (e.amount != null) { ${{ e.amount | number:'1.2-2' }} } @else { — }</td>
                       <td>{{ e.date || '—' }}</td>

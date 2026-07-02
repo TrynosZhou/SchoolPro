@@ -7,6 +7,7 @@ import {
   Unique,
 } from 'typeorm';
 import { FK_CASCADE, FK_RESTRICT, FK_SET_NULL } from './constraints';
+import { LessonLength } from './enums';
 import { SchoolClass } from './SchoolClass';
 import { Subject } from './Subject';
 import { Staff } from './Staff';
@@ -37,5 +38,13 @@ export class ClassSubject {
 
   @Column({ nullable: true })
   teacherId?: string;
+
+  /** Planned weekly lesson count when set from Teacher Load (used when no timetable slots exist yet). */
+  @Column({ type: 'int', default: 0 })
+  weeklyPeriods!: number;
+
+  /** Whether each weekly lesson is a single, double, or triple period block. */
+  @Column({ type: 'varchar', length: 16, default: LessonLength.SINGLE })
+  lessonLength!: LessonLength;
 }
 

@@ -5,6 +5,7 @@ import { RouterLink } from '@angular/router';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
 import { ApiService } from '../../core/services/api.service';
+import { formatGenderLabel, formatStudentClassLabel } from '../../core/utils/class-display';
 
 interface TermRow {
   id: string;
@@ -38,7 +39,9 @@ interface StudentMatch {
   admissionNumber: string;
   firstName: string;
   lastName: string;
+  gender?: string;
   className?: string;
+  classLabel?: string;
   formName?: string;
 }
 
@@ -459,8 +462,13 @@ export class AdminStudentReconciliationComponent implements OnInit {
     return `${student.firstName.charAt(0)}${student.lastName.charAt(0)}`.toUpperCase();
   }
 
-  classLabel(row: StudentReconciliationRow): string {
-    return `${row.student.formName || ''} ${row.student.className || ''}`.trim() || '—';
+  classLabel(row: StudentReconciliationRow | StudentMatch): string {
+    const student = 'student' in row ? row.student : row;
+    return student.classLabel || formatStudentClassLabel(student.className);
+  }
+
+  genderLabel(gender?: string): string {
+    return formatGenderLabel(gender);
   }
 
   typeLabel(type: string): string {

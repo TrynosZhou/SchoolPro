@@ -56,62 +56,81 @@
   </div>
 
   <section class="filters-card card">
-    <div class="filters-row">
-      <label class="field field-exam">
-        <span>Exam type</span>
+    <header class="filters-card-head">
+      <span class="filters-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+          <path d="M4 8h4v2H4V8zm0 6h4v2H4v-2zm6-6h10v2H10V8zm0 6h10v2H10v-2zM6 9a1 1 0 1 1 0-2 1 1 0 0 1 0 2zm0 8a1 1 0 1 1 0-2 1 1 0 0 1 0 2z"/>
+        </svg>
+      </span>
+      <div class="filters-card-copy">
+        <h2>Session filters</h2>
+        <p>Choose the exam session, then load students for marks entry.</p>
+      </div>
+    </header>
+
+    <div class="filters-grid">
+      <label class="filter-field">
+        <span class="filter-label">Exam type<span class="req">*</span></span>
         <select [(ngModel)]="filters.examTypeId" name="examType" (ngModelChange)="onFilterChange()">
-          <option value="">— Select —</option>
+          <option value="">Select exam type</option>
           @for (t of examTypes(); track t.id) {
             <option [value]="t.id">{{ t.name }}</option>
           }
         </select>
       </label>
-      <label class="field field-compact">
-        <span>Class</span>
+
+      <label class="filter-field">
+        <span class="filter-label">Class<span class="req">*</span></span>
         <select [(ngModel)]="filters.classId" name="class" (ngModelChange)="onClassChange(); onFilterChange()">
-          <option value="">— Select —</option>
+          <option value="">Select class</option>
           @for (c of classes(); track c.id) {
             <option [value]="c.id">{{ c.name }}</option>
           }
         </select>
       </label>
-      <label class="field field-subject">
-        <span>Subject</span>
+
+      <label class="filter-field" [class.is-disabled]="!filters.classId">
+        <span class="filter-label">Subject<span class="req">*</span></span>
         <select [(ngModel)]="filters.subjectId" name="subject" (ngModelChange)="onFilterChange()" [disabled]="!filters.classId">
-          <option value="">— Select subject —</option>
+          <option value="">{{ filters.classId ? 'Select subject' : 'Select class first' }}</option>
           @for (s of subjects(); track s.id) {
-            <option [value]="s.id">{{ s.name }}</option>
+            <option [value]="s.id">{{ subjectLabel(s) }}</option>
           }
         </select>
       </label>
-      <label class="field field-compact">
-        <span>Term</span>
+
+      <label class="filter-field">
+        <span class="filter-label">Term<span class="req">*</span></span>
         <select [(ngModel)]="filters.termId" name="term" (ngModelChange)="onFilterChange()">
-          <option value="">— Select —</option>
+          <option value="">Select term</option>
           @for (t of terms(); track t.id) {
             <option [value]="t.id">{{ t.name }}</option>
           }
         </select>
       </label>
-      <button
-        type="button"
-        class="btn-primary btn-fetch"
-        (click)="fetchStudents()"
-        [disabled]="loading() || !filters.classId"
-      >
-        @if (loading()) {
-          <span class="btn-spinner"></span> Fetching…
-        } @else {
-          Fetch
-        }
-      </button>
-      <button type="button" class="btn-ghost btn-reset" (click)="clearFilters()">Reset</button>
+
+      <div class="filters-actions">
+        <button
+          type="button"
+          class="btn-primary btn-fetch"
+          (click)="fetchStudents()"
+          [disabled]="loading() || !filters.classId"
+        >
+          @if (loading()) {
+            <span class="btn-spinner" aria-hidden="true"></span>
+            Fetching…
+          } @else {
+            Fetch students
+          }
+        </button>
+        <button type="button" class="btn-ghost btn-reset" (click)="clearFilters()">Reset</button>
+      </div>
     </div>
 
     @if (filters.examTypeId || filters.classId || filters.subjectId || filters.termId) {
-      <div class="session-pills">
+      <div class="session-pills" aria-label="Selected session">
         <span class="pill"><strong>Exam</strong> {{ sessionLabels().exam }}</span>
-        <span class="pill"><strong>Class</strong> {{ sessionLabels().class }}</span>
+        <span class="pill">{{ sessionClassLabel() }}</span>
         <span class="pill pill-subject"><strong>Subject</strong> {{ sessionLabels().subject }}</span>
         <span class="pill"><strong>Term</strong> {{ sessionLabels().term }}</span>
       </div>
@@ -274,6 +293,9 @@
                 <th>Gender</th>
                 <th>Marks (0–{{ maxMarks() }})</th>
                 <th>Grade</th>
+                @if (showGradePoints()) {
+                  <th>Points</th>
+                }
                 <th>Remarks</th>
                 <th>Status</th>
               </tr>
@@ -302,6 +324,9 @@
                       <span class="grade-badge" [class]="gradeTone(row.grade)">{{ row.grade }}</span>
                     } @else { — }
                   </td>
+                  @if (showGradePoints()) {
+                    <td class="points-cell mono">{{ pointsForGrade(row.grade) }}</td>
+                  }
                   <td>
                     <input
                       class="remarks-input"
@@ -321,7 +346,7 @@
                   </td>
                 </tr>
               } @empty {
-                <tr><td colspan="8" class="no-match">No students match the current filters.</td></tr>
+                <tr><td [attr.colspan]="showGradePoints() ? 9 : 8" class="no-match">No students match the current filters.</td></tr>
               }
             </tbody>
           </table>
@@ -352,6 +377,9 @@
                 />
                 @if (row.grade) {
                   <span class="grade-badge" [class]="gradeTone(row.grade)">{{ row.grade }}</span>
+                }
+                @if (showGradePoints()) {
+                  <span class="points-pill mono">{{ pointsForGrade(row.grade) }} pts</span>
                 }
               </div>
               <div class="list-remarks">

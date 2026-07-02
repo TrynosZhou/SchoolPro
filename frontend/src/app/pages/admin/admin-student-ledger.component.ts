@@ -5,6 +5,7 @@ import { RouterLink } from '@angular/router';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
 import { ApiService } from '../../core/services/api.service';
+import { formatGenderLabel, formatStudentClassLabel } from '../../core/utils/class-display';
 
 interface TermRow {
   id: string;
@@ -25,13 +26,15 @@ interface StudentMatch {
   admissionNumber: string;
   firstName: string;
   lastName: string;
+  gender?: string;
   className?: string;
+  classLabel?: string;
   formName?: string;
 }
 
 interface LedgerLine {
   date: string;
-  type: 'invoice' | 'payment' | 'opening';
+  type: 'invoice' | 'payment' | 'opening' | 'debit_note' | 'credit_note' | 'tuition_exemption';
   reference: string;
   description: string;
   debit: number;
@@ -43,11 +46,17 @@ interface StudentLedgerReport {
   student: StudentMatch;
   term: { id: string; name: string; startDate: string; endDate: string };
   lines: LedgerLine[];
+  invoiceBalance: number;
+  balanceTermId?: string;
+  balanceTermName?: string;
   summary: {
     openingBalance: number;
     totalDebits: number;
     totalCredits: number;
     closingBalance: number;
+    termCharges: number;
+    termNetMovement: number;
+    termOverpayment: number;
   };
 }
 
@@ -71,6 +80,8 @@ export class AdminStudentLedgerComponent implements OnInit {
   private api = inject(ApiService);
 
   readonly adminNav = ADMIN_NAV_SECTIONS;
+  readonly formatStudentClassLabel = formatStudentClassLabel;
+  readonly formatGenderLabel = formatGenderLabel;
 
   loading = signal(false);
   pdfLoading = signal(false);
@@ -106,11 +117,19 @@ export class AdminStudentLedgerComponent implements OnInit {
   });
 
   balanceStatus = computed(() => {
-    const closing = this.report()?.summary.closingBalance ?? 0;
-    if (closing > 0) return { label: 'Amount owed', tone: 'owed' as const };
-    if (closing < 0) return { label: 'Credit balance', tone: 'credit' as const };
+    const r = this.report();
+    const amount = r ? r.invoiceBalance : 0;
+    if (amount > 0) return { label: 'Invoice balance', tone: 'owed' as const };
     return { label: 'Settled', tone: 'clear' as const };
   });
+
+  displayBalance = computed(() => {
+    const r = this.report();
+    if (!r) return 0;
+    return r.invoiceBalance;
+  });
+
+  private allowAutoTermSwitch = true;
 
   hasLineFilters = computed(
     () => Boolean(this.lineSearch().trim()) || this.typeFilter() !== 'all',
@@ -131,6 +150,7 @@ export class AdminStudentLedgerComponent implements OnInit {
 
   selectTerm(termId: string) {
     this.selectedTermId = termId;
+    this.allowAutoTermSwitch = false;
     if (this.selectedStudentId || this.query.trim()) this.getReport();
   }
 
@@ -163,8 +183,23 @@ export class AdminStudentLedgerComponent implements OnInit {
           return;
         }
         if (res.report) {
-          this.selectedStudentId = res.report.student.id;
-          this.report.set(res.report);
+          const report = res.report;
+          if (
+            this.allowAutoTermSwitch &&
+            report.invoiceBalance > 0 &&
+            report.balanceTermId &&
+            report.balanceTermId !== this.selectedTermId
+          ) {
+            this.selectedTermId = report.balanceTermId;
+            this.allowAutoTermSwitch = false;
+            const termLabel = report.balanceTermName || 'the term with balance';
+            this.showToast('success', `Switched to ${termLabel} where the outstanding balance is recorded.`);
+            this.getReport();
+            return;
+          }
+          this.allowAutoTermSwitch = true;
+          this.selectedStudentId = report.student.id;
+          this.report.set(report);
           this.matches.set([]);
           this.showToast('success', 'Ledger report loaded.');
         }
@@ -179,6 +214,7 @@ export class AdminStudentLedgerComponent implements OnInit {
   pickStudent(student: StudentMatch) {
     this.selectedStudentId = student.id;
     this.query = `${student.firstName} ${student.lastName} (${student.admissionNumber})`;
+    this.allowAutoTermSwitch = true;
     this.getReport();
   }
 
@@ -189,6 +225,7 @@ export class AdminStudentLedgerComponent implements OnInit {
     this.report.set(null);
     this.lineSearch.set('');
     this.typeFilter.set('all');
+    this.allowAutoTermSwitch = true;
   }
 
   clearLineFilters() {
@@ -207,6 +244,9 @@ export class AdminStudentLedgerComponent implements OnInit {
   typeLabel(type: LedgerLine['type']): string {
     if (type === 'invoice') return 'Invoice';
     if (type === 'payment') return 'Payment';
+    if (type === 'debit_note') return 'Debit note';
+    if (type === 'credit_note') return 'Credit note';
+    if (type === 'tuition_exemption') return 'Exemption';
     return 'Opening';
   }
 

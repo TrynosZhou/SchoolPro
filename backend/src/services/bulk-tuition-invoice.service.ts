@@ -15,6 +15,11 @@ import {
   resolveFormLevel,
   resolveTuitionFeeForFormLevel,
 } from './registration-invoice.service';
+import {
+  buildTuitionInvoiceLines,
+  computeTuitionExemptionDiscount,
+  loadActiveExemptionsMap,
+} from './tuition-exemption.service';
 
 export interface BulkTuitionPreview {
   currentTerm: { id: string; name: string };
@@ -57,7 +62,7 @@ async function loadBillingTerms(): Promise<{ currentTerm: Term; nextTerm: Term }
 
 export async function previewBulkTuitionInvoices(): Promise<BulkTuitionPreview> {
   const { currentTerm, nextTerm } = await loadBillingTerms();
-  const description = bulkTuitionInvoiceDescription(nextTerm.name);
+  const description = bulkTuitionInvoiceDescription(currentTerm.name);
 
   const studentRepo = AppDataSource.getRepository(Student);
   const invoiceRepo = AppDataSource.getRepository(Invoice);
@@ -72,6 +77,7 @@ export async function previewBulkTuitionInvoices(): Promise<BulkTuitionPreview> 
     select: { studentId: true },
   });
   const alreadyInvoiced = new Set(existing.map((inv) => inv.studentId));
+  const exemptionMap = await loadActiveExemptionsMap(students.map((s) => s.id));
 
   let estimatedTotal = 0;
   let pendingCount = 0;
@@ -83,7 +89,8 @@ export async function previewBulkTuitionInvoices(): Promise<BulkTuitionPreview> 
     const tuitionFee = await resolveTuitionFeeForFormLevel(level);
     const amount = Number(tuitionFee?.defaultAmount || 0);
     if (amount <= 0) continue;
-    estimatedTotal += amount;
+    const { netAmount } = computeTuitionExemptionDiscount(amount, exemptionMap.get(student.id));
+    estimatedTotal += netAmount;
     pendingCount += 1;
   }
 
@@ -106,7 +113,7 @@ export async function createBulkTuitionInvoices(): Promise<BulkTuitionResult> {
     throw new Error('Billing terms could not be loaded.');
   }
 
-  const description = bulkTuitionInvoiceDescription(nextTerm.name);
+  const description = bulkTuitionInvoiceDescription(currentTerm.name);
   const dueDate = nextTerm.startDate || today();
 
   const studentRepo = AppDataSource.getRepository(Student);
@@ -125,6 +132,7 @@ export async function createBulkTuitionInvoices(): Promise<BulkTuitionResult> {
     select: { studentId: true },
   });
   const alreadyInvoiced = new Set(existing.map((inv) => inv.studentId));
+  const exemptionMap = await loadActiveExemptionsMap(students.map((s) => s.id));
 
   let created = 0;
   let skipped = 0;
@@ -166,7 +174,10 @@ export async function createBulkTuitionInvoices(): Promise<BulkTuitionResult> {
       continue;
     }
 
-    const lineDescription = `${tuitionFee.name} (${nextTerm.name})`;
+    const exemption = exemptionMap.get(student.id);
+    const invoiceLines = buildTuitionInvoiceLines(tuitionFee.name, currentTerm.name, amount, exemption);
+    const invoiceTotal = roundMoney(invoiceLines.reduce((sum, line) => sum + Number(line.amount), 0));
+
     let invoice = await invoiceRepo.save(
       invoiceRepo.create({
         invoiceNumber: generateNumber('INV'),
@@ -174,7 +185,7 @@ export async function createBulkTuitionInvoices(): Promise<BulkTuitionResult> {
         termId: currentTerm.id,
         feeType: tuitionFee.code,
         description,
-        totalAmount: amount,
+        totalAmount: invoiceTotal,
         amountPaid: 0,
         status: InvoiceStatus.SENT,
         dueDate,
@@ -182,15 +193,17 @@ export async function createBulkTuitionInvoices(): Promise<BulkTuitionResult> {
       }),
     );
 
-    await lineRepo.save(
-      lineRepo.create({
-        invoiceId: invoice.id,
-        description: lineDescription,
-        quantity: 1,
-        unitPrice: amount,
-        amount,
-      }),
-    );
+    for (const line of invoiceLines) {
+      await lineRepo.save(
+        lineRepo.create({
+          invoiceId: invoice.id,
+          description: line.description,
+          quantity: line.quantity,
+          unitPrice: line.unitPrice,
+          amount: line.amount,
+        }),
+      );
+    }
 
     const lastLedger = await ledgerRepo.findOne({
       where: { studentId: student.id },
@@ -203,9 +216,9 @@ export async function createBulkTuitionInvoices(): Promise<BulkTuitionResult> {
         termId: currentTerm.id,
         entryDate: today(),
         description: `Invoice ${invoice.invoiceNumber} - ${description}`,
-        debit: amount,
+        debit: invoiceTotal,
         credit: 0,
-        balance: prevBalance + amount,
+        balance: prevBalance + invoiceTotal,
         referenceType: 'invoice',
         referenceId: invoice.id,
       }),
@@ -216,7 +229,7 @@ export async function createBulkTuitionInvoices(): Promise<BulkTuitionResult> {
     await refreshTermClosingBalance(student.id, currentTerm.id);
 
     created += 1;
-    totalBilled += amount;
+    totalBilled += invoiceTotal;
     alreadyInvoiced.add(student.id);
   }
 
@@ -272,9 +285,9 @@ async function reversePrepaidAppliedToInvoice(
   await tbRepo.save(tb);
 }
 
-/** Remove bulk tuition invoices (e.g. "Tuition fees for Term 3") and restore prior balances. */
+/** Remove bulk tuition invoices for the current term and restore prior balances. */
 export async function reverseBulkTuitionInvoices(
-  nextTermName?: string,
+  termName?: string,
 ): Promise<BulkTuitionReverseResult> {
   const termRepo = AppDataSource.getRepository(Term);
   const invoiceRepo = AppDataSource.getRepository(Invoice);
@@ -282,16 +295,12 @@ export async function reverseBulkTuitionInvoices(
   const ledgerRepo = AppDataSource.getRepository(LedgerEntry);
   const paymentRepo = AppDataSource.getRepository(Payment);
 
-  let description: string;
-  if (nextTermName) {
-    description = bulkTuitionInvoiceDescription(nextTermName);
-  } else {
-    const { nextTerm } = await loadBillingTerms();
-    description = bulkTuitionInvoiceDescription(nextTerm.name);
-  }
+  const { currentTerm } = await loadBillingTerms();
+  const billingTermName = termName || currentTerm.name;
+  const description = bulkTuitionInvoiceDescription(billingTermName);
 
   const invoices = await invoiceRepo.find({
-    where: { description },
+    where: { termId: currentTerm.id, description },
     relations: relations('lines'),
     order: { createdAt: 'ASC' },
   });

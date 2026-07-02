@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.DEFAULT_GRADE_BOUNDARIES = void 0;
 exports.validateGradeBoundaries = validateGradeBoundaries;
 exports.calculateGradeFromBoundaries = calculateGradeFromBoundaries;
+exports.pointsForGrade = pointsForGrade;
 exports.DEFAULT_GRADE_BOUNDARIES = [
     { grade: 'A', label: 'Excellent', minPercent: 80 },
     { grade: 'B', label: 'Very Good', minPercent: 70 },
@@ -22,6 +23,12 @@ function validateGradeBoundaries(boundaries) {
         if (Number.isNaN(min) || min < 0 || min > 100) {
             return 'Minimum percentages must be between 0 and 100';
         }
+        if (b.points !== undefined && b.points !== null) {
+            const pts = Number(b.points);
+            if (Number.isNaN(pts) || pts < 0) {
+                return 'Points must be a non-negative number when provided';
+            }
+        }
     }
     const grades = boundaries.map((b) => b.grade.trim().toUpperCase());
     if (new Set(grades).size !== grades.length)
@@ -39,4 +46,13 @@ function calculateGradeFromBoundaries(marks, max, boundaries) {
             return b.grade.trim();
     }
     return sorted[sorted.length - 1]?.grade?.trim() ?? 'U';
+}
+function pointsForGrade(grade, boundaries) {
+    if (!grade?.trim())
+        return null;
+    const key = grade.trim().toUpperCase();
+    const row = boundaries.find((b) => b.grade.trim().toUpperCase() === key);
+    if (row?.points == null || Number.isNaN(Number(row.points)))
+        return null;
+    return Number(row.points);
 }

@@ -5,6 +5,20 @@ import { Router, RouterLink } from '@angular/router';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
 import { ApiService } from '../../core/services/api.service';
+import { formatGenderLabel, formatStudentClassLabel } from '../../core/utils/class-display';
+
+interface StudentBalanceRow {
+  id: string;
+  admissionNumber: string;
+  firstName: string;
+  lastName: string;
+  gender?: string;
+  className?: string;
+  classLabel?: string;
+  totalInvoiced: number;
+  totalPaid: number;
+  balance: number;
+}
 
 interface OutstandingInvoiceRow {
   invoiceId: string;
@@ -23,7 +37,9 @@ interface OutstandingStudentRow {
   admissionNumber: string;
   firstName: string;
   lastName: string;
+  gender?: string;
   className: string;
+  classLabel?: string;
   formName?: string;
   invoiceBalance: number;
   invoices: OutstandingInvoiceRow[];
@@ -32,6 +48,7 @@ interface OutstandingStudentRow {
 interface OutstandingInvoicesGroup {
   classId: string;
   className: string;
+  classLabel?: string;
   formName?: string;
   classTotal: number;
   students: OutstandingStudentRow[];
@@ -49,7 +66,9 @@ interface FlatInvoiceRow extends OutstandingInvoiceRow {
   admissionNumber: string;
   firstName: string;
   lastName: string;
+  gender?: string;
   className: string;
+  classLabel?: string;
   formName?: string;
   studentBalance: number;
 }
@@ -77,6 +96,10 @@ export class AdminOutstandingInvoicesComponent implements OnInit {
   report = signal<OutstandingInvoicesReport | null>(null);
 
   search = signal('');
+  balanceQuery = '';
+  balanceLoading = signal(false);
+  balanceRows = signal<StudentBalanceRow[]>([]);
+  balanceSearchAttempted = signal(false);
   classFilter = signal('all');
   formFilter = signal('all');
   dueFilter = signal<DueFilter>('all');
@@ -220,7 +243,9 @@ export class AdminOutstandingInvoicesComponent implements OnInit {
             firstName: s.firstName,
             lastName: s.lastName,
             className: s.className,
+            classLabel: s.classLabel,
             formName: s.formName,
+            gender: s.gender,
             studentBalance: s.invoiceBalance,
           });
         }
@@ -270,6 +295,7 @@ export class AdminOutstandingInvoicesComponent implements OnInit {
   hasActiveFilters = computed(
     () =>
       Boolean(this.search().trim()) ||
+      Boolean(this.balanceQuery.trim()) ||
       this.classFilter() !== 'all' ||
       this.formFilter() !== 'all' ||
       this.dueFilter() !== 'all' ||
@@ -299,11 +325,15 @@ export class AdminOutstandingInvoicesComponent implements OnInit {
   }
 
   classHeading(group: OutstandingInvoicesGroup): string {
-    const className = (group.className || '').trim();
-    const formPrefix = group.formName ? `${group.formName} · ` : '';
-    if (!className) return `${formPrefix}Class —`;
-    const label = /^class\s+/i.test(className) ? className : `Class ${className}`;
-    return `${formPrefix}${label}`;
+    return group.classLabel || formatStudentClassLabel(group.className) || 'Class —';
+  }
+
+  studentClassLabel(row: { classLabel?: string; className?: string }): string {
+    return row.classLabel || formatStudentClassLabel(row.className);
+  }
+
+  studentGenderLabel(gender?: string): string {
+    return formatGenderLabel(gender);
   }
 
   initials(student: { firstName: string; lastName: string }): string {
@@ -365,10 +395,62 @@ export class AdminOutstandingInvoicesComponent implements OnInit {
 
   clearFilters() {
     this.search.set('');
+    this.clearBalanceLookup();
     this.classFilter.set('all');
     this.formFilter.set('all');
     this.dueFilter.set('all');
     this.sortOrder.set('balance-desc');
+  }
+
+  getBalance() {
+    const q = this.balanceQuery.trim();
+    if (!q) {
+      this.showToast('error', 'Enter Student ID, first name, or last name.');
+      return;
+    }
+
+    this.balanceLoading.set(true);
+    this.balanceSearchAttempted.set(true);
+    this.search.set(q);
+
+    this.api.get<StudentBalanceRow[]>('/billing/student-balance', { q }).subscribe({
+      next: (rows) => {
+        this.balanceRows.set(rows);
+        this.balanceLoading.set(false);
+        if (!rows.length) {
+          this.showToast('error', 'No matching student found.');
+          return;
+        }
+        if (rows.length === 1) {
+          const s = rows[0];
+          this.showToast(
+            'success',
+            `${s.firstName} ${s.lastName}: $${Number(s.balance).toFixed(2)} outstanding`,
+          );
+        }
+      },
+      error: (e) => {
+        this.balanceLoading.set(false);
+        this.balanceRows.set([]);
+        this.showToast('error', e.error?.message || 'Failed to fetch student balance.');
+      },
+    });
+  }
+
+  clearBalanceLookup() {
+    this.balanceQuery = '';
+    this.balanceRows.set([]);
+    this.balanceSearchAttempted.set(false);
+  }
+
+  selectBalanceStudent(row: StudentBalanceRow) {
+    this.balanceQuery = row.admissionNumber || `${row.firstName} ${row.lastName}`;
+    this.balanceRows.set([row]);
+    this.search.set(this.balanceQuery);
+  }
+
+  recordPaymentForBalance(row: StudentBalanceRow): void {
+    void this.router.navigate(['/admin/fin-reports/record-payment', row.id]);
   }
 
   selectClassChip(classId: string) {

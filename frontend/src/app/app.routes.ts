@@ -30,6 +30,7 @@ import { AdminResultsAnalysisComponent } from './pages/admin/admin-results-analy
 import { AdminRankingComponent } from './pages/admin/admin-ranking.component';
 import { AdminManageFeesComponent } from './pages/admin/admin-manage-fees.component';
 import { AdminStudentBalanceComponent } from './pages/admin/admin-student-balance.component';
+import { AdminExemptionsComponent } from './pages/admin/admin-exemptions.component';
 import { AdminAcademicSettingsComponent } from './pages/admin/admin-academic-settings.component';
 import { AdminIntegrationsComponent } from './pages/admin/admin-integrations.component';
 import { AdminUserPermissionsComponent } from './pages/admin/admin-user-permissions.component';
@@ -44,11 +45,13 @@ import { AdminFeeCollectionRevenueComponent } from './pages/admin/admin-fee-coll
 import { AdminTimetableConfigurePeriodsComponent } from './pages/admin/admin-timetable-configure-periods.component';
 import { AdminTimetableGenerateComponent } from './pages/admin/admin-timetable-generate.component';
 import { AdminTimetableViewComponent } from './pages/admin/admin-timetable-view.component';
+import { AdminTimetableTeacherScheduleComponent } from './pages/admin/admin-timetable-teacher-schedule.component';
 import { AdminSendMessageComponent } from './pages/admin/admin-send-message.component';
 import { AdminInboxComponent } from './pages/admin/admin-inbox.component';
 import { AdminParentsComponent } from './pages/admin/admin-parents.component';
 import { AdminParentDetailComponent } from './pages/admin/admin-parent-detail.component';
 import { AdminPayrollComponent } from './pages/admin/admin-payroll.component';
+import { AdminGeneralLedgerComponent } from './pages/admin/admin-general-ledger.component';
 
 export const routes: Routes = [
   { path: '', redirectTo: 'login', pathMatch: 'full' },
@@ -103,6 +106,7 @@ export const routes: Routes = [
       { path: 'payment', component: AdminBillingComponent, data: { financeMode: 'payment' } },
       { path: 'manage-fees', component: AdminManageFeesComponent },
       { path: 'student-balance', component: AdminStudentBalanceComponent },
+      { path: 'exemptions', component: AdminExemptionsComponent },
       { path: 'finance', component: AdminFinanceComponent },
       { path: 'fin-reports/student-ledger', component: AdminStudentLedgerComponent },
       { path: 'fin-reports/outstanding-invoices', component: AdminOutstandingInvoicesComponent },
@@ -110,12 +114,14 @@ export const routes: Routes = [
       { path: 'fin-reports/student-reconciliation', component: AdminStudentReconciliationComponent },
       { path: 'fin-reports/debtor-aging', component: AdminDebtorAgingComponent },
       { path: 'fin-reports/fee-collection-revenue', component: AdminFeeCollectionRevenueComponent },
+      { path: 'fin-reports/general-ledger', component: AdminGeneralLedgerComponent },
       { path: 'communication/send', component: AdminSendMessageComponent },
       { path: 'communication/inbox', component: AdminInboxComponent },
       { path: 'timetable', redirectTo: 'timetable/configure-periods', pathMatch: 'full' },
       { path: 'timetable/configure-periods', component: AdminTimetableConfigurePeriodsComponent },
       { path: 'timetable/generate', component: AdminTimetableGenerateComponent },
       { path: 'timetable/view', component: AdminTimetableViewComponent },
+      { path: 'timetable/teacher-schedule', component: AdminTimetableTeacherScheduleComponent },
       { path: 'staff', component: AdminStaffComponent },
       { path: 'payroll', component: AdminPayrollComponent },
       { path: 'exams', component: ExamMarksEntryComponent },

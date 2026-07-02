@@ -1,13 +1,15 @@
 import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
 import {
   TIMETABLE_MAX_BREAKS,
+  TIMETABLE_MAX_LESSONS_PER_DAY,
   TIMETABLE_MIN_BREAKS,
+  TIMETABLE_MIN_LESSONS_PER_DAY,
   TimetablePeriod,
   TimetablePeriodsService,
+  TimetableTemplateSettings,
 } from '../../core/services/timetable-periods.service';
 
 type ViewMode = 'table' | 'cards' | 'timeline';
@@ -17,24 +19,40 @@ type AddPanel = 'lesson' | 'break' | null;
 @Component({
   selector: 'app-admin-timetable-configure-periods',
   standalone: true,
-  imports: [PortalLayoutComponent, FormsModule, RouterLink],
+  imports: [PortalLayoutComponent, FormsModule],
   templateUrl: './admin-timetable-configure-periods.component.html',
   styleUrl: './admin-timetable-configure-periods.component.scss',
 })
 export class AdminTimetableConfigurePeriodsComponent implements OnInit {
   private periodsSvc = inject(TimetablePeriodsService);
   readonly adminNav = ADMIN_NAV_SECTIONS;
+  readonly breakCountOptions = Array.from(
+    { length: TIMETABLE_MAX_BREAKS - TIMETABLE_MIN_BREAKS + 1 },
+    (_, i) => TIMETABLE_MIN_BREAKS + i,
+  );
+
   readonly minBreaks = TIMETABLE_MIN_BREAKS;
   readonly maxBreaks = TIMETABLE_MAX_BREAKS;
+  readonly minLessonsPerDay = TIMETABLE_MIN_LESSONS_PER_DAY;
+  readonly maxLessonsPerDay = TIMETABLE_MAX_LESSONS_PER_DAY;
 
   periods = signal<TimetablePeriod[]>([]);
   toast = signal<{ type: 'success' | 'error'; msg: string } | null>(null);
   saving = signal(false);
+  generatingTemplate = signal(false);
   viewMode = signal<ViewMode>('table');
   scheduleFilter = signal<ScheduleFilter>('all');
   addPanel = signal<AddPanel>(null);
   editingId = signal<string | null>(null);
   scheduleSearch = signal('');
+
+  templateSettings: TimetableTemplateSettings = {
+    periodsPerDay: 6,
+    dayStart: '08:00',
+    lessonMinutes: 40,
+    breakCount: TIMETABLE_MIN_BREAKS,
+    breakMinutes: [15, 15],
+  };
 
   lessonDraft = { name: '', startTime: '08:00', endTime: '08:40' };
   breakDraft = { name: '', startTime: '09:20', endTime: '09:35' };
@@ -96,8 +114,111 @@ export class AdminTimetableConfigurePeriodsComponent implements OnInit {
     return { startMin, endMin, span: Math.max(endMin - startMin, 1) };
   });
 
+  templateDayPreview(): {
+    lessonCount: number;
+    breakCount: number;
+    start: string;
+    end: string;
+    breakSummary: string;
+  } {
+    const preview = this.periodsSvc.generateTemplate(this.templateSettings);
+    if (!preview.length) {
+      return { lessonCount: 0, breakCount: 0, start: '—', end: '—', breakSummary: '—' };
+    }
+    const breaks = preview.filter((p) => p.slotType === 'break');
+    const breakSummary = breaks
+      .map((b) => {
+        const min = this.timeToMinutes(b.endTime) - this.timeToMinutes(b.startTime);
+        return `${b.name} ${min}m`;
+      })
+      .join(' · ');
+    return {
+      lessonCount: preview.filter((p) => p.slotType === 'lesson').length,
+      breakCount: breaks.length,
+      start: preview[0].startTime,
+      end: preview[preview.length - 1].endTime,
+      breakSummary,
+    };
+  }
+
+  breakTemplateLabel(index: number): string {
+    return this.periodsSvc.breakName(index);
+  }
+
+  onTemplateBreakCountChange() {
+    this.syncTemplateBreakMinutes();
+  }
+
+  syncTemplateBreakMinutes() {
+    const count = Math.max(
+      this.minBreaks,
+      Math.min(this.maxBreaks, Math.round(Number(this.templateSettings.breakCount) || this.minBreaks)),
+    );
+    this.templateSettings.breakCount = count;
+    const current = [...(this.templateSettings.breakMinutes || [])];
+    const fallback = current[current.length - 1] ?? 15;
+    while (current.length < count) {
+      current.push(fallback);
+    }
+    this.templateSettings.breakMinutes = current.slice(0, count);
+  }
+
   ngOnInit() {
-    this.periods.set(this.sortSlots(this.periodsSvc.load()));
+    this.templateSettings = this.periodsSvc.loadTemplateSettings();
+    this.syncTemplateBreakMinutes();
+    const loaded = this.sortSlots(this.periodsSvc.load());
+    this.periods.set(loaded);
+    const lessons = loaded.filter((p) => p.slotType === 'lesson');
+    const breaks = loaded.filter((p) => p.slotType === 'break');
+    if (lessons.length > 0) {
+      this.templateSettings = { ...this.templateSettings, periodsPerDay: lessons.length };
+    }
+    if (breaks.length >= this.minBreaks && breaks.length <= this.maxBreaks) {
+      this.templateSettings = {
+        ...this.templateSettings,
+        breakCount: breaks.length,
+        breakMinutes: breaks.map(
+          (b) => this.timeToMinutes(b.endTime) - this.timeToMinutes(b.startTime),
+        ),
+      };
+      this.syncTemplateBreakMinutes();
+    }
+  }
+
+  generateDayTemplate() {
+    const count = Math.round(Number(this.templateSettings.periodsPerDay) || 0);
+    if (count < this.minLessonsPerDay || count > this.maxLessonsPerDay) {
+      this.showToast(
+        'error',
+        `Enter between ${this.minLessonsPerDay} and ${this.maxLessonsPerDay} periods per day.`,
+      );
+      return;
+    }
+
+    const hasExisting = this.periods().length > 0;
+    if (
+      hasExisting &&
+      !confirm(
+        `Generate a new template with ${count} lesson periods? This replaces the current daily schedule (you can still edit times before saving).`,
+      )
+    ) {
+      return;
+    }
+
+    this.generatingTemplate.set(true);
+    this.syncTemplateBreakMinutes();
+    this.periodsSvc.saveTemplateSettings(this.templateSettings);
+    const generated = this.sortSlots(this.periodsSvc.generateTemplate(this.templateSettings));
+    this.periods.set(generated);
+    this.scheduleSearch.set('');
+    this.scheduleFilter.set('all');
+    this.addPanel.set(null);
+    this.cancelEdit();
+    this.generatingTemplate.set(false);
+    this.showToast(
+      'success',
+      `Generated template with ${count} lesson periods and ${this.templateSettings.breakCount} breaks. Adjust times below, then save.`,
+    );
   }
 
   addLesson() {
@@ -164,6 +285,8 @@ export class AdminTimetableConfigurePeriodsComponent implements OnInit {
       return;
     }
     this.saving.set(true);
+    this.syncTemplateBreakMinutes();
+    this.periodsSvc.saveTemplateSettings(this.templateSettings);
     this.periodsSvc.save(this.sortSlots(this.periods()));
     setTimeout(() => {
       this.saving.set(false);
@@ -173,6 +296,8 @@ export class AdminTimetableConfigurePeriodsComponent implements OnInit {
 
   resetDefaults() {
     this.periods.set(this.sortSlots(this.periodsSvc.resetDefaults()));
+    this.templateSettings = this.periodsSvc.loadTemplateSettings();
+    this.syncTemplateBreakMinutes();
     this.scheduleSearch.set('');
     this.scheduleFilter.set('all');
     this.showToast('success', 'Restored default lessons and breaks.');

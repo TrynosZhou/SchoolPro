@@ -35,11 +35,11 @@
             <span>Credits</span>
           </div>
         </article>
-        <article class="kpi" [class.warn]="report() && report()!.summary.closingBalance > 0">
+        <article class="kpi" [class.warn]="report() && displayBalance() > 0">
           <span class="kpi-icon">⚖</span>
           <div>
-            <strong>{{ report() ? ('$' + (report()!.summary.closingBalance | number:'1.2-2')) : '—' }}</strong>
-            <span>{{ report() ? balanceStatus().label : 'Closing balance' }}</span>
+            <strong>{{ report() ? ('$' + (displayBalance() | number:'1.2-2')) : '—' }}</strong>
+            <span>{{ report() ? balanceStatus().label : 'Invoice balance' }}</span>
           </div>
         </article>
       </div>
@@ -121,7 +121,10 @@
                 <div>
                   <strong>{{ m.firstName }} {{ m.lastName }}</strong>
                   <code class="sid">{{ m.admissionNumber }}</code>
-                  <span class="class-meta">{{ m.formName || '—' }} {{ m.className || '' }}</span>
+                  <span class="class-meta">{{ m.classLabel || formatStudentClassLabel(m.className) }}</span>
+                  @if (m.gender) {
+                    <span class="class-meta">{{ formatGenderLabel(m.gender) }}</span>
+                  }
                 </div>
               </button>
             }
@@ -135,12 +138,15 @@
               <h3>{{ report()!.student.firstName }} {{ report()!.student.lastName }}</h3>
               <p class="meta">
                 ID <strong>{{ report()!.student.admissionNumber }}</strong>
-                · {{ report()!.student.formName || '—' }} {{ report()!.student.className || '' }}
+                · {{ report()!.student.classLabel || formatStudentClassLabel(report()!.student.className) }}
+                @if (report()!.student.gender) {
+                  · {{ formatGenderLabel(report()!.student.gender) }}
+                }
                 · {{ report()!.term.name }} ({{ report()!.term.startDate }} → {{ report()!.term.endDate }})
               </p>
             </div>
             <span class="balance-badge" [attr.data-tone]="balanceStatus().tone">
-              {{ balanceStatus().label }}: ${{ report()!.summary.closingBalance | number:'1.2-2' }}
+              {{ balanceStatus().label }}: ${{ displayBalance() | number:'1.2-2' }}
             </span>
           </div>
 
@@ -150,7 +156,7 @@
               <strong>${{ report()!.summary.openingBalance | number:'1.2-2' }}</strong>
             </article>
             <article class="summary-card debit">
-              <span>Total debits</span>
+              <span>Term debits (excl. opening)</span>
               <strong>${{ report()!.summary.totalDebits | number:'1.2-2' }}</strong>
             </article>
             <article class="summary-card credit">
@@ -158,9 +164,27 @@
               <strong>${{ report()!.summary.totalCredits | number:'1.2-2' }}</strong>
             </article>
             <article class="summary-card closing" [attr.data-tone]="balanceStatus().tone">
-              <span>Closing balance</span>
-              <strong>${{ report()!.summary.closingBalance | number:'1.2-2' }}</strong>
+              <span>Outstanding invoice balance</span>
+              <strong>${{ report()!.invoiceBalance | number:'1.2-2' }}</strong>
             </article>
+          </div>
+
+          <div class="reconciliation-note" [attr.data-tone]="report()!.summary.termOverpayment > 0 ? 'overpaid' : 'balanced'">
+            <strong>Term reconciliation</strong>
+            <p>
+              Opening <span class="amt">${{ report()!.summary.openingBalance | number:'1.2-2' }}</span>
+              + term debits <span class="amt">${{ report()!.summary.totalDebits | number:'1.2-2' }}</span>
+              = <span class="amt">${{ report()!.summary.termCharges | number:'1.2-2' }}</span> term charges
+              · payments <span class="amt">${{ report()!.summary.totalCredits | number:'1.2-2' }}</span>
+              @if (report()!.summary.termOverpayment > 0) {
+                · <span class="overpaid">term overpayment ${{ report()!.summary.termOverpayment | number:'1.2-2' }}</span>
+              } @else if (report()!.summary.termNetMovement > 0) {
+                · <span class="owed">term balance ${{ report()!.summary.termNetMovement | number:'1.2-2' }}</span>
+              } @else {
+                · term settled
+              }
+              · open invoices <span class="amt">${{ report()!.invoiceBalance | number:'1.2-2' }}</span>
+            </p>
           </div>
 
           <div class="lines-toolbar">
@@ -183,6 +207,9 @@
               <button type="button" class="chip-filter" data-type="opening" [class.active]="typeFilter() === 'opening'" (click)="typeFilter.set('opening')">Opening</button>
               <button type="button" class="chip-filter" data-type="invoice" [class.active]="typeFilter() === 'invoice'" (click)="typeFilter.set('invoice')">Invoices</button>
               <button type="button" class="chip-filter" data-type="payment" [class.active]="typeFilter() === 'payment'" (click)="typeFilter.set('payment')">Payments</button>
+              <button type="button" class="chip-filter" data-type="debit_note" [class.active]="typeFilter() === 'debit_note'" (click)="typeFilter.set('debit_note')">Debit notes</button>
+              <button type="button" class="chip-filter" data-type="credit_note" [class.active]="typeFilter() === 'credit_note'" (click)="typeFilter.set('credit_note')">Credit notes</button>
+              <button type="button" class="chip-filter" data-type="tuition_exemption" [class.active]="typeFilter() === 'tuition_exemption'" (click)="typeFilter.set('tuition_exemption')">Exemptions</button>
             </div>
           </div>
 
@@ -203,7 +230,7 @@
                   <th>Description</th>
                   <th class="num">Debit</th>
                   <th class="num">Credit</th>
-                  <th class="num">Balance</th>
+                  <th class="num">Amount owed</th>
                 </tr>
               </thead>
               <tbody>

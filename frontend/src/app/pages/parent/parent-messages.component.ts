@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { PARENT_NAV_ITEMS } from '../../core/config/parent-nav';
 import { ApiService } from '../../core/services/api.service';
+import { MessageBadgeService } from '../../core/services/message-badge.service';
 
 interface MessageUser {
   id: string;
@@ -35,6 +36,7 @@ const SCHOOL_SENDER_ROLES = new Set(['admin', 'director', 'principal']);
 })
 export class ParentMessagesComponent implements OnInit {
   private api = inject(ApiService);
+  private messageBadge = inject(MessageBadgeService);
   readonly nav = PARENT_NAV_ITEMS;
 
   messages = signal<MessageRow[]>([]);
@@ -62,6 +64,7 @@ export class ParentMessagesComponent implements OnInit {
       next: (rows) => {
         this.messages.set(rows);
         this.loading.set(false);
+        this.messageBadge.refresh();
       },
       error: () => {
         this.messages.set([]);
@@ -77,6 +80,7 @@ export class ParentMessagesComponent implements OnInit {
         next: (updated) => {
           this.messages.update((rows) => rows.map((m) => (m.id === updated.id ? updated : m)));
           this.selected.set(updated);
+          this.messageBadge.refresh();
         },
       });
     }

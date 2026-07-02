@@ -5,12 +5,13 @@ import { RouterLink } from '@angular/router';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
 import { ApiService } from '../../core/services/api.service';
+import { formatGenderLabel, formatStudentClassLabel } from '../../core/utils/class-display';
 
 interface TermRow { id: string; name: string; startDate: string; endDate: string; isCurrent: boolean; }
 interface SchoolYearRow { id: string; name: string; terms?: TermRow[]; }
 interface FormRow { id: string; name: string; level: number; }
 interface ClassRow { id: string; name: string; formId: string; form?: { name: string }; }
-interface StudentMatch { id: string; admissionNumber: string; firstName: string; lastName: string; className?: string; formName?: string; }
+interface StudentMatch { id: string; admissionNumber: string; firstName: string; lastName: string; gender?: string; className?: string; classLabel?: string; formName?: string; }
 
 type AgingBucket = 'current' | '31_60' | '61_90' | '91_120' | '120_plus';
 type AccountStatus = 'reconciled' | 'unreconciled' | 'pending';
@@ -23,8 +24,10 @@ interface DebtorRow {
   admissionNumber: string;
   firstName: string;
   lastName: string;
+  gender?: string;
   formName?: string;
   className?: string;
+  classLabel?: string;
   guardianName?: string;
   guardianPhone?: string;
   guardianEmail?: string;
@@ -544,12 +547,12 @@ export class AdminDebtorAgingComponent implements OnInit {
     return 'Unreconciled';
   }
 
-  classLabel(r: DebtorRow): string {
-    const formPrefix = r.formName ? `${r.formName} · ` : '';
-    const className = (r.className || '').trim();
-    if (!className) return `${formPrefix}Class —`;
-    const label = /^class\s+/i.test(className) ? className : `Class ${className}`;
-    return `${formPrefix}${label}`;
+  classLabel(r: DebtorRow | StudentMatch): string {
+    return r.classLabel || formatStudentClassLabel(r.className);
+  }
+
+  genderLabel(gender?: string): string {
+    return formatGenderLabel(gender);
   }
 
   bucketShortLabel(key: AgingBucket): string {

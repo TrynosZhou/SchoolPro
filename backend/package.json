@@ -9,8 +9,13 @@
     "start": "node dist/server.js",
     "seed": "ts-node src/seed.ts",
     "db:init": "ts-node src/scripts/init-database.ts",
+    "migration:run": "ts-node ./node_modules/typeorm/cli.js migration:run -d src/config/data-source.ts",
+    "migration:revert": "ts-node ./node_modules/typeorm/cli.js migration:revert -d src/config/data-source.ts",
     "admin:login": "ts-node src/scripts/set-admin-login.ts",
-    "billing:reverse-bulk-tuition": "ts-node src/scripts/reverse-bulk-tuition-invoices.ts"
+    "billing:reverse-bulk-tuition": "ts-node src/scripts/reverse-bulk-tuition-invoices.ts",
+    "billing:repair-duplicate-term": "ts-node src/scripts/repair-duplicate-term.ts",
+    "billing:apply-term-labels": "ts-node src/scripts/apply-invoice-term-labels.ts",
+    "billing:fix-tuition-descriptions": "ts-node src/scripts/fix-bulk-tuition-descriptions.ts"
   },
   "keywords": [],
   "author": "",

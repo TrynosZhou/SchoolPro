@@ -114,7 +114,7 @@
       <p class="sheet-meta-line">
         <span><b>Exam:</b> {{ data.examType.name }}</span>
         <span><b>Term:</b> {{ data.term.name }}</span>
-        <span><b>Class:</b> {{ data.class.name }}</span>
+        <span>{{ formatStudentClassLabel(data.class.name) }}</span>
         <span><b>Max Marks:</b> {{ data.examType.maxMarks }}</span>
         <span><b>Students:</b> {{ data.students.length }}</span>
       </p>

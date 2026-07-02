@@ -8,6 +8,14 @@ import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
 import { TEACHER_NAV_SECTIONS } from '../../core/config/teacher-nav';
 import { DIRECTOR_NAV_ITEMS } from '../../core/config/director-nav';
 import { PRINCIPAL_NAV_ITEMS } from '../../core/config/principal-nav';
+import { formatStudentClassLabel, isALevelClassOption } from '../../core/utils/class-display';
+
+interface GradeBoundaryRow {
+  grade: string;
+  label?: string;
+  minPercent: number;
+  points?: number;
+}
 
 interface ExamMarkRow {
   studentId: string;
@@ -25,6 +33,7 @@ interface ExamMarkRow {
 interface EntryResponse {
   maxMarks: number;
   examTypeName?: string;
+  showGradePoints?: boolean;
   students: Omit<ExamMarkRow, 'saveStatus'>[];
 }
 
@@ -50,10 +59,12 @@ export class ExamMarksEntryComponent implements OnInit, OnDestroy {
   });
 
   examTypes = signal<{ id: string; name: string; maxMarks?: number }[]>([]);
-  classes = signal<{ id: string; name: string }[]>([]);
-  subjects = signal<{ id: string; name: string }[]>([]);
+  classes = signal<{ id: string; name: string; form?: { id: string; name: string; level: number } }[]>([]);
+  subjects = signal<{ id: string; code: string; name: string }[]>([]);
   terms = signal<{ id: string; name: string; isCurrent?: boolean }[]>([]);
+  gradeBoundaries = signal<GradeBoundaryRow[]>([]);
   markRows = signal<ExamMarkRow[]>([]);
+  showGradePointsFromEntry = signal<boolean | null>(null);
   maxMarks = signal(100);
   loading = signal(false);
   hasFetched = signal(false);
@@ -93,9 +104,23 @@ export class ExamMarksEntryComponent implements OnInit, OnDestroy {
     return {
       exam: exam?.name || '—',
       class: cls?.name || '—',
-      subject: sub?.name || '—',
+      subject: sub ? this.subjectLabel(sub) : '—',
       term: term?.name || '—',
     };
+  });
+
+  readonly sessionClassLabel = computed(() =>
+    formatStudentClassLabel(this.sessionLabels().class === '—' ? '' : this.sessionLabels().class),
+  );
+
+  readonly selectedClass = computed(() =>
+    this.classes().find((c) => c.id === this.filters.classId),
+  );
+
+  readonly showGradePoints = computed(() => {
+    const fromEntry = this.showGradePointsFromEntry();
+    if (fromEntry != null) return fromEntry;
+    return isALevelClassOption(this.selectedClass());
   });
 
   readonly stats = computed(() => {
@@ -183,7 +208,10 @@ export class ExamMarksEntryComponent implements OnInit, OnDestroy {
 
   ngOnInit() {
     this.api.get<{ id: string; name: string }[]>('/exams/types').subscribe((t) => this.examTypes.set(t));
-    this.api.get<{ id: string; name: string }[]>('/admin/classes').subscribe((c) => this.classes.set(c));
+    this.api
+      .get<{ id: string; name: string; form?: { id: string; name: string; level: number } }[]>('/admin/classes')
+      .subscribe((c) => this.classes.set(c));
+    this.api.get<GradeBoundaryRow[]>('/exams/grade-boundaries').subscribe((b) => this.gradeBoundaries.set(b));
     this.api.get<{ id: string; name: string; isCurrent?: boolean }[]>('/exams/terms').subscribe((terms) => {
       this.terms.set(terms);
       const current = terms.find((t) => t.isCurrent);
@@ -216,26 +244,36 @@ export class ExamMarksEntryComponent implements OnInit, OnDestroy {
     return 'grade-u';
   }
 
+  pointsForGrade(grade: string | null): string {
+    if (!grade?.trim()) return '—';
+    const key = grade.trim().toUpperCase();
+    const row = this.gradeBoundaries().find((b) => b.grade.trim().toUpperCase() === key);
+    if (row?.points == null || Number.isNaN(Number(row.points))) return '—';
+    return String(row.points);
+  }
+
   exportCsv() {
     const rows = this.markRows();
     if (!rows.length) {
       this.showToast('error', 'No data to export. Fetch students first.');
       return;
     }
-    const headers = ['Student ID', 'Last Name', 'First Name', 'Gender', 'Marks', 'Grade', 'Remarks'];
-    const lines = rows.map((r) =>
-      [
+    const headers = this.showGradePoints()
+      ? ['Student ID', 'Last Name', 'First Name', 'Gender', 'Marks', 'Grade', 'Points', 'Remarks']
+      : ['Student ID', 'Last Name', 'First Name', 'Gender', 'Marks', 'Grade', 'Remarks'];
+    const lines = rows.map((r) => {
+      const base = [
         r.studentNumber,
         r.lastName,
         r.firstName,
         r.gender,
         r.marks ?? '',
         r.grade ?? '',
-        (r.remarks || '').replace(/"/g, '""'),
-      ]
-        .map((v) => `"${v}"`)
-        .join(',')
-    );
+      ];
+      if (this.showGradePoints()) base.push(this.pointsForGrade(r.grade));
+      base.push((r.remarks || '').replace(/"/g, '""'));
+      return base.map((v) => `"${v}"`).join(',');
+    });
     const csv = [headers.join(','), ...lines].join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const a = document.createElement('a');
@@ -251,23 +289,31 @@ export class ExamMarksEntryComponent implements OnInit, OnDestroy {
     this.subjects.set([]);
     this.markRows.set([]);
     this.hasFetched.set(false);
+    this.showGradePointsFromEntry.set(null);
     this.searchQuery.set('');
     this.entryFilter.set('all');
     if (!this.filters.classId) return;
     this.api
-      .get<{ id: string; name: string }[]>('/exams/class-subjects', { classId: this.filters.classId })
+      .get<{ id: string; code: string; name: string }[]>('/exams/class-subjects', { classId: this.filters.classId })
       .subscribe((s) => {
         if (s.length) {
           this.subjects.set(s);
         } else {
-          this.api.get<{ id: string; name: string }[]>('/admin/subjects').subscribe((all) => this.subjects.set(all));
+          this.api
+            .get<{ id: string; code: string; name: string }[]>('/admin/subjects')
+            .subscribe((all) => this.subjects.set(all));
         }
       });
+  }
+
+  subjectLabel(subject: { code: string; name: string }): string {
+    return `${subject.code} ${subject.name}`.trim();
   }
 
   onFilterChange() {
     this.hasFetched.set(false);
     this.markRows.set([]);
+    this.showGradePointsFromEntry.set(null);
     this.searchQuery.set('');
     this.entryFilter.set('all');
   }
@@ -277,6 +323,7 @@ export class ExamMarksEntryComponent implements OnInit, OnDestroy {
     this.subjects.set([]);
     this.markRows.set([]);
     this.hasFetched.set(false);
+    this.showGradePointsFromEntry.set(null);
     this.searchQuery.set('');
     this.entryFilter.set('all');
   }
@@ -306,6 +353,9 @@ export class ExamMarksEntryComponent implements OnInit, OnDestroy {
       .subscribe({
         next: (data) => {
           this.maxMarks.set(data.maxMarks);
+          this.showGradePointsFromEntry.set(
+            data.showGradePoints ?? isALevelClassOption(this.selectedClass()),
+          );
           this.markRows.set(
             data.students.map((s) => ({
               ...s,

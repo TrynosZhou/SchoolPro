@@ -4,6 +4,7 @@ import { DecimalPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { ApiService } from '../../core/services/api.service';
+import { formatStudentClassLabel } from '../../core/utils/class-display';
 import { AuthService } from '../../core/services/auth.service';
 import { PARENT_NAV_ITEMS } from '../../core/config/parent-nav';
 
@@ -102,8 +103,7 @@ export class ParentDashboardComponent implements OnInit {
   }
 
   classLabel(child: ParentChildSummary): string {
-    const parts = [child.student.formName, child.student.className].filter(Boolean);
-    return parts.length ? parts.join(' · ') : 'Not enrolled in a class';
+    return formatStudentClassLabel(child.student.className);
   }
 
   attendanceSummary(child: ParentChildSummary): string {

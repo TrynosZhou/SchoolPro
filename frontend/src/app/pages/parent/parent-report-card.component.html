@@ -23,17 +23,48 @@
       <p>No report card for this term yet. Marks appear here after teachers enter exam results.</p>
     </div>
   } @else if (report()) {
-    <div class="report-header card">
-      <h2>{{ report()!.student?.firstName }} {{ report()!.student?.lastName }}</h2>
+    <div class="report-card-shell card">
+      <div class="report-school-banner">
+        <div class="banner-top-line" aria-hidden="true"></div>
+        <div class="banner-inner">
+          <div class="banner-left">
+            <h3 class="banner-school-name">{{ schoolName() }}</h3>
+            @if (schoolBranding()?.address) {
+              <p class="banner-line">{{ schoolBranding()!.address }}</p>
+            }
+            @if (schoolBranding()?.tagline) {
+              <p class="banner-line">{{ schoolBranding()!.tagline }}</p>
+            }
+            @if (schoolBranding()?.email) {
+              <p class="banner-line banner-email">
+                <span class="banner-email-label">Email.</span>
+                <span class="banner-email-value">{{ schoolBranding()!.email }}</span>
+              </p>
+            }
+          </div>
+          <div class="banner-right">
+            @if (logoFullUrl()) {
+              <img [src]="logoFullUrl()!" alt="School logo" class="banner-logo" />
+            } @else {
+              <div class="banner-logo placeholder" aria-hidden="true">🏫</div>
+            }
+            @if (websiteDisplay()) {
+              <p class="banner-website">{{ websiteDisplay() }}</p>
+            }
+          </div>
+        </div>
+      </div>
+
+      <div class="report-header">
+        <h2>{{ report()!.student?.firstName }} {{ report()!.student?.lastName }}</h2>
       <p class="meta">
         Student ID: <strong>{{ report()!.student?.admissionNumber }}</strong>
-        · Class: {{ report()!.student?.schoolClass?.name || '—' }}
-        · Form: {{ report()!.student?.schoolClass?.form?.name || '—' }}
+        · Class: <strong>{{ reportCardClassValue(report()!.student?.schoolClass?.name) }}</strong>
         · Term: {{ report()!.term?.name }}
       </p>
       @if (report()!.averageMark != null) {
         <p class="summary">
-          Average: <strong>{{ report()!.averageMark | number:'1.1-1' }}%</strong>
+          Average: <strong>{{ report()!.averageMark | number:'1.1-1' }}</strong>
           @if (report()!.classPosition) {
             · Class position: <strong>{{ positionOutOfLabel(report()!.classPosition, report()!.classTotal) }}</strong>
           }
@@ -45,9 +76,9 @@
           }
         </p>
       }
-    </div>
+      </div>
 
-    <div class="table-wrap card">
+      <div class="table-wrap">
       <table class="results-table">
         <thead>
           <tr>
@@ -55,6 +86,9 @@
             <th class="col-code">Code</th>
             <th class="col-mark">Mark</th>
             <th class="col-grade">Grade</th>
+            @if (showGradePoints()) {
+              <th class="col-points">Points</th>
+            }
             <th class="col-rank">Rank</th>
             <th class="col-avg">Mean</th>
             <th>Remarks</th>
@@ -67,19 +101,43 @@
               <td class="col-code">{{ row.subjectCode || '—' }}</td>
               <td class="mark-cell">{{ row.marks }}</td>
               <td class="grade-cell"><span class="grade-pill">{{ row.grade }}</span></td>
+              @if (showGradePoints()) {
+                <td class="points-cell col-points">{{ pointsForGrade(row.grade) }}</td>
+              }
               <td class="col-rank">{{ subjectPositionLabel(row.subjectPosition, row.subjectPositionTotal) }}</td>
               <td class="col-avg">{{ row.mean != null ? (row.mean | number:'1.1-1') : '—' }}</td>
               <td class="remarks">{{ row.remarks || '—' }}</td>
             </tr>
           } @empty {
-            <tr><td colspan="7">No subject results recorded.</td></tr>
+            <tr><td [attr.colspan]="showGradePoints() ? 8 : 7">No subject results recorded.</td></tr>
           }
         </tbody>
+        <tfoot>
+          <tr class="average-row">
+            <td colspan="2" class="avg-label-cell">Average Mark</td>
+            <td class="avg-value-cell mark-cell">
+              @if (report()!.averageMark != null) {
+                {{ report()!.averageMark | number:'1.1-1' }}
+              } @else {
+                —
+              }
+            </td>
+            <td class="grade-cell footer-total-label">
+              @if (showGradePoints()) {
+                Total
+              }
+            </td>
+            @if (showGradePoints()) {
+              <td class="points-cell col-points footer-points">{{ totalPointsForReport() }}</td>
+            }
+            <td [attr.colspan]="3"></td>
+          </tr>
+        </tfoot>
       </table>
     </div>
 
     @if (report()!.classTeacherRemarks || report()!.principalRemarks) {
-      <div class="comments card">
+      <div class="comments">
         @if (report()!.classTeacherRemarks) {
           <p><strong>Class teacher:</strong> {{ report()!.classTeacherRemarks }}</p>
         }
@@ -88,5 +146,6 @@
         }
       </div>
     }
+    </div>
   }
 </app-portal-layout>

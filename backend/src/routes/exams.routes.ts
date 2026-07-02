@@ -1,10 +1,11 @@
 // @ts-nocheck
 import { Router, Response } from 'express';
 import { AppDataSource } from '../config/data-source';
-import { ExamType, ExamMark, ReportCard, Student, HonourRoll, SchoolYear, SchoolSettings } from '../entities';
+import { ExamType, ExamMark, ReportCard, Student, HonourRoll, SchoolYear, SchoolSettings, SchoolClass } from '../entities';
 import { UserRole } from '../entities/enums';
 import { authenticate, authorize, AuthRequest } from '../middleware/auth';
-import { gradeForMarks } from '../services/grade.service';
+import { gradeForMarks, getGradeBoundaries } from '../services/grade.service';
+import { formatStudentClassLabel, isALevelClassOption } from '../utils/class-display';
 import { ClassSubject } from '../entities';
 import { calculateHonoursRoll } from '../services/honours.service';
 import {
@@ -12,6 +13,7 @@ import {
   generateClassReportCards,
   getClassTermAttendanceMap,
   getReportCardPdfMetrics,
+  applyFormRankingsToReports,
   syncReportCardForStudent,
 } from '../services/report-card.service';
 import { loadSchoolBranding } from '../services/school-branding.service';
@@ -72,6 +74,21 @@ router.get('/types', async (req: AuthRequest, res: Response) => {
 });
 
 router.get(
+  '/grade-boundaries',
+  authorize(
+    UserRole.TEACHER,
+    UserRole.ADMIN,
+    UserRole.PRINCIPAL,
+    UserRole.DIRECTOR,
+    UserRole.PARENT,
+    UserRole.STUDENT,
+  ),
+  async (_req, res: Response) => {
+    res.json(await getGradeBoundaries());
+  },
+);
+
+router.get(
   '/results-publications/status',
   authorize(...PUBLISH_ROLES),
   async (req, res: Response) => {
@@ -122,7 +139,14 @@ router.post('/results/unpublish', authorize(...PUBLISH_ROLES), async (req: AuthR
 
 router.get(
   '/school-branding',
-  authorize(UserRole.TEACHER, UserRole.ADMIN, UserRole.PRINCIPAL, UserRole.DIRECTOR),
+  authorize(
+    UserRole.TEACHER,
+    UserRole.ADMIN,
+    UserRole.PRINCIPAL,
+    UserRole.DIRECTOR,
+    UserRole.PARENT,
+    UserRole.STUDENT,
+  ),
   async (_req, res: Response) => {
     res.json(await loadSchoolBranding());
   },
@@ -155,6 +179,10 @@ router.get('/marks/entry', authorize(UserRole.TEACHER, UserRole.ADMIN, UserRole.
   }
 
   const examType = await AppDataSource.getRepository(ExamType).findOne({ where: { id: examTypeId as string } });
+  const schoolClass = await AppDataSource.getRepository(SchoolClass).findOne({
+    where: { id: classId as string },
+    relations: relations('form'),
+  });
   const studentRepo = AppDataSource.getRepository(Student);
   const markRepo = AppDataSource.getRepository(ExamMark);
 
@@ -176,6 +204,7 @@ router.get('/marks/entry', authorize(UserRole.TEACHER, UserRole.ADMIN, UserRole.
   res.json({
     maxMarks: examType ? Number(examType.maxMarks) : 100,
     examTypeName: examType?.name,
+    showGradePoints: isALevelClassOption(schoolClass),
     students: students.map((s) => {
       const m = markByStudent.get(s.id);
       return {
@@ -601,7 +630,7 @@ router.get(
       }
 
       const scopeParts: string[] = [];
-      if (rankings.class) scopeParts.push(`Class: ${rankings.class.name}`);
+      if (rankings.class) scopeParts.push(formatStudentClassLabel(rankings.class.name));
       if (rankings.form) scopeParts.push(`Form: ${rankings.form.name}`);
       if (rankings.subject) scopeParts.push(`Subject: ${rankings.subject.name}`);
 
@@ -738,6 +767,7 @@ router.get(
       .orderBy('rc.classPosition', 'ASC', 'NULLS LAST')
       .addOrderBy('student.lastName', 'ASC')
       .getMany();
+    await applyFormRankingsToReports(reports, examTypeId as string, termId as string);
     const attendanceMap = await getClassTermAttendanceMap(classId as string, termId as string);
     res.json({
       count: reports.length,
@@ -782,76 +812,87 @@ router.get('/report-cards/:studentId/:termId', authorize(UserRole.ADMIN, UserRol
 });
 
 router.get('/report-cards/:studentId/:termId/pdf', authorize(UserRole.ADMIN, UserRole.PRINCIPAL, UserRole.DIRECTOR, UserRole.TEACHER, UserRole.PARENT, UserRole.STUDENT), async (req: AuthRequest, res: Response) => {
-  const repo = AppDataSource.getRepository(ReportCard);
-  const where: { studentId: string; termId: string; examTypeId?: string } = {
-    studentId: req.params.studentId,
-    termId: req.params.termId,
-  };
-  if (req.query.examTypeId) {
-    where.examTypeId = req.query.examTypeId as string;
-  }
-  const report = await repo.findOne({
-    where,
-    relations: relations('student', 'student.schoolClass', 'student.schoolClass.form', 'term', 'examType'),
-  });
-  if (!report) return res.status(404).json({ message: 'Report card not found' });
+  try {
+    const repo = AppDataSource.getRepository(ReportCard);
+    const where: { studentId: string; termId: string; examTypeId?: string } = {
+      studentId: req.params.studentId,
+      termId: req.params.termId,
+    };
+    if (req.query.examTypeId) {
+      where.examTypeId = req.query.examTypeId as string;
+    }
+    const report = await repo.findOne({
+      where,
+      relations: relations('student', 'student.schoolClass', 'student.schoolClass.form', 'term', 'examType'),
+    });
+    if (!report) return res.status(404).json({ message: 'Report card not found' });
 
-  if (isPortalViewer(req.user!.role)) {
-    const block = await assertReportVisibleToPortalUser(
-      report,
-      req.query.examTypeId as string | undefined,
+    if (isPortalViewer(req.user!.role)) {
+      const block = await assertReportVisibleToPortalUser(
+        report,
+        req.query.examTypeId as string | undefined,
+      );
+      if (block) return res.status(403).json({ message: block });
+    }
+
+    const settings = await AppDataSource.getRepository(SchoolSettings).findOne({ where: { id: 'default' } });
+    const inline = req.query.preview === 'true';
+    const maxMarks = Number(report.examType?.maxMarks) || 100;
+    const metrics = await getReportCardPdfMetrics(report, maxMarks);
+
+    const pdf = await generateReportCardPdf({
+      schoolName: settings?.schoolName || 'School Pro Academy',
+      tagline: settings?.tagline || undefined,
+      logoUrl: settings?.logoUrl || undefined,
+      address: settings?.address || undefined,
+      phone: settings?.phone || undefined,
+      email: settings?.email || undefined,
+      website: settings?.website || undefined,
+      studentName: `${report.student.firstName} ${report.student.lastName}`,
+      admissionNumber: report.student.admissionNumber,
+      className: report.student.schoolClass?.name || '',
+      formName: report.student.schoolClass?.form?.name || '',
+      formLevel: report.student.schoolClass?.form?.level,
+      termName: report.term.name,
+      examTypeName: report.examType?.name,
+      subjectResults: metrics.subjectResults,
+      averageMark: Number(report.averageMark),
+      overallGrade: report.overallGrade,
+      classPosition: metrics.classPosition ?? report.classPosition,
+      formPosition: metrics.formPosition ?? report.formPosition,
+      classTotal: metrics.classTotal,
+      formTotal: metrics.formTotal,
+      subjectsPassed: metrics.subjectsPassed,
+      totalSubjects: metrics.totalSubjects,
+      attendance: metrics.attendance,
+      classTeacherRemarks: report.classTeacherRemarks,
+      principalRemarks: report.principalRemarks,
+      generatedAt: report.generatedAt ? new Date(report.generatedAt) : new Date(),
+      gradeBoundaries: settings?.gradeBoundaries?.length
+        ? settings.gradeBoundaries
+        : DEFAULT_GRADE_BOUNDARIES,
+      reportCardId: report.id,
+    });
+
+    res.setHeader('Content-Type', 'application/pdf');
+    const pdfFilename = reportCardPdfFilename(
+      report.student.firstName,
+      report.student.lastName,
+      report.student.admissionNumber || 'report-card',
     );
-    if (block) return res.status(403).json({ message: block });
+    res.setHeader(
+      'Content-Disposition',
+      `${inline ? 'inline' : 'attachment'}; filename="${pdfFilename}"`,
+    );
+    res.send(pdf);
+  } catch (err) {
+    console.error('Report card PDF generation failed:', err);
+    if (!res.headersSent) {
+      res.status(500).json({
+        message: err instanceof Error ? err.message : 'Failed to generate report card PDF',
+      });
+    }
   }
-
-  const settings = await AppDataSource.getRepository(SchoolSettings).findOne({ where: { id: 'default' } });
-  const inline = req.query.preview === 'true';
-  const maxMarks = Number(report.examType?.maxMarks) || 100;
-  const metrics = await getReportCardPdfMetrics(report, maxMarks);
-
-  const pdf = await generateReportCardPdf({
-    schoolName: settings?.schoolName || 'School Pro Academy',
-    tagline: settings?.tagline || undefined,
-    logoUrl: settings?.logoUrl || undefined,
-    address: settings?.address || undefined,
-    phone: settings?.phone || undefined,
-    website: settings?.website || undefined,
-    studentName: `${report.student.firstName} ${report.student.lastName}`,
-    admissionNumber: report.student.admissionNumber,
-    className: report.student.schoolClass?.name || '',
-    formName: report.student.schoolClass?.form?.name || '',
-    termName: report.term.name,
-    examTypeName: report.examType?.name,
-    subjectResults: metrics.subjectResults,
-    averageMark: Number(report.averageMark),
-    overallGrade: report.overallGrade,
-    classPosition: metrics.classPosition ?? report.classPosition,
-    formPosition: metrics.formPosition ?? report.formPosition,
-    classTotal: metrics.classTotal,
-    formTotal: metrics.formTotal,
-    subjectsPassed: metrics.subjectsPassed,
-    totalSubjects: metrics.totalSubjects,
-    attendance: metrics.attendance,
-    classTeacherRemarks: report.classTeacherRemarks,
-    principalRemarks: report.principalRemarks,
-    generatedAt: report.generatedAt ? new Date(report.generatedAt) : new Date(),
-    gradeBoundaries: settings?.gradeBoundaries?.length
-      ? settings.gradeBoundaries
-      : DEFAULT_GRADE_BOUNDARIES,
-    reportCardId: report.id,
-  });
-
-  res.setHeader('Content-Type', 'application/pdf');
-  const pdfFilename = reportCardPdfFilename(
-    report.student.firstName,
-    report.student.lastName,
-    report.student.admissionNumber || 'report-card',
-  );
-  res.setHeader(
-    'Content-Disposition',
-    `${inline ? 'inline' : 'attachment'}; filename="${pdfFilename}"`,
-  );
-  res.send(pdf);
 });
 
 router.patch(

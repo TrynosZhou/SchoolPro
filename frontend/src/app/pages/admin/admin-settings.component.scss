@@ -576,6 +576,7 @@
   }
 
   &.code-group { max-width: 100px; }
+  &.short-group { max-width: 84px; }
   &.grow { flex: 1; }
 }
 
@@ -1285,6 +1286,14 @@
   color: #94a3b8;
   text-transform: uppercase;
   letter-spacing: 0.05em;
+}
+
+.preview-points {
+  display: block;
+  margin-top: 0.35rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #0f766e;
 }
 
 .preview-list {

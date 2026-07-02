@@ -6,6 +6,7 @@ import { RouterLink, Router } from '@angular/router';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
 import { ApiService } from '../../core/services/api.service';
+import { formatStudentClassLabel } from '../../core/utils/class-display';
 import { resolveExecutivePortalLayout } from '../../core/utils/portal-layout.util';
 
 export type RankingType = 'class' | 'form' | 'subject';
@@ -298,5 +299,9 @@ export class AdminRankingComponent implements OnInit, OnDestroy {
   private showToast(type: 'success' | 'error', msg: string): void {
     this.toast.set({ type, msg });
     setTimeout(() => this.toast.set(null), 4500);
+  }
+
+  classDisplay(className?: string): string {
+    return formatStudentClassLabel(className);
   }
 }

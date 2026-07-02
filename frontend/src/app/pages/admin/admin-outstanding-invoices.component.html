@@ -63,7 +63,7 @@
         <div class="toolbar-head">
           <div>
             <h3>Outstanding balances</h3>
-            <p>Filter by class, due date, or search student ID, name, invoice #, or description.</p>
+            <p>Filter by class or due date, or look up a student’s current invoice balance below.</p>
           </div>
           <div class="toolbar-head-actions">
             <div class="view-tabs">
@@ -92,20 +92,91 @@
           </div>
         </div>
 
-        <div class="search-wrap">
-          <span class="search-icon" aria-hidden="true">🔍</span>
-          <input
-            type="search"
-            class="search-input"
-            placeholder="Search student, ID, invoice #, description…"
-            [ngModel]="search()"
-            (ngModelChange)="search.set($event)"
-            name="outstandingSearch"
-          />
-          @if (search()) {
-            <button type="button" class="clear-search" (click)="search.set('')" aria-label="Clear search">×</button>
-          }
+        <div class="search-row">
+          <div class="search-wrap compact">
+            <span class="search-icon" aria-hidden="true">🔍</span>
+            <input
+              type="text"
+              class="search-input"
+              placeholder="Student ID, First Name, or Last Name…"
+              [(ngModel)]="balanceQuery"
+              (ngModelChange)="balanceSearchAttempted.set(false)"
+              (keydown.enter)="getBalance()"
+              name="balanceLookup"
+              autocomplete="off"
+            />
+            @if (balanceQuery) {
+              <button type="button" class="clear-search" (click)="clearBalanceLookup(); search.set('')" aria-label="Clear search">×</button>
+            }
+          </div>
+          <button
+            type="button"
+            class="btn-get-balance"
+            (click)="getBalance()"
+            [disabled]="balanceLoading() || !balanceQuery.trim()"
+          >
+            {{ balanceLoading() ? 'Loading…' : 'Get Balance' }}
+          </button>
         </div>
+
+        @if (balanceSearchAttempted() && !balanceLoading()) {
+          @if (!balanceRows().length) {
+            <div class="balance-lookup-empty">
+              No student found matching <strong>"{{ balanceQuery }}"</strong>.
+            </div>
+          } @else if (balanceRows().length > 1) {
+            <div class="balance-lookup-multi">
+              <p><strong>{{ balanceRows().length }}</strong> students found — select one:</p>
+              <div class="balance-pick-list">
+                @for (s of balanceRows(); track s.id) {
+                  <button type="button" class="balance-pick-card" (click)="selectBalanceStudent(s)">
+                    <span class="avatar sm">{{ initials(s) }}</span>
+                    <span>
+                      <strong>{{ s.firstName }} {{ s.lastName }}</strong>
+                      <code class="sid">{{ s.admissionNumber }}</code>
+                    </span>
+                    <span class="balance-pill">${{ s.balance | number:'1.2-2' }}</span>
+                  </button>
+                }
+              </div>
+            </div>
+          } @else {
+            @if (balanceRows()[0]; as s) {
+              <div class="balance-lookup-result" [class.clear]="s.balance <= 0">
+                <div class="balance-lookup-head">
+                  <span class="avatar sm">{{ initials(s) }}</span>
+                  <div>
+                    <strong>{{ s.firstName }} {{ s.lastName }}</strong>
+                    <code class="sid">{{ s.admissionNumber }}</code>
+                    @if (s.className || s.classLabel) {
+                      <span class="class-meta">{{ studentClassLabel(s) }}</span>
+                    }
+                    @if (s.gender) {
+                      <span class="class-meta">{{ studentGenderLabel(s.gender) }}</span>
+                    }
+                  </div>
+                </div>
+                <div class="balance-lookup-amounts">
+                  <div>
+                    <span>Invoiced</span>
+                    <strong>${{ s.totalInvoiced | number:'1.2-2' }}</strong>
+                  </div>
+                  <div>
+                    <span>Paid</span>
+                    <strong class="paid">${{ s.totalPaid | number:'1.2-2' }}</strong>
+                  </div>
+                  <div>
+                    <span>Current balance</span>
+                    <strong class="balance-amt">${{ s.balance | number:'1.2-2' }}</strong>
+                  </div>
+                </div>
+                @if (s.balance > 0) {
+                  <button type="button" class="btn-collect" (click)="recordPaymentForBalance(s)">Record payment</button>
+                }
+              </div>
+            }
+          }
+        }
 
         <div class="toolbar-row">
           <div class="filter-chips">
@@ -263,7 +334,7 @@
                       <strong>{{ row.firstName }} {{ row.lastName }}</strong>
                     </div>
                   </td>
-                  <td>{{ row.formName || '—' }} {{ row.className }}</td>
+                  <td>{{ studentClassLabel(row) }}</td>
                   <td><code class="ref">{{ row.invoiceNumber }}</code></td>
                   <td>{{ row.description }}</td>
                   <td><span class="due" [attr.data-tone]="dueTone(row.dueDate)">{{ row.dueDate }}</span></td>

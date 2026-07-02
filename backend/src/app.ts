@@ -11,9 +11,12 @@ import examsRoutes from './routes/exams.routes';
 import billingRoutes from './routes/billing.routes';
 import financeRoutes from './routes/finance.routes';
 import academicsRoutes from './routes/academics.routes';
+import timetableRoutes from './routes/timetable.routes';
 import adminRoutes from './routes/admin.routes';
 import dashboardRoutes from './routes/dashboard.routes';
 import payrollRoutes from './routes/payroll.routes';
+import generalLedgerRoutes from './routes/general-ledger.routes';
+import chartOfAccountsRoutes from './routes/chart-of-accounts.routes';
 
 const app = express();
 
@@ -53,9 +56,12 @@ app.use('/api/exams', examsRoutes);
 app.use('/api/billing', billingRoutes);
 app.use('/api/finance', financeRoutes);
 app.use('/api/academics', academicsRoutes);
+app.use('/api/timetable', timetableRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/payroll', payrollRoutes);
+app.use('/api/general-ledger', generalLedgerRoutes);
+app.use('/api/chart-of-accounts', chartOfAccountsRoutes);
 
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error(err);

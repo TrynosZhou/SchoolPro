@@ -16,6 +16,7 @@ exports.resolvePaymentTermId = resolvePaymentTermId;
 const data_source_1 = require("../config/data-source");
 const entities_1 = require("../entities");
 const enums_1 = require("../entities/enums");
+const typeorm_1 = require("typeorm");
 const helpers_1 = require("../utils/helpers");
 exports.BALANCE_FORWARD_FEE_TYPE = 'balance_forward';
 const EPS = 0.005;
@@ -28,11 +29,13 @@ function today() {
 async function findPreviousTerm(term) {
     const termRepo = data_source_1.AppDataSource.getRepository(entities_1.Term);
     if (term.termNumber > 1) {
-        const priorInYear = await termRepo.findOne({
+        const priorInYear = await termRepo.find({
             where: { schoolYearId: term.schoolYearId, termNumber: term.termNumber - 1 },
+            order: { isCurrent: 'DESC', createdAt: 'DESC' },
+            take: 1,
         });
-        if (priorInYear)
-            return priorInYear;
+        if (priorInYear[0])
+            return priorInYear[0];
     }
     const rows = await data_source_1.AppDataSource.query(`
       SELECT t.*
@@ -48,11 +51,13 @@ async function findPreviousTerm(term) {
 }
 async function findNextTerm(term) {
     const termRepo = data_source_1.AppDataSource.getRepository(entities_1.Term);
-    const nextInYear = await termRepo.findOne({
+    const nextInYear = await termRepo.find({
         where: { schoolYearId: term.schoolYearId, termNumber: term.termNumber + 1 },
+        order: { isCurrent: 'DESC', createdAt: 'DESC' },
+        take: 1,
     });
-    if (nextInYear)
-        return nextInYear;
+    if (nextInYear[0])
+        return nextInYear[0];
     const rows = await data_source_1.AppDataSource.query(`
       SELECT t.*
       FROM terms t
@@ -84,20 +89,65 @@ async function computeTermNetBalance(studentId, termId) {
     const prepaidAvailable = await getAvailablePrepaidCredit(tb);
     return roundMoney(invoiceDue - prepaidAvailable);
 }
+/** Close prior-term fee invoices once their balance is represented by a carry-forward row. */
+async function supersedePriorTermInvoicesForCarryForward(studentId, prevTermId) {
+    const invoiceRepo = data_source_1.AppDataSource.getRepository(entities_1.Invoice);
+    const invoices = await invoiceRepo.find({
+        where: {
+            studentId,
+            termId: prevTermId,
+            feeType: (0, typeorm_1.Not)(exports.BALANCE_FORWARD_FEE_TYPE),
+        },
+    });
+    for (const inv of invoices) {
+        if (inv.status === enums_1.InvoiceStatus.CANCELLED || inv.status === enums_1.InvoiceStatus.DRAFT)
+            continue;
+        const remaining = roundMoney(Number(inv.totalAmount) - Number(inv.amountPaid));
+        if (remaining <= EPS && inv.status === enums_1.InvoiceStatus.PAID)
+            continue;
+        inv.amountPaid = Number(inv.totalAmount);
+        inv.status = enums_1.InvoiceStatus.PAID;
+        await invoiceRepo.save(inv);
+    }
+}
+async function removeDuplicateCarryForwardInvoice(invoice) {
+    const ledgerRepo = data_source_1.AppDataSource.getRepository(entities_1.LedgerEntry);
+    const lineRepo = data_source_1.AppDataSource.getRepository(entities_1.InvoiceLine);
+    const invoiceRepo = data_source_1.AppDataSource.getRepository(entities_1.Invoice);
+    const tbRepo = data_source_1.AppDataSource.getRepository(entities_1.StudentTermBalance);
+    await data_source_1.AppDataSource.query(`UPDATE payments SET "invoiceId" = NULL WHERE "invoiceId" = $1`, [invoice.id]);
+    await ledgerRepo.delete({ referenceType: 'invoice', referenceId: invoice.id });
+    await lineRepo.delete({ invoiceId: invoice.id });
+    await tbRepo.update({ carryForwardInvoiceId: invoice.id }, { carryForwardInvoiceId: null });
+    await invoiceRepo.remove(invoice);
+}
 async function syncCarryForwardInvoice(studentId, termId, term, openingArrears, tb) {
     const invoiceRepo = data_source_1.AppDataSource.getRepository(entities_1.Invoice);
     const ledgerRepo = data_source_1.AppDataSource.getRepository(entities_1.LedgerEntry);
     const prevTerm = await findPreviousTerm(term);
     const prevLabel = prevTerm?.name || 'previous term';
-    const description = `Balance brought forward from ${prevLabel}`;
+    const description = (0, helpers_1.invoiceDescriptionWithTerm)(`Balance brought forward from ${prevLabel}`, term.name);
     const amount = roundMoney(openingArrears);
+    const matchingCarryForwards = await invoiceRepo.find({
+        where: { studentId, feeType: exports.BALANCE_FORWARD_FEE_TYPE, description },
+        order: { createdAt: 'ASC' },
+    });
     let invoice = tb.carryForwardInvoiceId
-        ? await invoiceRepo.findOne({ where: { id: tb.carryForwardInvoiceId, studentId } })
+        ? matchingCarryForwards.find((inv) => inv.id === tb.carryForwardInvoiceId) ?? null
         : null;
     if (!invoice) {
-        invoice = await invoiceRepo.findOne({
-            where: { studentId, termId, feeType: exports.BALANCE_FORWARD_FEE_TYPE },
-        });
+        invoice = matchingCarryForwards.find((inv) => inv.termId === termId) ?? null;
+    }
+    if (!invoice && matchingCarryForwards.length) {
+        invoice = matchingCarryForwards[0];
+        if (invoice.termId !== termId) {
+            invoice.termId = termId;
+        }
+    }
+    for (const duplicate of matchingCarryForwards) {
+        if (invoice && duplicate.id !== invoice.id) {
+            await removeDuplicateCarryForwardInvoice(duplicate);
+        }
     }
     if (invoice) {
         const prevTotal = Number(invoice.totalAmount);
@@ -176,6 +226,9 @@ async function syncCarryForwardInvoice(studentId, termId, term, openingArrears, 
         }));
     }
     tb.carryForwardInvoiceId = invoice.id;
+    if (prevTerm && amount > EPS) {
+        await supersedePriorTermInvoicesForCarryForward(studentId, prevTerm.id);
+    }
 }
 async function ensureTermBalanceInitialized(studentId, termId) {
     const tbRepo = data_source_1.AppDataSource.getRepository(entities_1.StudentTermBalance);

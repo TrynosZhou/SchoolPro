@@ -14,7 +14,7 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
     for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.StaffLeaveBalance = exports.Payslip = exports.PayrollRun = exports.StaffPayrollProfile = exports.StudentTermBalance = exports.ResultsPublication = exports.ClassPromotionRule = exports.SchoolFee = exports.SchoolSettings = exports.UniformSale = exports.TuckshopSale = exports.TuckshopItem = exports.Notification = exports.Message = exports.WeeklyAssessment = exports.LearningSchedule = exports.Timetable = exports.CashbookEntry = exports.LedgerEntry = exports.Receipt = exports.Payment = exports.InvoiceLine = exports.Invoice = exports.HonourRoll = exports.ReportCard = exports.ExamMark = exports.ExamType = exports.StudentAttendance = exports.StaffAttendance = exports.Staff = exports.Guardian = exports.Student = exports.Parent = exports.ClassSubject = exports.Department = exports.Subject = exports.SchoolClass = exports.Form = exports.Term = exports.SchoolYear = exports.SchoolRole = exports.User = exports.entities = void 0;
+exports.GeneralLedgerEntry = exports.ChartOfAccount = exports.InvoiceAdjustment = exports.TuitionExemption = exports.StaffLeaveBalance = exports.Payslip = exports.PayrollRun = exports.StaffPayrollProfile = exports.StudentTermBalance = exports.ResultsPublication = exports.ClassPromotionRule = exports.SchoolFee = exports.SchoolSettings = exports.UniformSale = exports.TuckshopSale = exports.TuckshopItem = exports.Notification = exports.Message = exports.WeeklyAssessment = exports.LearningSchedule = exports.TeacherAllocation = exports.Timetable = exports.CashbookEntry = exports.LedgerEntry = exports.Receipt = exports.Payment = exports.InvoiceLine = exports.Invoice = exports.HonourRoll = exports.ReportCard = exports.ExamMark = exports.ExamType = exports.StudentAttendance = exports.StaffAttendance = exports.Staff = exports.Guardian = exports.Student = exports.Parent = exports.ClassSubject = exports.Department = exports.Subject = exports.SchoolClass = exports.Form = exports.Term = exports.SchoolYear = exports.SchoolRole = exports.User = exports.entities = void 0;
 const User_1 = require("./User");
 Object.defineProperty(exports, "User", { enumerable: true, get: function () { return User_1.User; } });
 const SchoolRole_1 = require("./SchoolRole");
@@ -67,6 +67,8 @@ const CashbookEntry_1 = require("./CashbookEntry");
 Object.defineProperty(exports, "CashbookEntry", { enumerable: true, get: function () { return CashbookEntry_1.CashbookEntry; } });
 const Timetable_1 = require("./Timetable");
 Object.defineProperty(exports, "Timetable", { enumerable: true, get: function () { return Timetable_1.Timetable; } });
+const TeacherAllocation_1 = require("./TeacherAllocation");
+Object.defineProperty(exports, "TeacherAllocation", { enumerable: true, get: function () { return TeacherAllocation_1.TeacherAllocation; } });
 const LearningSchedule_1 = require("./LearningSchedule");
 Object.defineProperty(exports, "LearningSchedule", { enumerable: true, get: function () { return LearningSchedule_1.LearningSchedule; } });
 const WeeklyAssessment_1 = require("./WeeklyAssessment");
@@ -99,6 +101,14 @@ const Payslip_1 = require("./Payslip");
 Object.defineProperty(exports, "Payslip", { enumerable: true, get: function () { return Payslip_1.Payslip; } });
 const StaffLeaveBalance_1 = require("./StaffLeaveBalance");
 Object.defineProperty(exports, "StaffLeaveBalance", { enumerable: true, get: function () { return StaffLeaveBalance_1.StaffLeaveBalance; } });
+const TuitionExemption_1 = require("./TuitionExemption");
+Object.defineProperty(exports, "TuitionExemption", { enumerable: true, get: function () { return TuitionExemption_1.TuitionExemption; } });
+const InvoiceAdjustment_1 = require("./InvoiceAdjustment");
+Object.defineProperty(exports, "InvoiceAdjustment", { enumerable: true, get: function () { return InvoiceAdjustment_1.InvoiceAdjustment; } });
+const ChartOfAccount_1 = require("./ChartOfAccount");
+Object.defineProperty(exports, "ChartOfAccount", { enumerable: true, get: function () { return ChartOfAccount_1.ChartOfAccount; } });
+const GeneralLedgerEntry_1 = require("./GeneralLedgerEntry");
+Object.defineProperty(exports, "GeneralLedgerEntry", { enumerable: true, get: function () { return GeneralLedgerEntry_1.GeneralLedgerEntry; } });
 exports.entities = [
     User_1.User,
     SchoolRole_1.SchoolRole,
@@ -131,6 +141,7 @@ exports.entities = [
     LedgerEntry_1.LedgerEntry,
     CashbookEntry_1.CashbookEntry,
     Timetable_1.Timetable,
+    TeacherAllocation_1.TeacherAllocation,
     LearningSchedule_1.LearningSchedule,
     WeeklyAssessment_1.WeeklyAssessment,
     Message_1.Message,
@@ -142,5 +153,9 @@ exports.entities = [
     PayrollRun_1.PayrollRun,
     Payslip_1.Payslip,
     StaffLeaveBalance_1.StaffLeaveBalance,
+    TuitionExemption_1.TuitionExemption,
+    InvoiceAdjustment_1.InvoiceAdjustment,
+    ChartOfAccount_1.ChartOfAccount,
+    GeneralLedgerEntry_1.GeneralLedgerEntry,
 ];
 __exportStar(require("./enums"), exports);

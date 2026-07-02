@@ -6,7 +6,7 @@ import { RouterLink, Router } from '@angular/router';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
 import { ApiService } from '../../core/services/api.service';
-import { classDisplayName } from '../../core/utils/class-display';
+import { classDisplayName, formatStudentClassLabel } from '../../core/utils/class-display';
 import { formatSubjectAbbrev } from '../../core/utils/subject-abbrev';
 import { resolveExecutivePortalLayout } from '../../core/utils/portal-layout.util';
 
@@ -64,6 +64,8 @@ export class AdminMarkSheetComponent implements OnInit, OnDestroy {
   private api = inject(ApiService);
   private sanitizer = inject(DomSanitizer);
   private router = inject(Router);
+
+  readonly formatStudentClassLabel = formatStudentClassLabel;
 
   readonly portalLayout = resolveExecutivePortalLayout(this.router);
   readonly adminNav = ADMIN_NAV_SECTIONS;

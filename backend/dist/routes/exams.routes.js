@@ -7,6 +7,7 @@ const entities_1 = require("../entities");
 const enums_1 = require("../entities/enums");
 const auth_1 = require("../middleware/auth");
 const grade_service_1 = require("../services/grade.service");
+const class_display_1 = require("../utils/class-display");
 const entities_2 = require("../entities");
 const honours_service_1 = require("../services/honours.service");
 const report_card_service_1 = require("../services/report-card.service");
@@ -50,6 +51,9 @@ router.get('/types', async (req, res) => {
     const repo = data_source_1.AppDataSource.getRepository(entities_1.ExamType);
     res.json(await repo.find());
 });
+router.get('/grade-boundaries', (0, auth_1.authorize)(enums_1.UserRole.TEACHER, enums_1.UserRole.ADMIN, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PARENT, enums_1.UserRole.STUDENT), async (_req, res) => {
+    res.json(await (0, grade_service_1.getGradeBoundaries)());
+});
 router.get('/results-publications/status', (0, auth_1.authorize)(...PUBLISH_ROLES), async (req, res) => {
     const { termId, examTypeId } = req.query;
     if (!termId || !examTypeId) {
@@ -89,7 +93,7 @@ router.post('/results/unpublish', (0, auth_1.authorize)(...PUBLISH_ROLES), async
         return res.status(400).json({ message: err instanceof Error ? err.message : 'Unpublish failed' });
     }
 });
-router.get('/school-branding', (0, auth_1.authorize)(enums_1.UserRole.TEACHER, enums_1.UserRole.ADMIN, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.DIRECTOR), async (_req, res) => {
+router.get('/school-branding', (0, auth_1.authorize)(enums_1.UserRole.TEACHER, enums_1.UserRole.ADMIN, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PARENT, enums_1.UserRole.STUDENT), async (_req, res) => {
     res.json(await (0, school_branding_service_1.loadSchoolBranding)());
 });
 router.get('/terms', (0, auth_1.authorize)(enums_1.UserRole.TEACHER, enums_1.UserRole.ADMIN, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PARENT, enums_1.UserRole.STUDENT), async (_req, res) => {
@@ -117,6 +121,10 @@ router.get('/marks/entry', (0, auth_1.authorize)(enums_1.UserRole.TEACHER, enums
         return res.status(400).json({ message: 'classId, subjectId, examTypeId, and termId are required' });
     }
     const examType = await data_source_1.AppDataSource.getRepository(entities_1.ExamType).findOne({ where: { id: examTypeId } });
+    const schoolClass = await data_source_1.AppDataSource.getRepository(entities_1.SchoolClass).findOne({
+        where: { id: classId },
+        relations: (0, typeorm_helpers_1.relations)('form'),
+    });
     const studentRepo = data_source_1.AppDataSource.getRepository(entities_1.Student);
     const markRepo = data_source_1.AppDataSource.getRepository(entities_1.ExamMark);
     const students = await studentRepo.find({
@@ -135,6 +143,7 @@ router.get('/marks/entry', (0, auth_1.authorize)(enums_1.UserRole.TEACHER, enums
     res.json({
         maxMarks: examType ? Number(examType.maxMarks) : 100,
         examTypeName: examType?.name,
+        showGradePoints: (0, class_display_1.isALevelClassOption)(schoolClass),
         students: students.map((s) => {
             const m = markByStudent.get(s.id);
             return {
@@ -499,7 +508,7 @@ router.get('/rankings/pdf', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_
         }
         const scopeParts = [];
         if (rankings.class)
-            scopeParts.push(`Class: ${rankings.class.name}`);
+            scopeParts.push((0, class_display_1.formatStudentClassLabel)(rankings.class.name));
         if (rankings.form)
             scopeParts.push(`Form: ${rankings.form.name}`);
         if (rankings.subject)
@@ -614,6 +623,7 @@ router.get('/report-cards/by-class', (0, auth_1.authorize)(enums_1.UserRole.ADMI
         .orderBy('rc.classPosition', 'ASC', 'NULLS LAST')
         .addOrderBy('student.lastName', 'ASC')
         .getMany();
+    await (0, report_card_service_1.applyFormRankingsToReports)(reports, examTypeId, termId);
     const attendanceMap = await (0, report_card_service_1.getClassTermAttendanceMap)(classId, termId);
     res.json({
         count: reports.length,
@@ -652,64 +662,76 @@ router.get('/report-cards/:studentId/:termId', (0, auth_1.authorize)(enums_1.Use
     res.json(report);
 });
 router.get('/report-cards/:studentId/:termId/pdf', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.DIRECTOR, enums_1.UserRole.TEACHER, enums_1.UserRole.PARENT, enums_1.UserRole.STUDENT), async (req, res) => {
-    const repo = data_source_1.AppDataSource.getRepository(entities_1.ReportCard);
-    const where = {
-        studentId: req.params.studentId,
-        termId: req.params.termId,
-    };
-    if (req.query.examTypeId) {
-        where.examTypeId = req.query.examTypeId;
+    try {
+        const repo = data_source_1.AppDataSource.getRepository(entities_1.ReportCard);
+        const where = {
+            studentId: req.params.studentId,
+            termId: req.params.termId,
+        };
+        if (req.query.examTypeId) {
+            where.examTypeId = req.query.examTypeId;
+        }
+        const report = await repo.findOne({
+            where,
+            relations: (0, typeorm_helpers_1.relations)('student', 'student.schoolClass', 'student.schoolClass.form', 'term', 'examType'),
+        });
+        if (!report)
+            return res.status(404).json({ message: 'Report card not found' });
+        if (isPortalViewer(req.user.role)) {
+            const block = await assertReportVisibleToPortalUser(report, req.query.examTypeId);
+            if (block)
+                return res.status(403).json({ message: block });
+        }
+        const settings = await data_source_1.AppDataSource.getRepository(entities_1.SchoolSettings).findOne({ where: { id: 'default' } });
+        const inline = req.query.preview === 'true';
+        const maxMarks = Number(report.examType?.maxMarks) || 100;
+        const metrics = await (0, report_card_service_1.getReportCardPdfMetrics)(report, maxMarks);
+        const pdf = await (0, pdf_1.generateReportCardPdf)({
+            schoolName: settings?.schoolName || 'School Pro Academy',
+            tagline: settings?.tagline || undefined,
+            logoUrl: settings?.logoUrl || undefined,
+            address: settings?.address || undefined,
+            phone: settings?.phone || undefined,
+            email: settings?.email || undefined,
+            website: settings?.website || undefined,
+            studentName: `${report.student.firstName} ${report.student.lastName}`,
+            admissionNumber: report.student.admissionNumber,
+            className: report.student.schoolClass?.name || '',
+            formName: report.student.schoolClass?.form?.name || '',
+            formLevel: report.student.schoolClass?.form?.level,
+            termName: report.term.name,
+            examTypeName: report.examType?.name,
+            subjectResults: metrics.subjectResults,
+            averageMark: Number(report.averageMark),
+            overallGrade: report.overallGrade,
+            classPosition: metrics.classPosition ?? report.classPosition,
+            formPosition: metrics.formPosition ?? report.formPosition,
+            classTotal: metrics.classTotal,
+            formTotal: metrics.formTotal,
+            subjectsPassed: metrics.subjectsPassed,
+            totalSubjects: metrics.totalSubjects,
+            attendance: metrics.attendance,
+            classTeacherRemarks: report.classTeacherRemarks,
+            principalRemarks: report.principalRemarks,
+            generatedAt: report.generatedAt ? new Date(report.generatedAt) : new Date(),
+            gradeBoundaries: settings?.gradeBoundaries?.length
+                ? settings.gradeBoundaries
+                : grade_boundaries_1.DEFAULT_GRADE_BOUNDARIES,
+            reportCardId: report.id,
+        });
+        res.setHeader('Content-Type', 'application/pdf');
+        const pdfFilename = (0, helpers_1.reportCardPdfFilename)(report.student.firstName, report.student.lastName, report.student.admissionNumber || 'report-card');
+        res.setHeader('Content-Disposition', `${inline ? 'inline' : 'attachment'}; filename="${pdfFilename}"`);
+        res.send(pdf);
     }
-    const report = await repo.findOne({
-        where,
-        relations: (0, typeorm_helpers_1.relations)('student', 'student.schoolClass', 'student.schoolClass.form', 'term', 'examType'),
-    });
-    if (!report)
-        return res.status(404).json({ message: 'Report card not found' });
-    if (isPortalViewer(req.user.role)) {
-        const block = await assertReportVisibleToPortalUser(report, req.query.examTypeId);
-        if (block)
-            return res.status(403).json({ message: block });
+    catch (err) {
+        console.error('Report card PDF generation failed:', err);
+        if (!res.headersSent) {
+            res.status(500).json({
+                message: err instanceof Error ? err.message : 'Failed to generate report card PDF',
+            });
+        }
     }
-    const settings = await data_source_1.AppDataSource.getRepository(entities_1.SchoolSettings).findOne({ where: { id: 'default' } });
-    const inline = req.query.preview === 'true';
-    const maxMarks = Number(report.examType?.maxMarks) || 100;
-    const metrics = await (0, report_card_service_1.getReportCardPdfMetrics)(report, maxMarks);
-    const pdf = await (0, pdf_1.generateReportCardPdf)({
-        schoolName: settings?.schoolName || 'School Pro Academy',
-        tagline: settings?.tagline || undefined,
-        logoUrl: settings?.logoUrl || undefined,
-        address: settings?.address || undefined,
-        phone: settings?.phone || undefined,
-        website: settings?.website || undefined,
-        studentName: `${report.student.firstName} ${report.student.lastName}`,
-        admissionNumber: report.student.admissionNumber,
-        className: report.student.schoolClass?.name || '',
-        formName: report.student.schoolClass?.form?.name || '',
-        termName: report.term.name,
-        examTypeName: report.examType?.name,
-        subjectResults: metrics.subjectResults,
-        averageMark: Number(report.averageMark),
-        overallGrade: report.overallGrade,
-        classPosition: metrics.classPosition ?? report.classPosition,
-        formPosition: metrics.formPosition ?? report.formPosition,
-        classTotal: metrics.classTotal,
-        formTotal: metrics.formTotal,
-        subjectsPassed: metrics.subjectsPassed,
-        totalSubjects: metrics.totalSubjects,
-        attendance: metrics.attendance,
-        classTeacherRemarks: report.classTeacherRemarks,
-        principalRemarks: report.principalRemarks,
-        generatedAt: report.generatedAt ? new Date(report.generatedAt) : new Date(),
-        gradeBoundaries: settings?.gradeBoundaries?.length
-            ? settings.gradeBoundaries
-            : grade_boundaries_1.DEFAULT_GRADE_BOUNDARIES,
-        reportCardId: report.id,
-    });
-    res.setHeader('Content-Type', 'application/pdf');
-    const pdfFilename = (0, helpers_1.reportCardPdfFilename)(report.student.firstName, report.student.lastName, report.student.admissionNumber || 'report-card');
-    res.setHeader('Content-Disposition', `${inline ? 'inline' : 'attachment'}; filename="${pdfFilename}"`);
-    res.send(pdf);
 });
 router.patch('/report-cards/:id/remarks', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.DIRECTOR, enums_1.UserRole.TEACHER), async (req, res) => {
     const { classTeacherRemarks, principalRemarks } = req.body;

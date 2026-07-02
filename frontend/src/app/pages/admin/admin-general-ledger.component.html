@@ -1,0 +1,128 @@
+<app-portal-layout portalTitle="Admin Portal" pageTitle="General Ledger" [navSections]="adminNav">
+  <div class="gl-page">
+    @if (toast(); as t) {
+      <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>
+    }
+
+    <header class="hero">
+      <div>
+        <p class="eyebrow">Finance reports</p>
+        <h2>General ledger</h2>
+        <p class="hero-sub">
+          Double-entry journal across all school accounts. Entries are posted automatically from
+          <a routerLink="/admin/payment">payments</a>, payroll, and cashbook expenses.
+        </p>
+      </div>
+      @if (report(); as r) {
+        <div class="summary-pills">
+          <span class="pill">Debits: ${{ r.summary.totalDebits | number:'1.2-2' }}</span>
+          <span class="pill">Credits: ${{ r.summary.totalCredits | number:'1.2-2' }}</span>
+          <span class="pill" [class.warn]="!r.summary.balanced">
+            Variance: ${{ r.summary.variance | number:'1.2-2' }}
+          </span>
+        </div>
+      }
+    </header>
+
+    <section class="panel">
+      <form class="filters" [formGroup]="filterForm" (ngSubmit)="applyFilters()">
+        <div class="field">
+          <label for="startDate">From</label>
+          <input id="startDate" type="date" formControlName="startDate" />
+        </div>
+        <div class="field">
+          <label for="endDate">To</label>
+          <input id="endDate" type="date" formControlName="endDate" />
+        </div>
+        <div class="field grow">
+          <label for="accountId">Account</label>
+          <select id="accountId" formControlName="accountId">
+            <option value="">All accounts</option>
+            @for (a of accounts(); track a.id) {
+              <option [value]="a.id">{{ a.accountCode }} — {{ a.accountName }}</option>
+            }
+          </select>
+        </div>
+        <div class="field">
+          <label for="accountType">Account type</label>
+          <select id="accountType" formControlName="accountType">
+            @for (t of accountTypes; track t.value) {
+              <option [value]="t.value">{{ t.label }}</option>
+            }
+          </select>
+        </div>
+        <div class="field">
+          <label for="referenceType">Reference</label>
+          <select id="referenceType" formControlName="referenceType">
+            @for (t of referenceTypes; track t.value) {
+              <option [value]="t.value">{{ t.label }}</option>
+            }
+          </select>
+        </div>
+        <div class="field grow">
+          <label for="search">Search</label>
+          <input id="search" type="search" formControlName="search" placeholder="Description or account…" />
+        </div>
+        <div class="actions">
+          <button type="submit" class="btn-primary" [disabled]="loading()">Apply</button>
+          <button type="button" class="btn-primary" (click)="clearFilters()">Reset</button>
+          <button type="button" class="btn-primary" (click)="previewPdf()" [disabled]="pdfPreviewLoading() || exporting()">
+            {{ pdfPreviewLoading() ? 'Generating…' : 'Preview PDF' }}
+          </button>
+          <button type="button" class="btn-primary" (click)="export('csv')" [disabled]="exporting() || pdfPreviewLoading()">Export CSV</button>
+          <button type="button" class="btn-primary" (click)="export('pdf')" [disabled]="exporting() || pdfPreviewLoading()">Download PDF</button>
+        </div>
+      </form>
+
+      @if (loading()) {
+        <div class="loading">Loading ledger entries…</div>
+      } @else if (report()) {
+        <div class="meta">
+          <span>{{ report()!.pagination.total }} entries</span>
+          <span>Page {{ report()!.pagination.page }} of {{ report()!.pagination.totalPages }}</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Account</th>
+                <th>Description</th>
+                <th class="num">Debit</th>
+                <th class="num">Credit</th>
+                <th class="num">Running balance</th>
+                <th>Reference</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of report()!.items; track row.id) {
+                <tr [class.reversed]="row.isReversed">
+                  <td>{{ row.transactionDate }}</td>
+                  <td>
+                    <code>{{ row.accountCode }}</code>
+                    <span class="acct-name">{{ row.accountName }}</span>
+                  </td>
+                  <td>{{ row.description }}</td>
+                  <td class="num debit">{{ row.debitAmount ? ('$' + (row.debitAmount | number:'1.2-2')) : '—' }}</td>
+                  <td class="num credit">{{ row.creditAmount ? ('$' + (row.creditAmount | number:'1.2-2')) : '—' }}</td>
+                  <td class="num"><strong>${{ row.runningBalance | number:'1.2-2' }}</strong></td>
+                  <td>{{ refLabel(row.referenceType) }}</td>
+                </tr>
+              } @empty {
+                <tr>
+                  <td colspan="7" class="empty">No ledger entries match your filters.</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+        @if (report()!.pagination.totalPages > 1) {
+          <div class="pager">
+            <button type="button" class="btn-ghost" [disabled]="report()!.pagination.page <= 1" (click)="goToPage(report()!.pagination.page - 1)">Previous</button>
+            <button type="button" class="btn-ghost" [disabled]="report()!.pagination.page >= report()!.pagination.totalPages" (click)="goToPage(report()!.pagination.page + 1)">Next</button>
+          </div>
+        }
+      }
+    </section>
+  </div>
+</app-portal-layout>

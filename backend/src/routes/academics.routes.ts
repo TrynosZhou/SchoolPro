@@ -97,6 +97,14 @@ router.get('/messages/recipients', authorize(UserRole.TEACHER, UserRole.ADMIN, U
   });
 });
 
+router.get('/messages/unread-count', authorize(UserRole.TEACHER, UserRole.PARENT, UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (req: AuthRequest, res: Response) => {
+  const rows = await AppDataSource.query(
+    `SELECT COUNT(*)::int AS count FROM messages WHERE "recipientId" = $1 AND "isRead" = false`,
+    [req.user!.userId],
+  );
+  res.json({ count: Number(rows[0]?.count || 0) });
+});
+
 router.get('/messages/inbox', authorize(UserRole.TEACHER, UserRole.PARENT, UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (req: AuthRequest, res: Response) => {
   const repo = AppDataSource.getRepository(Message);
   const messages = await repo.find({

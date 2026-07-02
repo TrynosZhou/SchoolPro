@@ -1,0 +1,368 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.formatPeriodRangeLabel = formatPeriodRangeLabel;
+exports.generateAllTeacherTimetablesPdf = generateAllTeacherTimetablesPdf;
+exports.generateAllClassTimetablesPdf = generateAllClassTimetablesPdf;
+exports.generateTeacherTimetablePdf = generateTeacherTimetablePdf;
+exports.generateClassTimetablePdf = generateClassTimetablePdf;
+exports.buildTimetableTermVersionLabel = buildTimetableTermVersionLabel;
+exports.buildTimetableTitleLine = buildTimetableTitleLine;
+exports.formatClassTeacherHeader = formatClassTeacherHeader;
+const pdfkit_1 = __importDefault(require("pdfkit"));
+const fs_1 = __importDefault(require("fs"));
+const path_1 = __importDefault(require("path"));
+const subject_abbrev_1 = require("./subject-abbrev");
+const teacher_load_pdf_1 = require("./teacher-load.pdf");
+const COLORS = {
+    border: '#000000',
+    ink: '#000000',
+    muted: '#333333',
+    breakFill: '#f5f5f5',
+};
+const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+function resolveUploadPath(publicUrl) {
+    const value = publicUrl?.trim();
+    if (!value)
+        return null;
+    if (/^https?:\/\//i.test(value))
+        return null;
+    const rel = value.startsWith('/') ? value.slice(1) : value;
+    const full = path_1.default.join(process.cwd(), rel.replace(/^uploads\//, 'uploads/'));
+    return fs_1.default.existsSync(full) ? full : null;
+}
+function compactTime(time) {
+    const [h, m] = String(time || '0:00').split(':');
+    return `${Number(h)}:${(m || '00').padStart(2, '0')}`;
+}
+function formatPeriodRangeLabel(period) {
+    return `${compactTime(period.startTime)} - ${compactTime(period.endTime)}`;
+}
+function isBreakPeriod(period) {
+    return period.slotType === 'break';
+}
+function lessonPeriodNumber(periods, index) {
+    return periods.slice(0, index + 1).filter((p) => !isBreakPeriod(p)).length;
+}
+function breakDurationMinutes(period) {
+    const [sh, sm] = String(period.startTime || '0:0').split(':').map(Number);
+    const [eh, em] = String(period.endTime || '0:0').split(':').map(Number);
+    return eh * 60 + em - (sh * 60 + sm);
+}
+function breakStartMinutes(period) {
+    const [h, m] = String(period.startTime || '0:0').split(':').map(Number);
+    return h * 60 + m;
+}
+function isLunchBreakPeriod(period) {
+    const name = String(period.name || '').trim();
+    if (/lunch/i.test(name))
+        return true;
+    const start = breakStartMinutes(period);
+    const duration = breakDurationMinutes(period);
+    return start >= 11 * 60 + 30 && duration >= 35;
+}
+function breakColumnTitle(period) {
+    return isLunchBreakPeriod(period) ? 'LUNCH TIME' : 'BREAK TIME';
+}
+function pdfSubjectLabel(short, code, name) {
+    const custom = String(short || '').trim();
+    if (custom)
+        return custom;
+    const raw = (0, subject_abbrev_1.formatSubjectAbbrev)(code ?? undefined, name);
+    if (raw.length <= 4) {
+        return raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
+    }
+    const words = name.trim().split(/\s+/).filter(Boolean);
+    if (words.length >= 2) {
+        return words
+            .map((w) => w.charAt(0))
+            .join('')
+            .slice(0, 4);
+    }
+    return name.slice(0, 4);
+}
+function formatTeacherClassLine(name) {
+    return String(name || '').trim() || '—';
+}
+function classStreamLabel(className) {
+    const code = (0, teacher_load_pdf_1.shortClassName)(className).replace(/\s+/g, '').toUpperCase();
+    if (!code)
+        return '';
+    if (/GIRLS?$/.test(code) || /[0-9]G$/.test(code))
+        return 'Girls';
+    if (/BOYS?$/.test(code) || /[0-9]B$/.test(code))
+        return 'Boys';
+    return '';
+}
+function formatGeneratedDate(date) {
+    return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'numeric', year: 'numeric' });
+}
+function slotAt(slots, day, period) {
+    return slots.find((s) => s.dayOfWeek === day && s.startTime === period.startTime && s.endTime === period.endTime);
+}
+function sameLesson(a, b, mode) {
+    if (a.subjectName !== b.subjectName)
+        return false;
+    if (mode === 'teacher') {
+        return a.className === b.className;
+    }
+    return (a.teacherName === b.teacherName);
+}
+function computeColSpans(day, periods, slots, mode) {
+    const spans = periods.map(() => 1);
+    let i = 0;
+    while (i < periods.length) {
+        if (isBreakPeriod(periods[i])) {
+            i += 1;
+            continue;
+        }
+        const slot = slotAt(slots, day, periods[i]);
+        if (!slot) {
+            i += 1;
+            continue;
+        }
+        let span = 1;
+        while (i + span < periods.length) {
+            const next = periods[i + span];
+            if (isBreakPeriod(next))
+                break;
+            const nextSlot = slotAt(slots, day, next);
+            if (!nextSlot || !sameLesson(slot, nextSlot, mode))
+                break;
+            span += 1;
+        }
+        spans[i] = span;
+        for (let k = 1; k < span; k += 1)
+            spans[i + k] = 0;
+        i += span;
+    }
+    return spans;
+}
+function drawVerticalLabel(doc, text, x, y, w, h) {
+    doc.save();
+    doc.font('Helvetica-Bold').fontSize(7).fillColor(COLORS.ink);
+    const cx = x + w / 2;
+    const cy = y + h / 2;
+    doc.translate(cx, cy);
+    doc.rotate(-90);
+    doc.text(text, -h / 2 + 4, -3, { width: h - 8, align: 'center' });
+    doc.restore();
+}
+function drawTeacherCell(doc, slot, x, y, w, h) {
+    const subject = String(slot.subjectName || '').trim() || '—';
+    const cls = (0, teacher_load_pdf_1.shortClassName)(slot.className);
+    const stream = classStreamLabel(slot.className);
+    doc.font('Helvetica').fontSize(5.5).fillColor(COLORS.ink);
+    doc.text(subject, x + 2, y + 3, { width: w - 4, align: 'left', lineBreak: true, height: h * 0.38 });
+    doc.font('Helvetica-Bold').fontSize(10).fillColor(COLORS.ink);
+    doc.text(cls, x + 1, y + h / 2 - 6, { width: w - 2, align: 'center', lineBreak: false });
+    const bottom = stream || slot.room || '';
+    if (bottom) {
+        doc.font('Helvetica').fontSize(5.5).fillColor(COLORS.muted);
+        doc.text(bottom, x + 1, y + h - 9, { width: w - 2, align: 'center', lineBreak: false });
+    }
+}
+function drawClassCell(doc, slot, x, y, w, h) {
+    const subject = pdfSubjectLabel(slot.subjectShort, slot.subjectCode, slot.subjectName);
+    const teacher = formatTeacherClassLine(slot.teacherName);
+    const centerY = y + h / 2;
+    const subjectY = centerY - 6;
+    doc.font('Helvetica-Bold').fontSize(10).fillColor(COLORS.ink);
+    doc.text(subject, x + 1, subjectY, { width: w - 2, align: 'center', lineBreak: false });
+    doc.font('Helvetica').fontSize(5.5).fillColor(COLORS.muted);
+    doc.text(teacher, x + 1, centerY + 2, { width: w - 2, align: 'center', lineBreak: false });
+    if (slot.room) {
+        doc.font('Helvetica').fontSize(5).fillColor(COLORS.muted);
+        doc.text(slot.room, x + 1, y + h - 8, { width: w - 2, align: 'center', lineBreak: false });
+    }
+}
+async function generateAscStylePdf(data, mode) {
+    return generateCombinedAscStylePdf([{ data, mode }]);
+}
+function renderClassicTimetablePage(doc, data, mode) {
+    const margin = 18;
+    const pageW = doc.page.width;
+    const pageH = doc.page.height;
+    const contentW = pageW - margin * 2;
+    const periods = data.periods;
+    const dayColW = 34;
+    const gridW = contentW - dayColW;
+    const colW = periods.length ? gridW / periods.length : gridW;
+    const periodNumH = 16;
+    const periodTimeH = 14;
+    const headerH = periodNumH + periodTimeH;
+    const titleBlockH = data.headerRight ? 54 : 46;
+    const footerH = 16;
+    const rowH = Math.max(34, Math.floor((pageH - margin * 2 - titleBlockH - footerH - headerH) / 5));
+    const bodyH = rowH * 5;
+    const logoPath = resolveUploadPath(data.logoUrl);
+    let y = margin;
+    if (logoPath) {
+        try {
+            doc.image(logoPath, margin, y, { fit: [38, 38] });
+        }
+        catch {
+            /* skip */
+        }
+    }
+    doc.font('Helvetica-Bold').fontSize(15).fillColor(COLORS.ink);
+    doc.text(data.titleLine, margin, y + 2, { width: contentW, align: 'center' });
+    y += 20;
+    doc.font('Helvetica-Bold').fontSize(11).fillColor(COLORS.ink);
+    doc.text(data.subtitleLine, margin, y, { width: contentW, align: 'center' });
+    y += 18;
+    if (data.headerRight) {
+        doc.font('Helvetica').fontSize(9).fillColor(COLORS.ink);
+        doc.text(data.headerRight, margin, margin + 4, { width: contentW, align: 'right' });
+    }
+    const gridX = margin;
+    const gridY = y;
+    const gridH = headerH + bodyH;
+    const slots = mode === 'teacher'
+        ? data.slots
+        : data.slots;
+    doc.save();
+    doc.strokeColor(COLORS.border).lineWidth(0.6);
+    doc.rect(gridX, gridY, dayColW, headerH).stroke();
+    let hx = gridX + dayColW;
+    for (let pi = 0; pi < periods.length; pi += 1) {
+        const period = periods[pi];
+        const isBreak = isBreakPeriod(period);
+        if (isBreak) {
+            doc.fillColor(COLORS.breakFill).strokeColor(COLORS.border);
+            doc.rect(hx, gridY, colW, headerH).fillAndStroke();
+            doc.font('Helvetica').fontSize(6).fillColor(COLORS.ink);
+            doc.text(formatPeriodRangeLabel(period), hx + 1, gridY + headerH / 2 - 3, {
+                width: colW - 2,
+                align: 'center',
+                lineBreak: false,
+            });
+        }
+        else {
+            doc.rect(hx, gridY, colW, periodNumH).stroke();
+            doc.font('Helvetica-Bold').fontSize(10).fillColor(COLORS.ink);
+            doc.text(String(lessonPeriodNumber(periods, pi)), hx + 1, gridY + 3, {
+                width: colW - 2,
+                align: 'center',
+            });
+            doc.rect(hx, gridY + periodNumH, colW, periodTimeH).stroke();
+            doc.font('Helvetica').fontSize(6).fillColor(COLORS.ink);
+            doc.text(formatPeriodRangeLabel(period), hx + 1, gridY + periodNumH + 3, {
+                width: colW - 2,
+                align: 'center',
+                lineBreak: false,
+            });
+        }
+        hx += colW;
+    }
+    const bodyY = gridY + headerH;
+    for (let di = 0; di < 5; di += 1) {
+        const day = di + 1;
+        const rowY = bodyY + di * rowH;
+        doc.rect(gridX, rowY, dayColW, rowH).stroke();
+        doc.font('Helvetica-Bold').fontSize(9).fillColor(COLORS.ink);
+        doc.text(DAY_LABELS[di], gridX + 1, rowY + rowH / 2 - 5, { width: dayColW - 2, align: 'center' });
+        const spans = computeColSpans(day, periods, slots, mode);
+        let cx = gridX + dayColW;
+        for (let pi = 0; pi < periods.length; pi += 1) {
+            const period = periods[pi];
+            const span = spans[pi];
+            if (isBreakPeriod(period)) {
+                cx += colW;
+                continue;
+            }
+            if (span === 0) {
+                cx += colW;
+                continue;
+            }
+            const cellW = colW * span;
+            doc.rect(cx, rowY, cellW, rowH).stroke();
+            const slot = slotAt(slots, day, period);
+            if (slot) {
+                if (mode === 'teacher') {
+                    drawTeacherCell(doc, slot, cx, rowY, cellW, rowH);
+                }
+                else {
+                    drawClassCell(doc, slot, cx, rowY, cellW, rowH);
+                }
+            }
+            cx += cellW;
+        }
+    }
+    let bx = gridX + dayColW;
+    for (const period of periods) {
+        if (isBreakPeriod(period)) {
+            doc.fillColor(COLORS.breakFill).strokeColor(COLORS.border);
+            doc.rect(bx, bodyY, colW, bodyH).fillAndStroke();
+            drawVerticalLabel(doc, breakColumnTitle(period), bx, bodyY, colW, bodyH);
+        }
+        bx += colW;
+    }
+    doc.lineWidth(1.4);
+    doc.rect(gridX, gridY, dayColW + gridW, gridH).stroke();
+    doc.restore();
+    const footerY = pageH - margin - 10;
+    doc.font('Helvetica').fontSize(7).fillColor(COLORS.muted);
+    doc.text(`Timetable generated: ${formatGeneratedDate(data.generatedAt)}`, margin, footerY, {
+        width: contentW / 2,
+        align: 'left',
+    });
+    doc.text(data.footerBrand || data.schoolName || 'School Pro', margin, footerY, {
+        width: contentW,
+        align: 'right',
+    });
+}
+async function generateCombinedAscStylePdf(pages) {
+    if (!pages.length) {
+        throw new Error('No timetable pages to export.');
+    }
+    return new Promise((resolve, reject) => {
+        const margin = 18;
+        const doc = new pdfkit_1.default({ margin, size: 'A4', layout: 'landscape' });
+        const chunks = [];
+        doc.on('data', (c) => chunks.push(c));
+        doc.on('end', () => resolve(Buffer.concat(chunks)));
+        doc.on('error', reject);
+        pages.forEach((page, index) => {
+            if (index > 0) {
+                doc.addPage({ layout: 'landscape', size: 'A4', margin });
+            }
+            renderClassicTimetablePage(doc, page.data, page.mode);
+        });
+        doc.end();
+    });
+}
+function generateAllTeacherTimetablesPdf(pages) {
+    return generateCombinedAscStylePdf(pages.map((data) => ({ data, mode: 'teacher' })));
+}
+function generateAllClassTimetablesPdf(pages) {
+    return generateCombinedAscStylePdf(pages.map((data) => ({ data, mode: 'class' })));
+}
+function generateTeacherTimetablePdf(data) {
+    return generateAscStylePdf(data, 'teacher');
+}
+function generateClassTimetablePdf(data) {
+    return generateAscStylePdf(data, 'class');
+}
+function buildTimetableTermVersionLabel(termName, yearName, version = 1) {
+    const term = String(termName || '').trim();
+    const year = String(yearName || '').trim();
+    if (term && year)
+        return `${term} (${year}) Version ${version}`;
+    if (term)
+        return `${term} Version ${version}`;
+    if (year)
+        return `${year} Version ${version}`;
+    return `Version ${version}`;
+}
+function buildTimetableTitleLine(schoolName, termName, yearName, version = 1) {
+    const school = schoolName || 'School';
+    const termVersion = buildTimetableTermVersionLabel(termName, yearName, version);
+    return `${school}: ${termVersion}`;
+}
+function formatClassTeacherHeader(name) {
+    const short = String(name || '').trim();
+    return short ? `Class teacher : ${short}` : '';
+}

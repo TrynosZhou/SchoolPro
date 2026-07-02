@@ -162,7 +162,7 @@
                     <div class="meta-tags">
                       <span class="form-tag">{{ formLabel(s) }}</span>
                       @if (s.gender) {
-                        <span class="meta-tag">{{ s.gender }}</span>
+                        <span class="meta-tag">{{ studentGenderLabel(s.gender) }}</span>
                       }
                       @if (s.studentType === 'boarder') {
                         <span class="meta-tag boarder">Boarder</span>
@@ -242,7 +242,7 @@
                   <strong>{{ s.firstName }} {{ s.lastName }}</strong>
                   <code class="sid">{{ s.admissionNumber }}</code>
                 </div>
-                <span class="class-pill">{{ s.schoolClass?.name || '—' }}</span>
+                <span class="class-pill">{{ studentClassLabel(s.schoolClass?.name) }}</span>
               </div>
 
               <div class="card-meta">
@@ -295,7 +295,7 @@
                     </div>
                   </td>
                   <td>
-                    <span class="class-pill">{{ s.schoolClass?.name || '—' }}</span>
+                    <span class="class-pill">{{ studentClassLabel(s.schoolClass?.name) }}</span>
                     <small class="form-hint">{{ s.schoolClass?.form?.name }}</small>
                   </td>
                   <td>{{ formLabel(s) }}</td>

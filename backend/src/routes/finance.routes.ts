@@ -3,8 +3,9 @@ import { Router, Response } from 'express';
 import { AppDataSource } from '../config/data-source';
 import { CashbookEntry } from '../entities';
 import { UserRole } from '../entities/enums';
-import { authenticate, authorize } from '../middleware/auth';
+import { authenticate, authorize, AuthRequest } from '../middleware/auth';
 import { findLatest } from '../utils/typeorm-helpers';
+import { postCashbookExpenseToGl, postCashbookReceiptToGl } from '../services/gl-posting.service';
 
 const router = Router();
 router.use(authenticate);
@@ -17,7 +18,7 @@ router.get('/cashbook', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PR
   res.json(await qb.getMany());
 });
 
-router.post('/cashbook', authorize(UserRole.ADMIN), async (req, res: Response) => {
+router.post('/cashbook', authorize(UserRole.ADMIN), async (req: AuthRequest, res: Response) => {
   const repo = AppDataSource.getRepository(CashbookEntry);
   const last = await findLatest(repo);
   const prevBalance = last ? Number(last.balance) : 0;
@@ -27,9 +28,19 @@ router.post('/cashbook', authorize(UserRole.ADMIN), async (req, res: Response) =
     moneyIn,
     moneyOut,
     balance: prevBalance + Number(moneyIn) - Number(moneyOut),
+    recordedById: req.user?.userId,
   });
-  await repo.save(entry);
-  res.status(201).json(entry);
+  const saved = await repo.save(entry);
+  try {
+    if (Number(moneyOut) > 0) {
+      await postCashbookExpenseToGl(saved, req.user!.userId);
+    } else if (Number(moneyIn) > 0 && !saved.studentId) {
+      await postCashbookReceiptToGl(saved, req.user!.userId);
+    }
+  } catch (glErr) {
+    console.error('GL posting failed for cashbook entry:', glErr);
+  }
+  res.status(201).json(saved);
 });
 
 router.get('/balance-sheet', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (_req, res: Response) => {

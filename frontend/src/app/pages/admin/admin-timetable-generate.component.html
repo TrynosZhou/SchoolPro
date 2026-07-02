@@ -4,19 +4,57 @@
       <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>
     }
 
+    @if (slotContextMenu(); as menu) {
+      <div
+        class="slot-context-menu"
+        [style.left.px]="menu.x"
+        [style.top.px]="menu.y"
+        (click)="$event.stopPropagation()"
+        (contextmenu)="$event.preventDefault()"
+      >
+        @if (menu.slot.isLocked) {
+          <button type="button" (click)="setSlotLocked(menu.slot, false)">Unlock lesson</button>
+        } @else {
+          <button type="button" (click)="setSlotLocked(menu.slot, true)">Lock lesson</button>
+        }
+      </div>
+    }
+
+    @if (slotMoveHint(); as hint) {
+      <div
+        class="slot-move-hint"
+        [class.above]="hint.above"
+        [style.left.px]="hint.x"
+        [style.top.px]="hint.y"
+        role="alert"
+      >
+        {{ hint.msg }}
+      </div>
+    }
+
     <header class="hero">
       <div class="hero-copy">
         <p class="eyebrow">Timetable</p>
-        <h2>Generate class timetable</h2>
+        <h2>Generate school timetable</h2>
         <p class="hero-sub">
-          Assign subjects and teachers to lesson periods for each class.
+          Builds the weekly timetable from class assignments on
+          <a routerLink="/admin/staff">Staff → Teacher Load</a>.
           Configure bell times on
           <a routerLink="/admin/timetable/configure-periods">Configure Periods</a>
-          first, then build the weekly schedule slot by slot.
+          first, then generate. After generation the timetable grid appears below — drag lessons to adjust slots or export PDFs.
         </p>
         <div class="hero-actions">
-          <a routerLink="/admin/timetable/configure-periods" class="secondary-action">← Configure Periods</a>
-          <a routerLink="/admin/timetable/view" class="primary-action">View Timetable →</a>
+          <button
+            type="button"
+            class="primary-action"
+            (click)="generateTimetable()"
+            [disabled]="generating() || !periods().length"
+          >
+            {{ generating() ? 'Generating…' : 'Generate Timetable →' }}
+          </button>
+          <a routerLink="/admin/timetable/view" class="secondary-action">View Timetable</a>
+          <a routerLink="/admin/timetable/configure-periods" class="secondary-action">Configure Periods</a>
+          <a routerLink="/admin/staff" class="secondary-action">Teacher Load</a>
         </div>
       </div>
       <div class="kpi-grid">
@@ -24,28 +62,28 @@
           <span class="kpi-icon">⏱</span>
           <div>
             <strong>{{ periods().length || '—' }}</strong>
-            <span>Lesson periods</span>
+            <span>Lesson periods / day</span>
           </div>
         </article>
         <article class="kpi accent">
-          <span class="kpi-icon">🏫</span>
+          <span class="kpi-icon">👩‍🏫</span>
           <div>
-            <strong>{{ loading() ? '…' : classes().length }}</strong>
-            <span>Classes</span>
+            <strong>{{ summary()?.teachersScheduled ?? '—' }}</strong>
+            <span>Teachers scheduled</span>
           </div>
         </article>
         <article class="kpi">
-          <span class="kpi-icon">📖</span>
+          <span class="kpi-icon">🏫</span>
           <div>
-            <strong>{{ loading() ? '…' : subjects().length }}</strong>
-            <span>Subjects</span>
+            <strong>{{ summary()?.classesScheduled ?? '—' }}</strong>
+            <span>Classes scheduled</span>
           </div>
         </article>
-        <article class="kpi" [class.ok]="classId && stats().slotCount > 0">
+        <article class="kpi" [class.ok]="hasResult()">
           <span class="kpi-icon">📅</span>
           <div>
-            <strong>{{ classId ? stats().slotCount : '—' }}</strong>
-            <span>{{ classId ? 'Slots for ' + selectedClassLabel() : 'Select a class' }}</span>
+            <strong>{{ summary()?.totalSlots ?? '—' }}</strong>
+            <span>Total slots / week</span>
           </div>
         </article>
       </div>
@@ -53,247 +91,566 @@
 
     @if (!periods().length) {
       <div class="alert-banner">
-        <span>No lesson periods configured. Set up your school day schedule before generating timetables.</span>
+        <span>No lesson periods configured. Set up your school day before generating timetables.</span>
         <a routerLink="/admin/timetable/configure-periods" class="link-btn">Configure periods</a>
       </div>
     }
 
-    <section class="list-shell">
-      <div class="list-toolbar">
-        <div class="toolbar-head">
-          <h3>Add timetable slot</h3>
-          <p>Pick a class, day, period, and subject — teacher and room are optional.</p>
-        </div>
-
-        <div class="form-grid">
-          <div class="field">
-            <label>Class *</label>
-            <select [(ngModel)]="classId" name="ttClass" (ngModelChange)="onClassChange()">
-              <option value="">Select class</option>
-              @for (c of classes(); track c.id) {
-                <option [value]="c.id">{{ c.form?.name || '' }} {{ c.name }}</option>
-              }
-            </select>
-          </div>
-          <div class="field">
-            <label>Period *</label>
-            <select [(ngModel)]="periodId" name="ttPeriod" [disabled]="!periods().length">
-              <option value="">Select period</option>
-              @for (p of periods(); track p.id) {
-                <option [value]="p.id">{{ p.name }} ({{ p.startTime }}–{{ p.endTime }})</option>
-              }
-            </select>
-          </div>
-          <div class="field">
-            <label>Subject *</label>
-            <select [(ngModel)]="subjectId" name="ttSubject">
-              <option value="">Select subject</option>
-              @for (s of subjects(); track s.id) {
-                <option [value]="s.id">{{ s.name }}@if (s.code) { ({{ s.code }}) }</option>
-              }
-            </select>
-          </div>
-          <div class="field">
-            <label>Teacher</label>
-            <select [(ngModel)]="teacherId" name="ttTeacher">
-              <option value="">Optional</option>
-              @for (t of staff(); track t.id) {
-                <option [value]="t.id">{{ staffName(t) }}</option>
-              }
-            </select>
-          </div>
-          <div class="field">
-            <label>Room</label>
-            <input type="text" [(ngModel)]="room" name="ttRoom" placeholder="e.g. Lab 1" />
-          </div>
-        </div>
-
-        <div class="day-picker">
-          <span class="day-picker-label">Day *</span>
-          <div class="day-chips">
-            @for (d of days; track d.value) {
-              <button
-                type="button"
-                class="day-chip"
-                [class.active]="dayOfWeek === d.value"
-                (click)="setDay(d.value)"
-              >
-                <span class="day-short">{{ d.short }}</span>
-                <span class="day-full">{{ d.label }}</span>
-              </button>
-            }
-          </div>
-        </div>
-
-        @if (formReady()) {
-          <div class="preview-card" [class.conflict]="hasConflict()">
-            <div class="preview-head">
-              <strong>Slot preview</strong>
-              @if (hasConflict()) {
-                <span class="conflict-badge">Conflict — slot already exists</span>
-              }
-            </div>
-            <dl class="preview-grid">
-              <div><dt>Class</dt><dd>{{ selectedClassLabel() }}</dd></div>
-              <div><dt>Day</dt><dd>{{ slotPreview().day }}</dd></div>
-              <div><dt>Period</dt><dd>{{ slotPreview().period }}</dd></div>
-              <div><dt>Subject</dt><dd>{{ slotPreview().subject }}</dd></div>
-              <div><dt>Teacher</dt><dd>{{ slotPreview().teacher }}</dd></div>
-              <div><dt>Room</dt><dd>{{ slotPreview().room }}</dd></div>
-            </dl>
-          </div>
+    <section class="timetable-term-banner generate-term-banner">
+      <h2 class="timetable-term-version">
+        @if (termPrefix()) {
+          <span>{{ termPrefix() }} Version</span>
+        } @else {
+          <span>Version</span>
         }
+        <input
+          class="version-input"
+          type="text"
+          [ngModel]="timetableVersion()"
+          (ngModelChange)="onTimetableVersionInput($event)"
+          (blur)="saveTimetableVersion()"
+          name="timetableVersion"
+          maxlength="32"
+          aria-label="Timetable version"
+          [disabled]="generating() || versionSaving()"
+        />
+      </h2>
+      <p class="version-hint">Edit the version label before generating. It appears on PDFs and the view timetable page.</p>
+    </section>
 
-        <div class="action-bar">
-          <button type="button" class="btn-ghost" (click)="resetForm()" [disabled]="saving()">Clear form</button>
+    <section class="list-shell generate-panel">
+      <div class="generate-panel-inner">
+        <div class="generate-copy">
+          <h3>Generate timetable</h3>
+          <p>
+            Uses each teacher's assigned classes, subjects, weekly lesson count, and lesson length
+            (single / double / triple) from Teacher Load. Avoids teacher and class double-booking.
+          </p>
+          @if (summary()?.requiredSlots) {
+            <p class="load-hint">
+              Teacher load requires <strong>{{ summary()!.requiredSlots }}</strong> period slots per week.
+              Weekly capacity is about <strong>{{ periods().length * 5 }}</strong> slots per class.
+            </p>
+          }
+        </div>
+        <div class="generate-controls">
+          <label class="check-row">
+            <input type="checkbox" [(ngModel)]="replaceExisting" name="replaceExisting" />
+            Replace existing timetable before generating
+          </label>
           <button
             type="button"
-            class="btn-primary"
-            (click)="addSlot()"
-            [disabled]="saving() || !formReady() || hasConflict() || !periods().length"
+            class="btn-primary generate-btn"
+            (click)="generateTimetable()"
+            [disabled]="generating() || !periods().length"
           >
-            {{ saving() ? 'Saving…' : 'Add to timetable' }}
+            {{ generating() ? 'Generating…' : 'Generate Timetable' }}
+          </button>
+          <button type="button" class="btn-outline" (click)="loadSnapshot()" [disabled]="loading() || generating()">
+            {{ loading() ? 'Loading…' : 'Refresh' }}
           </button>
         </div>
       </div>
+
+      @if (failures().length) {
+        <div class="warn-panel">
+          <strong>{{ failures().length }} assignment warning(s)</strong>
+          <ul>
+            @for (f of failures(); track f.className + f.subjectName + f.teacherName) {
+              <li>
+                <strong>{{ f.teacherName }}</strong> — {{ classDisplayName(f.className) }}, {{ f.subjectName }}:
+                {{ f.scheduledPeriods }}/{{ f.requiredPeriods }} periods. {{ f.reason }}
+              </li>
+            }
+          </ul>
+        </div>
+      }
     </section>
 
-    @if (classId) {
+    @if (loading()) {
       <section class="list-shell">
-        <div class="list-toolbar">
-          <div class="toolbar-head">
-            <h3>{{ selectedClassLabel() }} schedule</h3>
-            <p>
-              {{ stats().slotCount }} slots · {{ stats().daysFilled }}/5 days ·
-              {{ stats().withTeacher }} with teacher · {{ stats().coverage }}% period coverage
-            </p>
-          </div>
-
-          <div class="toolbar-row">
-            <div class="search-wrap">
-              <span class="search-icon" aria-hidden="true">🔍</span>
-              <input
-                type="search"
-                class="search-input"
-                [ngModel]="entriesSearch()"
-                (ngModelChange)="entriesSearch.set($event)"
-                name="entriesSearch"
-                placeholder="Search subject, teacher, room…"
-              />
-              @if (entriesSearch()) {
-                <button type="button" class="clear-search" (click)="clearEntriesSearch()" aria-label="Clear search">×</button>
-              }
-            </div>
-            <div class="toolbar-actions">
-              <div class="filter-chips">
-                <button type="button" class="chip" [class.active]="dayFilter() === 'all'" (click)="dayFilter.set('all')">
-                  All days
-                </button>
-                @for (d of days; track d.value) {
-                  <button
-                    type="button"
-                    class="chip"
-                    [class.active]="dayFilter() === d.value"
-                    (click)="dayFilter.set(d.value)"
-                  >
-                    {{ d.short }}
-                  </button>
-                }
-              </div>
-              <div class="view-toggle" role="group" aria-label="View mode">
-                <button type="button" class="view-btn" [class.active]="viewMode() === 'table'" (click)="viewMode.set('table')" title="Table view">☰</button>
-                <button type="button" class="view-btn" [class.active]="viewMode() === 'cards'" (click)="viewMode.set('cards')" title="Card view">▦</button>
-              </div>
-            </div>
-          </div>
-
-          <div class="action-bar compact">
-            <button type="button" class="btn-outline" (click)="loadEntries()" [disabled]="loadingEntries()">
-              {{ loadingEntries() ? 'Refreshing…' : 'Refresh' }}
-            </button>
-            <a [routerLink]="['/admin/timetable/view']" [queryParams]="{ class: classId }" class="btn-outline">
-              Open in View Timetable
-            </a>
-          </div>
+        <div class="loading-panel">
+          <div class="spinner"></div>
+          <p>Loading timetable…</p>
         </div>
+      </section>
+    } @else if (!hasResult()) {
+      <section class="list-shell">
+        <div class="empty-state">
+          <span class="empty-icon">📅</span>
+          <h3>No timetable generated yet</h3>
+          <p>
+            Assign teachers to classes on Staff → Teacher Load, then click
+            <strong>Generate Timetable</strong> above. The editable timetable grid will appear here once generation is complete.
+          </p>
+          <a routerLink="/admin/staff" class="btn-outline">Open Teacher Load</a>
+        </div>
+      </section>
+    } @else {
+      <section class="list-shell">
+        <nav class="tab-bar">
+          <button type="button" [class.active]="resultTab() === 'teachers'" (click)="setTab('teachers')">
+            Teachers
+            <span class="tab-count">{{ teachers().length }}</span>
+          </button>
+          <button type="button" [class.active]="resultTab() === 'classes'" (click)="setTab('classes')">
+            Classes
+            <span class="tab-count">{{ classes().length }}</span>
+          </button>
+          <button type="button" [class.active]="resultTab() === 'summary'" (click)="setTab('summary')">
+            Summary timetable
+            <span class="tab-count">{{ teachers().length }}</span>
+          </button>
+        </nav>
 
-        @if (loadingEntries()) {
-          <div class="loading-panel">
-            <div class="spinner"></div>
-            <p>Loading schedule…</p>
-          </div>
-        } @else if (!entries().length) {
-          <div class="empty-state">
-            <span class="empty-icon">📅</span>
-            <h3>No slots yet</h3>
-            <p>Add your first lesson above to build this class timetable.</p>
-          </div>
-        } @else if (!filteredEntries().length) {
-          <div class="empty-state">
-            <span class="empty-icon">🔍</span>
-            <h3>No matching slots</h3>
-            <p>Try a different day filter or search term.</p>
-            <button type="button" class="btn-outline" (click)="entriesSearch.set(''); dayFilter.set('all')">Clear filters</button>
-          </div>
-        } @else if (viewMode() === 'cards') {
-          <div class="card-grid">
-            @for (e of filteredEntries(); track e.id) {
-              <article class="slot-card">
-                <div class="slot-card-head">
-                  <span class="day-badge">{{ dayShort(e.dayOfWeek) }}</span>
-                  <span class="time-badge">{{ e.startTime }}–{{ e.endTime }}</span>
+        @if (resultTab() === 'teachers') {
+          <div class="view-panel">
+            <div class="view-toolbar view-toolbar-split">
+              <div class="toolbar-main">
+                <h3 class="summary-title">Teacher timetable</h3>
+                <p class="view-meta summary-intro">
+                  One row per teacher · drag class cards between periods on the same row · right-click to lock or unlock
+                </p>
+              </div>
+              <div class="summary-pdf-actions">
+                <div class="field inline-field">
+                  <label>PDF teacher</label>
+                  <select [(ngModel)]="selectedTeacherId" name="teacherPdfPick">
+                    @for (t of teachers(); track t.teacherId) {
+                      <option [value]="t.teacherId">{{ t.teacherName }}</option>
+                    }
+                  </select>
                 </div>
-                <strong class="slot-subject">{{ e.subject?.name || 'Subject' }}</strong>
-                <div class="slot-meta">
-                  <span class="avatar sm">{{ initials(teacherName(e)) }}</span>
-                  <span>{{ teacherName(e) }}</span>
-                  @if (e.room) {
-                    <span class="room-pill">{{ e.room }}</span>
-                  }
-                </div>
-              </article>
-            }
-          </div>
-        } @else {
-          <div class="table-wrap">
-            <table class="data-table">
-              <thead>
-                <tr>
-                  <th>Day</th>
-                  <th>Time</th>
-                  <th>Subject</th>
-                  <th>Teacher</th>
-                  <th>Room</th>
-                </tr>
-              </thead>
-              <tbody>
-                @for (e of filteredEntries(); track e.id) {
-                  <tr>
-                    <td><span class="day-badge inline">{{ dayShort(e.dayOfWeek) }}</span></td>
-                    <td class="time-cell">{{ e.startTime }}–{{ e.endTime }}</td>
-                    <td><strong>{{ e.subject?.name || '—' }}</strong></td>
-                    <td>
-                      <div class="user-cell">
-                        <span class="avatar sm">{{ initials(teacherName(e)) }}</span>
-                        {{ teacherName(e) }}
-                      </div>
-                    </td>
-                    <td>{{ e.room || '—' }}</td>
-                  </tr>
-                }
-              </tbody>
-            </table>
+                <button
+                  type="button"
+                  class="btn-primary"
+                  (click)="previewTeacherPdf()"
+                  [disabled]="teacherPdfLoading() || !selectedTeacherId"
+                >
+                  {{ teacherPdfLoading() ? 'Generating…' : 'Preview PDF' }}
+                </button>
+                <button
+                  type="button"
+                  class="btn-primary"
+                  (click)="downloadTeacherPdf()"
+                  [disabled]="teacherPdfLoading() || !selectedTeacherId"
+                >
+                  Download PDF
+                </button>
+                <button type="button" class="btn-primary" (click)="openEditor('teachers')">
+                  Open Editor
+                </button>
+              </div>
+            </div>
+
+            <p class="inline-grid-term">{{ termVersionLabel() }}</p>
+
+            <ng-container *ngTemplateOutlet="timetableGrid; context: { mode: 'teachers', fullPage: false }" />
           </div>
         }
-      </section>
-    } @else if (!loading()) {
-      <section class="list-shell">
-        <div class="empty-state padded">
-          <span class="empty-icon">🏫</span>
-          <h3>Select a class to begin</h3>
-          <p>Choose a class in the form above to view its current schedule and add timetable slots.</p>
-        </div>
+
+        @if (resultTab() === 'classes') {
+          <div class="view-panel">
+            <div class="view-toolbar view-toolbar-split">
+              <div class="toolbar-main">
+                <h3 class="summary-title">Class timetable</h3>
+                <p class="view-meta summary-intro">
+                  One row per class · drag subject cards between periods on the same row · colour = teacher
+                </p>
+              </div>
+              <div class="summary-pdf-actions">
+                <div class="field inline-field">
+                  <label>PDF class</label>
+                  <select [(ngModel)]="selectedClassId" name="classPdfPick">
+                    @for (c of classes(); track c.classId) {
+                      <option [value]="c.classId">{{ classDisplayName(c.className) }}</option>
+                    }
+                  </select>
+                </div>
+                <button
+                  type="button"
+                  class="btn-primary"
+                  (click)="previewClassPdf()"
+                  [disabled]="classPdfLoading() || !selectedClassId"
+                >
+                  {{ classPdfLoading() ? 'Generating…' : 'Preview PDF' }}
+                </button>
+                <button
+                  type="button"
+                  class="btn-primary"
+                  (click)="downloadClassPdf()"
+                  [disabled]="classPdfLoading() || !selectedClassId"
+                >
+                  Download PDF
+                </button>
+                <button type="button" class="btn-primary" (click)="openEditor('classes')">
+                  Open Editor
+                </button>
+              </div>
+            </div>
+
+            <p class="inline-grid-term">{{ termVersionLabel() }}</p>
+
+            <ng-container *ngTemplateOutlet="timetableGrid; context: { mode: 'classes', fullPage: false }" />
+          </div>
+        }
+
+        @if (resultTab() === 'summary') {
+          <div class="view-panel summary-panel">
+            <div class="view-toolbar summary-toolbar">
+              <div>
+                <h3 class="summary-title">Summary timetable of teachers</h3>
+                <p class="view-meta summary-intro">
+                  One row per teacher · columns are periods 0–{{ periods().length - 1 }} for each day · class codes shown in each cell
+                </p>
+              </div>
+              <div class="summary-pdf-actions">
+                <button
+                  type="button"
+                  class="btn-primary"
+                  (click)="previewSummaryPdf()"
+                  [disabled]="summaryPdfLoading() || !teachers().length"
+                >
+                  {{ summaryPdfLoading() ? 'Generating…' : 'Preview PDF' }}
+                </button>
+                <button
+                  type="button"
+                  class="btn-primary"
+                  (click)="downloadSummaryPdf()"
+                  [disabled]="summaryPdfLoading() || !teachers().length"
+                >
+                  Download PDF
+                </button>
+              </div>
+            </div>
+
+            <div class="period-legend">
+              <span class="legend-label">Period times:</span>
+              @for (p of periods(); track p.id; let pi = $index) {
+                <span class="legend-chip" [class.break]="isBreakPeriod(p)">
+                  @if (isBreakPeriod(p)) {
+                    <strong>{{ breakPeriodLabel(p) }}</strong>
+                  } @else {
+                    <strong>{{ lessonPeriodNumber(periods(), pi) }}</strong>
+                  }
+                  {{ formatPeriodRange(p) }}
+                </span>
+              }
+            </div>
+
+            <div class="summary-grid-wrap">
+              <table class="summary-grid">
+                <thead>
+                  <tr>
+                    <th class="teacher-col" rowspan="2">Teacher</th>
+                    @for (d of days; track d.value) {
+                      <th class="day-group" [attr.colspan]="periods().length">{{ d.label }}</th>
+                    }
+                  </tr>
+                  <tr>
+                    @for (d of days; track d.value) {
+                      @for (p of periods(); track p.id; let pi = $index) {
+                        <th class="period-index" [class.period-break]="isBreakPeriod(p)">{{ periodIndexLabel(pi) }}</th>
+                      }
+                    }
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (teacher of summaryGridTeachers(); track teacher.teacherId) {
+                    <tr>
+                      <td class="teacher-col" [title]="teacher.name + (teacher.employeeNumber ? ' · ' + teacher.employeeNumber : '')">
+                        <strong>{{ teacher.label }}</strong>
+                      </td>
+                      @for (d of days; track d.value) {
+                        @for (p of periods(); track p.id) {
+                          <td class="summary-cell" [class.filled]="summaryCell(teacher, d.value, p)" [class.break-slot]="isBreakPeriod(p)">
+                            @if (isBreakPeriod(p)) {
+                              <span class="break-mark">{{ breakPeriodLabel(p) }}</span>
+                            } @else {
+                              {{ summaryCell(teacher, d.value, p) }}
+                            }
+                          </td>
+                        }
+                      }
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+
+            @if (teacherSummary().length) {
+              <details class="load-details">
+                <summary>Teaching load details (scheduled vs required)</summary>
+                <div class="table-wrap">
+                  <table class="data-table summary-table compact">
+                    <thead>
+                      <tr>
+                        <th>Teacher</th>
+                        <th>Emp ID</th>
+                        <th class="num">Scheduled</th>
+                        <th class="num">Required</th>
+                        <th>Assignments</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (row of teacherSummary(); track row.teacherId) {
+                        <tr>
+                          <td><strong>{{ row.teacherName }}</strong></td>
+                          <td class="mono">{{ row.employeeNumber }}</td>
+                          <td class="num">{{ row.totalPeriods }}</td>
+                          <td class="num">{{ requiredPeriodsFor(row) }}</td>
+                          <td>
+                            <ul class="assignment-list">
+                              @for (a of row.assignments; track a.classId + a.subjectId) {
+                                <li [class]="assignmentStatus(a.scheduledPeriods, a.requiredPeriods)">
+                                  {{ classDisplayName(a.className) }} · {{ a.subjectName }}
+                                  ({{ a.scheduledPeriods }}/{{ a.requiredPeriods }})
+                                </li>
+                              }
+                            </ul>
+                          </td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                </div>
+              </details>
+            }
+          </div>
+        }
+
       </section>
     }
   </div>
+
+  <ng-template #timetableGrid let-mode="mode" let-fullPage="fullPage">
+    @if (hasResult()) {
+      <div class="board-legend" [class.template-legend]="fullPage">
+        @for (item of teacherLegendItems(); track item.teacherId) {
+          <span class="legend-item">
+            <span
+              class="legend-swatch"
+              [ngStyle]="{
+                background: item.style.background,
+                color: item.style.color,
+                borderColor: item.style.border || 'transparent'
+              }"
+            ></span>
+            {{ item.label }}
+          </span>
+        }
+      </div>
+
+      <div
+        class="drag-board-wrap"
+        [class.inline-grid-board]="!fullPage"
+        [class.template-board]="fullPage"
+        [class.teachers-board]="mode === 'teachers'"
+        [class.classes-board]="mode === 'classes'"
+      >
+        <table class="drag-board" [class.full-page]="fullPage">
+          <thead>
+            <tr>
+              <th class="row-label" rowspan="2">{{ gridRowLabelHeader(mode) }}</th>
+              @for (d of days; track d.value) {
+                <th class="day-group-head" [attr.colspan]="periods().length">{{ d.short }}</th>
+              }
+            </tr>
+            <tr>
+              @for (d of days; track d.value) {
+                @for (p of periods(); track p.id; let pi = $index; let first = $first) {
+                  @if (isBreakPeriod(p)) {
+                    <th
+                      class="period-head period-break"
+                      [class.day-start]="first"
+                    >
+                      <span class="break-head-title">{{ breakPeriodHeaderTitle(p) }}</span>
+                      <span class="break-head-time">{{ formatPeriodRange(p) }}</span>
+                    </th>
+                  } @else {
+                    <th
+                      class="period-head"
+                      [class.day-start]="first"
+                    >
+                      {{ periodIndexLabel(pi) }}
+                    </th>
+                  }
+                }
+              }
+            </tr>
+          </thead>
+          <tbody>
+            @if (mode === 'teachers') {
+              @for (teacher of summaryGridTeachers(); track teacher.teacherId; let rowIdx = $index) {
+                <tr>
+                  <td class="row-label" [title]="teacher.name + (teacher.employeeNumber ? ' · ' + teacher.employeeNumber : '')">
+                    <strong>{{ fullPage ? teacher.name : teacher.label }}</strong>
+                  </td>
+                  @for (d of days; track d.value) {
+                    @for (p of periods(); track p.id; let first = $first) {
+                      @if (isBreakPeriod(p)) {
+                        @if (rowIdx === 0) {
+                          <td
+                            class="drop-cell break-slot break-column"
+                            [class.day-start]="first"
+                            [attr.rowspan]="gridRowCount(mode)"
+                          >
+                            <span class="break-column-label">{{ breakColumnVerticalLabel(p) }}</span>
+                          </td>
+                        }
+                      } @else {
+                        <td
+                          class="drop-cell"
+                          [class.day-start]="first"
+                          [class.drag-over]="dragOverKey() === cellKey(d.value, p)"
+                          (dragover)="onCellDragOver(d.value, p, $event)"
+                          (dragleave)="onCellDragLeave(d.value, p)"
+                          (drop)="onCellDrop(teacher.teacherId, d.value, p, 'teacher', teacher.slots, $event)"
+                        >
+                          @if (slotAt(teacher.slots, d.value, p); as slot) {
+                            <div
+                              class="lesson-card"
+                              [class.dragging]="draggingSlotId() === slot.id"
+                              [class.locked]="slot.isLocked"
+                              [class.has-border]="cardHasBorder(teacher.teacherId)"
+                              [ngStyle]="cardStyle(teacher.teacherId)"
+                              [attr.draggable]="slot.isLocked ? null : true"
+                              (dragstart)="onCardDragStart(slot, $event)"
+                              (dragend)="onCardDragEnd()"
+                              (contextmenu)="onCardContextMenu(slot, $event)"
+                            >
+                              {{ shortClassCode(slot.className) }}
+                            </div>
+                          }
+                        </td>
+                      }
+                    }
+                  }
+                </tr>
+              }
+            } @else {
+              @for (cls of classes(); track cls.classId; let rowIdx = $index) {
+                <tr>
+                  <td class="row-label" [title]="classDisplayName(cls.className)">
+                    <strong>{{ shortClassCode(cls.className) }}</strong>
+                  </td>
+                  @for (d of days; track d.value) {
+                    @for (p of periods(); track p.id; let first = $first) {
+                      @if (isBreakPeriod(p)) {
+                        @if (rowIdx === 0) {
+                          <td
+                            class="drop-cell break-slot break-column"
+                            [class.day-start]="first"
+                            [attr.rowspan]="gridRowCount(mode)"
+                          >
+                            <span class="break-column-label">{{ breakColumnVerticalLabel(p) }}</span>
+                          </td>
+                        }
+                      } @else {
+                        <td
+                          class="drop-cell"
+                          [class.day-start]="first"
+                          [class.drag-over]="dragOverKey() === cellKey(d.value, p)"
+                          (dragover)="onCellDragOver(d.value, p, $event)"
+                          (dragleave)="onCellDragLeave(d.value, p)"
+                          (drop)="onCellDrop(cls.classId, d.value, p, 'class', cls.slots, $event)"
+                        >
+                          @if (slotAt(cls.slots, d.value, p); as slot) {
+                            <div
+                              class="lesson-card"
+                              [class.dragging]="draggingSlotId() === slot.id"
+                              [class.locked]="slot.isLocked"
+                              [class.has-border]="cardHasBorder(slot.teacherId)"
+                              [ngStyle]="cardStyle(slot.teacherId)"
+                              [attr.draggable]="slot.isLocked ? null : true"
+                              (dragstart)="onCardDragStart(slot, $event)"
+                              (dragend)="onCardDragEnd()"
+                              (contextmenu)="onCardContextMenu(slot, $event)"
+                              [title]="slot.teacherName + ' · ' + slot.subjectName + (slot.isLocked ? ' · Locked' : '')"
+                            >
+                              {{ timetableSubjectShort(slot.subjectCode, slot.subjectName, slot.subjectShort) }}
+                            </div>
+                          }
+                        </td>
+                      }
+                    }
+                  }
+                </tr>
+              }
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </ng-template>
+
+  @if (hasResult() && editorWindow(); as mode) {
+    <div class="template-overlay" role="dialog" aria-modal="true" [attr.aria-label]="editorTitle()">
+      <div class="template-window">
+        <header class="template-titlebar">
+          <div class="template-titlebar-main">
+            <span class="template-window-icon" aria-hidden="true">📅</span>
+            <span class="template-window-title">{{ editorTitle() }}</span>
+          </div>
+          <div class="template-titlebar-actions">
+            <label class="titlebar-pdf-mode-label">
+              <span class="sr-only">PDF type</span>
+              <select
+                class="titlebar-pdf-mode"
+                [ngModel]="editorPdfMode()"
+                (ngModelChange)="editorPdfMode.set($event)"
+                name="editorPdfMode"
+                [disabled]="editorPdfLoading()"
+              >
+                <option value="teachers">Teacher timetables</option>
+                <option value="classes">Class timetables</option>
+              </select>
+            </label>
+            <button
+              type="button"
+              class="titlebar-preview-btn"
+              (click)="previewEditorPdf()"
+              [disabled]="editorPdfLoading()"
+            >
+              {{ editorPdfLoading() ? 'Generating…' : 'Preview PDF' }}
+            </button>
+            <button type="button" class="window-close" (click)="closeEditor()" aria-label="Close" title="Close">
+              <span aria-hidden="true">✕</span>
+            </button>
+          </div>
+        </header>
+
+        <div class="template-body">
+          <div class="template-term-banner">
+            <h2 class="timetable-term-version">{{ termVersionLabel() }}</h2>
+          </div>
+
+          <ng-container *ngTemplateOutlet="timetableGrid; context: { mode, fullPage: true }" />
+        </div>
+      </div>
+    </div>
+  }
 </app-portal-layout>
+
+@if (pdfPreviewOpen() && pdfPreviewUrl()) {
+  <div class="timetable-pdf-overlay" role="dialog" aria-modal="true" aria-label="Timetable PDF preview">
+    <header class="timetable-pdf-toolbar">
+      <div class="timetable-pdf-toolbar-title">
+        <strong>{{ pdfPreviewTitle() }}</strong>
+        <span>{{ termVersionLabel() }} — scroll to view each page</span>
+      </div>
+      <div class="timetable-pdf-toolbar-actions">
+        <button type="button" class="btn-outline light" (click)="downloadPdfPreview()">Download PDF</button>
+        <button type="button" class="btn-primary light" (click)="closePdfPreview()">Close</button>
+      </div>
+    </header>
+    <div class="timetable-pdf-viewport">
+      <iframe
+        class="timetable-pdf-frame"
+        [src]="pdfPreviewUrl()!"
+        title="Timetable PDF preview"
+        scrolling="yes"
+      ></iframe>
+    </div>
+  </div>
+}

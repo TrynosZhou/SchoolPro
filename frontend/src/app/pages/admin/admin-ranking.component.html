@@ -167,7 +167,7 @@
                 <td><code>{{ s.admissionNumber }}</code></td>
                 <td class="fw">{{ s.lastName }}</td>
                 <td>{{ s.firstName }}</td>
-                <td>{{ s.className }}</td>
+                <td>{{ classDisplay(s.className) }}</td>
                 @if (data.rankingType === 'form' || data.rankingType === 'subject') {
                   <td>{{ s.formName }}</td>
                 }

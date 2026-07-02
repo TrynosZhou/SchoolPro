@@ -14,6 +14,7 @@ exports.markRunPaid = markRunPaid;
 exports.cancelRun = cancelRun;
 exports.updatePayslip = updatePayslip;
 const data_source_1 = require("../config/data-source");
+const gl_posting_service_1 = require("./gl-posting.service");
 const entities_1 = require("../entities");
 const enums_1 = require("../entities/enums");
 const typeorm_helpers_1 = require("../utils/typeorm-helpers");
@@ -367,6 +368,7 @@ async function markRunPaid(runId, userId) {
     run.paidByUserId = userId;
     await runRepo.save(run);
     await payslipRepo.update({ payrollRunId: runId, status: enums_1.PayslipStatus.PENDING }, { status: enums_1.PayslipStatus.PAID });
+    await (0, gl_posting_service_1.postPayrollPaymentToGl)(run, userId || '');
     return getRunWithPayslips(runId);
 }
 async function cancelRun(runId) {

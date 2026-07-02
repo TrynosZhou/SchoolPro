@@ -13,17 +13,22 @@ const entities_1 = require("../entities");
 const enums_1 = require("../entities/enums");
 const auth_1 = require("../middleware/auth");
 const helpers_1 = require("../utils/helpers");
+const class_display_1 = require("../utils/class-display");
 const pdf_1 = require("../utils/pdf");
 const fee_catalog_service_1 = require("../services/fee-catalog.service");
 const registration_invoice_service_1 = require("../services/registration-invoice.service");
 const school_branding_service_1 = require("../services/school-branding.service");
 const whatsapp_service_1 = require("../services/whatsapp.service");
+const gl_posting_service_1 = require("../services/gl-posting.service");
 const typeorm_helpers_1 = require("../utils/typeorm-helpers");
 const fin_reports_service_1 = require("../services/fin-reports.service");
 const term_balance_service_1 = require("../services/term-balance.service");
 const bulk_tuition_invoice_service_1 = require("../services/bulk-tuition-invoice.service");
+const tuition_exemption_service_1 = require("../services/tuition-exemption.service");
+const invoice_adjustment_service_1 = require("../services/invoice-adjustment.service");
 const fee_collection_revenue_service_1 = require("../services/fee-collection-revenue.service");
 const pdf_2 = require("../utils/pdf");
+const invoice_lookup_service_1 = require("../services/invoice-lookup.service");
 const router = (0, express_1.Router)();
 router.use(auth_1.authenticate);
 async function assertParentStudentAccess(req, studentId) {
@@ -246,6 +251,30 @@ router.get('/invoices', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.Us
     }
     res.json(await qb.orderBy('i.createdAt', 'DESC').getMany());
 });
+router.get('/invoices/resolve', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.PARENT), async (req, res) => {
+    const studentId = String(req.query.studentId || '').trim();
+    if (!studentId) {
+        return res.status(400).json({ message: 'studentId is required' });
+    }
+    if (req.user.role === enums_1.UserRole.PARENT) {
+        const accessError = await assertParentStudentAccess(req, studentId);
+        if (accessError) {
+            return res.status(403).json({ message: accessError });
+        }
+    }
+    const invoice = await (0, invoice_lookup_service_1.resolveStudentInvoiceForLookup)(studentId);
+    if (!invoice) {
+        return res.status(404).json({ message: 'No invoice found for this student' });
+    }
+    res.json({
+        id: invoice.id,
+        invoiceNumber: invoice.invoiceNumber,
+        termId: invoice.termId,
+        termName: invoice.term?.name,
+        description: invoice.description,
+        status: invoice.status,
+    });
+});
 router.get('/invoices/bulk-tuition/preview', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), async (_req, res) => {
     try {
         res.json(await (0, bulk_tuition_invoice_service_1.previewBulkTuitionInvoices)());
@@ -279,6 +308,180 @@ router.post('/invoices/bulk-tuition/reverse', (0, auth_1.authorize)(enums_1.User
         return res.status(400).json({ message: err instanceof Error ? err.message : 'Failed to reverse bulk tuition invoices' });
     }
 });
+const financeStaff = [enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL];
+router.get('/tuition-exemptions', (0, auth_1.authorize)(...financeStaff), async (_req, res) => {
+    res.json(await (0, tuition_exemption_service_1.listTuitionExemptions)());
+});
+router.get('/tuition-exemptions/student-search', (0, auth_1.authorize)(...financeStaff), async (req, res) => {
+    const rawQ = String(req.query.q || '').trim();
+    if (!rawQ) {
+        return res.status(400).json({ message: 'Query is required' });
+    }
+    res.json(await (0, tuition_exemption_service_1.searchStudentsForExemption)(rawQ));
+});
+router.post('/tuition-exemptions', (0, auth_1.authorize)(...financeStaff), async (req, res) => {
+    try {
+        const row = await (0, tuition_exemption_service_1.upsertTuitionExemption)({
+            studentId: String(req.body?.studentId || '').trim(),
+            exemptionType: String(req.body?.exemptionType || '').trim(),
+            value: Number(req.body?.value),
+            reason: typeof req.body?.reason === 'string' ? req.body.reason : undefined,
+        });
+        res.status(201).json(row);
+    }
+    catch (err) {
+        return res.status(400).json({ message: err instanceof Error ? err.message : 'Failed to save exemption' });
+    }
+});
+router.delete('/tuition-exemptions/:id', (0, auth_1.authorize)(...financeStaff), async (req, res) => {
+    try {
+        await (0, tuition_exemption_service_1.removeTuitionExemption)(req.params.id);
+        res.json({ ok: true });
+    }
+    catch (err) {
+        return res.status(400).json({ message: err instanceof Error ? err.message : 'Failed to remove exemption' });
+    }
+});
+router.get('/tuition-exemptions/export.pdf', (0, auth_1.authorize)(...financeStaff), async (req, res) => {
+    const rows = await (0, tuition_exemption_service_1.listTuitionExemptions)();
+    const inline = String(req.query.preview || '') === 'true';
+    const doc = new pdfkit_1.default({ size: 'A4', layout: 'landscape', margin: 34 });
+    const chunks = [];
+    doc.on('data', (c) => chunks.push(c));
+    doc.on('end', () => {
+        const pdf = Buffer.concat(chunks);
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `${inline ? 'inline' : 'attachment'}; filename="tuition-exemptions.pdf"`);
+        res.send(pdf);
+    });
+    const margin = 34;
+    const contentW = doc.page.width - margin * 2;
+    const pageBottom = () => doc.page.height - margin - 20;
+    const exemptionLabel = (row) => {
+        if (row.exemptionType === 'staff_child') {
+            return 'Staff child — all fees waived';
+        }
+        if (row.exemptionType === 'percentage') {
+            return `${row.value}% off tuition`;
+        }
+        return `$${Number(row.value).toFixed(2)} off tuition`;
+    };
+    let y = margin;
+    await renderPdfHeaderWithLogo(doc, 'Tuition Exemptions Report', {
+        margin,
+        subtitle: `${rows.length} active exemption${rows.length === 1 ? '' : 's'}`,
+    });
+    y = Math.max(doc.y + 4, y + 52);
+    const cols = [
+        { label: 'STUDENT ID', w: 88 },
+        { label: 'NAME', w: 150 },
+        { label: 'CLASS', w: 100 },
+        { label: 'GENDER', w: 72 },
+        { label: 'EXEMPTION', w: 120 },
+        { label: 'REASON', w: 200 },
+    ];
+    const tableW = cols.reduce((s, c) => s + c.w, 0);
+    const scaledCols = scalePdfTableCols(cols, Math.min(tableW, contentW));
+    const drawHeader = () => {
+        let x = margin;
+        doc.save();
+        doc.roundedRect(margin, y, scaledCols.reduce((s, c) => s + c.w, 0), 18, 5).fill('#1e40af');
+        doc.restore();
+        doc.font('Helvetica-Bold').fontSize(8).fillColor('#ffffff');
+        for (const c of scaledCols) {
+            doc.text(c.label, x + 4, y + 6, { width: c.w - 8, lineBreak: false });
+            x += c.w;
+        }
+        y += 20;
+    };
+    if (!rows.length) {
+        doc.font('Helvetica').fontSize(10).fillColor('#64748b');
+        doc.text('No students on the exemption list.', margin, y + 8, { width: contentW, align: 'center' });
+        renderGeneratedFooter(doc, new Date(), margin);
+        doc.end();
+        return;
+    }
+    drawHeader();
+    let rowIndex = 0;
+    for (const row of rows) {
+        const vals = [
+            String(row.admissionNumber || '—'),
+            `${row.lastName || ''}, ${row.firstName || ''}`.trim() || '—',
+            row.className || '—',
+            row.gender || '—',
+            exemptionLabel(row),
+            row.reason || '—',
+        ];
+        doc.font('Helvetica').fontSize(8);
+        let rowH = 0;
+        for (let i = 0; i < scaledCols.length; i++) {
+            rowH = Math.max(rowH, doc.heightOfString(vals[i], { width: scaledCols[i].w - 8 }));
+        }
+        rowH = Math.max(17, Math.ceil(rowH) + 6);
+        if (y + rowH > pageBottom()) {
+            doc.addPage({ size: 'A4', layout: 'landscape', margin });
+            y = margin;
+            drawHeader();
+        }
+        const tableWidth = scaledCols.reduce((s, c) => s + c.w, 0);
+        if (rowIndex % 2 === 1) {
+            doc.save();
+            doc.rect(margin, y, tableWidth, rowH).fill('#f8fafc');
+            doc.restore();
+        }
+        doc.fillColor('#0f172a').font('Helvetica').fontSize(8);
+        let x = margin;
+        for (let i = 0; i < scaledCols.length; i++) {
+            doc.text(vals[i], x + 4, y + 3, { width: scaledCols[i].w - 8 });
+            x += scaledCols[i].w;
+        }
+        y += rowH;
+        rowIndex += 1;
+    }
+    renderGeneratedFooter(doc, new Date(), margin);
+    doc.end();
+});
+router.get('/invoice-adjustments/student-lookup', (0, auth_1.authorize)(...financeStaff), async (req, res) => {
+    const rawQ = String(req.query.q || '').trim();
+    if (!rawQ) {
+        return res.status(400).json({ message: 'Query is required' });
+    }
+    res.json(await (0, invoice_adjustment_service_1.lookupStudentForAdjustment)(rawQ));
+});
+router.post('/invoice-adjustments/credit-note', (0, auth_1.authorize)(...financeStaff), async (req, res) => {
+    try {
+        const result = await (0, invoice_adjustment_service_1.applyCreditNote)({
+            studentId: String(req.body?.studentId || '').trim(),
+            amount: Number(req.body?.amount),
+            reason: typeof req.body?.reason === 'string' ? req.body.reason : undefined,
+            recordedById: req.user?.userId,
+        });
+        res.status(201).json({
+            message: `Credit note ${result.noteNumber} applied. Invoice balance reduced by $${result.amount.toFixed(2)}.`,
+            ...result,
+        });
+    }
+    catch (err) {
+        return res.status(400).json({ message: err instanceof Error ? err.message : 'Failed to apply credit note' });
+    }
+});
+router.post('/invoice-adjustments/debit-note', (0, auth_1.authorize)(...financeStaff), async (req, res) => {
+    try {
+        const result = await (0, invoice_adjustment_service_1.applyDebitNote)({
+            studentId: String(req.body?.studentId || '').trim(),
+            amount: Number(req.body?.amount),
+            reason: typeof req.body?.reason === 'string' ? req.body.reason : undefined,
+            recordedById: req.user?.userId,
+        });
+        res.status(201).json({
+            message: `Debit note ${result.noteNumber} applied. Invoice balance increased by $${result.amount.toFixed(2)}.`,
+            ...result,
+        });
+    }
+    catch (err) {
+        return res.status(400).json({ message: err instanceof Error ? err.message : 'Failed to apply debit note' });
+    }
+});
 router.post('/invoices', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (req, res) => {
     const repo = data_source_1.AppDataSource.getRepository(entities_1.Invoice);
     const ledgerRepo = data_source_1.AppDataSource.getRepository(entities_1.LedgerEntry);
@@ -290,6 +493,21 @@ router.post('/invoices', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (r
     });
     if (!student)
         return res.status(404).json({ message: 'Student not found' });
+    let termName;
+    if (data.termId) {
+        const term = await data_source_1.AppDataSource.getRepository(entities_1.Term).findOne({ where: { id: data.termId } });
+        termName = term?.name;
+    }
+    if (termName && data.description) {
+        data.description = (0, helpers_1.invoiceDescriptionWithTerm)(data.description, termName);
+    }
+    if (termName && lines?.length) {
+        for (const line of lines) {
+            if (line.description) {
+                line.description = (0, helpers_1.invoiceDescriptionWithTerm)(line.description, termName);
+            }
+        }
+    }
     const totalAmount = lines?.reduce((s, l) => s + Number(l.amount), 0) || data.totalAmount;
     const created = repo.create({
         ...data,
@@ -317,11 +535,6 @@ router.post('/invoices', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (r
         referenceId: invoice.id,
     }));
     const branding = await (0, school_branding_service_1.loadSchoolBranding)();
-    let termName;
-    if (data.termId) {
-        const term = await data_source_1.AppDataSource.getRepository(entities_1.Term).findOne({ where: { id: data.termId } });
-        termName = term?.name;
-    }
     const invoiceLines = lines?.map((l) => ({
         description: l.description,
         quantity: l.quantity ?? 1,
@@ -468,6 +681,7 @@ router.post('/payments', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (r
             studentId,
             recordedById: req.user.userId,
         }));
+        await (0, gl_posting_service_1.postFeePaymentToGl)(queryRunner.manager, payment, req.user.userId);
         const branding = await (0, school_branding_service_1.loadSchoolBranding)();
         const receiptNumber = (0, helpers_1.generateNumber)('RCP');
         let linkedInvoiceNumber;
@@ -710,7 +924,7 @@ router.get('/statement/:studentId/pdf', (0, auth_1.authorize)(enums_1.UserRole.A
     doc.text(studentName, margin + 12, y + 11, { width: contentW - 24, lineBreak: false });
     doc.font('Helvetica').fontSize(9).fillColor('#475569');
     doc.text(`Student ID: ${studentCode}`, margin + 12, y + 30, { lineBreak: false });
-    doc.text(`Class: ${student?.schoolClass?.name || '—'}`, margin + contentW / 2, y + 30, { lineBreak: false });
+    doc.text((0, class_display_1.formatStudentClassLabel)(student?.schoolClass?.name), margin + contentW / 2, y + 30, { lineBreak: false });
     y += 72;
     // Summary cards
     const cardGap = 8;
@@ -855,11 +1069,13 @@ router.get('/payments', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.Us
 });
 async function fetchStudentInvoiceBalance(studentId, manager = data_source_1.AppDataSource.manager) {
     const result = await manager.query(`
-      SELECT COALESCE(SUM("totalAmount" - "amountPaid"), 0) as owed
-      FROM invoices
-      WHERE "studentId" = $1 AND status IN ('sent', 'partial', 'overdue')
+      SELECT COALESCE(SUM(i."totalAmount" - i."amountPaid"), 0) as owed
+      FROM invoices i
+      WHERE i."studentId" = $1
+        AND (i."totalAmount" - i."amountPaid") > 0.005
+        AND i.status NOT IN ('cancelled', 'draft', 'paid')
     `, [studentId]);
-    return (0, term_balance_service_1.roundMoney)(Math.max(0, Number(result[0]?.owed || 0)));
+    return (0, term_balance_service_1.roundMoney)(Number(result[0]?.owed || 0));
 }
 async function fetchBillingDebtors() {
     const result = await data_source_1.AppDataSource.query(`
@@ -868,7 +1084,8 @@ async function fetchBillingDebtors() {
       MAX(i."dueDate") as "oldestDue"
     FROM students s
     LEFT JOIN classes c ON c.id = s."classId"
-    LEFT JOIN invoices i ON i."studentId" = s.id AND i.status IN ('sent', 'partial', 'overdue')
+    LEFT JOIN invoices i ON i."studentId" = s.id
+      AND i.status IN ('sent', 'partial', 'overdue')
     WHERE s."isActive" = true
     GROUP BY s.id, s."firstName", s."lastName", s."admissionNumber", s.gender, c.name
     HAVING COALESCE(SUM(i."totalAmount" - i."amountPaid"), 0) > 0
@@ -1181,17 +1398,31 @@ router.get('/reports/student-ledger/export.pdf', (0, auth_1.authorize)(enums_1.U
     await renderPdfHeaderWithLogo(doc, 'Student Ledger Report', { margin });
     y = Math.max(y, doc.y + 2);
     const studentName = `${report.student.firstName || ''} ${report.student.lastName || ''}`.trim() || 'Unknown Student';
-    const classLabel = `${report.student.formName || ''} ${report.student.className || ''}`.trim() || '—';
+    const classLabel = report.student.classLabel || (0, class_display_1.formatStudentClassLabel)(report.student.className) || '—';
+    const genderLabel = (0, class_display_1.formatGenderLabel)(report.student.gender);
     const fmtMoney = (value) => `$${Number(value || 0).toFixed(2)}`;
-    const typeLabel = (type) => type === 'invoice' ? 'INVOICE' : type === 'payment' ? 'PAYMENT' : 'OPENING';
+    const typeLabel = (type) => {
+        if (type === 'invoice')
+            return 'INVOICE';
+        if (type === 'payment')
+            return 'PAYMENT';
+        if (type === 'debit_note')
+            return 'DEBIT NOTE';
+        if (type === 'credit_note')
+            return 'CREDIT NOTE';
+        if (type === 'tuition_exemption')
+            return 'EXEMPTION';
+        return 'OPENING';
+    };
     doc.save();
     doc.roundedRect(margin, y, contentW, 44, 8).fillAndStroke('#f8fafc', '#e2e8f0');
     doc.restore();
     doc.font('Helvetica-Bold').fontSize(11).fillColor('#0f172a').text(studentName, margin + 10, y + 8);
     doc.font('Helvetica').fontSize(8.5).fillColor('#334155');
     doc.text(`Student ID: ${report.student.admissionNumber || '—'}`, margin + 10, y + 24);
-    doc.text(`Class: ${classLabel}`, margin + 170, y + 24);
-    doc.text(`Term: ${report.term.name}`, margin + 300, y + 24);
+    doc.text(classLabel, margin + 170, y + 24);
+    doc.text(`Gender: ${genderLabel}`, margin + 300, y + 24);
+    doc.text(`Term: ${report.term.name}`, margin + 420, y + 24);
     y += 54;
     const cardGap = 8;
     const cardW = (contentW - cardGap * 3) / 4;
@@ -1206,10 +1437,31 @@ router.get('/reports/student-ledger/export.pdf', (0, auth_1.authorize)(enums_1.U
         doc.font('Helvetica-Bold').fontSize(11).fillColor(fg).text(value, x + 9, y + 21, { width: cardW - 18 });
     };
     drawSummaryCard(margin, 'Opening', fmtMoney(report.summary.openingBalance), 'neutral');
-    drawSummaryCard(margin + cardW + cardGap, 'Debits', fmtMoney(report.summary.totalDebits), 'neutral');
+    drawSummaryCard(margin + cardW + cardGap, 'Term debits', fmtMoney(report.summary.totalDebits), 'neutral');
     drawSummaryCard(margin + (cardW + cardGap) * 2, 'Credits', fmtMoney(report.summary.totalCredits), 'positive');
-    drawSummaryCard(margin + (cardW + cardGap) * 3, 'Closing', fmtMoney(report.summary.closingBalance), report.summary.closingBalance > 0 ? 'warn' : 'positive');
+    drawSummaryCard(margin + (cardW + cardGap) * 3, 'Invoice balance', fmtMoney(report.invoiceBalance), report.invoiceBalance > 0 ? 'warn' : 'positive');
     y += 52;
+    const reconParts = [
+        `Opening ${fmtMoney(report.summary.openingBalance)} + term debits ${fmtMoney(report.summary.totalDebits)}`,
+        `= ${fmtMoney(report.summary.termCharges)} term charges`,
+        `· payments ${fmtMoney(report.summary.totalCredits)}`,
+    ];
+    if (report.summary.termOverpayment > 0) {
+        reconParts.push(`· term overpayment ${fmtMoney(report.summary.termOverpayment)}`);
+    }
+    else if (report.summary.termNetMovement > 0) {
+        reconParts.push(`· term balance ${fmtMoney(report.summary.termNetMovement)}`);
+    }
+    else {
+        reconParts.push('· term settled');
+    }
+    reconParts.push(`· open invoices ${fmtMoney(report.invoiceBalance)}`);
+    doc.save();
+    doc.roundedRect(margin, y, contentW, 28, 6).fillAndStroke('#f8fafc', '#e2e8f0');
+    doc.restore();
+    doc.font('Helvetica-Bold').fontSize(7.5).fillColor('#475569').text('TERM RECONCILIATION', margin + 8, y + 6);
+    doc.font('Helvetica').fontSize(8).fillColor('#334155').text(reconParts.join(' '), margin + 8, y + 16, { width: contentW - 16 });
+    y += 36;
     const colX = {
         date: margin + 4,
         type: margin + 100,
@@ -1239,7 +1491,7 @@ router.get('/reports/student-ledger/export.pdf', (0, auth_1.authorize)(enums_1.U
         doc.text('DESCRIPTION', colX.desc, y + 6, { width: colW.desc });
         doc.text('DEBIT', colX.debit, y + 6, { width: colW.debit, align: 'right' });
         doc.text('CREDIT', colX.credit, y + 6, { width: colW.credit, align: 'right' });
-        doc.text('BALANCE', colX.balance, y + 6, { width: colW.balance, align: 'right' });
+        doc.text('AMT OWED', colX.balance, y + 6, { width: colW.balance, align: 'right' });
         y += 20;
     };
     drawHeader();
@@ -1269,8 +1521,18 @@ router.get('/reports/student-ledger/export.pdf', (0, auth_1.authorize)(enums_1.U
         const pillX = colX.type;
         const pillY = y + 4;
         const pillW = Math.min(colW.type - 6, Math.max(32, doc.widthOfString(typeLabel(type)) + 12));
-        const pillTone = type === 'payment' ? '#dcfce7' : type === 'invoice' ? '#fee2e2' : '#e0e7ff';
-        const pillText = type === 'payment' ? '#166534' : type === 'invoice' ? '#991b1b' : '#3730a3';
+        const pillTone = type === 'payment' ? '#dcfce7'
+            : type === 'invoice' ? '#fee2e2'
+                : type === 'debit_note' ? '#ffedd5'
+                    : type === 'credit_note' ? '#dbeafe'
+                        : type === 'tuition_exemption' ? '#ede9fe'
+                            : '#e0e7ff';
+        const pillText = type === 'payment' ? '#166534'
+            : type === 'invoice' ? '#991b1b'
+                : type === 'debit_note' ? '#c2410c'
+                    : type === 'credit_note' ? '#1d4ed8'
+                        : type === 'tuition_exemption' ? '#6d28d9'
+                            : '#3730a3';
         doc.save();
         doc.roundedRect(pillX, pillY, pillW, 11, 5).fill(pillTone);
         doc.restore();
@@ -1982,7 +2244,8 @@ router.get('/reports/debtor-aging/reminder-letter.pdf', (0, auth_1.authorize)(en
     await renderPdfHeaderWithLogo(doc, 'Fee Reminder Letter', { margin: 48 });
     doc.moveDown(0.7);
     doc.fontSize(11).text(`Student: ${s.firstName} ${s.lastName} (${s.admissionNumber})`);
-    doc.text(`Class: ${s.formName || ''} ${s.className || ''}`);
+    doc.text(s.classLabel || (0, class_display_1.formatStudentClassLabel)(s.className));
+    doc.text(`Gender: ${(0, class_display_1.formatGenderLabel)(s.gender)}`);
     doc.text(`Guardian: ${s.guardianName || 'N/A'}  Phone: ${s.guardianPhone || 'N/A'}`);
     doc.moveDown(0.6);
     doc.text(`Outstanding balance: $${s.outstandingBalance.toFixed(2)}`);
@@ -2003,22 +2266,23 @@ async function fetchStudentBalances(rawQ) {
         s."admissionNumber",
         s."firstName",
         s."lastName",
+        s.gender,
         c.name as "className",
         COALESCE(inv."totalInvoiced", 0) as "totalInvoiced",
-        COALESCE(pay."totalPaid", 0) as "totalPaid",
-        COALESCE(inv."totalInvoiced", 0) - COALESCE(pay."totalPaid", 0) as balance
+        COALESCE(inv."totalPaid", 0) as "totalPaid",
+        COALESCE(inv.balance, 0) as balance
       FROM students s
       LEFT JOIN classes c ON c.id = s."classId"
       LEFT JOIN (
-        SELECT "studentId", COALESCE(SUM("totalAmount"), 0) as "totalInvoiced"
+        SELECT
+          "studentId",
+          COALESCE(SUM("totalAmount"), 0) AS "totalInvoiced",
+          COALESCE(SUM("amountPaid"), 0) AS "totalPaid",
+          COALESCE(SUM(GREATEST("totalAmount" - "amountPaid", 0)), 0) AS balance
         FROM invoices
+        WHERE status NOT IN ('cancelled', 'draft')
         GROUP BY "studentId"
       ) inv ON inv."studentId" = s.id
-      LEFT JOIN (
-        SELECT "studentId", COALESCE(SUM(amount), 0) as "totalPaid"
-        FROM payments
-        GROUP BY "studentId"
-      ) pay ON pay."studentId" = s.id
       WHERE
         s."isActive" = true
         AND (
@@ -2028,15 +2292,17 @@ async function fetchStudentBalances(rawQ) {
           OR s."lastName" ILIKE $2
           OR CONCAT(s."firstName", ' ', s."lastName") ILIKE $2
         )
-      GROUP BY s.id, c.name, inv."totalInvoiced", pay."totalPaid"
+      GROUP BY s.id, s.gender, c.name, inv."totalInvoiced", inv."totalPaid", inv.balance
       ORDER BY balance DESC, s."lastName" ASC, s."firstName" ASC
       LIMIT 20
     `, [rawQ, q]);
     return result.map((r) => ({
         ...r,
-        totalInvoiced: Number(r.totalInvoiced || 0),
-        totalPaid: Number(r.totalPaid || 0),
-        balance: Number(r.balance || 0),
+        classLabel: (0, class_display_1.formatStudentClassLabel)(r.className),
+        gender: (0, class_display_1.formatGenderLabel)(r.gender),
+        totalInvoiced: (0, term_balance_service_1.roundMoney)(Number(r.totalInvoiced || 0)),
+        totalPaid: (0, term_balance_service_1.roundMoney)(Number(r.totalPaid || 0)),
+        balance: (0, term_balance_service_1.roundMoney)(Math.max(0, Number(r.balance || 0))),
     }));
 }
 router.get('/student-balance', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), async (req, res) => {

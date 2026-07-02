@@ -17,6 +17,7 @@ const term_balance_service_1 = require("./term-balance.service");
 const fee_catalog_service_1 = require("./fee-catalog.service");
 const school_branding_service_1 = require("./school-branding.service");
 const typeorm_helpers_1 = require("../utils/typeorm-helpers");
+const tuition_exemption_service_1 = require("./tuition-exemption.service");
 exports.REGISTRATION_FEE_CODES = {
     desk: 'desk_fee',
     registration: 'registration_fee',
@@ -142,8 +143,8 @@ async function resolveTuitionFeeForFormLevel(level) {
     }
     return tuitionFee || null;
 }
-function bulkTuitionInvoiceDescription(nextTermName) {
-    return `Tuition fees for ${nextTermName}`;
+function bulkTuitionInvoiceDescription(termName) {
+    return `Tuition fees for ${termName}`;
 }
 async function createRegistrationInvoiceForStudent(student, form) {
     await ensureRegistrationSchoolFees();
@@ -151,7 +152,7 @@ async function createRegistrationInvoiceForStudent(student, form) {
     const existing = await invoiceRepo.findOne({
         where: {
             studentId: student.id,
-            description: `New student registration — ${form.name} (${student.admissionNumber})`,
+            feeType: exports.REGISTRATION_FEE_CODES.registration,
         },
         relations: (0, typeorm_helpers_1.relations)('lines'),
         order: { createdAt: 'DESC' },
@@ -233,18 +234,21 @@ async function createRegistrationInvoiceForStudent(student, form) {
     if (!deskFee || !registrationFee || !tuitionFee) {
         throw new Error('Unable to resolve registration fees (desk, registration, tuition) from Manage Fees.');
     }
-    const lines = [deskFee, registrationFee, tuitionFee].map((fee) => ({
-        description: fee.name,
-        quantity: 1,
-        unitPrice: Number(fee.defaultAmount),
-        amount: Number(fee.defaultAmount),
-    }));
-    const totalAmount = lines.reduce((s, l) => s + l.amount, 0);
     const termId = await getCurrentTermId();
+    const termRepo = data_source_1.AppDataSource.getRepository(entities_1.Term);
+    const term = termId ? await termRepo.findOne({ where: { id: termId } }) : null;
+    const tuitionExemption = await (0, tuition_exemption_service_1.getActiveExemptionForStudent)(student.id);
+    const tuitionLines = (0, tuition_exemption_service_1.buildTuitionInvoiceLines)(tuitionFee.name, term?.name || 'Current term', Number(tuitionFee.defaultAmount), tuitionExemption);
+    const lines = [
+        ...(0, tuition_exemption_service_1.buildFeeInvoiceLines)(deskFee.name, Number(deskFee.defaultAmount), tuitionExemption),
+        ...(0, tuition_exemption_service_1.buildFeeInvoiceLines)(registrationFee.name, Number(registrationFee.defaultAmount), tuitionExemption),
+        ...tuitionLines,
+    ];
+    const totalAmount = (0, term_balance_service_1.roundMoney)(lines.reduce((s, l) => s + l.amount, 0));
     const due = new Date();
     due.setDate(due.getDate() + 30);
     const dueDate = due.toISOString().split('T')[0];
-    const description = `New student registration — ${form.name} (${student.admissionNumber})`;
+    const description = (0, helpers_1.invoiceDescriptionWithTerm)(`New student registration — ${form.name} (${student.admissionNumber})`, term?.name);
     const ledgerRepo = data_source_1.AppDataSource.getRepository(entities_1.LedgerEntry);
     let invoice;
     if (existing) {

@@ -45,6 +45,10 @@ __decorate([
 __decorate([
     (0, typeorm_1.Column)({ nullable: true }),
     __metadata("design:type", String)
+], SchoolSettings.prototype, "facebookPageUrl", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ nullable: true }),
+    __metadata("design:type", String)
 ], SchoolSettings.prototype, "logoUrl", void 0);
 __decorate([
     (0, typeorm_1.Column)({ default: 'USD' }),
@@ -86,6 +90,10 @@ __decorate([
     (0, typeorm_1.Column)({ type: 'jsonb', nullable: true }),
     __metadata("design:type", Object)
 ], SchoolSettings.prototype, "integrationsConfig", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'varchar', length: 32, default: '1' }),
+    __metadata("design:type", String)
+], SchoolSettings.prototype, "timetableVersion", void 0);
 __decorate([
     (0, typeorm_1.UpdateDateColumn)(),
     __metadata("design:type", Date)

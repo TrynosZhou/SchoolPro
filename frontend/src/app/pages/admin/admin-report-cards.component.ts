@@ -11,7 +11,7 @@ import { PRINCIPAL_NAV_ITEMS } from '../../core/config/principal-nav';
 import { reportCardPdfFilename } from '../../core/utils/report-card-filename';
 import type { NavItem, NavSection } from '../../shared/portal-layout/portal-layout.component';
 import { ApiService } from '../../core/services/api.service';
-import { classDisplayName } from '../../core/utils/class-display';
+import { classDisplayName, formatStudentClassLabel, isALevelForm, reportCardClassValue } from '../../core/utils/class-display';
 import { environment } from '../../../environments/environment';
 
 interface StudentTermAttendance {
@@ -27,6 +27,16 @@ interface SchoolBranding {
   schoolName?: string;
   tagline?: string;
   logoUrl?: string;
+  address?: string;
+  email?: string;
+  website?: string;
+}
+
+interface GradeBoundaryRow {
+  grade: string;
+  label?: string;
+  minPercent: number;
+  points?: number;
 }
 
 interface SubjectResult {
@@ -61,7 +71,7 @@ export interface ReportCardRow {
     firstName: string;
     lastName: string;
     admissionNumber: string;
-    schoolClass?: { name: string; form?: { name: string } };
+    schoolClass?: { name: string; form?: { name: string; level?: number } };
   };
   term?: { name: string };
   examType?: { name: string };
@@ -90,6 +100,9 @@ export class AdminReportCardsComponent implements OnInit, OnDestroy {
   private api = inject(ApiService);
   private sanitizer = inject(DomSanitizer);
   private router = inject(Router);
+
+  readonly formatStudentClassLabel = formatStudentClassLabel;
+  readonly reportCardClassValue = reportCardClassValue;
 
   portalTitle = signal('Admin Portal');
   navSections = signal<NavSection[]>(ADMIN_NAV_SECTIONS);
@@ -124,6 +137,7 @@ export class AdminReportCardsComponent implements OnInit, OnDestroy {
   remarksSavedIds = signal<Set<string>>(new Set());
 
   schoolBranding = signal<SchoolBranding | null>(null);
+  gradeBoundaries = signal<GradeBoundaryRow[]>([]);
 
   readonly sortOptions: { value: SortKey; label: string }[] = [
     { value: 'position', label: 'Class position' },
@@ -285,6 +299,7 @@ export class AdminReportCardsComponent implements OnInit, OnDestroy {
       next: (b) => this.schoolBranding.set(b),
       error: () => this.schoolBranding.set({ schoolName: 'School Pro Academy' }),
     });
+    this.api.get<GradeBoundaryRow[]>('/exams/grade-boundaries').subscribe((b) => this.gradeBoundaries.set(b));
   }
 
   schoolName(): string {
@@ -296,6 +311,12 @@ export class AdminReportCardsComponent implements OnInit, OnDestroy {
     if (!url) return null;
     const origin = environment.apiUrl.replace(/\/api$/, '');
     return `${origin}${url}`;
+  }
+
+  websiteDisplay(): string {
+    const url = this.schoolBranding()?.website?.trim();
+    if (!url) return '';
+    return url.replace(/^https?:\/\//i, '').replace(/\/$/, '');
   }
 
   ngOnDestroy(): void {
@@ -391,7 +412,9 @@ export class AdminReportCardsComponent implements OnInit, OnDestroy {
       if (!blob) return;
       this.revokePdfUrl();
       this.pdfObjectUrl = URL.createObjectURL(blob);
-      this.pdfPreviewUrl.set(this.sanitizer.bypassSecurityTrustResourceUrl(this.pdfObjectUrl));
+      this.pdfPreviewUrl.set(
+        this.sanitizer.bypassSecurityTrustResourceUrl(`${this.pdfObjectUrl}#zoom=100`),
+      );
       this.pdfPreviewTitle.set(
         `${report.student?.firstName} ${report.student?.lastName} — Report Card`,
       );
@@ -577,6 +600,37 @@ export class AdminReportCardsComponent implements OnInit, OnDestroy {
   subjectPositionLabel(pos?: number, total?: number): string {
     if (!pos || !total) return '—';
     return `${pos}/${total}`;
+  }
+
+  classPositionSlash(position?: number, total?: number): string {
+    if (!position || !total) return '—';
+    return `${position} / ${total}`;
+  }
+
+  isALevelReport(report: ReportCardRow): boolean {
+    return isALevelForm(report.student?.schoolClass?.form);
+  }
+
+  pointsForGrade(grade?: string | null): string {
+    if (!grade?.trim()) return '—';
+    const key = grade.trim().toUpperCase();
+    const row = this.gradeBoundaries().find((b) => b.grade.trim().toUpperCase() === key);
+    if (row?.points == null || Number.isNaN(Number(row.points))) return '—';
+    return String(row.points);
+  }
+
+  totalPointsForReport(report: ReportCardRow): string {
+    if (!this.isALevelReport(report)) return '—';
+    let total = 0;
+    let hasAny = false;
+    for (const row of report.subjectResults) {
+      const pts = this.pointsForGrade(row.grade);
+      if (pts !== '—') {
+        total += Number(pts);
+        hasAny = true;
+      }
+    }
+    return hasAny ? String(total) : '—';
   }
 
   canEditClassTeacherRemark(): boolean {

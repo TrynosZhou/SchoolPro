@@ -24,6 +24,7 @@ import { Receipt } from './Receipt';
 import { LedgerEntry } from './LedgerEntry';
 import { CashbookEntry } from './CashbookEntry';
 import { Timetable } from './Timetable';
+import { TeacherAllocation } from './TeacherAllocation';
 import { LearningSchedule } from './LearningSchedule';
 import { WeeklyAssessment } from './WeeklyAssessment';
 import { Message } from './Message';
@@ -40,6 +41,10 @@ import { StaffPayrollProfile } from './StaffPayrollProfile';
 import { PayrollRun } from './PayrollRun';
 import { Payslip } from './Payslip';
 import { StaffLeaveBalance } from './StaffLeaveBalance';
+import { TuitionExemption } from './TuitionExemption';
+import { InvoiceAdjustment } from './InvoiceAdjustment';
+import { ChartOfAccount } from './ChartOfAccount';
+import { GeneralLedgerEntry } from './GeneralLedgerEntry';
 
 export const entities = [
   User,
@@ -73,6 +78,7 @@ export const entities = [
   LedgerEntry,
   CashbookEntry,
   Timetable,
+  TeacherAllocation,
   LearningSchedule,
   WeeklyAssessment,
   Message,
@@ -84,6 +90,10 @@ export const entities = [
   PayrollRun,
   Payslip,
   StaffLeaveBalance,
+  TuitionExemption,
+  InvoiceAdjustment,
+  ChartOfAccount,
+  GeneralLedgerEntry,
 ];
 
 export * from './enums';
@@ -114,6 +124,7 @@ export {
   LedgerEntry,
   CashbookEntry,
   Timetable,
+  TeacherAllocation,
   LearningSchedule,
   WeeklyAssessment,
   Message,
@@ -130,5 +141,9 @@ export {
   PayrollRun,
   Payslip,
   StaffLeaveBalance,
+  TuitionExemption,
+  InvoiceAdjustment,
+  ChartOfAccount,
+  GeneralLedgerEntry,
 };
 

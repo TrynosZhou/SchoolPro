@@ -5,13 +5,16 @@ import { Router, RouterLink } from '@angular/router';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
 import { ApiService } from '../../core/services/api.service';
+import { formatGenderLabel, formatStudentClassLabel } from '../../core/utils/class-display';
 
 interface StudentBalanceRow {
   id: string;
   admissionNumber: string;
   firstName: string;
   lastName: string;
+  gender?: string;
   className?: string;
+  classLabel?: string;
   totalInvoiced: number;
   totalPaid: number;
   balance: number;
@@ -188,6 +191,14 @@ export class AdminStudentBalanceComponent implements AfterViewInit {
         this.showToast('error', e.error?.message || 'Failed to generate PDF');
       },
     });
+  }
+
+  classLabel(row: StudentBalanceRow): string {
+    return row.classLabel || formatStudentClassLabel(row.className);
+  }
+
+  genderLabel(gender?: string): string {
+    return formatGenderLabel(gender);
   }
 
   payBalance(row: StudentBalanceRow): void {

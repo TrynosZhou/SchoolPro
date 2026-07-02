@@ -41,6 +41,13 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_school_year_one_current
   ON school_years ("isCurrent") WHERE "isCurrent" = true;
 CREATE UNIQUE INDEX IF NOT EXISTS uq_term_one_current
   ON terms ("isCurrent") WHERE "isCurrent" = true;
+
+-- General ledger performance indexes (idempotent when migration already ran)
+CREATE INDEX IF NOT EXISTS idx_gl_entry_transaction_date ON general_ledger_entries ("transactionDate");
+CREATE INDEX IF NOT EXISTS idx_gl_entry_account_id ON general_ledger_entries ("accountId");
+CREATE INDEX IF NOT EXISTS idx_gl_entry_reference_type ON general_ledger_entries ("referenceType");
+CREATE INDEX IF NOT EXISTS idx_gl_entry_journal_batch ON general_ledger_entries ("journalBatchId");
+CREATE INDEX IF NOT EXISTS idx_chart_of_accounts_type ON chart_of_accounts ("accountType");
 `;
 
 async function ensureDatabaseExists() {

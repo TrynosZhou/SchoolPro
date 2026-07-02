@@ -25,7 +25,7 @@ function labelToSentinel(label: string): string | undefined {
   return COMPLETION_OPTIONS.find((o) => o.label.replace('🎓 ', '') === label)?.value;
 }
 
-type Tab = 'calendar' | 'classes' | 'subjects' | 'departments' | 'exams' | 'promotion' | 'publish';
+type Tab = 'calendar' | 'classes' | 'subjects' | 'classSubjects' | 'departments' | 'exams' | 'promotion' | 'publish';
 
 interface PublicationStatus {
   termId: string;
@@ -50,6 +50,7 @@ interface GradeBoundaryRow {
   grade: string;
   label?: string;
   minPercent: number;
+  points?: number;
 }
 
 interface SchoolSettings {
@@ -96,6 +97,7 @@ interface SubjectRow {
   id: string;
   code: string;
   name: string;
+  short?: string | null;
   description?: string;
 }
 
@@ -113,7 +115,7 @@ interface ClassSubjectRow {
   classId: string;
   subjectId: string;
   teacherId?: string;
-  subject?: { code: string; name: string };
+  subject?: { code: string; name: string; short?: string | null };
   teacher?: { id: string; user?: { firstName: string; lastName: string } };
 }
 
@@ -156,7 +158,8 @@ export class AdminAcademicSettingsComponent implements OnInit {
   readonly tabs: { id: Tab; label: string; icon: string; desc: string }[] = [
     { id: 'calendar', label: 'Academic Calendar', icon: '📅', desc: 'Years, terms & sessions' },
     { id: 'classes', label: 'Forms & Classes', icon: '🎓', desc: 'Structure & teachers' },
-    { id: 'subjects', label: 'Subjects', icon: '📖', desc: 'Catalogue & class assignments' },
+    { id: 'subjects', label: 'Subjects', icon: '📖', desc: 'Subject catalogue' },
+    { id: 'classSubjects', label: 'Class & Subjects', icon: '🔗', desc: 'Subjects per class' },
     { id: 'departments', label: 'Departments', icon: '🏛️', desc: 'School departments & faculties' },
     { id: 'exams', label: 'Exams & Grades', icon: '📝', desc: 'Weights & grade boundaries' },
     { id: 'promotion', label: 'Promotion Rules', icon: '🎯', desc: 'Class progression at year-end' },
@@ -208,31 +211,28 @@ export class AdminAcademicSettingsComponent implements OnInit {
   editClassName = '';
   editingClassFormName = signal('');
   editingSubjectId = signal<string | null>(null);
-  editingSubjectField = signal<'name' | 'code' | null>(null);
+  editingSubjectField = signal<'name' | 'code' | 'short' | null>(null);
   editSubjectValue = '';
   editingSubjectHint = signal('');
   newClass = { name: '', formId: '', capacity: 40, classTeacherId: '' };
-  newSubject = { code: '', name: '', description: '' };
+  newSubject = { code: '', name: '', short: '', description: '' };
   newDepartment = { code: '', name: '', description: '', isActive: true, sortOrder: 0 };
   editingDepartmentId = signal<string | null>(null);
   editDepartmentData = { code: '', name: '', description: '', isActive: true, sortOrder: 0 };
-  newAssignment = { classId: '', subjectId: '', teacherId: '' };
-  selectedClassId = signal('');
+  newAssignment = { classId: '', subjectId: '' };
+  classSubjectsPickerId = '';
+  loadedClassId = signal('');
+  loadedClassSubjects = signal<ClassSubjectRow[]>([]);
+  classSubjectsLoading = signal(false);
 
-  filteredClassSubjects = computed(() => {
-    const classId = this.selectedClassId();
-    if (!classId) return this.classSubjects();
-    return this.classSubjects().filter((cs) => cs.classId === classId);
-  });
-
-  selectedClass = computed(() => this.classes().find((c) => c.id === this.selectedClassId()) ?? null);
+  loadedClass = computed(() => this.classes().find((c) => c.id === this.loadedClassId()) ?? null);
 
   pageStats = computed(() => ({
     subjects: this.subjects().length,
     departments: this.departments().length,
     classes: this.classes().length,
     forms: this.forms().length,
-    assignments: this.filteredClassSubjects().length,
+    assignments: this.classSubjects().length,
     years: this.schoolYears().length,
     promotionRules: Object.values(this.targetsByClass()).filter((v) => !!v).length,
   }));
@@ -258,6 +258,14 @@ export class AdminAcademicSettingsComponent implements OnInit {
       if (pct >= Number(b.minPercent)) return b.grade;
     }
     return sorted[sorted.length - 1]?.grade ?? '—';
+  });
+
+  gradePreviewPoints = computed(() => {
+    const grade = this.gradePreviewResult();
+    if (!grade || grade === '—') return null;
+    const row = this.gradeBoundaries().find((b) => b.grade.trim().toUpperCase() === grade.trim().toUpperCase());
+    if (row?.points == null || Number.isNaN(Number(row.points))) return null;
+    return Number(row.points);
   });
 
   sortedClasses = computed(() =>
@@ -437,8 +445,7 @@ export class AdminAcademicSettingsComponent implements OnInit {
         const currentYear = data.years.find((y) => y.isCurrent) || data.years[0];
         if (currentYear) this.newTerm.schoolYearId = currentYear.id;
         if (data.classes[0]) {
-          this.selectedClassId.set(data.classes[0].id);
-          this.newAssignment.classId = data.classes[0].id;
+          this.classSubjectsPickerId = data.classes[0].id;
         }
         this.loading.set(false);
       },
@@ -638,9 +645,21 @@ export class AdminAcademicSettingsComponent implements OnInit {
   }
 
   updateClassTeacher(cls: ClassRow, teacherId: string) {
-    this.api.patch(`/admin/classes/${cls.id}`, { classTeacherId: teacherId || null }).subscribe({
-      next: () => this.showToast('success', 'Class teacher updated'),
-      error: () => this.showToast('error', 'Failed to update class'),
+    this.api.patch<ClassRow>(`/admin/classes/${cls.id}`, { classTeacherId: teacherId || null }).subscribe({
+      next: (updated) => {
+        this.classes.update((rows) =>
+          rows.map((row) =>
+            row.id === cls.id
+              ? { ...row, classTeacherId: updated.classTeacherId }
+              : row,
+          ),
+        );
+        this.showToast('success', 'Class teacher updated');
+      },
+      error: (e) => {
+        this.reloadClasses();
+        this.showToast('error', e.error?.message || 'Failed to update class teacher');
+      },
     });
   }
 
@@ -693,12 +712,19 @@ export class AdminAcademicSettingsComponent implements OnInit {
     }
     this.api.post('/admin/subjects', this.newSubject).subscribe({
       next: () => {
-        this.newSubject = { code: '', name: '', description: '' };
+        this.newSubject = { code: '', name: '', short: '', description: '' };
         this.api.get<SubjectRow[]>('/admin/subjects').subscribe((s) => this.subjects.set(s));
         this.showToast('success', 'Subject added');
       },
       error: () => this.showToast('error', 'Failed to add subject'),
     });
+  }
+
+  openEditSubjectShort(subject: SubjectRow) {
+    this.editingSubjectId.set(subject.id);
+    this.editingSubjectField.set('short');
+    this.editSubjectValue = subject.short || '';
+    this.editingSubjectHint.set(`${subject.name} (${subject.code})`);
   }
 
   openEditSubjectName(subject: SubjectRow) {
@@ -727,7 +753,15 @@ export class AdminAcademicSettingsComponent implements OnInit {
     this.classSubjects.update((rows) =>
       rows.map((cs) =>
         cs.subjectId === updated.id && cs.subject
-          ? { ...cs, subject: { ...cs.subject, code: updated.code, name: updated.name } }
+          ? {
+              ...cs,
+              subject: {
+                ...cs.subject,
+                code: updated.code,
+                name: updated.name,
+                short: updated.short,
+              },
+            }
           : cs,
       ),
     );
@@ -738,19 +772,30 @@ export class AdminAcademicSettingsComponent implements OnInit {
     const field = this.editingSubjectField();
     const value = this.editSubjectValue.trim();
     if (!id || !field) return;
-    if (!value) {
+    if (!value && field !== 'short') {
       this.showToast('error', field === 'code' ? 'Subject code is required' : 'Subject name is required');
       return;
     }
 
-    const body = field === 'code' ? { code: value.toUpperCase() } : { name: value };
+    const body =
+      field === 'code'
+        ? { code: value.toUpperCase() }
+        : field === 'short'
+          ? { short: value || null }
+          : { name: value };
     this.submitting.set(true);
     this.api.patch<SubjectRow>(`/admin/subjects/${id}`, body).subscribe({
       next: (updated) => {
         this.applySubjectUpdate(updated);
         this.closeEditSubject();
         this.submitting.set(false);
-        this.showToast('success', field === 'code' ? 'Subject code updated' : 'Subject name updated');
+        const msg =
+          field === 'code'
+            ? 'Subject code updated'
+            : field === 'short'
+              ? 'Subject short label updated'
+              : 'Subject name updated';
+        this.showToast('success', msg);
       },
       error: (e) => {
         this.submitting.set(false);
@@ -816,30 +861,56 @@ export class AdminAcademicSettingsComponent implements OnInit {
     });
   }
 
-  onClassSelect(classId: string) {
-    this.selectedClassId.set(classId);
-    this.newAssignment.classId = classId;
+  loadClassSubjects() {
+    const classId = this.classSubjectsPickerId.trim();
+    if (!classId) {
+      this.showToast('error', 'Select a class first');
+      return;
+    }
+    this.classSubjectsLoading.set(true);
     this.api.get<ClassSubjectRow[]>('/admin/class-subjects', { classId }).subscribe({
-      next: (cs) => this.classSubjects.set(cs),
+      next: (cs) => {
+        this.loadedClassSubjects.set(cs);
+        this.loadedClassId.set(classId);
+        this.newAssignment.classId = classId;
+        this.classSubjectsLoading.set(false);
+      },
+      error: () => {
+        this.classSubjectsLoading.set(false);
+        this.showToast('error', 'Failed to load subjects for this class');
+      },
+    });
+  }
+
+  private refreshLoadedClassSubjects() {
+    const classId = this.loadedClassId();
+    if (!classId) return;
+    this.api.get<ClassSubjectRow[]>('/admin/class-subjects', { classId }).subscribe({
+      next: (cs) => {
+        this.loadedClassSubjects.set(cs);
+        this.classSubjects.update((rows) => {
+          const other = rows.filter((r) => r.classId !== classId);
+          return [...other, ...cs];
+        });
+      },
     });
   }
 
   assignSubject() {
-    if (!this.newAssignment.classId || !this.newAssignment.subjectId) {
-      this.showToast('error', 'Select class and subject');
+    const classId = this.loadedClassId() || this.classSubjectsPickerId;
+    if (!classId || !this.newAssignment.subjectId) {
+      this.showToast('error', 'Load a class and choose a subject');
       return;
     }
     this.api
       .post('/admin/class-subjects', {
-        classId: this.newAssignment.classId,
+        classId,
         subjectId: this.newAssignment.subjectId,
-        teacherId: this.newAssignment.teacherId || undefined,
       })
       .subscribe({
         next: () => {
-          this.onClassSelect(this.newAssignment.classId);
+          this.refreshLoadedClassSubjects();
           this.newAssignment.subjectId = '';
-          this.newAssignment.teacherId = '';
           this.showToast('success', 'Subject assigned to class');
         },
         error: (e) =>
@@ -847,25 +918,31 @@ export class AdminAcademicSettingsComponent implements OnInit {
       });
   }
 
-  updateAssignmentTeacher(cs: ClassSubjectRow, teacherId: string) {
-    this.api.patch(`/admin/class-subjects/${cs.id}`, { teacherId: teacherId || null }).subscribe({
-      next: () => this.showToast('success', 'Teacher updated'),
-      error: () => this.showToast('error', 'Failed to update assignment'),
+  updateAssignmentSubject(cs: ClassSubjectRow, subjectId: string) {
+    if (!subjectId || subjectId === cs.subjectId) return;
+    this.api.patch(`/admin/class-subjects/${cs.id}`, { subjectId }).subscribe({
+      next: () => {
+        this.refreshLoadedClassSubjects();
+        this.showToast('success', 'Subject updated');
+      },
+      error: (e) =>
+        this.showToast('error', e.error?.message || 'Failed to update subject (may already exist)'),
     });
   }
 
   removeAssignment(cs: ClassSubjectRow) {
+    if (!confirm(`Remove ${cs.subject?.name || 'this subject'} from the class?`)) return;
     this.api.delete(`/admin/class-subjects/${cs.id}`).subscribe({
       next: () => {
-        this.onClassSelect(cs.classId);
-        this.showToast('success', 'Assignment removed');
+        this.refreshLoadedClassSubjects();
+        this.showToast('success', 'Subject removed from class');
       },
       error: () => this.showToast('error', 'Failed to remove assignment'),
     });
   }
 
   addGradeBoundary() {
-    this.gradeBoundaries.update((rows) => [...rows, { grade: '', label: '', minPercent: 0 }]);
+    this.gradeBoundaries.update((rows) => [...rows, { grade: '', label: '', minPercent: 0, points: undefined }]);
   }
 
   removeGradeBoundary(index: number) {
@@ -886,6 +963,10 @@ export class AdminAcademicSettingsComponent implements OnInit {
       grade: b.grade.trim(),
       label: b.label?.trim() || undefined,
       minPercent: Number(b.minPercent),
+      points:
+        b.points !== undefined && b.points !== null && !Number.isNaN(Number(b.points))
+          ? Number(b.points)
+          : undefined,
     }));
     if (!rows.every((b) => b.grade)) {
       this.showToast('error', 'Every row needs a grade code.');
@@ -976,6 +1057,16 @@ export class AdminAcademicSettingsComponent implements OnInit {
   staffName(s: StaffRow): string {
     if (s.user) return `${s.user.firstName} ${s.user.lastName}`;
     return s.employeeNumber;
+  }
+
+  /** Staff available as class teacher for this class (one teacher per class). */
+  classTeacherOptions(forClass: ClassRow): StaffRow[] {
+    const takenElsewhere = new Set(
+      this.classes()
+        .filter((c) => c.id !== forClass.id && c.classTeacherId)
+        .map((c) => c.classTeacherId as string),
+    );
+    return this.staff().filter((s) => s.id === forClass.classTeacherId || !takenElsewhere.has(s.id));
   }
 
   subjectHue(code: string): string {

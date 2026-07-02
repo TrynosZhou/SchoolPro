@@ -14,7 +14,10 @@ export class AuthService {
 
   private userSignal = signal<User | null>(this.loadUser());
   user = this.userSignal.asReadonly();
-  isLoggedIn = computed(() => !!this.userSignal() && !!this.getToken());
+  isLoggedIn = computed(() => {
+    const token = this.getToken();
+    return !!this.userSignal() && !!token && !this.isTokenExpired(token);
+  });
 
   login(username: string, password: string) {
     return this.api.post<AuthResponse>('/auth/login', { username, password }).pipe(
@@ -65,6 +68,29 @@ export class AuthService {
 
   getToken(): string | null {
     return localStorage.getItem(TOKEN_KEY);
+  }
+
+  /** Clear stale local session when JWT is missing or expired. */
+  clearExpiredSession(): void {
+    const token = this.getToken();
+    if (!token || this.isTokenExpired(token)) {
+      localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(USER_KEY);
+      this.userSignal.set(null);
+    }
+  }
+
+  private isTokenExpired(token: string): boolean {
+    try {
+      const segment = token.split('.')[1];
+      if (!segment) return true;
+      const base64 = segment.replace(/-/g, '+').replace(/_/g, '/');
+      const payload = JSON.parse(atob(base64)) as { exp?: number };
+      if (typeof payload.exp !== 'number') return false;
+      return Date.now() >= payload.exp * 1000;
+    } catch {
+      return true;
+    }
   }
 
   hasRole(...roles: UserRole[]): boolean {

@@ -170,7 +170,9 @@ export class ParentReportCardsComponent implements OnInit {
       if (!blob) return;
       this.revokePdfUrl();
       this.pdfObjectUrl = URL.createObjectURL(blob);
-      this.pdfPreviewUrl.set(this.sanitizer.bypassSecurityTrustResourceUrl(this.pdfObjectUrl));
+      this.pdfPreviewUrl.set(
+        this.sanitizer.bypassSecurityTrustResourceUrl(`${this.pdfObjectUrl}#zoom=100`),
+      );
 
       const child = this.children().find((c) => c.student.id === this.selectedStudentId)?.student;
       const term = this.terms().find((t) => t.id === this.selectedTermId)?.name || 'Report';

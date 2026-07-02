@@ -5,13 +5,14 @@ import { RouterLink } from '@angular/router';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
 import { ApiService } from '../../core/services/api.service';
+import { formatGenderLabel, formatStudentClassLabel } from '../../core/utils/class-display';
 import { AuthService } from '../../core/services/auth.service';
 
 interface TermRow { id: string; name: string; startDate: string; endDate: string; isCurrent: boolean; }
 interface SchoolYearRow { id: string; name: string; terms?: TermRow[]; }
 interface FormRow { id: string; name: string; level: number; }
 interface ClassRow { id: string; name: string; formId: string; form?: { name: string }; }
-interface StudentMatch { id: string; admissionNumber: string; firstName: string; lastName: string; className?: string; formName?: string; }
+interface StudentMatch { id: string; admissionNumber: string; firstName: string; lastName: string; gender?: string; className?: string; classLabel?: string; formName?: string; }
 interface ChartPoint { label: string; value: number; value2?: number; }
 
 type ReportTab =
@@ -415,6 +416,14 @@ export class AdminFeeCollectionRevenueComponent implements OnInit {
           this.showToast('error', e.error?.message || 'Failed to generate PDF');
         },
       });
+  }
+
+  studentClassLabel(row: { classLabel?: string; className?: string }): string {
+    return row.classLabel || formatStudentClassLabel(row.className);
+  }
+
+  studentGenderLabel(gender?: string): string {
+    return formatGenderLabel(gender);
   }
 
   private showToast(type: 'success' | 'error', msg: string) {

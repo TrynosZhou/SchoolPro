@@ -5,6 +5,7 @@ import { Router, RouterLink } from '@angular/router';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
 import { ApiService } from '../../core/services/api.service';
+import { MessageBadgeService } from '../../core/services/message-badge.service';
 
 interface MessageUser {
   id: string;
@@ -39,6 +40,7 @@ type SortOrder = 'newest' | 'oldest';
 export class AdminInboxComponent implements OnInit {
   private api = inject(ApiService);
   private router = inject(Router);
+  private messageBadge = inject(MessageBadgeService);
   readonly adminNav = ADMIN_NAV_SECTIONS;
 
   inbox = signal<MessageRow[]>([]);
@@ -115,6 +117,7 @@ export class AdminInboxComponent implements OnInit {
       if (inboxDone && sentDone) {
         this.loading.set(false);
         this.refreshing.set(false);
+        this.messageBadge.refresh();
       }
     };
 
@@ -165,6 +168,7 @@ export class AdminInboxComponent implements OnInit {
         next: (updated) => {
           this.inbox.update((rows) => rows.map((m) => (m.id === updated.id ? updated : m)));
           this.selected.set(updated);
+          this.messageBadge.refresh();
         },
       });
     }

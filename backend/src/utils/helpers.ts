@@ -51,6 +51,16 @@ export function today(): string {
   return new Date().toISOString().split('T')[0];
 }
 
+/** Append the billing term name when missing, e.g. "Term fees" -> "Term fees (Term 3)". */
+export function invoiceDescriptionWithTerm(description: string, termName?: string | null): string {
+  const base = (description || '').trim();
+  const term = (termName || '').trim();
+  if (!base || !term) return description;
+  const suffix = ` (${term})`;
+  if (base.endsWith(suffix)) return base;
+  return `${base}${suffix}`;
+}
+
 /** Normalize DB/entity dates to YYYY-MM-DD for SQL date comparisons. */
 export function toDateOnly(value: string | Date): string {
   if (typeof value === 'string') return value.slice(0, 10);

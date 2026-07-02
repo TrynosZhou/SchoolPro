@@ -47,6 +47,17 @@ export enum FeeType {
   OTHER = 'other',
 }
 
+export enum TuitionExemptionType {
+  PERCENTAGE = 'percentage',
+  AMOUNT = 'amount',
+  STAFF_CHILD = 'staff_child',
+}
+
+export enum InvoiceAdjustmentType {
+  CREDIT_NOTE = 'credit_note',
+  DEBIT_NOTE = 'debit_note',
+}
+
 export enum ExamTypeName {
   CONTINUOUS = 'continuous',
   MID_TERM = 'mid_term',
@@ -82,5 +93,40 @@ export enum PayslipStatus {
   PENDING = 'pending',
   PAID = 'paid',
   EXCLUDED = 'excluded',
+}
+
+export enum GlAccountType {
+  REVENUE = 'REVENUE',
+  EXPENSE = 'EXPENSE',
+  ASSET = 'ASSET',
+  LIABILITY = 'LIABILITY',
+  EQUITY = 'EQUITY',
+}
+
+export enum GlReferenceType {
+  FEE_PAYMENT = 'FEE_PAYMENT',
+  SALARY = 'SALARY',
+  EXPENSE = 'EXPENSE',
+  REFUND = 'REFUND',
+  MANUAL_ADJUSTMENT = 'MANUAL_ADJUSTMENT',
+  OTHER = 'OTHER',
+}
+
+/** Timetable slot length for a weekly lesson assignment (Teacher Load). */
+export enum LessonLength {
+  SINGLE = 'single',
+  DOUBLE = 'double',
+  TRIPLE = 'triple',
+}
+
+/** Weekday labels stored on teacher allocations (maps to timetable dayOfWeek 1=Mon … 7=Sun). */
+export enum DayOfWeek {
+  MONDAY = 'MONDAY',
+  TUESDAY = 'TUESDAY',
+  WEDNESDAY = 'WEDNESDAY',
+  THURSDAY = 'THURSDAY',
+  FRIDAY = 'FRIDAY',
+  SATURDAY = 'SATURDAY',
+  SUNDAY = 'SUNDAY',
 }
 

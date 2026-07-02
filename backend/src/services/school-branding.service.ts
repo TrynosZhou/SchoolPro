@@ -13,6 +13,7 @@ export async function loadSchoolBranding(): Promise<SchoolBranding> {
     address: settings?.address,
     phone: settings?.phone,
     email: settings?.email,
+    website: settings?.website,
     currency: settings?.currency || 'USD',
     bankAccountName: settings?.bankAccountName,
     bankName: settings?.bankName,

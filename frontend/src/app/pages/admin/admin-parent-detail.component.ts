@@ -4,6 +4,7 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
 import { ApiService } from '../../core/services/api.service';
+import { formatStudentClassLabel } from '../../core/utils/class-display';
 
 interface LinkedStudent {
   guardianId: string;
@@ -212,8 +213,7 @@ export class AdminParentDetailComponent implements OnInit, OnDestroy {
   }
 
   classLabel(student: { className: string | null; formName: string | null }): string {
-    if (student.className && student.formName) return `${student.formName} · ${student.className}`;
-    return student.className || student.formName || 'Unassigned';
+    return formatStudentClassLabel(student.className);
   }
 
   private showToast(type: 'success' | 'error', msg: string) {

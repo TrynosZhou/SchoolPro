@@ -94,6 +94,10 @@ router.get('/messages/recipients', (0, auth_1.authorize)(enums_1.UserRole.TEACHE
         registeredParentCount,
     });
 });
+router.get('/messages/unread-count', (0, auth_1.authorize)(enums_1.UserRole.TEACHER, enums_1.UserRole.PARENT, enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), async (req, res) => {
+    const rows = await data_source_1.AppDataSource.query(`SELECT COUNT(*)::int AS count FROM messages WHERE "recipientId" = $1 AND "isRead" = false`, [req.user.userId]);
+    res.json({ count: Number(rows[0]?.count || 0) });
+});
 router.get('/messages/inbox', (0, auth_1.authorize)(enums_1.UserRole.TEACHER, enums_1.UserRole.PARENT, enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), async (req, res) => {
     const repo = data_source_1.AppDataSource.getRepository(entities_1.Message);
     const messages = await repo.find({

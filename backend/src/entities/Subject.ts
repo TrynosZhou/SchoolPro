@@ -13,6 +13,10 @@ export class Subject {
   @Column()
   name!: string;
 
+  /** Short label for timetables (e.g. Ma, CS, Eng). */
+  @Column({ nullable: true, length: 16 })
+  short?: string | null;
+
   @Column({ nullable: true })
   description?: string;
 

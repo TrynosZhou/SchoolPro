@@ -1,11 +1,24 @@
 // @ts-nocheck
 import { Router, Response } from 'express';
 import { AppDataSource } from '../config/data-source';
+import { SchoolSettings } from '../entities';
 import { UserRole } from '../entities/enums';
 import { authenticate, authorize, AuthRequest } from '../middleware/auth';
 
 const router = Router();
 router.use(authenticate);
+
+router.get('/school-links', async (_req, res: Response) => {
+  const settings = await AppDataSource.getRepository(SchoolSettings).findOne({
+    where: { id: 'default' },
+  });
+  res.json({
+    schoolName: settings?.schoolName?.trim() || null,
+    logoUrl: settings?.logoUrl?.trim() || null,
+    website: settings?.website?.trim() || null,
+    facebookPageUrl: settings?.facebookPageUrl?.trim() || null,
+  });
+});
 
 router.get('/overview', authorize(UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.ADMIN), async (_req, res: Response) => {
   const [students, staff, attendanceToday, collections, debtors, lowStock] = await Promise.all([

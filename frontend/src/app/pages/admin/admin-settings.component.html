@@ -114,7 +114,11 @@
                 </div>
                 <div class="field">
                   <label>Website</label>
-                  <input [(ngModel)]="profileForm.website" name="website" />
+                  <input [(ngModel)]="profileForm.website" name="website" placeholder="https://www.example.com" />
+                </div>
+                <div class="field">
+                  <label>Facebook page</label>
+                  <input [(ngModel)]="profileForm.facebookPageUrl" name="facebookPageUrl" placeholder="https://www.facebook.com/yourschool" />
                 </div>
                 <div class="field">
                   <label>Currency</label>

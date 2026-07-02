@@ -6,6 +6,7 @@ import { UserRole } from '../models';
 export const authGuard: CanActivateFn = () => {
   const auth = inject(AuthService);
   const router = inject(Router);
+  auth.clearExpiredSession();
   if (auth.isLoggedIn()) return true;
   return router.createUrlTree(['/login']);
 };
@@ -13,6 +14,7 @@ export const authGuard: CanActivateFn = () => {
 export const roleGuard = (...roles: UserRole[]): CanActivateFn => () => {
   const auth = inject(AuthService);
   const router = inject(Router);
+  auth.clearExpiredSession();
   if (!auth.isLoggedIn()) return router.createUrlTree(['/login']);
   if (auth.hasRole(...roles)) return true;
   return router.createUrlTree([auth.getPortalRoute()]);

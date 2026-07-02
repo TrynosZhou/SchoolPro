@@ -3,10 +3,22 @@ Object.defineProperty(exports, "__esModule", { value: true });
 // @ts-nocheck
 const express_1 = require("express");
 const data_source_1 = require("../config/data-source");
+const entities_1 = require("../entities");
 const enums_1 = require("../entities/enums");
 const auth_1 = require("../middleware/auth");
 const router = (0, express_1.Router)();
 router.use(auth_1.authenticate);
+router.get('/school-links', async (_req, res) => {
+    const settings = await data_source_1.AppDataSource.getRepository(entities_1.SchoolSettings).findOne({
+        where: { id: 'default' },
+    });
+    res.json({
+        schoolName: settings?.schoolName?.trim() || null,
+        logoUrl: settings?.logoUrl?.trim() || null,
+        website: settings?.website?.trim() || null,
+        facebookPageUrl: settings?.facebookPageUrl?.trim() || null,
+    });
+});
 router.get('/overview', (0, auth_1.authorize)(enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.ADMIN), async (_req, res) => {
     const [students, staff, attendanceToday, collections, debtors, lowStock] = await Promise.all([
         data_source_1.AppDataSource.query(`SELECT COUNT(*) as count FROM students WHERE "isActive" = true`),

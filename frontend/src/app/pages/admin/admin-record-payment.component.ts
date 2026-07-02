@@ -7,6 +7,7 @@ import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
 import { ApiService } from '../../core/services/api.service';
 import { Student } from '../../core/models';
+import { formatGenderLabel, formatStudentClassLabel } from '../../core/utils/class-display';
 
 interface InvoiceRow {
   id: string;
@@ -98,10 +99,10 @@ export class AdminRecordPaymentComponent implements OnInit {
 
   classLabel = computed(() => {
     const s = this.student();
-    if (!s?.schoolClass) return '—';
-    const form = s.schoolClass.form?.name;
-    return form ? `${form} · ${s.schoolClass.name}` : s.schoolClass.name;
+    return formatStudentClassLabel(s?.schoolClass?.name);
   });
+
+  genderLabel = computed(() => formatGenderLabel(this.student()?.gender));
 
   ngOnInit(): void {
     const studentId = this.route.snapshot.paramMap.get('studentId')?.trim();

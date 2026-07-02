@@ -503,6 +503,12 @@
     strong { color: #047857; }
   }
 
+  &.highlight {
+    background: #fff7ed;
+    border-color: #fdba74;
+    strong { color: #c2410c; }
+  }
+
   &.closing[data-tone='owed'] {
     background: #fff7ed;
     border-color: #fed7aa;
@@ -513,6 +519,50 @@
     background: #ecfdf5;
     border-color: #a7f3d0;
     strong { color: #047857; }
+  }
+}
+
+.reconciliation-note {
+  margin: -0.35rem 0 1rem;
+  padding: 0.75rem 1rem;
+  border-radius: 10px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+
+  strong {
+    display: block;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #475569;
+    margin-bottom: 0.3rem;
+  }
+
+  p {
+    margin: 0;
+    font-size: 0.84rem;
+    line-height: 1.55;
+    color: #334155;
+  }
+
+  .amt {
+    font-weight: 600;
+    color: #0f172a;
+  }
+
+  .overpaid {
+    font-weight: 700;
+    color: #047857;
+  }
+
+  .owed {
+    font-weight: 700;
+    color: #c2410c;
+  }
+
+  &[data-tone='overpaid'] {
+    background: #f0fdf4;
+    border-color: #bbf7d0;
   }
 }
 
@@ -553,6 +603,9 @@
   &.active[data-type='opening'] { background: #4338ca; }
   &.active[data-type='invoice'] { background: #dc2626; }
   &.active[data-type='payment'] { background: #059669; }
+  &.active[data-type='debit_note'] { background: #ea580c; }
+  &.active[data-type='credit_note'] { background: #2563eb; }
+  &.active[data-type='tuition_exemption'] { background: #7c3aed; }
 }
 
 .results-meta {
@@ -607,6 +660,9 @@
     &[data-type='opening'] { background: #f8fafc; }
     &[data-type='invoice'] { background: #fffafa; }
     &[data-type='payment'] { background: #fafffb; }
+    &[data-type='debit_note'] { background: #fffaf5; }
+    &[data-type='credit_note'] { background: #f8fbff; }
+    &[data-type='tuition_exemption'] { background: #faf5ff; }
 
     &:hover {
       filter: brightness(0.98);
@@ -654,6 +710,21 @@
   &[data-type='opening'] {
     background: #e0e7ff;
     color: #3730a3;
+  }
+
+  &[data-type='debit_note'] {
+    background: #ffedd5;
+    color: #c2410c;
+  }
+
+  &[data-type='credit_note'] {
+    background: #dbeafe;
+    color: #1d4ed8;
+  }
+
+  &[data-type='tuition_exemption'] {
+    background: #ede9fe;
+    color: #6d28d9;
   }
 }
 

@@ -1,0 +1,218 @@
+<app-portal-layout portalTitle="Admin Portal" pageTitle="Exemptions" [navSections]="adminNav">
+  <div class="exemptions-page">
+    @if (toast(); as t) {
+      <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>
+    }
+
+    <header class="hero">
+      <div>
+        <p class="eyebrow">Finance</p>
+        <h1>Exemptions</h1>
+        <p class="hero-sub">
+          Add students who should receive a fee exemption. Staff children are exempt from desk fee, registration fee, and tuition.
+          Other exemptions apply as a fixed percentage or fixed amount on tuition when bulk tuition invoices are created and on registration tuition lines.
+        </p>
+      </div>
+      <div class="hero-actions">
+        <button type="button" class="btn-primary" (click)="previewPdf()" [disabled]="pdfLoading() || listLoading()">
+          {{ pdfLoading() ? 'Generating…' : 'Preview PDF' }}
+        </button>
+        <button type="button" class="btn-primary" (click)="downloadPdf()" [disabled]="pdfLoading() || listLoading()">
+          {{ pdfLoading() ? 'Generating…' : 'Download PDF' }}
+        </button>
+      </div>
+    </header>
+
+    <section class="panel">
+      <h2>Find student</h2>
+      <p class="panel-sub">Search by Student ID, first name, or last name, then click <strong>+</strong> to add an exemption.</p>
+
+      <div class="search-row">
+        <input
+          type="search"
+          class="search-input"
+          [(ngModel)]="query"
+          name="exemptionSearch"
+          placeholder="Student ID, First Name, or Last Name…"
+          (keyup.enter)="searchStudents()"
+        />
+        <button type="button" class="btn-primary" (click)="searchStudents()" [disabled]="searchLoading()">
+          {{ searchLoading() ? 'Searching…' : 'Search' }}
+        </button>
+        @if (query) {
+          <button type="button" class="btn-ghost" (click)="clearSearch()">Clear</button>
+        }
+      </div>
+
+      @if (hasSearched()) {
+        @if (searchLoading()) {
+          <p class="muted">Searching students…</p>
+        } @else if (!searchResults().length) {
+          <p class="muted warn">No student found for "{{ query }}".</p>
+        } @else {
+          <div class="result-list">
+            @for (row of searchResults(); track row.id) {
+              <article class="result-card">
+                <div class="result-main">
+                  <strong>{{ row.lastName }}, {{ row.firstName }}</strong>
+                  <div class="meta">
+                    <span><code>{{ row.admissionNumber }}</code></span>
+                    @if (row.className) {
+                      <span>{{ classLabel(row.className) }}</span>
+                    }
+                    @if (row.gender) {
+                      <span>{{ genderLabel(row.gender) }}</span>
+                    }
+                    @if (row.gender) {
+                      <span>{{ row.gender }}</span>
+                    }
+                    @if (row.hasExemption) {
+                      <span class="badge">On exemption list</span>
+                    }
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  class="add-btn"
+                  [attr.aria-label]="'Add ' + row.firstName + ' ' + row.lastName + ' to exemption list'"
+                  (click)="openAdd(row)"
+                >
+                  +
+                </button>
+              </article>
+            }
+          </div>
+        }
+      }
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <div>
+          <h2>Exemption list</h2>
+          <p class="panel-sub">{{ exemptions().length }} student{{ exemptions().length === 1 ? '' : 's' }} with active tuition exemptions.</p>
+        </div>
+      </div>
+
+      @if (listLoading()) {
+        <p class="muted">Loading exemptions…</p>
+      } @else if (!exemptions().length) {
+        <p class="muted">No students on the exemption list yet.</p>
+      } @else {
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Student</th>
+                <th>ID</th>
+                <th>Class</th>
+                <th>Gender</th>
+                <th>Exemption</th>
+                <th>Reason</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of exemptions(); track row.id) {
+                <tr>
+                  <td><strong>{{ row.lastName }}, {{ row.firstName }}</strong></td>
+                  <td><code>{{ row.admissionNumber }}</code></td>
+                  <td>{{ classLabel(row.className) }}</td>
+                  <td>{{ genderLabel(row.gender) }}</td>
+                  <td>{{ exemptionLabel(row) }}</td>
+                  <td>{{ row.reason || '—' }}</td>
+                  <td class="actions">
+                    <button type="button" class="btn-ghost" (click)="openAdd({
+                      id: row.studentId,
+                      admissionNumber: row.admissionNumber,
+                      firstName: row.firstName,
+                      lastName: row.lastName,
+                      gender: row.gender,
+                      className: row.className,
+                      hasExemption: true
+                    })">Edit</button>
+                    <button type="button" class="btn-danger" (click)="removeExemption(row)">Remove</button>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </section>
+  </div>
+
+  @if (addOpen(); as _) {
+    @if (selectedStudent(); as student) {
+      <div class="modal-backdrop" (click)="closeAdd()">
+        <div class="modal" role="dialog" aria-labelledby="exemptionModalTitle" (click)="$event.stopPropagation()">
+          <header class="modal-head">
+            <div>
+              <h3 id="exemptionModalTitle">Add tuition exemption</h3>
+              <p>{{ student.lastName }}, {{ student.firstName }} · {{ classLabel(student.className) }} · {{ genderLabel(student.gender) }}</p>
+            </div>
+            <button type="button" class="close-btn" (click)="closeAdd()" aria-label="Close">×</button>
+          </header>
+
+          <form class="modal-form" (ngSubmit)="saveExemption()">
+            <div class="field">
+              <label>Exemption type</label>
+              <div class="type-row">
+                <label class="radio-chip staff-child">
+                  <input type="radio" name="exemptionType" value="staff_child" [(ngModel)]="formType" />
+                  Staff child
+                </label>
+                <label class="radio-chip">
+                  <input type="radio" name="exemptionType" value="percentage" [(ngModel)]="formType" />
+                  Fixed percentage
+                </label>
+                <label class="radio-chip">
+                  <input type="radio" name="exemptionType" value="amount" [(ngModel)]="formType" />
+                  Fixed amount
+                </label>
+              </div>
+              @if (formType === 'staff_child') {
+                <p class="staff-child-note">
+                  Waives <strong>desk fee</strong>, <strong>registration fee</strong>, and <strong>tuition</strong> on all open invoices for this student.
+                </p>
+              }
+            </div>
+
+            @if (formType !== 'staff_child') {
+            <div class="field">
+              <label>{{ formType === 'percentage' ? 'Percentage (%)' : 'Amount ($)' }}</label>
+              <input
+                type="number"
+                [(ngModel)]="formValue"
+                name="exemptionValue"
+                [min]="0"
+                [max]="formType === 'percentage' ? 100 : null"
+                step="0.01"
+                required
+              />
+            </div>
+            }
+
+            <div class="field field-reason">
+              <label>Reason (optional)</label>
+              <textarea
+                [(ngModel)]="formReason"
+                name="exemptionReason"
+                rows="5"
+                placeholder="e.g. Staff child, scholarship, bursary award, sibling discount…"
+              ></textarea>
+              <small class="field-hint">Explain why this student is exempted from full tuition.</small>
+            </div>
+
+            <div class="modal-actions">
+              <button type="button" class="btn-ghost" (click)="closeAdd()">Cancel</button>
+              <button type="submit" class="btn-primary" [disabled]="saving()">
+                {{ saving() ? 'Saving…' : 'Save exemption' }}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    }
+  }
+</app-portal-layout>

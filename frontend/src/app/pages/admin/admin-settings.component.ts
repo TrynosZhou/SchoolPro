@@ -26,6 +26,7 @@ interface GradeBoundaryRow {
   grade: string;
   label?: string;
   minPercent: number;
+  points?: number;
 }
 
 interface SchoolSettings {
@@ -36,6 +37,7 @@ interface SchoolSettings {
   phone?: string;
   email?: string;
   website?: string;
+  facebookPageUrl?: string;
   logoUrl?: string;
   updatedAt?: string;
   currency: string;
@@ -177,6 +179,7 @@ export class AdminSettingsComponent implements OnInit {
     phone: '',
     email: '',
     website: '',
+    facebookPageUrl: '',
     currency: 'USD',
     feeReminderTemplate: '',
   };
@@ -701,6 +704,10 @@ export class AdminSettingsComponent implements OnInit {
       grade: b.grade.trim(),
       label: b.label?.trim() || undefined,
       minPercent: Number(b.minPercent),
+      points:
+        b.points !== undefined && b.points !== null && !Number.isNaN(Number(b.points))
+          ? Number(b.points)
+          : undefined,
     }));
     if (!rows.every((b) => b.grade)) {
       this.showToast('error', 'Every row needs a grade code.');
