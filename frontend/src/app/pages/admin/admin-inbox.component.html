@@ -225,6 +225,23 @@
             }
 
             <article class="detail-content">{{ msg.body }}</article>
+
+            @if (msg.attachments?.length) {
+              <div class="attachments-block">
+                <h4>Attachments</h4>
+                <ul class="attachment-list">
+                  @for (att of msg.attachments; track att.id) {
+                    <li>
+                      <button type="button" class="attachment-btn" (click)="downloadAttachment(att)">
+                        <span class="att-icon">📎</span>
+                        <span class="att-name">{{ att.originalName }}</span>
+                        <span class="att-size">{{ formatFileSize(att.sizeBytes) }}</span>
+                      </button>
+                    </li>
+                  }
+                </ul>
+              </div>
+            }
           </div>
         } @else {
           <div class="detail-empty">

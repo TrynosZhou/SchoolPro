@@ -8,6 +8,7 @@ import {
   lessonLengthMultiplier,
   normalizeLessonLength,
 } from './teacher-load.service';
+import { syncTimetableSlotsFromGenerated } from './teacher-assignment.service';
 
 export interface TimetablePeriodInput {
   startTime: string;
@@ -633,11 +634,13 @@ export async function generateTimetableFromTeacherLoad(
 
   const { placed, failures } = scheduleAssignments(tasks, periods);
 
+  const replacing = input.replaceExisting !== false;
+
   await AppDataSource.transaction(async (manager) => {
     const timetableRepo = manager.getRepository(Timetable);
     const allocationRepo = manager.getRepository(TeacherAllocation);
 
-    if (input.replaceExisting !== false) {
+    if (replacing) {
       await allocationRepo.createQueryBuilder().delete().execute();
       await timetableRepo.createQueryBuilder().delete().execute();
     }
@@ -671,6 +674,8 @@ export async function generateTimetableFromTeacherLoad(
       }
     }
   });
+
+  await syncTimetableSlotsFromGenerated({ replaceAll: replacing });
 
   const snapshot = await getTimetableSnapshot();
   const assignmentsPlaced = tasks.filter(

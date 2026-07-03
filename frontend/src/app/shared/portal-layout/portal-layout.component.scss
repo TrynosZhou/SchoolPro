@@ -1243,7 +1243,7 @@ $sidebar-transition: 0.15s ease;
     border-color: #bbf7d0;
     background: #ecfdf5;
 
-    .balance-highlight dd {
+    .balance-highlight .balance-amount {
       color: #047857;
     }
   }
@@ -1284,10 +1284,53 @@ $sidebar-transition: 0.15s ease;
     padding-top: 0.35rem;
     border-top: 1px solid rgba(15, 23, 42, 0.08);
 
-    dd {
+    .balance-amount-row {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+
+    .balance-amount {
       font-size: 1.35rem;
       color: #b45309;
+      font-weight: 700;
     }
+
+    dd {
+      margin: 0;
+    }
+  }
+}
+
+.balance-pay-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border: 1px solid #1e40af;
+  border-radius: 999px;
+  padding: 0.4rem 0.85rem;
+  background: #1e40af;
+  color: #fff;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+
+  svg {
+    width: 1rem;
+    height: 1rem;
+    flex-shrink: 0;
+  }
+
+  &:hover {
+    background: #1e3a8a;
+    border-color: #1e3a8a;
+  }
+
+  &:focus-visible {
+    outline: 2px solid #1e40af;
+    outline-offset: 2px;
   }
 }
 

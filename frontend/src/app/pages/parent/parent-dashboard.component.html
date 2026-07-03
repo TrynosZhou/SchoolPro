@@ -11,9 +11,12 @@
       <p>One parent account can be linked to multiple children. Enter each child's Student ID to add them.</p>
     </div>
     @if (isParent()) {
-      <button type="button" class="btn-primary" (click)="toggleLinkForm()">
-        {{ showLinkForm() ? 'Cancel' : '+ Link a child' }}
-      </button>
+      <div class="hero-actions">
+        <button type="button" class="btn-primary" (click)="toggleLinkForm()">
+          {{ showLinkForm() ? 'Cancel' : '+ Link a child' }}
+        </button>
+        <a routerLink="/parent/send-email" class="btn-outline">✉ Send Email</a>
+      </div>
     }
   </header>
 

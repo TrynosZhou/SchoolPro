@@ -287,6 +287,11 @@ export class PortalLayoutComponent implements OnInit, OnDestroy {
     this.balanceSelected.set(row);
   }
 
+  goToRecordPayment(row: BalanceEnquiryRow): void {
+    this.closeBalanceEnquiry();
+    void this.router.navigate(['/admin/fin-reports/record-payment', row.id]);
+  }
+
   formatGender(value?: string): string {
     if (!value) return '—';
     const v = value.trim().toLowerCase();

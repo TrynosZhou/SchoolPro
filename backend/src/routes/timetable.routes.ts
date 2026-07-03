@@ -27,7 +27,7 @@ import { formatTeacherTimetableName } from '../utils/teacher-display';
 import { shortClassName } from '../utils/teacher-load.pdf';
 import { relations } from '../utils/typeorm-helpers';
 import { moveTimetableSlot } from '../services/timetable-move.service';
-import { setTimetableSlotLocked } from '../services/timetable-lock.service';
+import { setBulkTimetableSlotsLocked, setTimetableSlotLocked } from '../services/timetable-lock.service';
 import { loadTimetableContext, saveTimetableVersion } from '../services/timetable-context.service';
 import {
   createTeacherAllocation,
@@ -462,6 +462,20 @@ router.patch('/slots/:id/move', authorize(...manageRoles), async (req: AuthReque
       return res.status(409).json({ message: e.message, conflict: e.conflict });
     }
     res.status(400).json({ message: e.message || 'Failed to move timetable slot.' });
+  }
+});
+
+router.patch('/slots/lock-bulk', authorize(...manageRoles), async (req: AuthRequest, res: Response) => {
+  try {
+    const locked = req.body?.locked;
+    if (typeof locked !== 'boolean') {
+      return res.status(400).json({ message: 'locked (boolean) is required.' });
+    }
+    const result = await setBulkTimetableSlotsLocked(locked);
+    res.json(result);
+  } catch (err) {
+    const e = err as Error;
+    res.status(400).json({ message: e.message || 'Failed to update lesson locks.' });
   }
 });
 

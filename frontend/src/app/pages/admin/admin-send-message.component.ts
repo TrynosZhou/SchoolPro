@@ -148,23 +148,29 @@ export class AdminSendMessageComponent implements OnInit {
     ).slice(0, 50);
   });
 
-  selectedRecipient = computed(() =>
-    this.recipients().find((r) => r.id === this.recipientId) ?? null,
-  );
+  selectedRecipient(): RecipientRow | null {
+    return this.recipients().find((r) => r.id === this.recipientId) ?? null;
+  }
 
-  selectedStudent = computed(() =>
-    this.students().find((s) => s.id === this.studentId) ?? null,
-  );
+  selectedStudent(): StudentRow | null {
+    return this.students().find((s) => s.id === this.studentId) ?? null;
+  }
 
-  bodyCharCount = computed(() => this.body.length);
-  subjectCharCount = computed(() => this.subject.trim().length);
-  canSend = computed(() => {
+  bodyCharCount(): number {
+    return this.body.length;
+  }
+
+  subjectCharCount(): number {
+    return this.subject.trim().length;
+  }
+
+  canSend(): boolean {
     if (!this.subject.trim() || !this.body.trim()) return false;
     if (this.audienceMode() === 'broadcast') {
       return this.registeredParentCount() > 0;
     }
     return Boolean(this.recipientId);
-  });
+  }
 
   roleFilters: { value: RoleFilter; label: string }[] = [
     { value: 'all', label: 'All' },

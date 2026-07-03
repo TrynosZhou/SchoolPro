@@ -15,6 +15,7 @@ const Form_1 = require("./Form");
 const Student_1 = require("./Student");
 const ClassSubject_1 = require("./ClassSubject");
 const Staff_1 = require("./Staff");
+const Section_1 = require("./Section");
 const constraints_1 = require("./constraints");
 let SchoolClass = class SchoolClass {
 };
@@ -36,6 +37,15 @@ __decorate([
     (0, typeorm_1.Column)(),
     __metadata("design:type", String)
 ], SchoolClass.prototype, "formId", void 0);
+__decorate([
+    (0, typeorm_1.ManyToOne)(() => Section_1.Section, (s) => s.classes, { ...constraints_1.FK_SET_NULL, nullable: true }),
+    (0, typeorm_1.JoinColumn)({ name: 'sectionId' }),
+    __metadata("design:type", Section_1.Section)
+], SchoolClass.prototype, "section", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ nullable: true }),
+    __metadata("design:type", String)
+], SchoolClass.prototype, "sectionId", void 0);
 __decorate([
     (0, typeorm_1.ManyToOne)(() => Staff_1.Staff, { ...constraints_1.FK_SET_NULL, nullable: true }),
     (0, typeorm_1.JoinColumn)({ name: 'classTeacherId' }),

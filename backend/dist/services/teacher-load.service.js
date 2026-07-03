@@ -4,6 +4,7 @@ exports.lessonLengthMultiplier = lessonLengthMultiplier;
 exports.normalizeLessonLength = normalizeLessonLength;
 exports.effectiveWeeklyPeriods = effectiveWeeklyPeriods;
 exports.getTeacherLoadReport = getTeacherLoadReport;
+exports.calculateTeacherWeeklyLoadTotals = calculateTeacherWeeklyLoadTotals;
 exports.addTeacherLoadAssignment = addTeacherLoadAssignment;
 exports.removeTeacherLoadClassAssignments = removeTeacherLoadClassAssignments;
 exports.removeTeacherLoadAssignment = removeTeacherLoadAssignment;
@@ -12,6 +13,7 @@ const data_source_1 = require("../config/data-source");
 const entities_1 = require("../entities");
 const enums_1 = require("../entities/enums");
 const typeorm_helpers_1 = require("../utils/typeorm-helpers");
+const class_subject_teacher_service_1 = require("./class-subject-teacher.service");
 function lessonLengthMultiplier(lessonLength) {
     switch (lessonLength) {
         case enums_1.LessonLength.DOUBLE:
@@ -188,40 +190,33 @@ async function getTeacherLoadReport() {
         },
     };
 }
-async function isActiveTeacherStaff(staffId) {
-    try {
-        const staff = await loadStaffForAssignment(staffId);
-        return canReceiveTeacherLoad(staff);
+/** Planned weekly load for one teacher — matches Staff → Teacher Load totals. */
+async function calculateTeacherWeeklyLoadTotals(teacherId) {
+    const rows = await data_source_1.AppDataSource.getRepository(entities_1.ClassSubject).find({
+        where: { teacherId },
+    });
+    let totalLoad = 0;
+    for (const cs of rows) {
+        const weeklyPeriods = Number(cs.weeklyPeriods || 0);
+        const lessonLength = normalizeLessonLength(cs.lessonLength);
+        const timetablePeriods = Math.max(await countAllocationPeriods(teacherId, cs.classId, cs.subjectId), await countTimetablePeriods(teacherId, cs.classId, cs.subjectId));
+        totalLoad += resolvePeriods(weeklyPeriods, lessonLength, timetablePeriods);
     }
-    catch {
-        return false;
-    }
+    return { totalLoad, assignmentCount: rows.length };
 }
 async function addTeacherLoadAssignment(input) {
     const { classId, subjectId, forceReassign } = input;
-    const weeklyPeriods = Math.max(1, Math.min(40, Math.round(Number(input.weeklyPeriods) || 0)));
+    const weeklyPeriods = Math.max(1, Math.round(Number(input.weeklyPeriods) || 0));
     const lessonLength = normalizeLessonLength(input.lessonLength);
     const staff = await loadStaffForAssignment(input.teacherId);
     const teacherId = staff.id;
     const repo = data_source_1.AppDataSource.getRepository(entities_1.ClassSubject);
-    let row = await repo.findOne({ where: { classId, subjectId } });
-    if (row?.teacherId && row.teacherId !== teacherId && !forceReassign) {
-        const otherActive = await isActiveTeacherStaff(row.teacherId);
-        if (otherActive) {
-            const other = await data_source_1.AppDataSource.getRepository(entities_1.Staff)
-                .createQueryBuilder('s')
-                .innerJoinAndSelect('s.user', 'u')
-                .where('s.id = :id', { id: row.teacherId })
-                .getOne();
-            const otherName = other?.user
-                ? `${other.user.firstName} ${other.user.lastName}`.trim()
-                : 'another teacher';
-            const err = new Error(`This class/subject is already assigned to ${otherName}.`);
-            err.statusCode = 409;
-            throw err;
-        }
-        // Stale assignment (inactive / non-teacher) — allow reassignment.
-    }
+    let row = await (0, class_subject_teacher_service_1.assertCanAssignTeacherToClassSubject)({
+        classId,
+        subjectId,
+        teacherId,
+        forceReassign,
+    });
     if (!row) {
         row = repo.create({ classId, subjectId, teacherId, weeklyPeriods, lessonLength });
     }
@@ -231,6 +226,7 @@ async function addTeacherLoadAssignment(input) {
         row.lessonLength = lessonLength;
     }
     const saved = await repo.save(row);
+    await (0, class_subject_teacher_service_1.syncTimetableTeachersForAssignment)(classId, subjectId, teacherId);
     const report = await getTeacherLoadReport();
     return { assignment: saved, report };
 }

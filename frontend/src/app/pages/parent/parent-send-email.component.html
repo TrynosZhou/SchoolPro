@@ -1,0 +1,243 @@
+<app-portal-layout portalTitle="Parent Portal" pageTitle="Send Email" [navItems]="nav">
+  <div class="send-page">
+    @if (toast(); as t) {
+      <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>
+    }
+
+    <header class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">Communication</p>
+        <h2>Send email to school staff</h2>
+        <p class="hero-sub">
+          Contact the administration, teachers, or leadership team directly. Attach documents such as PDFs, photos, or
+          letters when needed.
+        </p>
+        <a routerLink="/parent/messages" class="inbox-link">
+          <span class="inbox-icon">📥</span>
+          View received messages
+          <span aria-hidden="true">→</span>
+        </a>
+      </div>
+      <div class="hero-stats">
+        <article class="stat-card">
+          <span class="stat-icon">👥</span>
+          <div>
+            <strong>{{ staffRecipients().length }}</strong>
+            <span>Staff contacts</span>
+          </div>
+        </article>
+        <article class="stat-card">
+          <span class="stat-icon">📎</span>
+          <div>
+            <strong>{{ maxFiles }}</strong>
+            <span>Max attachments</span>
+          </div>
+        </article>
+        <article class="stat-card">
+          <span class="stat-icon">💾</span>
+          <div>
+            <strong>5 MB</strong>
+            <span>Per file limit</span>
+          </div>
+        </article>
+      </div>
+    </header>
+
+    <div class="workspace">
+      <section class="panel compose-panel">
+        <div class="panel-head">
+          <div>
+            <h3>{{ isReply() ? 'Reply to message' : 'Compose message' }}</h3>
+            <p class="panel-sub">Fields marked with <span class="req">*</span> are required.</p>
+          </div>
+          <button type="button" class="btn-ghost" (click)="clearForm()">Clear draft</button>
+        </div>
+
+        <form (ngSubmit)="send()" class="compose-form">
+          <div class="compose-row">
+            <label for="recipientEmail" class="row-label">To <span class="req">*</span></label>
+            <div class="row-input">
+              <input
+                id="recipientEmail"
+                type="email"
+                [(ngModel)]="recipientEmail"
+                (ngModelChange)="saveDraft()"
+                name="recipientEmail"
+                list="staffRecipientEmails"
+                placeholder="Staff email address"
+                autocomplete="email"
+                required
+              />
+              <datalist id="staffRecipientEmails">
+                @for (r of staffRecipients(); track r.id) {
+                  <option [value]="r.email">{{ r.firstName }} {{ r.lastName }} ({{ roleLabel(r.role) }})</option>
+                }
+              </datalist>
+            </div>
+          </div>
+
+          @if (staffRecipients().length) {
+            <div class="quick-recipients">
+              <span class="quick-label">Quick select:</span>
+              <div class="chip-row">
+                @for (r of staffRecipients().slice(0, 6); track r.id) {
+                  <button
+                    type="button"
+                    class="chip"
+                    [class.active]="recipientEmail === r.email"
+                    (click)="selectRecipient(r.email)"
+                  >
+                    {{ r.firstName }} {{ r.lastName }}
+                    <span class="chip-role">{{ roleLabel(r.role) }}</span>
+                  </button>
+                }
+              </div>
+            </div>
+          }
+
+          <div class="compose-row">
+            <label for="subject" class="row-label">Subject <span class="req">*</span></label>
+            <div class="row-input with-meta">
+              <input
+                id="subject"
+                type="text"
+                [(ngModel)]="subject"
+                (ngModelChange)="saveDraft()"
+                name="subject"
+                maxlength="120"
+                placeholder="Brief summary of your enquiry"
+                required
+              />
+              <span class="char-count">{{ subjectCharCount() }}/120</span>
+            </div>
+          </div>
+
+          <div class="compose-row">
+            <label for="studentId" class="row-label">Regarding</label>
+            <div class="row-input">
+              <select
+                id="studentId"
+                [(ngModel)]="studentId"
+                (ngModelChange)="saveDraft()"
+                name="studentId"
+                [disabled]="loading() || !children().length"
+              >
+                <option value="">General enquiry (not about a specific child)</option>
+                @for (row of children(); track row.student.id) {
+                  <option [value]="row.student.id">{{ childLabel(row) }}</option>
+                }
+              </select>
+              @if (!loading() && !children().length) {
+                <small class="field-hint">
+                  <a routerLink="/parent">Link a child</a> on My Children to tag messages to a student.
+                </small>
+              }
+            </div>
+          </div>
+
+          <div class="message-block">
+            <div class="message-head">
+              <label for="body">Message <span class="req">*</span></label>
+              <span class="char-count">{{ bodyCharCount() }} characters</span>
+            </div>
+            <textarea
+              id="body"
+              [(ngModel)]="body"
+              (ngModelChange)="saveDraft()"
+              name="body"
+              rows="10"
+              placeholder="Write your message clearly and include any relevant details (dates, student name, invoice numbers, etc.)…"
+              required
+            ></textarea>
+          </div>
+
+          <div class="attachments-block">
+            <div class="attachments-head">
+              <label for="attachments">Attachments</label>
+              <span class="attach-meta">{{ selectedFiles().length }} / {{ maxFiles }} files</span>
+            </div>
+
+            <div class="drop-zone" [class.has-files]="selectedFiles().length > 0">
+              <input
+                type="file"
+                id="attachments"
+                class="file-input"
+                multiple
+                accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.png,.jpg,.jpeg,.webp,.gif,image/*,application/pdf"
+                (change)="onFilesSelected($event)"
+                [disabled]="selectedFiles().length >= maxFiles"
+              />
+              <label for="attachments" class="drop-label" [class.disabled]="selectedFiles().length >= maxFiles">
+                <span class="drop-icon">📎</span>
+                <span class="drop-title">Choose files or drag here</span>
+                <span class="drop-sub">PDF, Word, Excel, images · 5 MB max each</span>
+              </label>
+            </div>
+
+            @if (selectedFiles().length) {
+              <ul class="file-list">
+                @for (file of selectedFiles(); track file.name + file.size; let i = $index) {
+                  <li>
+                    <span class="file-icon">{{ fileIcon(file.name) }}</span>
+                    <div class="file-meta">
+                      <span class="file-name">{{ file.name }}</span>
+                      <span class="file-size">{{ formatFileSize(file.size) }}</span>
+                    </div>
+                    <button type="button" class="remove-file" (click)="removeFile(i)" aria-label="Remove file">×</button>
+                  </li>
+                }
+              </ul>
+            }
+          </div>
+
+          <div class="compose-actions">
+            <p class="draft-note">Your draft is saved automatically while you compose.</p>
+            <button type="submit" class="btn-primary" [disabled]="sending() || !canSend()">
+              @if (sending()) {
+                <span class="spinner" aria-hidden="true"></span>
+                Sending…
+              } @else {
+                Send message
+              }
+            </button>
+          </div>
+        </form>
+      </section>
+
+      <aside class="side-stack">
+        <section class="panel tips-panel">
+          <div class="panel-head compact">
+            <h3>Writing tips</h3>
+          </div>
+          <ul class="tips-list">
+            <li>Use a clear subject line so staff can prioritise your message.</li>
+            <li>Include your child's name and class if the enquiry is student-related.</li>
+            <li>Attach receipts, medical letters, or forms when they support your request.</li>
+            <li>Allow one to two working days for a response during term time.</li>
+          </ul>
+        </section>
+
+        <section class="panel contacts-panel">
+          <div class="panel-head compact">
+            <h3>School contacts</h3>
+          </div>
+          @if (staffRecipients().length) {
+            <div class="contact-list">
+              @for (r of staffRecipients(); track r.id) {
+                <button type="button" class="contact-row" (click)="selectRecipient(r.email)">
+                  <span class="contact-avatar">{{ roleIcon(r.role) }}</span>
+                  <span class="contact-meta">
+                    <strong>{{ r.firstName }} {{ r.lastName }}</strong>
+                    <small>{{ roleLabel(r.role) }} · {{ r.email }}</small>
+                  </span>
+                </button>
+              }
+            </div>
+          } @else {
+            <p class="empty-hint">Staff contacts will appear here when available.</p>
+          }
+        </section>
+      </aside>
+    </div>
+  </div>
+</app-portal-layout>

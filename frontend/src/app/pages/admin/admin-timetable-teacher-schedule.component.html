@@ -106,6 +106,16 @@
             <h2 class="timetable-sheet-title">Teacher {{ selectedTeacherName() }}</h2>
             <div class="grid-wrap classic-wrap">
               <table class="timetable-grid classic">
+                <colgroup>
+                  <col class="col-day" />
+                  @for (p of periods(); track p.id) {
+                    @if (isBreakPeriod(p)) {
+                      <col class="col-break" />
+                    } @else {
+                      <col class="col-period" />
+                    }
+                  }
+                </colgroup>
                 <thead>
                   <tr>
                     <th class="corner" rowspan="2"></th>
@@ -137,7 +147,6 @@
                             @if (allocationAt(d.value, p); as a) {
                               <div class="lesson-cell teacher-lesson">
                                 <span class="lesson-corner tl">{{ subjectShortLabel(a) }}</span>
-                                <span class="lesson-corner tr">{{ classShort(a) }}</span>
                                 <span class="lesson-main">{{ classShort(a) }}</span>
                               </div>
                             }

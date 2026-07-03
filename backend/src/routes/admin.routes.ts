@@ -26,6 +26,16 @@ import { DEFAULT_INTEGRATIONS } from '../types/integrations-config';
 import { sendWhatsAppReminder } from '../services/whatsapp.service';
 import { carryForwardBalancesForTerm } from '../services/term-balance.service';
 import { getTeacherLoadReport, addTeacherLoadAssignment, removeTeacherLoadClassAssignments, removeTeacherLoadAssignment } from '../services/teacher-load.service';
+import {
+  endSubjectTeacherAssignmentsForTeacherClass,
+  syncSubjectAssignmentFromClassSubjectId,
+} from '../services/teacher-assignment.service';
+import {
+  assertCanAssignTeacherToClassSubject,
+  ClassSubjectTeacherConflictError,
+  listClassSubjectTeachers,
+  syncTimetableTeachersForAssignment,
+} from '../services/class-subject-teacher.service';
 import { loadSchoolBranding } from '../services/school-branding.service';
 import { generateTeacherLoadPdf, mapTeacherLoadReportToPdfRows } from '../utils/teacher-load.pdf';
 import permissionsRoutes from './permissions.routes';
@@ -531,23 +541,52 @@ router.delete('/departments/:id', authorize(UserRole.ADMIN), async (req, res: Re
 
 router.get('/class-subjects', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (req, res: Response) => {
   const { classId } = req.query;
+  if (classId) {
+    return res.json(await listClassSubjectTeachers(String(classId)));
+  }
   const qb = AppDataSource.getRepository(ClassSubject).createQueryBuilder('cs')
     .leftJoinAndSelect('cs.subject', 'subject')
     .leftJoinAndSelect('cs.teacher', 'teacher')
     .leftJoinAndSelect('teacher.user', 'user')
     .leftJoinAndSelect('cs.schoolClass', 'schoolClass');
-  if (classId) qb.where('cs.classId = :classId', { classId });
   res.json(await qb.getMany());
 });
 
 router.post('/class-subjects', authorize(UserRole.ADMIN), async (req, res: Response) => {
   try {
     const repo = AppDataSource.getRepository(ClassSubject);
+    const { classId, subjectId, teacherId, weeklyPeriods, lessonLength, forceReassign } = req.body || {};
+    if (!classId || !subjectId) {
+      return res.status(400).json({ message: 'classId and subjectId are required.' });
+    }
+
+    const existing = await assertCanAssignTeacherToClassSubject({
+      classId,
+      subjectId,
+      teacherId: teacherId || '',
+      forceReassign: Boolean(forceReassign),
+    });
+
+    if (existing) {
+      if (teacherId) existing.teacherId = teacherId;
+      if (weeklyPeriods !== undefined) existing.weeklyPeriods = Number(weeklyPeriods) || 0;
+      if (lessonLength !== undefined) existing.lessonLength = lessonLength;
+      const saved = await repo.save(existing);
+      if (teacherId) await syncTimetableTeachersForAssignment(classId, subjectId, teacherId);
+      return res.status(200).json(saved);
+    }
+
     const entity = repo.create(req.body);
     const cs = await repo.save(entity);
+    if (cs.teacherId) {
+      await syncTimetableTeachersForAssignment(cs.classId, cs.subjectId, cs.teacherId);
+    }
     res.status(201).json(cs);
   } catch (err) {
     const e = err as any;
+    if (e instanceof ClassSubjectTeacherConflictError || e?.name === 'ClassSubjectTeacherConflictError') {
+      return res.status(409).json({ message: e.message });
+    }
     if (e?.code === '23505') {
       return res.status(409).json({ message: 'This subject is already allocated to the selected class.' });
     }
@@ -556,11 +595,40 @@ router.post('/class-subjects', authorize(UserRole.ADMIN), async (req, res: Respo
 });
 
 router.patch('/class-subjects/:id', authorize(UserRole.ADMIN), async (req, res: Response) => {
-  const repo = AppDataSource.getRepository(ClassSubject);
-  const cs = await repo.findOne({ where: { id: req.params.id } });
-  if (!cs) return res.status(404).json({ message: 'Assignment not found' });
-  Object.assign(cs, req.body);
-  res.json(await repo.save(cs));
+  try {
+    const repo = AppDataSource.getRepository(ClassSubject);
+    const cs = await repo.findOne({ where: { id: req.params.id } });
+    if (!cs) return res.status(404).json({ message: 'Assignment not found' });
+
+    const nextClassId = req.body?.classId ?? cs.classId;
+    const nextSubjectId = req.body?.subjectId ?? cs.subjectId;
+    const nextTeacherId = req.body?.teacherId;
+
+    if (nextTeacherId !== undefined && nextTeacherId !== null && nextTeacherId !== cs.teacherId) {
+      await assertCanAssignTeacherToClassSubject({
+        classId: nextClassId,
+        subjectId: nextSubjectId,
+        teacherId: nextTeacherId,
+        forceReassign: Boolean(req.body?.forceReassign),
+      });
+    }
+
+    Object.assign(cs, req.body);
+    const saved = await repo.save(cs);
+    if (saved.teacherId) {
+      await syncTimetableTeachersForAssignment(saved.classId, saved.subjectId, saved.teacherId);
+    }
+    res.json(saved);
+  } catch (err) {
+    const e = err as any;
+    if (e instanceof ClassSubjectTeacherConflictError || e?.name === 'ClassSubjectTeacherConflictError') {
+      return res.status(409).json({ message: e.message });
+    }
+    if (e?.code === '23505') {
+      return res.status(409).json({ message: 'This subject is already allocated to the selected class.' });
+    }
+    res.status(400).json({ message: e?.message || 'Failed to update class subject assignment.' });
+  }
 });
 
 router.delete('/class-subjects/:id', authorize(UserRole.ADMIN), async (req, res: Response) => {
@@ -889,9 +957,13 @@ router.post('/staff/teacher-load', authorize(UserRole.ADMIN, UserRole.DIRECTOR, 
       lessonLength,
       forceReassign: Boolean(forceReassign),
     });
+    await syncSubjectAssignmentFromClassSubjectId(result.assignment.id);
     res.status(201).json(result.report);
   } catch (err) {
     const e = err as Error & { statusCode?: number };
+    if (e instanceof ClassSubjectTeacherConflictError || e.name === 'ClassSubjectTeacherConflictError') {
+      return res.status(409).json({ message: e.message });
+    }
     res.status(e.statusCode || 400).json({ message: e.message || 'Failed to add teacher assignment.' });
   }
 });
@@ -900,13 +972,16 @@ router.delete('/staff/teacher-load', authorize(UserRole.ADMIN, UserRole.DIRECTOR
   try {
     const classSubjectId = String(req.query.classSubjectId || '').trim();
     if (classSubjectId) {
-      return res.json(await removeTeacherLoadAssignment(classSubjectId));
+      const report = await removeTeacherLoadAssignment(classSubjectId);
+      await syncSubjectAssignmentFromClassSubjectId(classSubjectId);
+      return res.json(report);
     }
     const teacherId = String(req.query.teacherId || '').trim();
     const classId = String(req.query.classId || '').trim();
     if (!teacherId || !classId) {
       return res.status(400).json({ message: 'classSubjectId or teacherId and classId are required.' });
     }
+    await endSubjectTeacherAssignmentsForTeacherClass(teacherId, classId);
     res.json(await removeTeacherLoadClassAssignments(teacherId, classId));
   } catch (err) {
     const e = err as Error;

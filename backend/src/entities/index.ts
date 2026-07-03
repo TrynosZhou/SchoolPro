@@ -7,6 +7,9 @@ import { SchoolClass } from './SchoolClass';
 import { Subject } from './Subject';
 import { Department } from './Department';
 import { ClassSubject } from './ClassSubject';
+import { Section } from './Section';
+import { TeacherAssignment } from './TeacherAssignment';
+import { TimetableSlot } from './TimetableSlot';
 import { Parent } from './Parent';
 import { Student } from './Student';
 import { Guardian } from './Guardian';
@@ -28,6 +31,7 @@ import { TeacherAllocation } from './TeacherAllocation';
 import { LearningSchedule } from './LearningSchedule';
 import { WeeklyAssessment } from './WeeklyAssessment';
 import { Message } from './Message';
+import { MessageAttachment } from './MessageAttachment';
 import { Notification } from './Notification';
 import { TuckshopItem } from './TuckshopItem';
 import { TuckshopSale } from './TuckshopSale';
@@ -61,6 +65,9 @@ export const entities = [
   Subject,
   Department,
   ClassSubject,
+  Section,
+  TeacherAssignment,
+  TimetableSlot,
   Parent,
   Student,
   Guardian,
@@ -82,6 +89,7 @@ export const entities = [
   LearningSchedule,
   WeeklyAssessment,
   Message,
+  MessageAttachment,
   Notification,
   TuckshopItem,
   TuckshopSale,
@@ -107,6 +115,9 @@ export {
   Subject,
   Department,
   ClassSubject,
+  Section,
+  TeacherAssignment,
+  TimetableSlot,
   Parent,
   Student,
   Guardian,
@@ -128,6 +139,7 @@ export {
   LearningSchedule,
   WeeklyAssessment,
   Message,
+  MessageAttachment,
   Notification,
   TuckshopItem,
   TuckshopSale,

@@ -52,7 +52,7 @@
           >
             {{ generating() ? 'Generating…' : 'Generate Timetable →' }}
           </button>
-          <a routerLink="/admin/timetable/view" class="secondary-action">View Timetable</a>
+          <a routerLink="/admin/timetable/view" class="secondary-action">Class Schedule</a>
           <a routerLink="/admin/timetable/configure-periods" class="secondary-action">Configure Periods</a>
           <a routerLink="/admin/staff" class="secondary-action">Teacher Load</a>
         </div>
@@ -209,7 +209,7 @@
               <div class="toolbar-main">
                 <h3 class="summary-title">Teacher timetable</h3>
                 <p class="view-meta summary-intro">
-                  One row per teacher · drag class cards between periods on the same row · right-click to lock or unlock
+                  One row per teacher · drag class cards between periods on the same row · right-click to lock or unlock · use Lock All / Unlock All above the grid
                 </p>
               </div>
               <div class="summary-pdf-actions">
@@ -255,7 +255,7 @@
               <div class="toolbar-main">
                 <h3 class="summary-title">Class timetable</h3>
                 <p class="view-meta summary-intro">
-                  One row per class · drag subject cards between periods on the same row · colour = teacher
+                  One row per class · drag subject cards between periods on the same row · colour = teacher · use Lock All / Unlock All above the grid
                 </p>
               </div>
               <div class="summary-pdf-actions">
@@ -301,7 +301,7 @@
               <div>
                 <h3 class="summary-title">Summary timetable of teachers</h3>
                 <p class="view-meta summary-intro">
-                  One row per teacher · columns are periods 0–{{ periods().length - 1 }} for each day · class codes shown in each cell
+                  One row per teacher · lesson period columns are numbered 1–{{ lessonPeriodCount(periods()) }} for each day · class codes shown in each cell
                 </p>
               </div>
               <div class="summary-pdf-actions">
@@ -441,6 +441,25 @@
         }
       </div>
 
+      <div class="board-lock-toolbar" [class.template-lock-toolbar]="fullPage">
+        <button
+          type="button"
+          class="btn-outline lock-action-btn"
+          (click)="lockAllPlacedCards()"
+          [disabled]="slotLockUpdating() || !hasUnlockableSlots()"
+        >
+          {{ slotLockUpdating() ? 'Updating…' : 'Lock All' }}
+        </button>
+        <button
+          type="button"
+          class="btn-outline lock-action-btn"
+          (click)="unlockAllPlacedCards()"
+          [disabled]="slotLockUpdating() || !hasLockableSlots()"
+        >
+          Unlock All
+        </button>
+      </div>
+
       <div
         class="drag-board-wrap"
         [class.inline-grid-board]="!fullPage"
@@ -449,6 +468,18 @@
         [class.classes-board]="mode === 'classes'"
       >
         <table class="drag-board" [class.full-page]="fullPage">
+          <colgroup>
+            <col class="col-row-label" />
+            @for (d of days; track d.value) {
+              @for (p of periods(); track p.id) {
+                @if (isBreakPeriod(p)) {
+                  <col class="col-break" />
+                } @else {
+                  <col class="col-period" />
+                }
+              }
+            }
+          </colgroup>
           <thead>
             <tr>
               <th class="row-label" rowspan="2">{{ gridRowLabelHeader(mode) }}</th>
@@ -489,15 +520,15 @@
                   @for (d of days; track d.value) {
                     @for (p of periods(); track p.id; let first = $first) {
                       @if (isBreakPeriod(p)) {
-                        @if (rowIdx === 0) {
-                          <td
-                            class="drop-cell break-slot break-column"
-                            [class.day-start]="first"
-                            [attr.rowspan]="gridRowCount(mode)"
-                          >
+                        <td
+                          class="drop-cell break-slot break-column"
+                          [class.break-column-first]="rowIdx === 0"
+                          [class.day-start]="first"
+                        >
+                          @if (rowIdx === 0) {
                             <span class="break-column-label">{{ breakColumnVerticalLabel(p) }}</span>
-                          </td>
-                        }
+                          }
+                        </td>
                       } @else {
                         <td
                           class="drop-cell"
@@ -519,7 +550,7 @@
                               (dragend)="onCardDragEnd()"
                               (contextmenu)="onCardContextMenu(slot, $event)"
                             >
-                              {{ shortClassCode(slot.className) }}
+                              {{ compactClassGridLabel(slot.className) }}
                             </div>
                           }
                         </td>
@@ -537,15 +568,15 @@
                   @for (d of days; track d.value) {
                     @for (p of periods(); track p.id; let first = $first) {
                       @if (isBreakPeriod(p)) {
-                        @if (rowIdx === 0) {
-                          <td
-                            class="drop-cell break-slot break-column"
-                            [class.day-start]="first"
-                            [attr.rowspan]="gridRowCount(mode)"
-                          >
+                        <td
+                          class="drop-cell break-slot break-column"
+                          [class.break-column-first]="rowIdx === 0"
+                          [class.day-start]="first"
+                        >
+                          @if (rowIdx === 0) {
                             <span class="break-column-label">{{ breakColumnVerticalLabel(p) }}</span>
-                          </td>
-                        }
+                          }
+                        </td>
                       } @else {
                         <td
                           class="drop-cell"

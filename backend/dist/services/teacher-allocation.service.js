@@ -12,6 +12,7 @@ const enums_1 = require("../entities/enums");
 const timetable_day_1 = require("../utils/timetable-day");
 const typeorm_helpers_1 = require("../utils/typeorm-helpers");
 const timetable_conflict_service_1 = require("./timetable-conflict.service");
+const class_subject_teacher_service_1 = require("./class-subject-teacher.service");
 function mapAllocation(row) {
     return {
         id: row.id,
@@ -55,6 +56,7 @@ async function createTeacherAllocation(input) {
     if (!entry) {
         throw new Error('Timetable entry not found.');
     }
+    await (0, class_subject_teacher_service_1.assertTimetableTeacherMatchesAssignment)(entry.classId, entry.subjectId, input.teacherId);
     const dayOfWeek = (0, timetable_day_1.dayIntToEnum)(entry.dayOfWeek);
     const conflict = await timetable_conflict_service_1.timetableConflictService.checkTeacherConflict(input.teacherId, dayOfWeek, entry.startTime, entry.endTime);
     if (conflict) {
@@ -96,6 +98,7 @@ async function updateTeacherAllocation(id, input) {
     if (!entry) {
         throw new Error('Timetable entry not found.');
     }
+    await (0, class_subject_teacher_service_1.assertTimetableTeacherMatchesAssignment)(entry.classId, entry.subjectId, teacherId);
     const dayOfWeek = (0, timetable_day_1.dayIntToEnum)(entry.dayOfWeek);
     const conflict = await timetable_conflict_service_1.timetableConflictService.checkTeacherConflict(teacherId, dayOfWeek, entry.startTime, entry.endTime, id);
     if (conflict) {

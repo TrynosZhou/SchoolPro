@@ -7,12 +7,15 @@ class AddTeacherAllocation1739200000000 {
     }
     async up(queryRunner) {
         await queryRunner.query(`
-      CREATE TYPE "day_of_week_enum" AS ENUM (
-        'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'
-      )
+      DO $$ BEGIN
+        CREATE TYPE "day_of_week_enum" AS ENUM (
+          'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'
+        );
+      EXCEPTION WHEN duplicate_object THEN NULL;
+      END $$
     `);
         await queryRunner.query(`
-      CREATE TABLE "teacher_allocations" (
+      CREATE TABLE IF NOT EXISTS "teacher_allocations" (
         "id" uuid NOT NULL DEFAULT uuid_generate_v4(),
         "timetableEntryId" uuid NOT NULL,
         "teacherId" uuid NOT NULL,
@@ -37,10 +40,10 @@ class AddTeacherAllocation1739200000000 {
       )
     `);
         await queryRunner.query(`
-      CREATE INDEX "idx_teacher_allocations_teacher" ON "teacher_allocations" ("teacherId")
+      CREATE INDEX IF NOT EXISTS "idx_teacher_allocations_teacher" ON "teacher_allocations" ("teacherId")
     `);
         await queryRunner.query(`
-      CREATE INDEX "idx_teacher_allocations_class" ON "teacher_allocations" ("classId")
+      CREATE INDEX IF NOT EXISTS "idx_teacher_allocations_class" ON "teacher_allocations" ("classId")
     `);
     }
     async down(queryRunner) {

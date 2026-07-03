@@ -23,6 +23,8 @@ const integrations_config_1 = require("../types/integrations-config");
 const whatsapp_service_1 = require("../services/whatsapp.service");
 const term_balance_service_1 = require("../services/term-balance.service");
 const teacher_load_service_1 = require("../services/teacher-load.service");
+const teacher_assignment_service_1 = require("../services/teacher-assignment.service");
+const class_subject_teacher_service_1 = require("../services/class-subject-teacher.service");
 const school_branding_service_1 = require("../services/school-branding.service");
 const teacher_load_pdf_1 = require("../utils/teacher-load.pdf");
 const permissions_routes_1 = __importDefault(require("./permissions.routes"));
@@ -476,24 +478,53 @@ router.delete('/departments/:id', (0, auth_1.authorize)(enums_1.UserRole.ADMIN),
 });
 router.get('/class-subjects', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), async (req, res) => {
     const { classId } = req.query;
+    if (classId) {
+        return res.json(await (0, class_subject_teacher_service_1.listClassSubjectTeachers)(String(classId)));
+    }
     const qb = data_source_1.AppDataSource.getRepository(entities_1.ClassSubject).createQueryBuilder('cs')
         .leftJoinAndSelect('cs.subject', 'subject')
         .leftJoinAndSelect('cs.teacher', 'teacher')
         .leftJoinAndSelect('teacher.user', 'user')
         .leftJoinAndSelect('cs.schoolClass', 'schoolClass');
-    if (classId)
-        qb.where('cs.classId = :classId', { classId });
     res.json(await qb.getMany());
 });
 router.post('/class-subjects', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (req, res) => {
     try {
         const repo = data_source_1.AppDataSource.getRepository(entities_1.ClassSubject);
+        const { classId, subjectId, teacherId, weeklyPeriods, lessonLength, forceReassign } = req.body || {};
+        if (!classId || !subjectId) {
+            return res.status(400).json({ message: 'classId and subjectId are required.' });
+        }
+        const existing = await (0, class_subject_teacher_service_1.assertCanAssignTeacherToClassSubject)({
+            classId,
+            subjectId,
+            teacherId: teacherId || '',
+            forceReassign: Boolean(forceReassign),
+        });
+        if (existing) {
+            if (teacherId)
+                existing.teacherId = teacherId;
+            if (weeklyPeriods !== undefined)
+                existing.weeklyPeriods = Number(weeklyPeriods) || 0;
+            if (lessonLength !== undefined)
+                existing.lessonLength = lessonLength;
+            const saved = await repo.save(existing);
+            if (teacherId)
+                await (0, class_subject_teacher_service_1.syncTimetableTeachersForAssignment)(classId, subjectId, teacherId);
+            return res.status(200).json(saved);
+        }
         const entity = repo.create(req.body);
         const cs = await repo.save(entity);
+        if (cs.teacherId) {
+            await (0, class_subject_teacher_service_1.syncTimetableTeachersForAssignment)(cs.classId, cs.subjectId, cs.teacherId);
+        }
         res.status(201).json(cs);
     }
     catch (err) {
         const e = err;
+        if (e instanceof class_subject_teacher_service_1.ClassSubjectTeacherConflictError || e?.name === 'ClassSubjectTeacherConflictError') {
+            return res.status(409).json({ message: e.message });
+        }
         if (e?.code === '23505') {
             return res.status(409).json({ message: 'This subject is already allocated to the selected class.' });
         }
@@ -501,12 +532,39 @@ router.post('/class-subjects', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), as
     }
 });
 router.patch('/class-subjects/:id', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (req, res) => {
-    const repo = data_source_1.AppDataSource.getRepository(entities_1.ClassSubject);
-    const cs = await repo.findOne({ where: { id: req.params.id } });
-    if (!cs)
-        return res.status(404).json({ message: 'Assignment not found' });
-    Object.assign(cs, req.body);
-    res.json(await repo.save(cs));
+    try {
+        const repo = data_source_1.AppDataSource.getRepository(entities_1.ClassSubject);
+        const cs = await repo.findOne({ where: { id: req.params.id } });
+        if (!cs)
+            return res.status(404).json({ message: 'Assignment not found' });
+        const nextClassId = req.body?.classId ?? cs.classId;
+        const nextSubjectId = req.body?.subjectId ?? cs.subjectId;
+        const nextTeacherId = req.body?.teacherId;
+        if (nextTeacherId !== undefined && nextTeacherId !== null && nextTeacherId !== cs.teacherId) {
+            await (0, class_subject_teacher_service_1.assertCanAssignTeacherToClassSubject)({
+                classId: nextClassId,
+                subjectId: nextSubjectId,
+                teacherId: nextTeacherId,
+                forceReassign: Boolean(req.body?.forceReassign),
+            });
+        }
+        Object.assign(cs, req.body);
+        const saved = await repo.save(cs);
+        if (saved.teacherId) {
+            await (0, class_subject_teacher_service_1.syncTimetableTeachersForAssignment)(saved.classId, saved.subjectId, saved.teacherId);
+        }
+        res.json(saved);
+    }
+    catch (err) {
+        const e = err;
+        if (e instanceof class_subject_teacher_service_1.ClassSubjectTeacherConflictError || e?.name === 'ClassSubjectTeacherConflictError') {
+            return res.status(409).json({ message: e.message });
+        }
+        if (e?.code === '23505') {
+            return res.status(409).json({ message: 'This subject is already allocated to the selected class.' });
+        }
+        res.status(400).json({ message: e?.message || 'Failed to update class subject assignment.' });
+    }
 });
 router.delete('/class-subjects/:id', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (req, res) => {
     await data_source_1.AppDataSource.getRepository(entities_1.ClassSubject).delete({ id: req.params.id });
@@ -806,10 +864,14 @@ router.post('/staff/teacher-load', (0, auth_1.authorize)(enums_1.UserRole.ADMIN,
             lessonLength,
             forceReassign: Boolean(forceReassign),
         });
+        await (0, teacher_assignment_service_1.syncSubjectAssignmentFromClassSubjectId)(result.assignment.id);
         res.status(201).json(result.report);
     }
     catch (err) {
         const e = err;
+        if (e instanceof class_subject_teacher_service_1.ClassSubjectTeacherConflictError || e.name === 'ClassSubjectTeacherConflictError') {
+            return res.status(409).json({ message: e.message });
+        }
         res.status(e.statusCode || 400).json({ message: e.message || 'Failed to add teacher assignment.' });
     }
 });
@@ -817,13 +879,16 @@ router.delete('/staff/teacher-load', (0, auth_1.authorize)(enums_1.UserRole.ADMI
     try {
         const classSubjectId = String(req.query.classSubjectId || '').trim();
         if (classSubjectId) {
-            return res.json(await (0, teacher_load_service_1.removeTeacherLoadAssignment)(classSubjectId));
+            const report = await (0, teacher_load_service_1.removeTeacherLoadAssignment)(classSubjectId);
+            await (0, teacher_assignment_service_1.syncSubjectAssignmentFromClassSubjectId)(classSubjectId);
+            return res.json(report);
         }
         const teacherId = String(req.query.teacherId || '').trim();
         const classId = String(req.query.classId || '').trim();
         if (!teacherId || !classId) {
             return res.status(400).json({ message: 'classSubjectId or teacherId and classId are required.' });
         }
+        await (0, teacher_assignment_service_1.endSubjectTeacherAssignmentsForTeacherClass)(teacherId, classId);
         res.json(await (0, teacher_load_service_1.removeTeacherLoadClassAssignments)(teacherId, classId));
     }
     catch (err) {

@@ -38,6 +38,10 @@ export class Staff {
   @Column({ default: true })
   isActive!: boolean;
 
+  /** Optional per-teacher weekly period cap (overrides school default). */
+  @Column({ type: 'int', nullable: true })
+  maxWeeklyPeriods?: number | null;
+
   @CreateDateColumn()
   createdAt!: Date;
 }

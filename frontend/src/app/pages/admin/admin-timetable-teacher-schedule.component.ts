@@ -20,6 +20,7 @@ import {
   isBreakPeriod,
   lessonPeriodNumber,
   shortClassCode,
+  compactClassGridLabel,
   timetableSubjectShort,
 } from '../../core/utils/timetable-grid-display';
 
@@ -133,6 +134,6 @@ export class AdminTimetableTeacherScheduleComponent implements OnInit {
   }
 
   classShort(row: TeacherAllocationRow): string {
-    return shortClassCode(row.schoolClass?.name || classLabelFromAllocation(row));
+    return compactClassGridLabel(row.schoolClass?.name || classLabelFromAllocation(row));
   }
 }

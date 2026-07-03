@@ -151,6 +151,27 @@
   }
 }
 
+.detail-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 0.45rem;
+  align-items: center;
+}
+
+.btn-primary {
+  border: none;
+  border-radius: 10px;
+  padding: 0.45rem 0.85rem;
+  background: #2563eb;
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover {
+    background: #1d4ed8;
+  }
+}
+
 .meta {
   margin: 0.3rem 0 0;
   color: #64748b;

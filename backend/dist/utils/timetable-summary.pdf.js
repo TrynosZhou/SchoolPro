@@ -55,7 +55,7 @@ function isBreakPeriod(period) {
 function lessonPeriodNumber(periods, index) {
     if (isBreakPeriod(periods[index]))
         return null;
-    return periods.slice(0, index + 1).filter((p) => !isBreakPeriod(p)).length - 1;
+    return periods.slice(0, index + 1).filter((p) => !isBreakPeriod(p)).length;
 }
 function breakPeriodLabel(period) {
     const name = String(period.name || 'Break');

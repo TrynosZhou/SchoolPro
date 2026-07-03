@@ -5,16 +5,22 @@ export class AddGeneralLedger1735689600000 implements MigrationInterface {
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
-      CREATE TYPE "gl_account_type_enum" AS ENUM ('REVENUE', 'EXPENSE', 'ASSET', 'LIABILITY', 'EQUITY')
+      DO $$ BEGIN
+        CREATE TYPE "gl_account_type_enum" AS ENUM ('REVENUE', 'EXPENSE', 'ASSET', 'LIABILITY', 'EQUITY');
+      EXCEPTION WHEN duplicate_object THEN NULL;
+      END $$
     `);
     await queryRunner.query(`
-      CREATE TYPE "gl_reference_type_enum" AS ENUM (
-        'FEE_PAYMENT', 'SALARY', 'EXPENSE', 'REFUND', 'MANUAL_ADJUSTMENT', 'OTHER'
-      )
+      DO $$ BEGIN
+        CREATE TYPE "gl_reference_type_enum" AS ENUM (
+          'FEE_PAYMENT', 'SALARY', 'EXPENSE', 'REFUND', 'MANUAL_ADJUSTMENT', 'OTHER'
+        );
+      EXCEPTION WHEN duplicate_object THEN NULL;
+      END $$
     `);
 
     await queryRunner.query(`
-      CREATE TABLE "chart_of_accounts" (
+      CREATE TABLE IF NOT EXISTS "chart_of_accounts" (
         "id" uuid NOT NULL DEFAULT uuid_generate_v4(),
         "accountCode" character varying(32) NOT NULL,
         "accountName" character varying(128) NOT NULL,
@@ -31,7 +37,7 @@ export class AddGeneralLedger1735689600000 implements MigrationInterface {
     `);
 
     await queryRunner.query(`
-      CREATE TABLE "general_ledger_entries" (
+      CREATE TABLE IF NOT EXISTS "general_ledger_entries" (
         "id" uuid NOT NULL DEFAULT uuid_generate_v4(),
         "transactionDate" date NOT NULL,
         "accountId" uuid NOT NULL,
@@ -59,11 +65,11 @@ export class AddGeneralLedger1735689600000 implements MigrationInterface {
       )
     `);
 
-    await queryRunner.query(`CREATE INDEX "idx_gl_entry_transaction_date" ON "general_ledger_entries" ("transactionDate")`);
-    await queryRunner.query(`CREATE INDEX "idx_gl_entry_account_id" ON "general_ledger_entries" ("accountId")`);
-    await queryRunner.query(`CREATE INDEX "idx_gl_entry_reference_type" ON "general_ledger_entries" ("referenceType")`);
-    await queryRunner.query(`CREATE INDEX "idx_gl_entry_journal_batch" ON "general_ledger_entries" ("journalBatchId")`);
-    await queryRunner.query(`CREATE INDEX "idx_chart_of_accounts_type" ON "chart_of_accounts" ("accountType")`);
+    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_gl_entry_transaction_date" ON "general_ledger_entries" ("transactionDate")`);
+    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_gl_entry_account_id" ON "general_ledger_entries" ("accountId")`);
+    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_gl_entry_reference_type" ON "general_ledger_entries" ("referenceType")`);
+    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_gl_entry_journal_batch" ON "general_ledger_entries" ("journalBatchId")`);
+    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "idx_chart_of_accounts_type" ON "chart_of_accounts" ("accountType")`);
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {

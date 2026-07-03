@@ -4,6 +4,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.shortClassName = shortClassName;
+exports.compactClassName = compactClassName;
 exports.buildPeriodsFormula = buildPeriodsFormula;
 exports.buildTeacherPeriodsFormula = buildTeacherPeriodsFormula;
 exports.mapTeacherLoadReportToPdfRows = mapTeacherLoadReportToPdfRows;
@@ -45,6 +46,29 @@ function shortClassName(className) {
     if (!name)
         return '';
     return name.replace(/^class\s+/i, '');
+}
+/** Compact label for narrow timetable/PDF cells — e.g. "L6 Sciences" → "L6 Sci". */
+function compactClassName(className) {
+    const name = shortClassName(className);
+    if (!name)
+        return '';
+    const levelStream = name.match(/^(L6|U6)\s+(.+)$/i);
+    if (levelStream) {
+        const level = levelStream[1].toUpperCase();
+        const stream = levelStream[2].trim();
+        const shortStream = stream.length <= 4 ? stream : stream.split(/\s+/).map((w) => w.slice(0, 3)).join(' ');
+        return `${level} ${shortStream}`.trim();
+    }
+    if (name.length <= 6)
+        return name;
+    const parts = name.split(/\s+/).filter(Boolean);
+    if (parts.length >= 2) {
+        const last = parts[parts.length - 1];
+        parts[parts.length - 1] = last.length > 3 ? last.slice(0, 3) : last;
+        const compact = parts.join(' ');
+        return compact.length < name.length ? compact : name;
+    }
+    return name.length > 8 ? `${name.slice(0, 7)}…` : name;
 }
 function buildPeriodsFormula(classLoads) {
     if (!classLoads.length)

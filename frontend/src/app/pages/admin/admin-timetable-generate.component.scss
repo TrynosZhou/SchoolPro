@@ -242,6 +242,13 @@
   border-radius: 16px;
   overflow: hidden;
   box-shadow: 0 4px 18px rgba(15, 23, 42, 0.04);
+
+  &:has(.timetable-sheet.classic),
+  &:has(.classic-wrap),
+  &:has(.drag-board-wrap) {
+    overflow-x: auto;
+    overflow-y: visible;
+  }
 }
 
 .list-toolbar {
@@ -1242,9 +1249,11 @@ option.unavailable {
 }
 
 .summary-grid {
-  width: max-content;
+  width: 100%;
   min-width: 100%;
   border-collapse: collapse;
+  border-spacing: 0;
+  table-layout: fixed;
   font-size: 0.72rem;
 
   th,
@@ -1253,6 +1262,7 @@ option.unavailable {
     padding: 0.2rem 0.15rem;
     text-align: center;
     vertical-align: middle;
+    box-sizing: border-box;
   }
 
   thead th {

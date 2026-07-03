@@ -603,6 +603,61 @@
   border: 1px solid #e2e8f0;
 }
 
+.attachments-block {
+  margin-top: 1rem;
+
+  h4 {
+    margin: 0 0 0.55rem;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #64748b;
+  }
+}
+
+.attachment-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.attachment-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 0.55rem 0.75rem;
+  background: #fff;
+  cursor: pointer;
+  text-align: left;
+
+  &:hover {
+    border-color: #93c5fd;
+    background: #f8faff;
+  }
+
+  .att-name {
+    flex: 1;
+    min-width: 0;
+    font-size: 0.88rem;
+    color: #0f172a;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .att-size {
+    font-size: 0.78rem;
+    color: #64748b;
+    white-space: nowrap;
+  }
+}
+
 .detail-empty,
 .state-box {
   display: flex;

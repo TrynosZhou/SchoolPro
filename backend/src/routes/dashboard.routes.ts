@@ -22,7 +22,13 @@ router.get('/school-links', async (_req, res: Response) => {
 
 router.get('/overview', authorize(UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.ADMIN), async (_req, res: Response) => {
   const [students, staff, attendanceToday, collections, debtors, lowStock] = await Promise.all([
-    AppDataSource.query(`SELECT COUNT(*) as count FROM students WHERE "isActive" = true`),
+    AppDataSource.query(`
+      SELECT
+        COUNT(*)::int AS count,
+        COUNT(*) FILTER (WHERE "studentType" = 'boarder')::int AS boarders,
+        COUNT(*) FILTER (WHERE "studentType" IS DISTINCT FROM 'boarder')::int AS "dayScholars"
+      FROM students WHERE "isActive" = true
+    `),
     AppDataSource.query(`SELECT COUNT(*) as count FROM staff WHERE "isActive" = true`),
     AppDataSource.query(`
       SELECT status, COUNT(*) as count FROM student_attendance
@@ -44,6 +50,8 @@ router.get('/overview', authorize(UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRol
 
   res.json({
     totalStudents: Number(students[0]?.count || 0),
+    boarders: Number(students[0]?.boarders || 0),
+    dayScholars: Number(students[0]?.dayScholars || 0),
     totalStaff: Number(staff[0]?.count || 0),
     attendanceToday,
     monthlyCollections: Number(collections[0]?.total || 0),

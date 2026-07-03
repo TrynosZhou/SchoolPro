@@ -20,6 +20,33 @@ export function shortClassCode(className: string): string {
   return name.replace(/^class\s+/i, '');
 }
 
+/** Shorter label for narrow timetable cells — e.g. "L6 Sciences" → "L6 Sci". */
+export function compactClassGridLabel(className: string): string {
+  const name = shortClassCode(className);
+  if (!name) return '';
+
+  const levelStream = name.match(/^(L6|U6)\s+(.+)$/i);
+  if (levelStream) {
+    const level = levelStream[1].toUpperCase();
+    const stream = levelStream[2].trim();
+    const shortStream =
+      stream.length <= 4 ? stream : stream.split(/\s+/).map((w) => w.slice(0, 3)).join(' ');
+    return `${level} ${shortStream}`.trim();
+  }
+
+  if (name.length <= 6) return name;
+
+  const parts = name.split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) {
+    const last = parts[parts.length - 1];
+    parts[parts.length - 1] = last.length > 3 ? `${last.slice(0, 3)}` : last;
+    const compact = parts.join(' ');
+    return compact.length < name.length ? compact : name;
+  }
+
+  return name.length > 8 ? `${name.slice(0, 7)}…` : name;
+}
+
 export function formatPeriodRange(period: { startTime: string; endTime: string }): string {
   const compact = (time: string) => {
     const [h, m] = String(time || '0:00').split(':');
@@ -72,11 +99,16 @@ export function isBreakPeriod(period: { slotType?: string }): boolean {
   return period.slotType === 'break';
 }
 
-/** Lesson-only index (0, 1, 2…) for timetable headers; null for breaks. */
+/** Lesson-only index (1, 2, 3…) for timetable headers; null for breaks. */
 export function lessonPeriodNumber(periods: { slotType?: string }[], index: number): number | null {
   const period = periods[index];
   if (!period || isBreakPeriod(period)) return null;
-  return periods.slice(0, index + 1).filter((p) => !isBreakPeriod(p)).length - 1;
+  return periods.slice(0, index + 1).filter((p) => !isBreakPeriod(p)).length;
+}
+
+/** Count of lesson slots (excludes breaks). */
+export function lessonPeriodCount(periods: { slotType?: string }[]): number {
+  return periods.filter((p) => !isBreakPeriod(p)).length;
 }
 
 function breakDurationMinutes(period: { startTime?: string; endTime?: string }): number {

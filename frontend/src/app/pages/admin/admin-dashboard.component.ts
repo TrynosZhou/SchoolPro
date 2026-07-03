@@ -1,5 +1,5 @@
-import { NgTemplateOutlet } from '@angular/common';
-import { Component, computed, inject, OnInit, signal } from '@angular/core';
+import { NgClass, NgTemplateOutlet } from '@angular/common';
+import { Component, computed, ElementRef, inject, OnInit, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { DecimalPipe } from '@angular/common';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
@@ -18,13 +18,14 @@ interface MajorMenu {
 @Component({
   selector: 'app-admin-dashboard',
   standalone: true,
-  imports: [PortalLayoutComponent, RouterLink, DecimalPipe, NgTemplateOutlet],
+  imports: [PortalLayoutComponent, RouterLink, DecimalPipe, NgClass, NgTemplateOutlet],
   templateUrl: './admin-dashboard.component.html',
   styleUrl: './admin-dashboard.component.scss',
 })
 export class AdminDashboardComponent implements OnInit {
   private api = inject(ApiService);
   private auth = inject(AuthService);
+  private elementRef = inject(ElementRef<HTMLElement>);
 
   readonly adminNav = ADMIN_NAV_SECTIONS;
   readonly selectedMenu = signal<string | null>(null);
@@ -56,13 +57,6 @@ export class AdminDashboardComponent implements OnInit {
     return (debtors / collections) * 100;
   });
 
-  readonly financeHealth = computed(() => {
-    const ratio = this.debtRatio();
-    if (ratio >= 80) return 'High Risk';
-    if (ratio >= 40) return 'Watch List';
-    return 'Healthy';
-  });
-
   readonly statCards = computed(() => {
     const o = this.overview();
     return [
@@ -73,6 +67,7 @@ export class AdminDashboardComponent implements OnInit {
         caption: 'Enrolled learners',
         path: '/admin/students',
         tone: 'blue',
+        icon: '👥',
       },
       {
         key: 'staff',
@@ -81,6 +76,7 @@ export class AdminDashboardComponent implements OnInit {
         caption: 'Teaching & support',
         path: '/admin/staff',
         tone: 'indigo',
+        icon: '👩‍🏫',
       },
       {
         key: 'collections',
@@ -89,6 +85,7 @@ export class AdminDashboardComponent implements OnInit {
         caption: 'Received this month',
         path: '/admin/payment',
         tone: 'green',
+        icon: '💳',
       },
       {
         key: 'debtors',
@@ -97,9 +94,19 @@ export class AdminDashboardComponent implements OnInit {
         caption: 'Debtor balances',
         path: '/admin/fin-reports/debtor-aging',
         tone: 'amber',
+        icon: '📊',
       },
     ];
   });
+
+  readonly quickActions = [
+    { label: 'Mark register', path: '/admin/attendance/mark-register', icon: '☑️' },
+    { label: 'Record payment', path: '/admin/payment', icon: '💳' },
+    { label: 'Billing', path: '/admin/billing', icon: '🧾' },
+    { label: 'Announcements', path: '/admin/communication/send', icon: '✉️' },
+    { label: 'Report cards', path: '/admin/report-cards', icon: '📄' },
+    { label: 'Timetable', path: '/admin/timetable/generate', icon: '📅' },
+  ];
 
   readonly majorMenus: MajorMenu[] = [
     {
@@ -117,7 +124,7 @@ export class AdminDashboardComponent implements OnInit {
       title: 'Parents',
       icon: 'parents',
       primaryPath: '/admin/parents',
-      links: [{ label: 'All Parents', path: '/admin/parents' }],
+      links: [{ label: 'Parents', path: '/admin/parents' }],
     },
     {
       title: 'Attendance',
@@ -134,6 +141,8 @@ export class AdminDashboardComponent implements OnInit {
       primaryPath: '/admin/staff',
       links: [
         { label: 'Staff Directory', path: '/admin/staff' },
+        { label: 'Class Assignments', path: '/admin/class-assignments' },
+        { label: 'Staff Attendance', path: '/admin/staff-attendance' },
         { label: 'Payroll', path: '/admin/payroll' },
       ],
     },
@@ -189,7 +198,7 @@ export class AdminDashboardComponent implements OnInit {
       links: [
         { label: 'Configure Periods', path: '/admin/timetable/configure-periods' },
         { label: 'Generate Timetable', path: '/admin/timetable/generate' },
-        { label: 'View Timetable', path: '/admin/timetable/view' },
+        { label: 'Class Schedule', path: '/admin/timetable/view' },
       ],
     },
     {
@@ -222,12 +231,42 @@ export class AdminDashboardComponent implements OnInit {
     });
   }
 
+  attendanceSegmentFlex(count: string | number): number {
+    const total = this.attendanceTotal();
+    if (!total) return 1;
+    return Math.max(0.08, Number(count) / total);
+  }
+
   isSelected(title: string): boolean {
     return this.selectedMenu() === title;
   }
 
   toggleMenu(title: string): void {
+    const opening = this.selectedMenu() !== title;
     this.selectedMenu.update((current) => (current === title ? null : title));
+    if (opening) {
+      queueMicrotask(() => this.scrollMenuTileIntoView(title));
+    }
+  }
+
+  onDashboardSubmenuClick(): void {
+    const title = this.selectedMenu();
+    if (title) {
+      this.scrollMenuTileIntoView(title);
+    }
+  }
+
+  menuDomId(title: string): string {
+    return title.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  }
+
+  private scrollMenuTileIntoView(title: string): void {
+    requestAnimationFrame(() => {
+      const tile = this.elementRef.nativeElement.querySelector(
+        `#menu-tile-${this.menuDomId(title)}`,
+      ) as HTMLElement | null;
+      tile?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
   }
 
   primaryPathFor(title: string): string {

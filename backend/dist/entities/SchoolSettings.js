@@ -95,6 +95,14 @@ __decorate([
     __metadata("design:type", String)
 ], SchoolSettings.prototype, "timetableVersion", void 0);
 __decorate([
+    (0, typeorm_1.Column)({ type: 'int', default: 0 }),
+    __metadata("design:type", Number)
+], SchoolSettings.prototype, "minWeeklyPeriods", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'int', default: 30 }),
+    __metadata("design:type", Number)
+], SchoolSettings.prototype, "maxWeeklyPeriods", void 0);
+__decorate([
     (0, typeorm_1.UpdateDateColumn)(),
     __metadata("design:type", Date)
 ], SchoolSettings.prototype, "updatedAt", void 0);

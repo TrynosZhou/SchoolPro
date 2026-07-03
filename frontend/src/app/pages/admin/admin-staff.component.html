@@ -9,11 +9,10 @@
         <p class="eyebrow">Human Resources</p>
         <h2>Staff directory</h2>
         <p class="hero-sub">
-          Manage teachers, administrators, and principals. Track daily attendance and export your staff roster.
+          Manage teachers, administrators, and principals. Export your staff roster and track teacher workload.
         </p>
         <div class="hero-actions">
           <button type="button" class="primary-action" (click)="openRegister()">Register staff</button>
-          <button type="button" class="secondary-action" (click)="setTab('attendance')">Mark attendance</button>
           <button type="button" class="refresh-action" (click)="refreshList()" [disabled]="loading() || refreshing()">
             {{ refreshing() ? 'Refreshing…' : 'Refresh' }}
           </button>
@@ -58,10 +57,6 @@
         <button type="button" [class.active]="activeTab() === 'directory'" (click)="setTab('directory')">
           Directory
           <span class="tab-count">{{ stats().total }}</span>
-        </button>
-        <button type="button" [class.active]="activeTab() === 'attendance'" (click)="setTab('attendance')">
-          Attendance
-          <span class="tab-count">{{ stats().active }}</span>
         </button>
         <button type="button" [class.active]="activeTab() === 'teacherLoad'" (click)="setTab('teacherLoad')">
           Teacher Load
@@ -261,98 +256,13 @@
         }
       }
 
-      @if (activeTab() === 'attendance') {
-        <div class="panel attendance-panel">
-          <div class="attendance-head">
-            <div>
-              <h3>Staff attendance</h3>
-              <p class="subtitle">Mark daily attendance for all active staff</p>
-            </div>
-            <div class="date-row">
-              <label for="attDate">Date</label>
-              <input id="attDate" type="date" [(ngModel)]="attendanceDate" (ngModelChange)="loadAttendanceForDate()" name="attDate" />
-              <button type="button" class="btn-primary" [disabled]="submitting() || !activeStaff().length" (click)="saveAttendance()">
-                {{ submitting() ? 'Saving…' : 'Save attendance' }}
-              </button>
-            </div>
-          </div>
-
-          @if (activeStaff().length) {
-            <div class="att-summary">
-              <div class="att-stat present">
-                <strong>{{ attendanceStats().present }}</strong>
-                <span>Present</span>
-              </div>
-              <div class="att-stat late">
-                <strong>{{ attendanceStats().late }}</strong>
-                <span>Late</span>
-              </div>
-              <div class="att-stat absent">
-                <strong>{{ attendanceStats().absent }}</strong>
-                <span>Absent</span>
-              </div>
-              <div class="att-stat excused">
-                <strong>{{ attendanceStats().excused }}</strong>
-                <span>Excused</span>
-              </div>
-              <div class="att-bulk">
-                <button type="button" class="btn-outline btn-sm" (click)="markAllAttendance('present')">All present</button>
-                <button type="button" class="btn-ghost btn-sm" (click)="markAllAttendance('absent')">All absent</button>
-              </div>
-            </div>
-
-            <div class="search-wrap compact">
-              <span class="search-icon" aria-hidden="true">🔍</span>
-              <input
-                type="search"
-                class="search-input"
-                placeholder="Filter staff for attendance…"
-                [ngModel]="attendanceSearch()"
-                (ngModelChange)="attendanceSearch.set($event)"
-                name="attQ"
-              />
-            </div>
-          }
-
-          <div class="attendance-grid">
-            @for (s of filteredAttendanceStaff(); track s.id) {
-              <div class="att-row">
-                <div class="att-info">
-                  <span class="avatar sm" [attr.data-role]="s.user.role">{{ initials(s) }}</span>
-                  <div>
-                    <code>{{ s.employeeNumber }}</code>
-                    <strong>{{ directoryName(s) }}</strong>
-                    <small>{{ roleLabel(s.user.role) }} · {{ s.department || '—' }}</small>
-                  </div>
-                </div>
-                <div class="att-btns">
-                  @for (st of attendanceStatuses; track st) {
-                    <button
-                      type="button"
-                      class="att-chip"
-                      [attr.data-s]="st"
-                      [class.active]="attendanceMarks()[s.id] === st"
-                      (click)="setAttendance(s.id, st)"
-                    >
-                      {{ attendanceLabel(st) }}
-                    </button>
-                  }
-                </div>
-              </div>
-            } @empty {
-              <p class="empty-inline">No active staff to mark attendance for.</p>
-            }
-          </div>
-        </div>
-      }
-
       @if (activeTab() === 'teacherLoad') {
         <div class="panel teacher-load-panel">
           <div class="teacher-load-head">
             <div>
               <h3>Teacher load</h3>
               <p class="subtitle">
-                Subjects assigned per teacher, weekly timetable periods per class, and total teaching load.
+                Each class/subject pair has one assigned teacher. A teacher may teach the same subject across multiple classes.
               </p>
             </div>
             <div class="teacher-load-actions">
@@ -437,7 +347,6 @@
                 <thead>
                   <tr>
                     <th>Teacher</th>
-                    <th>Employee ID</th>
                     <th>Class to teach</th>
                     <th>Subject</th>
                     <th class="num">Periods</th>
@@ -454,22 +363,10 @@
                             <span class="avatar sm" data-role="teacher">{{ initialsFromName(row.teacherName) }}</span>
                             <div class="teacher-meta">
                               <strong>{{ row.teacherName }}</strong>
-                              @if (row.assignedClassLabels.length) {
-                                <div class="assigned-classes">
-                                  <span class="assigned-classes-label">Classes assigned</span>
-                                  <div class="assigned-class-chips">
-                                    @for (label of row.assignedClassLabels; track label) {
-                                      <span class="class-chip">{{ label }}</span>
-                                    }
-                                  </div>
-                                </div>
-                              } @else {
-                                <small class="no-classes">No classes assigned</small>
-                              }
+                              <small class="teacher-emp-id">{{ row.employeeNumber }}</small>
                             </div>
                           </div>
                         </td>
-                        <td [attr.rowspan]="row.rowSpan" class="mono">{{ row.employeeNumber }}</td>
                       }
                       <td>
                         @if (row.hasAssignment) {
@@ -787,7 +684,7 @@
               </div>
               <div class="field">
                 <label>Class *</label>
-                <select [(ngModel)]="loadForm.classId" name="loadClassId" required>
+                <select [(ngModel)]="loadForm.classId" (ngModelChange)="onLoadClassChange($event)" name="loadClassId" required>
                   <option value="">Select class</option>
                   @for (c of loadClasses(); track c.id) {
                     <option [value]="c.id">{{ classOptionLabel(c) }}</option>
@@ -799,16 +696,18 @@
                 <select [(ngModel)]="loadForm.subjectId" name="loadSubjectId" required>
                   <option value="">Select subject</option>
                   @for (s of loadSubjects(); track s.id) {
-                    <option [value]="s.id">{{ loadSubjectLabel(s.id) || s.name }}</option>
+                    <option [value]="s.id" [disabled]="isSubjectBlockedForLoad(s.id)">
+                      {{ loadSubjectLabel(s.id) || s.name }}{{ subjectAssignmentLabel(s.id) }}
+                    </option>
                   }
                 </select>
+                <small class="field-hint">Subjects already assigned to another teacher must be reassigned explicitly.</small>
               </div>
               <div class="field">
                 <label>Periods per week *</label>
                 <input
                   type="number"
                   min="1"
-                  max="40"
                   [(ngModel)]="loadForm.weeklyPeriods"
                   name="loadWeeklyPeriods"
                   required

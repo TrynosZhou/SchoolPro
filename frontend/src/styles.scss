@@ -1,8 +1,9 @@
 @use 'styles/page-headers';
+@use 'styles/design-tokens';
 
 :root {
-  --primary: #1e40af;
-  --primary-dark: #1e3a8a;
+  --primary: var(--color-accent);
+  --primary-dark: var(--color-accent-hover);
   --sidebar: #0f172a;
   --sidebar-text: #94a3b8;
   --bg: #f1f5f9;
@@ -32,9 +33,9 @@ html {
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
-  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-  background: var(--bg);
-  color: var(--text);
+  font-family: var(--font-family-base);
+  background: var(--color-bg-subtle);
+  color: var(--color-text-primary);
   line-height: 1.5;
   padding-bottom: var(--safe-bottom);
   overflow-x: hidden;

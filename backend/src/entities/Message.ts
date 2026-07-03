@@ -3,11 +3,13 @@ import {
   PrimaryGeneratedColumn,
   Column,
   ManyToOne,
+  OneToMany,
   JoinColumn,
   CreateDateColumn,
 } from 'typeorm';
 import { User } from './User';
 import { Student } from './Student';
+import { MessageAttachment } from './MessageAttachment';
 
 @Entity('messages')
 export class Message {
@@ -43,6 +45,9 @@ export class Message {
 
   @Column({ default: false })
   isRead!: boolean;
+
+  @OneToMany(() => MessageAttachment, (attachment) => attachment.message)
+  attachments!: MessageAttachment[];
 
   @CreateDateColumn()
   sentAt!: Date;

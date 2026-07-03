@@ -4,6 +4,7 @@ import { DayOfWeek } from '../entities/enums';
 import { dayIntToEnum, dayEnumToInt } from '../utils/timetable-day';
 import { relations } from '../utils/typeorm-helpers';
 import { timetableConflictService } from './timetable-conflict.service';
+import { assertTimetableTeacherMatchesAssignment } from './class-subject-teacher.service';
 
 export interface CreateTeacherAllocationInput {
   timetableEntryId: string;
@@ -83,6 +84,8 @@ export async function createTeacherAllocation(input: CreateTeacherAllocationInpu
     throw new Error('Timetable entry not found.');
   }
 
+  await assertTimetableTeacherMatchesAssignment(entry.classId, entry.subjectId, input.teacherId);
+
   const dayOfWeek = dayIntToEnum(entry.dayOfWeek);
   const conflict = await timetableConflictService.checkTeacherConflict(
     input.teacherId,
@@ -139,6 +142,8 @@ export async function updateTeacherAllocation(id: string, input: UpdateTeacherAl
   if (!entry) {
     throw new Error('Timetable entry not found.');
   }
+
+  await assertTimetableTeacherMatchesAssignment(entry.classId, entry.subjectId, teacherId);
 
   const dayOfWeek = dayIntToEnum(entry.dayOfWeek);
   const conflict = await timetableConflictService.checkTeacherConflict(

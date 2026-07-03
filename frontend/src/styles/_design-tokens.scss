@@ -1,0 +1,221 @@
+// =============================================================
+// DESIGN TOKENS — Minimal SaaS / "Linear-style" theme
+// School Pro Academy Admin Dashboard
+// Import this file once (e.g. in styles.scss) and reference
+// these variables everywhere instead of hardcoded values.
+// =============================================================
+
+// -------------------------------------------------------------
+// COLOR — Light theme
+// -------------------------------------------------------------
+:root {
+  // Base neutrals (grayscale backbone of the UI)
+  --color-bg: #ffffff;
+  --color-bg-subtle: #fafafa;      // sidebar, hover backgrounds
+  --color-bg-muted: #f4f4f5;       // card backgrounds, input fills
+  --color-border: #e4e4e7;         // hairline borders (replaces shadows)
+  --color-border-strong: #d4d4d8;  // dividers that need slightly more weight
+
+  // Text
+  --color-text-primary: #18181b;   // headings, KPI numbers
+  --color-text-secondary: #52525b; // body text
+  --color-text-muted: #a1a1aa;     // labels, metadata, placeholders
+
+  // Accent — the ONE color used sparingly (active states, primary actions)
+  --color-accent: #6366f1;         // indigo — swap for your brand color
+  --color-accent-hover: #4f46e5;
+  --color-accent-subtle: #eef2ff;  // active row / chip backgrounds
+
+  // Semantic (used only where meaning requires color, e.g. trend indicators)
+  --color-positive: #16a34a;
+  --color-negative: #dc2626;
+  --color-warning: #d97706;
+
+  // Elevation — borders instead of box-shadow
+  --shadow-none: none;
+  --border-card: 1px solid var(--color-border);
+
+  // KPI card pastel tints (light theme) — used ONLY on dashboard summary
+  // cards, never on sidebar/topbar/tables. Background + matching badge/icon.
+  --color-kpi-lavender-bg: #f1f0fe;
+  --color-kpi-lavender-badge: #e0defc;
+  --color-kpi-lavender-icon: #6d63e0;
+
+  --color-kpi-mint-bg: #eefaf3;
+  --color-kpi-mint-badge: #d9f4e4;
+  --color-kpi-mint-icon: #2f9e6b;
+
+  --color-kpi-sky-bg: #eef6fd;
+  --color-kpi-sky-badge: #dcedfb;
+  --color-kpi-sky-icon: #2f80c9;
+
+  --color-kpi-peach-bg: #fdf3ec;
+  --color-kpi-peach-badge: #fbe4d3;
+  --color-kpi-peach-icon: #d97b3f;
+}
+
+// -------------------------------------------------------------
+// COLOR — Dark theme (apply via [data-theme="dark"] on <body> or <html>)
+// -------------------------------------------------------------
+[data-theme="dark"] {
+  --color-bg: #0f0f10;
+  --color-bg-subtle: #18181b;
+  --color-bg-muted: #1f1f23;
+  --color-border: #27272a;
+  --color-border-strong: #3f3f46;
+
+  --color-text-primary: #fafafa;
+  --color-text-secondary: #a1a1aa;
+  --color-text-muted: #71717a;
+
+  --color-accent: #818cf8;
+  --color-accent-hover: #6366f1;
+  --color-accent-subtle: #1e1b4b;
+
+  --color-positive: #4ade80;
+  --color-negative: #f87171;
+  --color-warning: #fbbf24;
+
+  // KPI card pastel tints (dark theme) — desaturated, low-brightness
+  // versions so the "soft color" feeling survives in dark mode too.
+  --color-kpi-lavender-bg: #211f38;
+  --color-kpi-lavender-badge: #2c294d;
+  --color-kpi-lavender-icon: #a8a0f5;
+
+  --color-kpi-mint-bg: #16281f;
+  --color-kpi-mint-badge: #1d3627;
+  --color-kpi-mint-icon: #5fd399;
+
+  --color-kpi-sky-bg: #172433;
+  --color-kpi-sky-badge: #1e3145;
+  --color-kpi-sky-icon: #6cb3ee;
+
+  --color-kpi-peach-bg: #2c2119;
+  --color-kpi-peach-badge: #3b2b20;
+  --color-kpi-peach-icon: #eba36f;
+}
+
+// -------------------------------------------------------------
+// TYPOGRAPHY
+// -------------------------------------------------------------
+:root {
+  --font-family-base: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-family-mono: 'IBM Plex Mono', 'SF Mono', monospace; // for tabular data if needed
+
+  --letter-spacing-tight: -0.01em;
+  --letter-spacing-tighter: -0.02em; // headings
+
+  // Type scale
+  --font-size-xs: 0.75rem;    // 12px — metadata, badges
+  --font-size-sm: 0.8125rem;  // 13px — labels, captions
+  --font-size-base: 0.875rem; // 14px — body text
+  --font-size-md: 1rem;       // 16px — card titles
+  --font-size-lg: 1.25rem;    // 20px — section headers
+  --font-size-xl: 1.75rem;    // 28px — KPI numbers
+  --font-size-2xl: 2.25rem;   // 36px — hero stat (if used)
+
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;    // reserve for KPI numbers only
+
+  --line-height-tight: 1.2;
+  --line-height-normal: 1.5;
+}
+
+// -------------------------------------------------------------
+// SPACING (4px base unit)
+// -------------------------------------------------------------
+:root {
+  --space-1: 0.25rem;  // 4px
+  --space-2: 0.5rem;   // 8px
+  --space-3: 0.75rem;  // 12px
+  --space-4: 1rem;     // 16px
+  --space-5: 1.25rem;  // 20px
+  --space-6: 1.5rem;   // 24px
+  --space-8: 2rem;     // 32px
+  --space-10: 2.5rem;  // 40px
+  --space-12: 3rem;    // 48px
+}
+
+// -------------------------------------------------------------
+// RADIUS
+// -------------------------------------------------------------
+:root {
+  --radius-sm: 6px;   // buttons, inputs
+  --radius-md: 8px;   // cards
+  --radius-lg: 12px;  // modals, larger surfaces
+  --radius-full: 999px; // pills, avatars
+}
+
+// -------------------------------------------------------------
+// LAYOUT
+// -------------------------------------------------------------
+:root {
+  --sidebar-width-expanded: 280px;
+  --sidebar-width-collapsed: 72px;
+  --topbar-height: 56px;
+  --transition-base: 180ms ease;
+}
+
+// -------------------------------------------------------------
+// COMPONENT-LEVEL SHORTCUTS (optional, use as needed)
+// -------------------------------------------------------------
+.token-card {
+  background: var(--color-bg);
+  border: var(--border-card);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-none);
+}
+
+.token-kpi-number {
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-primary);
+  letter-spacing: var(--letter-spacing-tighter);
+}
+
+.token-label {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+// -------------------------------------------------------------
+// KPI CARD VARIANTS — apply one of these classes to each KPI card
+// Suggested mapping: Students → lavender, Staff → mint,
+// Collections → sky, Outstanding → peach
+// -------------------------------------------------------------
+.token-kpi-card {
+  border-radius: var(--radius-lg); // 12px, softer/friendlier than --radius-md
+  border: none;                    // pastel fill replaces the border on KPI cards
+  padding: var(--space-5);
+
+  .token-kpi-icon-badge {
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-full);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  &--lavender {
+    background: var(--color-kpi-lavender-bg);
+    .token-kpi-icon-badge { background: var(--color-kpi-lavender-badge); color: var(--color-kpi-lavender-icon); }
+  }
+  &--mint {
+    background: var(--color-kpi-mint-bg);
+    .token-kpi-icon-badge { background: var(--color-kpi-mint-badge); color: var(--color-kpi-mint-icon); }
+  }
+  &--sky {
+    background: var(--color-kpi-sky-bg);
+    .token-kpi-icon-badge { background: var(--color-kpi-sky-badge); color: var(--color-kpi-sky-icon); }
+  }
+  &--peach {
+    background: var(--color-kpi-peach-bg);
+    .token-kpi-icon-badge { background: var(--color-kpi-peach-badge); color: var(--color-kpi-peach-icon); }
+  }
+}

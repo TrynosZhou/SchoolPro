@@ -3,7 +3,8 @@
     <section class="card intro">
       <h3>School messages &amp; announcements</h3>
       <p class="sub">
-        Announcements and messages sent to you by the school administration appear here.
+        Announcements and messages sent to you by the school appear here. Open a message and use
+        <strong>Reply</strong> to respond.
         @if (unreadCount() > 0) {
           You have <strong>{{ unreadCount() }}</strong> unread message{{ unreadCount() === 1 ? '' : 's' }}.
         }
@@ -69,7 +70,10 @@
                 </p>
               }
             </div>
-            <button type="button" class="btn-outline" (click)="closeDetail()">Close</button>
+            <div class="detail-actions">
+              <button type="button" class="btn-primary" (click)="replyTo(msg)">Reply</button>
+              <button type="button" class="btn-outline" (click)="closeDetail()">Close</button>
+            </div>
           </div>
           <div class="detail-body">{{ msg.body }}</div>
         } @else {

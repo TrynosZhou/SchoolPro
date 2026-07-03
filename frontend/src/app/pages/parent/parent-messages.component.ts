@@ -1,6 +1,7 @@
 import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { PARENT_NAV_ITEMS } from '../../core/config/parent-nav';
 import { ApiService } from '../../core/services/api.service';
@@ -37,6 +38,7 @@ const SCHOOL_SENDER_ROLES = new Set(['admin', 'director', 'principal']);
 export class ParentMessagesComponent implements OnInit {
   private api = inject(ApiService);
   private messageBadge = inject(MessageBadgeService);
+  private router = inject(Router);
   readonly nav = PARENT_NAV_ITEMS;
 
   messages = signal<MessageRow[]>([]);
@@ -88,6 +90,17 @@ export class ParentMessagesComponent implements OnInit {
 
   closeDetail() {
     this.selected.set(null);
+  }
+
+  replyTo(msg: MessageRow) {
+    const subject = msg.subject.startsWith('Re:') ? msg.subject : `Re: ${msg.subject}`;
+    this.router.navigate(['/parent/send-email'], {
+      queryParams: {
+        recipientEmail: msg.sender?.email || undefined,
+        subject,
+        studentId: msg.student?.id || undefined,
+      },
+    });
   }
 
   isSchoolAnnouncement(msg: MessageRow): boolean {

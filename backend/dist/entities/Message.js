@@ -13,6 +13,7 @@ exports.Message = void 0;
 const typeorm_1 = require("typeorm");
 const User_1 = require("./User");
 const Student_1 = require("./Student");
+const MessageAttachment_1 = require("./MessageAttachment");
 let Message = class Message {
 };
 exports.Message = Message;
@@ -59,6 +60,10 @@ __decorate([
     (0, typeorm_1.Column)({ default: false }),
     __metadata("design:type", Boolean)
 ], Message.prototype, "isRead", void 0);
+__decorate([
+    (0, typeorm_1.OneToMany)(() => MessageAttachment_1.MessageAttachment, (attachment) => attachment.message),
+    __metadata("design:type", Array)
+], Message.prototype, "attachments", void 0);
 __decorate([
     (0, typeorm_1.CreateDateColumn)(),
     __metadata("design:type", Date)

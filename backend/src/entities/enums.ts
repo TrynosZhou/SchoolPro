@@ -130,3 +130,9 @@ export enum DayOfWeek {
   SUNDAY = 'SUNDAY',
 }
 
+/** Role for teacher-to-class assignments (homeroom vs subject teaching). */
+export enum TeacherAssignmentRole {
+  CLASS_TEACHER = 'class_teacher',
+  SUBJECT_TEACHER = 'subject_teacher',
+}
+

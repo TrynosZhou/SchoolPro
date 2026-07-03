@@ -14,7 +14,8 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
     for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.GeneralLedgerEntry = exports.ChartOfAccount = exports.InvoiceAdjustment = exports.TuitionExemption = exports.StaffLeaveBalance = exports.Payslip = exports.PayrollRun = exports.StaffPayrollProfile = exports.StudentTermBalance = exports.ResultsPublication = exports.ClassPromotionRule = exports.SchoolFee = exports.SchoolSettings = exports.UniformSale = exports.TuckshopSale = exports.TuckshopItem = exports.Notification = exports.Message = exports.WeeklyAssessment = exports.LearningSchedule = exports.TeacherAllocation = exports.Timetable = exports.CashbookEntry = exports.LedgerEntry = exports.Receipt = exports.Payment = exports.InvoiceLine = exports.Invoice = exports.HonourRoll = exports.ReportCard = exports.ExamMark = exports.ExamType = exports.StudentAttendance = exports.StaffAttendance = exports.Staff = exports.Guardian = exports.Student = exports.Parent = exports.ClassSubject = exports.Department = exports.Subject = exports.SchoolClass = exports.Form = exports.Term = exports.SchoolYear = exports.SchoolRole = exports.User = exports.entities = void 0;
+exports.InvoiceAdjustment = exports.TuitionExemption = exports.StaffLeaveBalance = exports.Payslip = exports.PayrollRun = exports.StaffPayrollProfile = exports.StudentTermBalance = exports.ResultsPublication = exports.ClassPromotionRule = exports.SchoolFee = exports.SchoolSettings = exports.UniformSale = exports.TuckshopSale = exports.TuckshopItem = exports.Notification = exports.MessageAttachment = exports.Message = exports.WeeklyAssessment = exports.LearningSchedule = exports.TeacherAllocation = exports.Timetable = exports.CashbookEntry = exports.LedgerEntry = exports.Receipt = exports.Payment = exports.InvoiceLine = exports.Invoice = exports.HonourRoll = exports.ReportCard = exports.ExamMark = exports.ExamType = exports.StudentAttendance = exports.StaffAttendance = exports.Staff = exports.Guardian = exports.Student = exports.Parent = exports.TimetableSlot = exports.TeacherAssignment = exports.Section = exports.ClassSubject = exports.Department = exports.Subject = exports.SchoolClass = exports.Form = exports.Term = exports.SchoolYear = exports.SchoolRole = exports.User = exports.entities = void 0;
+exports.GeneralLedgerEntry = exports.ChartOfAccount = void 0;
 const User_1 = require("./User");
 Object.defineProperty(exports, "User", { enumerable: true, get: function () { return User_1.User; } });
 const SchoolRole_1 = require("./SchoolRole");
@@ -33,6 +34,12 @@ const Department_1 = require("./Department");
 Object.defineProperty(exports, "Department", { enumerable: true, get: function () { return Department_1.Department; } });
 const ClassSubject_1 = require("./ClassSubject");
 Object.defineProperty(exports, "ClassSubject", { enumerable: true, get: function () { return ClassSubject_1.ClassSubject; } });
+const Section_1 = require("./Section");
+Object.defineProperty(exports, "Section", { enumerable: true, get: function () { return Section_1.Section; } });
+const TeacherAssignment_1 = require("./TeacherAssignment");
+Object.defineProperty(exports, "TeacherAssignment", { enumerable: true, get: function () { return TeacherAssignment_1.TeacherAssignment; } });
+const TimetableSlot_1 = require("./TimetableSlot");
+Object.defineProperty(exports, "TimetableSlot", { enumerable: true, get: function () { return TimetableSlot_1.TimetableSlot; } });
 const Parent_1 = require("./Parent");
 Object.defineProperty(exports, "Parent", { enumerable: true, get: function () { return Parent_1.Parent; } });
 const Student_1 = require("./Student");
@@ -75,6 +82,8 @@ const WeeklyAssessment_1 = require("./WeeklyAssessment");
 Object.defineProperty(exports, "WeeklyAssessment", { enumerable: true, get: function () { return WeeklyAssessment_1.WeeklyAssessment; } });
 const Message_1 = require("./Message");
 Object.defineProperty(exports, "Message", { enumerable: true, get: function () { return Message_1.Message; } });
+const MessageAttachment_1 = require("./MessageAttachment");
+Object.defineProperty(exports, "MessageAttachment", { enumerable: true, get: function () { return MessageAttachment_1.MessageAttachment; } });
 const Notification_1 = require("./Notification");
 Object.defineProperty(exports, "Notification", { enumerable: true, get: function () { return Notification_1.Notification; } });
 const TuckshopItem_1 = require("./TuckshopItem");
@@ -124,6 +133,9 @@ exports.entities = [
     Subject_1.Subject,
     Department_1.Department,
     ClassSubject_1.ClassSubject,
+    Section_1.Section,
+    TeacherAssignment_1.TeacherAssignment,
+    TimetableSlot_1.TimetableSlot,
     Parent_1.Parent,
     Student_1.Student,
     Guardian_1.Guardian,
@@ -145,6 +157,7 @@ exports.entities = [
     LearningSchedule_1.LearningSchedule,
     WeeklyAssessment_1.WeeklyAssessment,
     Message_1.Message,
+    MessageAttachment_1.MessageAttachment,
     Notification_1.Notification,
     TuckshopItem_1.TuckshopItem,
     TuckshopSale_1.TuckshopSale,

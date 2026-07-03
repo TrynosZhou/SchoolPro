@@ -16,3 +16,19 @@ export async function setTimetableSlotLocked(slotId: string, locked: boolean) {
     isLocked: entry.isLocked,
   };
 }
+
+/** Lock all unlocked slots, or unlock all locked slots. */
+export async function setBulkTimetableSlotsLocked(locked: boolean) {
+  const repo = AppDataSource.getRepository(Timetable);
+  const result = await repo
+    .createQueryBuilder()
+    .update(Timetable)
+    .set({ isLocked: locked })
+    .where('isLocked = :opposite', { opposite: !locked })
+    .execute();
+
+  return {
+    updated: result.affected ?? 0,
+    isLocked: locked,
+  };
+}

@@ -7,10 +7,9 @@ import { ApiService } from '../../core/services/api.service';
 import { classHeaderLabel } from '../../core/utils/class-display';
 import { formatTeacherTimetableName, TEACHER_TITLE_OPTIONS } from '../../core/utils/teacher-display';
 
-type Tab = 'directory' | 'attendance' | 'teacherLoad';
+type Tab = 'directory' | 'teacherLoad';
 type StaffRole = 'teacher' | 'admin' | 'principal';
 type LessonLength = 'single' | 'double' | 'triple';
-type AttendanceStatus = 'present' | 'absent' | 'late' | 'excused';
 type ViewMode = 'table' | 'cards';
 type SortKey = 'name-asc' | 'name-desc' | 'hire-desc' | 'hire-asc' | 'id-asc';
 
@@ -35,15 +34,6 @@ export interface StaffMember {
   isActive: boolean;
   createdAt: string;
   user: StaffUser;
-}
-
-interface StaffAttendanceRow {
-  id?: string;
-  staffId: string;
-  date: string;
-  status: AttendanceStatus;
-  remarks?: string;
-  staff?: StaffMember;
 }
 
 interface TeacherLoadSubjectRow {
@@ -114,6 +104,14 @@ interface LoadSubjectOption {
   code?: string;
 }
 
+interface ClassSubjectAssignmentRow {
+  id: string;
+  classId: string;
+  subjectId: string;
+  teacherId: string | null;
+  teacher?: { id: string; firstName: string; lastName: string } | null;
+}
+
 interface DepartmentRow {
   id: string;
   code: string;
@@ -135,7 +133,6 @@ export class AdminStaffComponent implements OnInit {
 
   readonly adminNav = ADMIN_NAV_SECTIONS;
   readonly teacherTitleOptions = TEACHER_TITLE_OPTIONS;
-  readonly attendanceStatuses: AttendanceStatus[] = ['present', 'late', 'absent', 'excused'];
   readonly sortOptions: { value: SortKey; label: string }[] = [
     { value: 'name-asc', label: 'Name A–Z' },
     { value: 'name-desc', label: 'Name Z–A' },
@@ -165,9 +162,7 @@ export class AdminStaffComponent implements OnInit {
   deactivateTarget = signal<StaffMember | null>(null);
 
   nextEmployeeId = signal('');
-  attendanceDate = new Date().toISOString().split('T')[0];
-  attendanceMarks = signal<Record<string, AttendanceStatus>>({});
-  attendanceSearch = signal('');
+
   showInitialPassword = signal(false);
 
   teacherLoadReport = signal<TeacherLoadReport | null>(null);
@@ -175,6 +170,7 @@ export class AdminStaffComponent implements OnInit {
   teacherLoadSearch = signal('');
   loadClasses = signal<LoadClassOption[]>([]);
   loadSubjects = signal<LoadSubjectOption[]>([]);
+  loadClassAssignments = signal<ClassSubjectAssignmentRow[]>([]);
   loadModalOpen = signal(false);
   loadRemoveTarget = signal<TeacherLoadGridRow | null>(null);
   loadReassignOpen = signal(false);
@@ -281,28 +277,6 @@ export class AdminStaffComponent implements OnInit {
       this.statusFilter() !== 'active',
   );
 
-  activeStaff = computed(() => this.staff().filter((s) => s.isActive));
-
-  filteredAttendanceStaff = computed(() => {
-    const q = this.attendanceSearch().toLowerCase().trim();
-    const list = this.activeStaff();
-    if (!q) return list;
-    return list.filter((s) =>
-      `${s.user.firstName} ${s.user.lastName} ${s.employeeNumber} ${s.department}`.toLowerCase().includes(q),
-    );
-  });
-
-  attendanceStats = computed(() => {
-    const marks = this.attendanceMarks();
-    const counts = { present: 0, late: 0, absent: 0, excused: 0 };
-    for (const s of this.activeStaff()) {
-      const st = marks[s.id] || 'present';
-      counts[st] += 1;
-    }
-    const total = this.activeStaff().length;
-    return { ...counts, total, marked: total };
-  });
-
   teacherLoadSummary = computed(() => {
     return (
       this.teacherLoadReport()?.summary ?? {
@@ -399,9 +373,6 @@ export class AdminStaffComponent implements OnInit {
   setTab(tab: Tab) {
     this.activeTab.set(tab);
     this.profileStaff.set(null);
-    if (tab === 'attendance') {
-      this.initAttendanceMarks();
-    }
     if (tab === 'teacherLoad') {
       this.loadTeacherLoad();
       this.loadTeacherLoadCatalog();
@@ -436,7 +407,6 @@ export class AdminStaffComponent implements OnInit {
         this.staff.set(list);
         this.loading.set(false);
         this.refreshing.set(false);
-        if (this.activeTab() === 'attendance') this.initAttendanceMarks();
       },
       error: () => {
         this.loading.set(false);
@@ -502,7 +472,43 @@ export class AdminStaffComponent implements OnInit {
     if (!this.loadClasses().length || !this.loadSubjects().length) {
       this.loadTeacherLoadCatalog();
     }
+    if (this.loadForm.classId) {
+      this.loadClassAssignmentsForModal(this.loadForm.classId);
+    } else {
+      this.loadClassAssignments.set([]);
+    }
     this.loadModalOpen.set(true);
+  }
+
+  onLoadClassChange(classId: string) {
+    this.loadForm.classId = classId;
+    this.loadForm.subjectId = '';
+    if (classId) {
+      this.loadClassAssignmentsForModal(classId);
+    } else {
+      this.loadClassAssignments.set([]);
+    }
+  }
+
+  loadClassAssignmentsForModal(classId: string) {
+    this.api.get<ClassSubjectAssignmentRow[]>('/admin/class-subjects', { classId }).subscribe({
+      next: (rows) => this.loadClassAssignments.set(rows),
+      error: () => this.loadClassAssignments.set([]),
+    });
+  }
+
+  subjectAssignmentLabel(subjectId: string): string {
+    const assignment = this.loadClassAssignments().find((row) => row.subjectId === subjectId);
+    if (!assignment?.teacherId) return '';
+    if (assignment.teacherId === this.loadForm.teacherId) return ' (already yours)';
+    const teacher = assignment.teacher;
+    const name = teacher ? `${teacher.firstName} ${teacher.lastName}`.trim() : 'another teacher';
+    return ` (assigned to ${name})`;
+  }
+
+  isSubjectBlockedForLoad(subjectId: string): boolean {
+    const assignment = this.loadClassAssignments().find((row) => row.subjectId === subjectId);
+    return Boolean(assignment?.teacherId && assignment.teacherId !== this.loadForm.teacherId);
   }
 
   closeAddLoadModal() {
@@ -518,6 +524,10 @@ export class AdminStaffComponent implements OnInit {
     }
     if (!this.loadForm.weeklyPeriods || this.loadForm.weeklyPeriods < 1) {
       this.showToast('error', 'Enter at least 1 period per week.');
+      return;
+    }
+    if (this.isSubjectBlockedForLoad(this.loadForm.subjectId)) {
+      this.showToast('error', 'This subject is already assigned to another teacher for the selected class.');
       return;
     }
     this.submitting.set(true);
@@ -857,58 +867,6 @@ export class AdminStaffComponent implements OnInit {
     this.showToast('success', `Exported ${rows.length} staff records`);
   }
 
-  initAttendanceMarks() {
-    const marks: Record<string, AttendanceStatus> = {};
-    for (const s of this.staff().filter((x) => x.isActive)) {
-      marks[s.id] = 'present';
-    }
-    this.attendanceMarks.set(marks);
-    this.loadAttendanceForDate();
-  }
-
-  loadAttendanceForDate() {
-    this.api.get<StaffAttendanceRow[]>('/attendance/staff', { date: this.attendanceDate }).subscribe({
-      next: (records) => {
-        const marks = { ...this.attendanceMarks() };
-        for (const r of records) {
-          marks[r.staffId] = r.status;
-        }
-        this.attendanceMarks.set(marks);
-      },
-    });
-  }
-
-  setAttendance(staffId: string, status: AttendanceStatus) {
-    this.attendanceMarks.set({ ...this.attendanceMarks(), [staffId]: status });
-  }
-
-  markAllAttendance(status: AttendanceStatus) {
-    const marks = { ...this.attendanceMarks() };
-    for (const s of this.activeStaff()) {
-      marks[s.id] = status;
-    }
-    this.attendanceMarks.set(marks);
-  }
-
-  saveAttendance() {
-    const activeStaff = this.staff().filter((s) => s.isActive);
-    const records = activeStaff.map((s) => ({
-      staffId: s.id,
-      status: this.attendanceMarks()[s.id] || 'present',
-    }));
-    this.submitting.set(true);
-    this.api.post('/attendance/staff/bulk', { date: this.attendanceDate, records }).subscribe({
-      next: () => {
-        this.submitting.set(false);
-        this.showToast('success', `Attendance saved for ${this.attendanceDate}`);
-      },
-      error: () => {
-        this.submitting.set(false);
-        this.showToast('error', 'Failed to save attendance');
-      },
-    });
-  }
-
   fullName(s: StaffMember): string {
     return formatTeacherTimetableName({
       title: s.title,
@@ -943,16 +901,6 @@ export class AdminStaffComponent implements OnInit {
       principal: 'Principal',
     };
     return map[role] || role;
-  }
-
-  attendanceLabel(status: AttendanceStatus): string {
-    const map: Record<AttendanceStatus, string> = {
-      present: 'Present',
-      late: 'Late',
-      absent: 'Absent',
-      excused: 'Excused',
-    };
-    return map[status];
   }
 
   resetNewForm() {

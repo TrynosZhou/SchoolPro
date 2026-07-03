@@ -1,9 +1,9 @@
-<app-portal-layout portalTitle="Admin Portal" pageTitle="View Timetable" [navSections]="adminNav">
+<app-portal-layout portalTitle="Admin Portal" pageTitle="Class Schedule" [navSections]="adminNav">
   <div class="view-page">
     <header class="hero">
       <div class="hero-copy">
         <p class="eyebrow">Timetable</p>
-        <h2>View class timetable</h2>
+        <h2>Class Schedule</h2>
         <p class="hero-sub">
           Browse the weekly schedule for any class in grid, day, table, or card layout.
           Add or edit slots on
@@ -58,25 +58,11 @@
         </div>
 
         <div class="class-picker-row">
-          <div class="search-wrap">
-            <span class="search-icon" aria-hidden="true">🔍</span>
-            <input
-              type="search"
-              class="search-input"
-              [ngModel]="classSearch()"
-              (ngModelChange)="classSearch.set($event)"
-              name="classSearch"
-              placeholder="Filter classes…"
-            />
-            @if (classSearch()) {
-              <button type="button" class="clear-search" (click)="clearClassSearch()" aria-label="Clear class search">×</button>
-            }
-          </div>
           <div class="field class-select">
             <label>Class</label>
             <select [(ngModel)]="classId" name="viewClass" (ngModelChange)="onClassChange()">
               <option value="">Select class</option>
-              @for (c of filteredClasses(); track c.id) {
+              @for (c of classes(); track c.id) {
                 <option [value]="c.id">{{ classLabel(c) }}</option>
               }
             </select>
@@ -164,6 +150,16 @@
             <h2 class="timetable-sheet-title">{{ shortClassCode(selectedClassLabel()) }}</h2>
             <div class="grid-wrap classic-wrap">
               <table class="timetable-grid classic">
+                <colgroup>
+                  <col class="col-day" />
+                  @for (p of periods(); track p.id) {
+                    @if (isBreakPeriod(p)) {
+                      <col class="col-break" />
+                    } @else {
+                      <col class="col-period" />
+                    }
+                  }
+                </colgroup>
                 <thead>
                   <tr>
                     <th class="corner" rowspan="2"></th>

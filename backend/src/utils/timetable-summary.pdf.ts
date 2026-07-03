@@ -85,7 +85,7 @@ function isBreakPeriod(period: SummaryGridPeriod): boolean {
 
 function lessonPeriodNumber(periods: SummaryGridPeriod[], index: number): number | null {
   if (isBreakPeriod(periods[index])) return null;
-  return periods.slice(0, index + 1).filter((p) => !isBreakPeriod(p)).length - 1;
+  return periods.slice(0, index + 1).filter((p) => !isBreakPeriod(p)).length;
 }
 
 function breakPeriodLabel(period: SummaryGridPeriod): string {

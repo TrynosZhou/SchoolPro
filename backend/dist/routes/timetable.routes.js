@@ -413,6 +413,20 @@ router.patch('/slots/:id/move', (0, auth_1.authorize)(...manageRoles), async (re
         res.status(400).json({ message: e.message || 'Failed to move timetable slot.' });
     }
 });
+router.patch('/slots/lock-bulk', (0, auth_1.authorize)(...manageRoles), async (req, res) => {
+    try {
+        const locked = req.body?.locked;
+        if (typeof locked !== 'boolean') {
+            return res.status(400).json({ message: 'locked (boolean) is required.' });
+        }
+        const result = await (0, timetable_lock_service_1.setBulkTimetableSlotsLocked)(locked);
+        res.json(result);
+    }
+    catch (err) {
+        const e = err;
+        res.status(400).json({ message: e.message || 'Failed to update lesson locks.' });
+    }
+});
 router.patch('/slots/:id/lock', (0, auth_1.authorize)(...manageRoles), async (req, res) => {
     try {
         const locked = req.body?.locked;

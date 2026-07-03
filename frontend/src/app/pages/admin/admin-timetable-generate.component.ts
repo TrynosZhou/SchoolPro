@@ -16,7 +16,9 @@ import {
   formatPeriodRange,
   isBreakPeriod,
   lessonPeriodNumber,
+  lessonPeriodCount,
   shortClassCode,
+  compactClassGridLabel,
   teacherInitials,
   timetableSubjectShort,
 } from '../../core/utils/timetable-grid-display';
@@ -138,6 +140,7 @@ export class AdminTimetableGenerateComponent implements OnInit, OnDestroy {
   readonly dayGridLabel = dayGridLabel;
   readonly formatPeriodRange = formatPeriodRange;
   readonly shortClassCode = shortClassCode;
+  readonly compactClassGridLabel = compactClassGridLabel;
   readonly timetableSubjectShort = timetableSubjectShort;
   readonly teacherInitials = teacherInitials;
   readonly isBreakPeriod = isBreakPeriod;
@@ -145,6 +148,7 @@ export class AdminTimetableGenerateComponent implements OnInit, OnDestroy {
   readonly breakPeriodHeaderTitle = breakPeriodHeaderTitle;
   readonly breakColumnVerticalLabel = breakColumnVerticalLabel;
   readonly lessonPeriodNumber = lessonPeriodNumber;
+  readonly lessonPeriodCount = lessonPeriodCount;
 
   periods = signal<TimetablePeriod[]>([]);
   lessonPeriods = computed(() => this.periods().filter((p) => p.slotType === 'lesson'));
@@ -481,6 +485,22 @@ export class AdminTimetableGenerateComponent implements OnInit, OnDestroy {
     this.slotContextMenu.set(null);
   }
 
+  hasUnlockableSlots = computed(() =>
+    this.teachers().some((t) => t.slots.some((s) => !s.isLocked)),
+  );
+
+  hasLockableSlots = computed(() =>
+    this.teachers().some((t) => t.slots.some((s) => !!s.isLocked)),
+  );
+
+  lockAllPlacedCards() {
+    this.setBulkSlotLocked(true);
+  }
+
+  unlockAllPlacedCards() {
+    this.setBulkSlotLocked(false);
+  }
+
   setSlotLocked(slot: TimetableSlotView, locked: boolean) {
     if (this.slotLockUpdating()) return;
     this.closeSlotContextMenu();
@@ -493,6 +513,29 @@ export class AdminTimetableGenerateComponent implements OnInit, OnDestroy {
       error: (e) => {
         this.slotLockUpdating.set(false);
         this.showToast('error', e.error?.message || 'Could not update lesson lock.');
+      },
+    });
+  }
+
+  private setBulkSlotLocked(locked: boolean) {
+    if (this.slotLockUpdating()) return;
+    this.closeSlotContextMenu();
+    this.slotLockUpdating.set(true);
+    this.api.patch<{ updated: number }>('/timetable/slots/lock-bulk', { locked }).subscribe({
+      next: (res) => {
+        this.slotLockUpdating.set(false);
+        const count = res?.updated ?? 0;
+        if (count > 0) {
+          this.showToast(
+            'success',
+            locked ? `Locked ${count} lesson${count === 1 ? '' : 's'}.` : `Unlocked ${count} lesson${count === 1 ? '' : 's'}.`,
+          );
+        }
+        this.loadSnapshot();
+      },
+      error: (e) => {
+        this.slotLockUpdating.set(false);
+        this.showToast('error', e.error?.message || 'Could not update lesson locks.');
       },
     });
   }

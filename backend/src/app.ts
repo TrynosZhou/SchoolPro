@@ -17,6 +17,7 @@ import dashboardRoutes from './routes/dashboard.routes';
 import payrollRoutes from './routes/payroll.routes';
 import generalLedgerRoutes from './routes/general-ledger.routes';
 import chartOfAccountsRoutes from './routes/chart-of-accounts.routes';
+import teacherAssignmentRoutes from './routes/teacher-assignment.routes';
 
 const app = express();
 
@@ -62,6 +63,7 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/payroll', payrollRoutes);
 app.use('/api/general-ledger', generalLedgerRoutes);
 app.use('/api/chart-of-accounts', chartOfAccountsRoutes);
+app.use('/api/admin/assignments', teacherAssignmentRoutes);
 
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error(err);

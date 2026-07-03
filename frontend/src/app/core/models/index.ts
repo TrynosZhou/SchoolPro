@@ -50,6 +50,8 @@ export interface Guardian {
 
 export interface DashboardOverview {
   totalStudents: number;
+  boarders: number;
+  dayScholars: number;
   totalStaff: number;
   attendanceToday: { status: string; count: string }[];
   monthlyCollections: number;

@@ -19,7 +19,7 @@ export const ADMIN_NAV_SECTIONS: NavSection[] = [
   {
     heading: 'All Parents',
     items: [
-      { label: 'All Parents', path: '/admin/parents', icon: '👨‍👩‍👧' },
+      { label: 'Parents', path: '/admin/parents', icon: '👨‍👩‍👧' },
     ],
   },
   {
@@ -33,7 +33,8 @@ export const ADMIN_NAV_SECTIONS: NavSection[] = [
     heading: 'All Teachers',
     items: [
       { label: 'Staff Directory', path: '/admin/staff', icon: '🧑' },
-      { label: 'Staff Attendance', path: '/admin/staff', icon: '🗂' },
+      { label: 'Class Assignments', path: '/admin/class-assignments', icon: '📚' },
+      { label: 'Staff Attendance', path: '/admin/staff-attendance', icon: '🗂' },
       { label: 'Payroll', path: '/admin/payroll', icon: '💰' },
     ],
   },
@@ -81,8 +82,8 @@ export const ADMIN_NAV_SECTIONS: NavSection[] = [
     items: [
       { label: 'Configure Periods', path: '/admin/timetable/configure-periods', icon: '⏱' },
       { label: 'Generate Timetable', path: '/admin/timetable/generate', icon: '📅' },
-      { label: 'View Timetable', path: '/admin/timetable/view', icon: '👁' },
       { label: 'Teacher Schedule', path: '/admin/timetable/teacher-schedule', icon: '👨‍🏫' },
+      { label: 'Class Schedule', path: '/admin/timetable/view', icon: '👁' },
     ],
   },
   {

@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.DayOfWeek = exports.LessonLength = exports.GlReferenceType = exports.GlAccountType = exports.PayslipStatus = exports.PayrollRunStatus = exports.PayrollPaymentMethod = exports.PayFrequency = exports.CashbookEntryType = exports.ExamTypeName = exports.InvoiceAdjustmentType = exports.TuitionExemptionType = exports.FeeType = exports.StudentType = exports.InvoiceStatus = exports.PaymentMethod = exports.AttendanceStatus = exports.UserRole = void 0;
+exports.TeacherAssignmentRole = exports.DayOfWeek = exports.LessonLength = exports.GlReferenceType = exports.GlAccountType = exports.PayslipStatus = exports.PayrollRunStatus = exports.PayrollPaymentMethod = exports.PayFrequency = exports.CashbookEntryType = exports.ExamTypeName = exports.InvoiceAdjustmentType = exports.TuitionExemptionType = exports.FeeType = exports.StudentType = exports.InvoiceStatus = exports.PaymentMethod = exports.AttendanceStatus = exports.UserRole = void 0;
 var UserRole;
 (function (UserRole) {
     UserRole["DIRECTOR"] = "director";
@@ -133,3 +133,9 @@ var DayOfWeek;
     DayOfWeek["SATURDAY"] = "SATURDAY";
     DayOfWeek["SUNDAY"] = "SUNDAY";
 })(DayOfWeek || (exports.DayOfWeek = DayOfWeek = {}));
+/** Role for teacher-to-class assignments (homeroom vs subject teaching). */
+var TeacherAssignmentRole;
+(function (TeacherAssignmentRole) {
+    TeacherAssignmentRole["CLASS_TEACHER"] = "class_teacher";
+    TeacherAssignmentRole["SUBJECT_TEACHER"] = "subject_teacher";
+})(TeacherAssignmentRole || (exports.TeacherAssignmentRole = TeacherAssignmentRole = {}));

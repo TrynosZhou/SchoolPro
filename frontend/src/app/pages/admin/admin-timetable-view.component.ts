@@ -70,18 +70,9 @@ export class AdminTimetableViewComponent implements OnInit {
   viewMode = signal<ViewMode>('grid');
   dayFilter = signal<DayFilter>('all');
   entriesSearch = signal('');
-  classSearch = signal('');
   termVersionLabel = signal(buildTimetableTermVersionLabel());
 
   classId = '';
-
-  filteredClasses = computed(() => {
-    const q = this.classSearch().trim().toLowerCase();
-    if (!q) return this.classes();
-    return this.classes().filter((c) =>
-      `${classHeaderLabel(c)} ${c.name} ${c.form?.name || ''}`.toLowerCase().includes(q)
-    );
-  });
 
   selectedClassLabel = computed(() => classHeaderLabelById(this.classes(), this.classId));
 
@@ -220,9 +211,5 @@ export class AdminTimetableViewComponent implements OnInit {
 
   clearEntriesSearch() {
     this.entriesSearch.set('');
-  }
-
-  clearClassSearch() {
-    this.classSearch.set('');
   }
 }

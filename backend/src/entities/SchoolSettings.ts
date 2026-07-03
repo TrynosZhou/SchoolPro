@@ -75,6 +75,14 @@ export class SchoolSettings {
   @Column({ type: 'varchar', length: 32, default: '1' })
   timetableVersion!: string;
 
+  /** Default minimum weekly teaching periods before flagging underload. */
+  @Column({ type: 'int', default: 0 })
+  minWeeklyPeriods!: number;
+
+  /** Default maximum weekly teaching periods before flagging overload. */
+  @Column({ type: 'int', default: 30 })
+  maxWeeklyPeriods!: number;
+
   @UpdateDateColumn()
   updatedAt!: Date;
 }

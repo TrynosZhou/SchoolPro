@@ -1,7 +1,16 @@
 import 'reflect-metadata';
+import path from 'path';
 import { DataSource } from 'typeorm';
 import { env } from './env';
 import { entities } from '../entities';
+
+/** ts-node (CLI/dev) loads .ts migrations; compiled dist/server.js loads .js migrations. */
+const migrationsGlob = path.join(
+  __dirname,
+  '..',
+  'migrations',
+  __filename.endsWith('.ts') ? '*.ts' : '*.js',
+);
 
 export const AppDataSource = new DataSource({
   type: 'postgres',
@@ -13,7 +22,7 @@ export const AppDataSource = new DataSource({
   synchronize: env.nodeEnv === 'development',
   logging: env.nodeEnv === 'development',
   entities,
-  migrations: ['src/migrations/*.ts'],
+  migrations: [migrationsGlob],
   /** Enforce referential integrity on all foreign keys */
   extra: {
     statement_timeout: 60000,

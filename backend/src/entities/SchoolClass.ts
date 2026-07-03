@@ -10,6 +10,7 @@ import { Form } from './Form';
 import { Student } from './Student';
 import { ClassSubject } from './ClassSubject';
 import { Staff } from './Staff';
+import { Section } from './Section';
 import { FK_RESTRICT, FK_SET_NULL } from './constraints';
 
 @Entity('classes')
@@ -26,6 +27,13 @@ export class SchoolClass {
 
   @Column()
   formId!: string;
+
+  @ManyToOne(() => Section, (s) => s.classes, { ...FK_SET_NULL, nullable: true })
+  @JoinColumn({ name: 'sectionId' })
+  section?: Section | null;
+
+  @Column({ nullable: true })
+  sectionId?: string | null;
 
   @ManyToOne(() => Staff, { ...FK_SET_NULL, nullable: true })
   @JoinColumn({ name: 'classTeacherId' })

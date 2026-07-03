@@ -2,7 +2,7 @@ import PDFDocument from 'pdfkit';
 import fs from 'fs';
 import path from 'path';
 import { formatSubjectAbbrev } from './subject-abbrev';
-import { shortClassName } from './teacher-load.pdf';
+import { shortClassName, compactClassName } from './teacher-load.pdf';
 
 const COLORS = {
   border: '#000000',
@@ -220,6 +220,37 @@ function drawVerticalLabel(
   doc.restore();
 }
 
+function fitSingleLine(doc: PDFKit.PDFDocument, text: string, maxWidth: number): string {
+  let value = String(text || '').trim();
+  if (!value) return '—';
+  while (value.length > 1 && doc.widthOfString(value) > maxWidth) {
+    value = value.slice(0, -1);
+  }
+  if (value.length < String(text).trim().length) {
+    value = value.length > 1 ? `${value.slice(0, -1)}…` : '…';
+  }
+  return value;
+}
+
+function distributeColumnWidths(totalWidth: number, count: number): number[] {
+  if (count <= 0) return [];
+  const base = Math.floor(totalWidth / count);
+  let remainder = Math.round(totalWidth - base * count);
+  return Array.from({ length: count }, () => {
+    if (remainder > 0) {
+      remainder -= 1;
+      return base + 1;
+    }
+    return base;
+  });
+}
+
+function spanColumnWidth(widths: number[], start: number, span: number): number {
+  let total = 0;
+  for (let i = 0; i < span; i += 1) total += widths[start + i] || 0;
+  return total;
+}
+
 function drawTeacherCell(
   doc: PDFKit.PDFDocument,
   slot: ClassicTeacherSlot,
@@ -228,18 +259,30 @@ function drawTeacherCell(
   w: number,
   h: number,
 ) {
+  doc.save();
+  doc.rect(x, y, w, h).clip();
   const subject = String(slot.subjectName || '').trim() || '—';
-  const cls = shortClassName(slot.className);
+  const cls = compactClassName(slot.className);
   const stream = classStreamLabel(slot.className);
   doc.font('Helvetica').fontSize(5.5).fillColor(COLORS.ink);
-  doc.text(subject, x + 2, y + 3, { width: w - 4, align: 'left', lineBreak: true, height: h * 0.38 });
-  doc.font('Helvetica-Bold').fontSize(10).fillColor(COLORS.ink);
-  doc.text(cls, x + 1, y + h / 2 - 6, { width: w - 2, align: 'center', lineBreak: false });
+  doc.text(fitSingleLine(doc, subject, w - 4), x + 2, y + 3, { width: w - 4, align: 'left', lineBreak: false });
+  let classFont = Math.min(10, Math.max(6, w * 0.38));
+  doc.font('Helvetica-Bold').fontSize(classFont).fillColor(COLORS.ink);
+  let classLabel = cls;
+  while (classFont > 5.5 && doc.widthOfString(classLabel) > w - 2) {
+    classFont -= 0.5;
+    doc.fontSize(classFont);
+  }
+  if (doc.widthOfString(classLabel) > w - 2) {
+    classLabel = fitSingleLine(doc, classLabel, w - 2);
+  }
+  doc.text(classLabel, x + 1, y + h / 2 - classFont / 2, { width: w - 2, align: 'center', lineBreak: false });
   const bottom = stream || slot.room || '';
   if (bottom) {
     doc.font('Helvetica').fontSize(5.5).fillColor(COLORS.muted);
-    doc.text(bottom, x + 1, y + h - 9, { width: w - 2, align: 'center', lineBreak: false });
+    doc.text(fitSingleLine(doc, bottom, w - 2), x + 1, y + h - 9, { width: w - 2, align: 'center', lineBreak: false });
   }
+  doc.restore();
 }
 
 function drawClassCell(
@@ -250,21 +293,33 @@ function drawClassCell(
   w: number,
   h: number,
 ) {
+  doc.save();
+  doc.rect(x, y, w, h).clip();
   const subject = pdfSubjectLabel(slot.subjectShort, slot.subjectCode, slot.subjectName);
   const teacher = formatTeacherClassLine(slot.teacherName);
   const centerY = y + h / 2;
   const subjectY = centerY - 6;
 
-  doc.font('Helvetica-Bold').fontSize(10).fillColor(COLORS.ink);
-  doc.text(subject, x + 1, subjectY, { width: w - 2, align: 'center', lineBreak: false });
+  let subjectFont = Math.min(10, Math.max(6, w * 0.34));
+  doc.font('Helvetica-Bold').fontSize(subjectFont).fillColor(COLORS.ink);
+  let subjectText = subject;
+  while (subjectFont > 5.5 && doc.widthOfString(subjectText) > w - 2) {
+    subjectFont -= 0.5;
+    doc.fontSize(subjectFont);
+  }
+  if (doc.widthOfString(subjectText) > w - 2) {
+    subjectText = fitSingleLine(doc, subjectText, w - 2);
+  }
+  doc.text(subjectText, x + 1, subjectY, { width: w - 2, align: 'center', lineBreak: false });
 
   doc.font('Helvetica').fontSize(5.5).fillColor(COLORS.muted);
-  doc.text(teacher, x + 1, centerY + 2, { width: w - 2, align: 'center', lineBreak: false });
+  doc.text(fitSingleLine(doc, teacher, w - 2), x + 1, centerY + 2, { width: w - 2, align: 'center', lineBreak: false });
 
   if (slot.room) {
     doc.font('Helvetica').fontSize(5).fillColor(COLORS.muted);
-    doc.text(slot.room, x + 1, y + h - 8, { width: w - 2, align: 'center', lineBreak: false });
+    doc.text(fitSingleLine(doc, slot.room, w - 2), x + 1, y + h - 8, { width: w - 2, align: 'center', lineBreak: false });
   }
+  doc.restore();
 }
 
 async function generateAscStylePdf(
@@ -279,14 +334,15 @@ function renderClassicTimetablePage(
   data: ClassicTeacherPdfData | ClassicClassPdfData,
   mode: 'teacher' | 'class',
 ): void {
-  const margin = 18;
+  const periods = data.periods;
+  const periodCount = periods.length;
+  const margin = periodCount > 13 ? 12 : periodCount > 11 ? 14 : 18;
   const pageW = doc.page.width;
   const pageH = doc.page.height;
   const contentW = pageW - margin * 2;
-  const periods = data.periods;
-  const dayColW = 34;
+  const dayColW = periodCount > 13 ? 26 : periodCount > 11 ? 30 : 34;
   const gridW = contentW - dayColW;
-  const colW = periods.length ? gridW / periods.length : gridW;
+  const colWidths = distributeColumnWidths(gridW, periodCount);
   const periodNumH = 16;
   const periodTimeH = 14;
   const headerH = periodNumH + periodTimeH;
@@ -332,6 +388,7 @@ function renderClassicTimetablePage(
   let hx = gridX + dayColW;
   for (let pi = 0; pi < periods.length; pi += 1) {
     const period = periods[pi];
+    const colW = colWidths[pi];
     const isBreak = isBreakPeriod(period);
     if (isBreak) {
       doc.fillColor(COLORS.breakFill).strokeColor(COLORS.border);
@@ -372,16 +429,25 @@ function renderClassicTimetablePage(
     let cx = gridX + dayColW;
     for (let pi = 0; pi < periods.length; pi += 1) {
       const period = periods[pi];
+      const colW = colWidths[pi];
       const span = spans[pi];
+
       if (isBreakPeriod(period)) {
+        doc.fillColor(COLORS.breakFill).strokeColor(COLORS.border);
+        doc.rect(cx, rowY, colW, rowH).fillAndStroke();
+        if (di === 2) {
+          drawVerticalLabel(doc, breakColumnTitle(period), cx, rowY, colW, rowH);
+        }
         cx += colW;
         continue;
       }
+
       if (span === 0) {
         cx += colW;
         continue;
       }
-      const cellW = colW * span;
+      const cellW = spanColumnWidth(colWidths, pi, span);
+      doc.fillColor('#ffffff').strokeColor(COLORS.border);
       doc.rect(cx, rowY, cellW, rowH).stroke();
       const slot = slotAt(slots, day, period);
       if (slot) {
@@ -393,16 +459,6 @@ function renderClassicTimetablePage(
       }
       cx += cellW;
     }
-  }
-
-  let bx = gridX + dayColW;
-  for (const period of periods) {
-    if (isBreakPeriod(period)) {
-      doc.fillColor(COLORS.breakFill).strokeColor(COLORS.border);
-      doc.rect(bx, bodyY, colW, bodyH).fillAndStroke();
-      drawVerticalLabel(doc, breakColumnTitle(period), bx, bodyY, colW, bodyH);
-    }
-    bx += colW;
   }
 
   doc.lineWidth(1.4);

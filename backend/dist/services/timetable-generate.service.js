@@ -8,6 +8,7 @@ const entities_1 = require("../entities");
 const timetable_day_1 = require("../utils/timetable-day");
 const typeorm_helpers_1 = require("../utils/typeorm-helpers");
 const teacher_load_service_1 = require("./teacher-load.service");
+const teacher_assignment_service_1 = require("./teacher-assignment.service");
 const teacher_display_1 = require("../utils/teacher-display");
 function staffName(staff) {
     return (0, teacher_display_1.formatTeacherTimetableName)(staff);
@@ -384,10 +385,11 @@ async function generateTimetableFromTeacherLoad(input) {
         // Soft warning only — per-class capacity is periods*5, not global
     }
     const { placed, failures } = scheduleAssignments(tasks, periods);
+    const replacing = input.replaceExisting !== false;
     await data_source_1.AppDataSource.transaction(async (manager) => {
         const timetableRepo = manager.getRepository(entities_1.Timetable);
         const allocationRepo = manager.getRepository(entities_1.TeacherAllocation);
-        if (input.replaceExisting !== false) {
+        if (replacing) {
             await allocationRepo.createQueryBuilder().delete().execute();
             await timetableRepo.createQueryBuilder().delete().execute();
         }
@@ -415,6 +417,7 @@ async function generateTimetableFromTeacherLoad(input) {
             }
         }
     });
+    await (0, teacher_assignment_service_1.syncTimetableSlotsFromGenerated)({ replaceAll: replacing });
     const snapshot = await getTimetableSnapshot();
     const assignmentsPlaced = tasks.filter((t) => !failures.some((f) => f.className === t.className && f.subjectName === t.subjectName)).length;
     return {

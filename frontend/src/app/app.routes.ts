@@ -14,6 +14,8 @@ import { AdminEnrollmentComponent } from './pages/admin/admin-enrollment.compone
 import { ClassListComponent } from './pages/students/class-list.component';
 import { AdminReportCardsComponent } from './pages/admin/admin-report-cards.component';
 import { AdminStaffComponent } from './pages/admin/admin-staff.component';
+import { AdminStaffAttendanceComponent } from './pages/admin/admin-staff-attendance.component';
+import { AdminClassAssignmentsComponent } from './pages/admin/admin-class-assignments.component';
 import { TeacherDashboardComponent } from './pages/teacher/teacher-dashboard.component';
 import { TeacherExamsComponent } from './pages/teacher/teacher-exams.component';
 import { ExamMarksEntryComponent } from './pages/exams/exam-marks-entry.component';
@@ -22,6 +24,7 @@ import { ParentFinanceComponent } from './pages/parent/parent-finance.component'
 import { ParentReportCardComponent } from './pages/parent/parent-report-card.component';
 import { ParentReportCardsComponent } from './pages/parent/parent-report-cards.component';
 import { ParentMessagesComponent } from './pages/parent/parent-messages.component';
+import { ParentSendEmailComponent } from './pages/parent/parent-send-email.component';
 import { ParentAttendanceComponent } from './pages/parent/parent-attendance.component';
 import { AttendanceMarkRegisterComponent } from './pages/attendance/attendance-mark-register.component';
 import { AttendanceReportComponent } from './pages/attendance/attendance-report.component';
@@ -133,7 +136,8 @@ export const routes: Routes = [
       { path: 'results-analysis', component: AdminResultsAnalysisComponent },
       { path: 'ranking', component: AdminRankingComponent },
       { path: 'classes', component: AdminDashboardComponent },
-      { path: 'staff-attendance', redirectTo: 'staff', pathMatch: 'full' },
+      { path: 'staff-attendance', component: AdminStaffAttendanceComponent },
+      { path: 'class-assignments', component: AdminClassAssignmentsComponent },
       { path: 'settings', component: AdminSettingsComponent },
       { path: 'academic-settings', component: AdminAcademicSettingsComponent },
       { path: 'user-management', component: AdminUserManagementComponent },
@@ -170,6 +174,7 @@ export const routes: Routes = [
       { path: 'report-card/:studentId', component: ParentReportCardComponent },
       { path: 'report-cards', component: ParentReportCardsComponent },
       { path: 'messages', component: ParentMessagesComponent },
+      { path: 'send-email', component: ParentSendEmailComponent },
     ],
   },
 

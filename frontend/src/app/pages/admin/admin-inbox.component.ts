@@ -15,6 +15,13 @@ interface MessageUser {
   role: string;
 }
 
+interface MessageAttachmentRow {
+  id: string;
+  originalName: string;
+  mimeType: string;
+  sizeBytes: number;
+}
+
 interface MessageRow {
   id: string;
   subject: string;
@@ -24,6 +31,7 @@ interface MessageRow {
   sender: MessageUser;
   recipient: MessageUser;
   student?: { id: string; firstName: string; lastName: string; admissionNumber: string };
+  attachments?: MessageAttachmentRow[];
 }
 
 type InboxTab = 'inbox' | 'sent';
@@ -261,6 +269,26 @@ export class AdminInboxComponent implements OnInit {
 
   counterparty(msg: MessageRow): MessageUser {
     return this.tab() === 'inbox' ? msg.sender : msg.recipient;
+  }
+
+  formatFileSize(bytes: number): string {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  downloadAttachment(att: MessageAttachmentRow) {
+    this.api.getBlob(`/academics/messages/attachments/${att.id}`).subscribe({
+      next: (blob) => {
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = att.originalName;
+        anchor.click();
+        URL.revokeObjectURL(url);
+      },
+      error: () => this.showToast('error', 'Could not download attachment'),
+    });
   }
 
   private showToast(type: 'success' | 'error', msg: string) {

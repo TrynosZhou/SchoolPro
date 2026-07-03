@@ -1,0 +1,104 @@
+<app-portal-layout portalTitle="Admin Portal" pageTitle="Staff Attendance" [navSections]="adminNav">
+  <div class="staff-attendance-page">
+    @if (toast(); as t) {
+      <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>
+    }
+
+    <header class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">Human Resources</p>
+        <h2>Staff attendance</h2>
+        <p class="hero-sub">Mark daily attendance for all active staff members.</p>
+      </div>
+      <div class="hero-stat">
+        <strong>{{ attendanceStats().total }}</strong>
+        <span>Active staff</span>
+      </div>
+    </header>
+
+    <section class="panel attendance-panel">
+      <div class="attendance-head">
+        <div>
+          <h3>Mark register</h3>
+          <p class="subtitle">Select a date and set each staff member's status</p>
+        </div>
+        <div class="date-row">
+          <label for="attDate">Date</label>
+          <input id="attDate" type="date" [(ngModel)]="attendanceDate" (ngModelChange)="loadAttendanceForDate()" name="attDate" />
+          <button type="button" class="btn-primary" [disabled]="submitting() || !activeStaff().length" (click)="saveAttendance()">
+            {{ submitting() ? 'Saving…' : 'Save attendance' }}
+          </button>
+        </div>
+      </div>
+
+      @if (loading()) {
+        <p class="loading-note">Loading staff…</p>
+      } @else if (activeStaff().length) {
+        <div class="att-summary">
+          <div class="att-stat present">
+            <strong>{{ attendanceStats().present }}</strong>
+            <span>Present</span>
+          </div>
+          <div class="att-stat late">
+            <strong>{{ attendanceStats().late }}</strong>
+            <span>Late</span>
+          </div>
+          <div class="att-stat absent">
+            <strong>{{ attendanceStats().absent }}</strong>
+            <span>Absent</span>
+          </div>
+          <div class="att-stat excused">
+            <strong>{{ attendanceStats().excused }}</strong>
+            <span>Excused</span>
+          </div>
+          <div class="att-bulk">
+            <button type="button" class="btn-outline btn-sm" (click)="markAllAttendance('present')">All present</button>
+            <button type="button" class="btn-ghost btn-sm" (click)="markAllAttendance('absent')">All absent</button>
+          </div>
+        </div>
+
+        <div class="search-wrap compact">
+          <span class="search-icon" aria-hidden="true">🔍</span>
+          <input
+            type="search"
+            class="search-input"
+            placeholder="Search staff by name, ID, or department…"
+            [ngModel]="attendanceSearch()"
+            (ngModelChange)="attendanceSearch.set($event)"
+            name="attQ"
+          />
+        </div>
+      }
+
+      <div class="attendance-grid">
+        @for (s of filteredAttendanceStaff(); track s.id) {
+          <div class="att-row">
+            <div class="att-info">
+              <span class="avatar sm" [attr.data-role]="s.user.role">{{ initials(s) }}</span>
+              <div>
+                <code>{{ s.employeeNumber }}</code>
+                <strong>{{ directoryName(s) }}</strong>
+                <small>{{ roleLabel(s.user.role) }} · {{ s.department || '—' }}</small>
+              </div>
+            </div>
+            <div class="att-btns">
+              @for (st of attendanceStatuses; track st) {
+                <button
+                  type="button"
+                  class="att-chip"
+                  [attr.data-s]="st"
+                  [class.active]="attendanceMarks()[s.id] === st"
+                  (click)="setAttendance(s.id, st)"
+                >
+                  {{ attendanceLabel(st) }}
+                </button>
+              }
+            </div>
+          </div>
+        } @empty {
+          <p class="empty-inline">{{ loading() ? '' : 'No active staff to mark attendance for.' }}</p>
+        }
+      </div>
+    </section>
+  </div>
+</app-portal-layout>

@@ -3,6 +3,10 @@ import { AppDataSource } from '../config/data-source';
 import { ClassSubject, Staff, Timetable } from '../entities';
 import { LessonLength, UserRole } from '../entities/enums';
 import { relations } from '../utils/typeorm-helpers';
+import {
+  assertCanAssignTeacherToClassSubject,
+  syncTimetableTeachersForAssignment,
+} from './class-subject-teacher.service';
 
 export function lessonLengthMultiplier(lessonLength?: LessonLength | string | null): number {
   switch (lessonLength) {
@@ -258,6 +262,29 @@ export async function getTeacherLoadReport(): Promise<TeacherLoadReport> {
   };
 }
 
+/** Planned weekly load for one teacher — matches Staff → Teacher Load totals. */
+export async function calculateTeacherWeeklyLoadTotals(teacherId: string): Promise<{
+  totalLoad: number;
+  assignmentCount: number;
+}> {
+  const rows = await AppDataSource.getRepository(ClassSubject).find({
+    where: { teacherId },
+  });
+
+  let totalLoad = 0;
+  for (const cs of rows) {
+    const weeklyPeriods = Number(cs.weeklyPeriods || 0);
+    const lessonLength = normalizeLessonLength(cs.lessonLength);
+    const timetablePeriods = Math.max(
+      await countAllocationPeriods(teacherId, cs.classId, cs.subjectId),
+      await countTimetablePeriods(teacherId, cs.classId, cs.subjectId),
+    );
+    totalLoad += resolvePeriods(weeklyPeriods, lessonLength, timetablePeriods);
+  }
+
+  return { totalLoad, assignmentCount: rows.length };
+}
+
 export interface AddTeacherLoadInput {
   teacherId: string;
   classId: string;
@@ -267,45 +294,22 @@ export interface AddTeacherLoadInput {
   forceReassign?: boolean;
 }
 
-async function isActiveTeacherStaff(staffId: string): Promise<boolean> {
-  try {
-    const staff = await loadStaffForAssignment(staffId);
-    return canReceiveTeacherLoad(staff);
-  } catch {
-    return false;
-  }
-}
 
 export async function addTeacherLoadAssignment(input: AddTeacherLoadInput) {
   const { classId, subjectId, forceReassign } = input;
-  const weeklyPeriods = Math.max(1, Math.min(40, Math.round(Number(input.weeklyPeriods) || 0)));
+  const weeklyPeriods = Math.max(1, Math.round(Number(input.weeklyPeriods) || 0));
   const lessonLength = normalizeLessonLength(input.lessonLength);
 
   const staff = await loadStaffForAssignment(input.teacherId);
   const teacherId = staff.id;
 
   const repo = AppDataSource.getRepository(ClassSubject);
-  let row = await repo.findOne({ where: { classId, subjectId } });
-
-  if (row?.teacherId && row.teacherId !== teacherId && !forceReassign) {
-    const otherActive = await isActiveTeacherStaff(row.teacherId);
-    if (otherActive) {
-      const other = await AppDataSource.getRepository(Staff)
-        .createQueryBuilder('s')
-        .innerJoinAndSelect('s.user', 'u')
-        .where('s.id = :id', { id: row.teacherId })
-        .getOne();
-      const otherName = other?.user
-        ? `${other.user.firstName} ${other.user.lastName}`.trim()
-        : 'another teacher';
-      const err = new Error(`This class/subject is already assigned to ${otherName}.`) as Error & {
-        statusCode?: number;
-      };
-      err.statusCode = 409;
-      throw err;
-    }
-    // Stale assignment (inactive / non-teacher) — allow reassignment.
-  }
+  let row = await assertCanAssignTeacherToClassSubject({
+    classId,
+    subjectId,
+    teacherId,
+    forceReassign,
+  });
 
   if (!row) {
     row = repo.create({ classId, subjectId, teacherId, weeklyPeriods, lessonLength });
@@ -316,6 +320,7 @@ export async function addTeacherLoadAssignment(input: AddTeacherLoadInput) {
   }
 
   const saved = await repo.save(row);
+  await syncTimetableTeachersForAssignment(classId, subjectId, teacherId);
   const report = await getTeacherLoadReport();
   return { assignment: saved, report };
 }
