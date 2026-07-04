@@ -6,6 +6,7 @@ import {
   OneToMany,
   JoinColumn,
   CreateDateColumn,
+  Index,
 } from 'typeorm';
 import { User } from './User';
 import { Student } from './Student';
@@ -15,6 +16,14 @@ import { MessageAttachment } from './MessageAttachment';
 export class Message {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
+
+  /**
+   * Stable conversation key for the parent↔teacher (or any two-user) pair,
+   * derived from the two sorted user ids. Groups a threaded conversation view.
+   */
+  @Index()
+  @Column({ type: 'varchar', length: 128, nullable: true })
+  threadId?: string;
 
   @ManyToOne(() => User)
   @JoinColumn({ name: 'senderId' })

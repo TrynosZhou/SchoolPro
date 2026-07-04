@@ -11,6 +11,7 @@ export const ADMIN_NAV_SECTIONS: NavSection[] = [
     heading: 'All Students',
     items: [
       { label: 'Students', path: '/admin/students', icon: '👥' },
+      { label: 'Admissions', path: '/admin/admissions', icon: '📝' },
       { label: 'Enrolment', path: '/admin/enrollment', icon: '🎓' },
       { label: 'Class List', path: '/admin/class-list', icon: '📋' },
       { label: 'Class Promotion', path: '/admin/class-promotion', icon: '⬆' },
@@ -71,10 +72,21 @@ export const ADMIN_NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
+    heading: 'Analytics & Reporting',
+    items: [
+      { label: 'Demographics', path: '/admin/analytics/demographics', icon: '📊' },
+      { label: 'Retention & Dropout', path: '/admin/analytics/retention', icon: '📉' },
+      { label: 'Report Builder', path: '/admin/analytics/report-builder', icon: '🧩' },
+    ],
+  },
+  {
     heading: 'Communication',
     items: [
       { label: 'Announcements', path: '/admin/communication/send', icon: '✉' },
       { label: 'Messages', path: '/admin/communication/inbox', icon: '📥' },
+      { label: 'Bulk SMS / Email', path: '/admin/communication/bulk', icon: '📣' },
+      { label: 'Notifications', path: '/admin/communication/notifications', icon: '🔔' },
+      { label: 'Notification Settings', path: '/admin/communication/notification-settings', icon: '🔧' },
     ],
   },
   {
@@ -93,6 +105,7 @@ export const ADMIN_NAV_SECTIONS: NavSection[] = [
       { label: 'Academic Settings', path: '/admin/academic-settings', icon: '🧭' },
       { label: 'User Management', path: '/admin/user-management', icon: '👤' },
       { label: 'User Permissions', path: '/admin/user-permissions', icon: '🔐' },
+      { label: 'Audit Trail', path: '/admin/audit-trail', icon: '📜' },
       { label: 'Integrations', path: '/admin/integrations', icon: '🔌' },
     ],
   },

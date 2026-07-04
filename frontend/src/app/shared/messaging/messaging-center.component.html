@@ -1,0 +1,180 @@
+<app-portal-layout
+  [portalTitle]="portalTitle"
+  pageTitle="Messages"
+  [navItems]="navItems"
+  [navSections]="navSections"
+>
+  @if (toast(); as t) {
+    <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">
+      {{ t.msg }}
+    </div>
+  }
+
+  <header class="page-hero">
+    <div class="hero-text">
+      <p class="hero-eyebrow">Communication</p>
+      <h1>Messages</h1>
+      <p>
+        @if (isTeacher) {
+          Chat directly with the parents and students of the classes you teach.
+        } @else {
+          Message your child's teachers or the school office. Conversations are grouped by person.
+        }
+      </p>
+    </div>
+    <div class="hero-actions">
+      <button type="button" class="btn-primary" (click)="openCompose()">✎ New message</button>
+    </div>
+  </header>
+
+  <div class="messaging-grid">
+    <!-- Thread list -->
+    <aside class="thread-list card">
+      <div class="thread-list-head">
+        <span>Conversations</span>
+        @if (totalUnread() > 0) {
+          <span class="unread-pill">{{ totalUnread() }}</span>
+        }
+      </div>
+
+      @if (loadingThreads()) {
+        <p class="muted pad">Loading conversations…</p>
+      } @else if (!threads().length) {
+        <div class="empty pad">
+          <p>No conversations yet.</p>
+          <button type="button" class="btn-outline" (click)="openCompose()">Start a conversation</button>
+        </div>
+      } @else {
+        <ul class="threads">
+          @for (t of threads(); track t.threadId) {
+            <li>
+              <button
+                type="button"
+                class="thread-item"
+                [class.active]="activeThread()?.threadId === t.threadId"
+                [class.unread]="t.unreadCount > 0"
+                (click)="openThread(t)"
+              >
+                <span class="avatar">{{ (t.counterpart?.firstName || '?').charAt(0) }}{{ (t.counterpart?.lastName || '').charAt(0) }}</span>
+                <span class="thread-main">
+                  <span class="thread-top">
+                    <span class="thread-name">{{ counterpartName(t) }}</span>
+                    <span class="thread-time">{{ t.lastMessage.sentAt | date: 'MMM d' }}</span>
+                  </span>
+                  <span class="thread-preview">
+                    @if (t.lastMessage.fromMe) { <span class="you">You:</span> }
+                    {{ t.lastMessage.subject }}
+                  </span>
+                </span>
+                @if (t.unreadCount > 0) {
+                  <span class="thread-badge">{{ t.unreadCount }}</span>
+                }
+              </button>
+            </li>
+          }
+        </ul>
+      }
+    </aside>
+
+    <!-- Conversation / compose pane -->
+    <section class="conversation card">
+      @if (showCompose()) {
+        <div class="compose">
+          <div class="compose-head">
+            <h2>New message</h2>
+            <button type="button" class="icon-btn" (click)="cancelCompose()">✕</button>
+          </div>
+
+          <label class="field-label">To</label>
+          @if (!recipientsLoaded()) {
+            <p class="muted">Loading contacts…</p>
+          } @else if (!recipients().length) {
+            <p class="muted">No contacts available to message yet.</p>
+          } @else {
+            <input
+              class="input"
+              type="text"
+              placeholder="Search contacts…"
+              [(ngModel)]="recipientSearch"
+            />
+            <div class="recipient-list">
+              @for (r of filteredRecipients(); track r.id) {
+                <button
+                  type="button"
+                  class="recipient"
+                  [class.selected]="composeRecipientId === r.id"
+                  (click)="selectRecipient(r.id)"
+                >
+                  <span class="avatar sm">{{ r.firstName.charAt(0) }}{{ r.lastName.charAt(0) }}</span>
+                  <span class="recipient-main">
+                    <span class="recipient-name">{{ r.firstName }} {{ r.lastName }}
+                      <span class="role-chip">{{ r.role }}</span>
+                    </span>
+                    @if (r.context) { <span class="recipient-context">{{ r.context }}</span> }
+                  </span>
+                </button>
+              }
+            </div>
+          }
+
+          <label class="field-label">Subject</label>
+          <input class="input" type="text" [(ngModel)]="composeSubject" placeholder="Subject" />
+
+          <label class="field-label">Message</label>
+          <textarea class="input" rows="6" [(ngModel)]="composeBody" placeholder="Write your message…"></textarea>
+
+          <div class="compose-actions">
+            <button type="button" class="btn-outline" (click)="cancelCompose()">Cancel</button>
+            <button type="button" class="btn-primary" [disabled]="sending()" (click)="sendCompose()">
+              {{ sending() ? 'Sending…' : 'Send message' }}
+            </button>
+          </div>
+        </div>
+      } @else if (activeThread()) {
+        <div class="conversation-head">
+          <span class="avatar">{{ (activeThread()?.counterpart?.firstName || '?').charAt(0) }}{{ (activeThread()?.counterpart?.lastName || '').charAt(0) }}</span>
+          <div>
+            <h2>{{ counterpartName(activeThread()) }}</h2>
+            <span class="role-chip">{{ counterpartRole(activeThread()) }}</span>
+          </div>
+        </div>
+
+        <div class="messages">
+          @if (loadingThread()) {
+            <p class="muted">Loading…</p>
+          } @else {
+            @for (m of threadMessages(); track m.id) {
+              <div class="bubble-row" [class.mine]="isMine(m)">
+                <div class="bubble">
+                  <div class="bubble-subject">{{ m.subject }}</div>
+                  <div class="bubble-body">{{ m.body }}</div>
+                  <div class="bubble-time">{{ m.sentAt | date: 'MMM d, h:mm a' }}</div>
+                </div>
+              </div>
+            }
+          }
+        </div>
+
+        <div class="reply-bar">
+          <textarea
+            class="input"
+            rows="2"
+            [(ngModel)]="replyBody"
+            placeholder="Write a reply…"
+            (keydown.enter)="$event.preventDefault(); sendReply()"
+          ></textarea>
+          <button type="button" class="btn-primary" [disabled]="sendingReply() || !replyBody.trim()" (click)="sendReply()">
+            {{ sendingReply() ? '…' : 'Send' }}
+          </button>
+        </div>
+      } @else {
+        <div class="conversation-empty">
+          <div class="empty-emoji">💬</div>
+          <h2>Select a conversation</h2>
+          <p>Choose a conversation on the left, or start a new message.</p>
+          <button type="button" class="btn-primary" (click)="openCompose()">✎ New message</button>
+        </div>
+      }
+    </section>
+  </div>
+</app-portal-layout>

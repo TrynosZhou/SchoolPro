@@ -15,6 +15,8 @@ import {
 } from '../entities';
 import { relations } from '../utils/typeorm-helpers';
 import { sendSmsMessage, sendWhatsAppReminder } from './whatsapp.service';
+import { sendTransactionalEmail } from './email.service';
+import { getNotificationSettings } from './notification-settings.service';
 
 export interface PublishResultsParams {
   termId: string;
@@ -130,7 +132,15 @@ export async function publishResults(params: PublishResultsParams) {
 
   const settings = await AppDataSource.getRepository(SchoolSettings).findOne({ where: { id: 'default' } });
   const schoolName = settings?.schoolName || 'School Pro Academy';
-  const message = buildResultsMessage(schoolName, term.name, examType.name);
+  const examCfg = (await getNotificationSettings()).examResults;
+  const message = examCfg.template
+    ? examCfg.template
+        .replace(/\{school\}/g, schoolName)
+        .replace(/\{exam\}/g, examType.name)
+        .replace(/\{term\}/g, term.name)
+    : buildResultsMessage(schoolName, term.name, examType.name);
+  const wantEmail = examCfg.channels.email;
+  const wantInApp = examCfg.channels.inApp;
 
   const studentIds = [...new Set(reports.map((r) => r.studentId))];
   const guardians = await AppDataSource.getRepository(Guardian).find({
@@ -145,19 +155,21 @@ export async function publishResults(params: PublishResultsParams) {
 
   const phonesWhatsApp = new Set<string>();
   const phonesSms = new Set<string>();
+  const emails = new Set<string>();
   const notifyUserIds = new Set<string>();
 
   for (const g of guardians) {
-    const phone = g.phone || g.parent?.user?.phone;
-    if (!phone) continue;
-    const normalized = normalizePhone(phone);
-    if (!normalized) continue;
-
-    if (g.parent?.receivesWhatsApp !== false && notifyWhatsApp) {
-      phonesWhatsApp.add(normalized);
+    if (wantEmail) {
+      const email = g.email || g.parent?.user?.email;
+      if (email) emails.add(email);
     }
-    if (notifySms) {
-      phonesSms.add(normalized);
+    const phone = g.phone || g.parent?.user?.phone;
+    if (phone) {
+      const normalized = normalizePhone(phone);
+      if (normalized) {
+        if (g.parent?.receivesWhatsApp !== false && notifyWhatsApp) phonesWhatsApp.add(normalized);
+        if (notifySms) phonesSms.add(normalized);
+      }
     }
     if (g.parent?.userId) {
       notifyUserIds.add(g.parent.userId);
@@ -166,6 +178,7 @@ export async function publishResults(params: PublishResultsParams) {
 
   for (const s of students) {
     if (s.userId) notifyUserIds.add(s.userId);
+    if (wantEmail && s.user?.email) emails.add(s.user.email);
     if (s.user?.phone && notifySms) {
       const normalized = normalizePhone(s.user.phone);
       if (normalized) phonesSms.add(normalized);
@@ -174,6 +187,7 @@ export async function publishResults(params: PublishResultsParams) {
 
   let whatsappSent = 0;
   let smsSent = 0;
+  let emailsSent = 0;
 
   if (notifyWhatsApp) {
     for (const phone of phonesWhatsApp) {
@@ -189,10 +203,18 @@ export async function publishResults(params: PublishResultsParams) {
     }
   }
 
+  if (wantEmail) {
+    const subject = `${schoolName}: ${examType.name} results published`;
+    for (const email of emails) {
+      const result = await sendTransactionalEmail({ to: email, subject, text: message });
+      if (result.sent) emailsSent += 1;
+    }
+  }
+
   const notificationRepo = AppDataSource.getRepository(Notification);
   let notificationsCreated = 0;
   const title = `${examType.name} results published`;
-  for (const userId of notifyUserIds) {
+  for (const userId of wantInApp ? notifyUserIds : []) {
     await notificationRepo.save(
       notificationRepo.create({
         userId,
@@ -224,6 +246,7 @@ export async function publishResults(params: PublishResultsParams) {
     reportCardCount: reports.length,
     whatsappSent,
     smsSent,
+    emailsSent,
     notificationsCreated,
     publishedAt: publication.publishedAt.toISOString(),
   };

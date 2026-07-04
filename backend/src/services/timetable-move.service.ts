@@ -9,12 +9,21 @@ export interface MoveTimetableSlotInput {
   endTime: string;
 }
 
+export interface MoveTimetableSlotOptions {
+  /** When true, allow the teacher to be double-booked (teach 2+ classes at once). */
+  ignoreConflicts?: boolean;
+}
+
 function normalizeTime(time: string): string {
   const [h, m] = String(time || '0:00').split(':');
   return `${String(h).padStart(2, '0')}:${String(m || '00').padStart(2, '0')}`;
 }
 
-export async function moveTimetableSlot(slotId: string, input: MoveTimetableSlotInput) {
+export async function moveTimetableSlot(
+  slotId: string,
+  input: MoveTimetableSlotInput,
+  options: MoveTimetableSlotOptions = {},
+) {
   const dayOfWeek = Number(input.dayOfWeek);
   const startTime = normalizeTime(input.startTime);
   const endTime = normalizeTime(input.endTime);
@@ -46,22 +55,24 @@ export async function moveTimetableSlot(slotId: string, input: MoveTimetableSlot
     return { id: entry.id, dayOfWeek: entry.dayOfWeek, startTime: entry.startTime, endTime: entry.endTime };
   }
 
-  const classOccupied = await timetableRepo.findOne({
-    where: {
-      classId: entry.classId,
-      dayOfWeek,
-      startTime,
-      endTime,
-    },
-  });
-  if (classOccupied && classOccupied.id !== slotId) {
-    throw new Error('This class already has a lesson in the target period.');
+  if (!options.ignoreConflicts) {
+    const classOccupied = await timetableRepo.findOne({
+      where: {
+        classId: entry.classId,
+        dayOfWeek,
+        startTime,
+        endTime,
+      },
+    });
+    if (classOccupied && classOccupied.id !== slotId) {
+      throw new Error('This class already has a lesson in the target period.');
+    }
   }
 
   const allocation = await allocationRepo.findOne({ where: { timetableEntryId: slotId } });
   const dayEnum = dayIntToEnum(dayOfWeek);
 
-  if (entry.teacherId) {
+  if (entry.teacherId && !options.ignoreConflicts) {
     const conflict = await timetableConflictService.checkTeacherConflict(
       entry.teacherId,
       dayEnum,
@@ -79,14 +90,21 @@ export async function moveTimetableSlot(slotId: string, input: MoveTimetableSlot
   entry.dayOfWeek = dayOfWeek;
   entry.startTime = startTime;
   entry.endTime = endTime;
-  await timetableRepo.save(entry);
 
   if (allocation) {
     allocation.dayOfWeek = dayEnum;
     allocation.startTime = startTime;
     allocation.endTime = endTime;
-    await allocationRepo.save(allocation);
   }
+
+  // Update the timetable entry and its allocation together so a failure on either
+  // never leaves the two out of sync.
+  await AppDataSource.transaction(async (manager) => {
+    await manager.save(entry);
+    if (allocation) {
+      await manager.save(allocation);
+    }
+  });
 
   return {
     id: entry.id,

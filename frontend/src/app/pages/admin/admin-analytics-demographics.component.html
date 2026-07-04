@@ -1,0 +1,161 @@
+<app-portal-layout
+  [portalTitle]="portalLayout.portalTitle"
+  pageTitle="Student Demographics"
+  [navSections]="portalLayout.navSections || []"
+  [navItems]="portalLayout.navItems || []"
+>
+  <section class="an-head">
+    <div>
+      <h1>Student Demographics</h1>
+      <p class="an-sub">Breakdowns by class, grade level, gender and age — filter by academic year or term.</p>
+    </div>
+  </section>
+
+  <section class="card filter-bar">
+    <div class="filter-grid">
+      <label class="fld">
+        <span>Academic year</span>
+        <select [(ngModel)]="filters.schoolYearId" (ngModelChange)="onYearChange()">
+          <option value="">All years (current roll)</option>
+          @for (y of options().schoolYears; track y.id) {
+            <option [value]="y.id">{{ y.name }}{{ y.isCurrent ? ' (current)' : '' }}</option>
+          }
+        </select>
+      </label>
+      <label class="fld">
+        <span>Term</span>
+        <select [(ngModel)]="filters.termId" (ngModelChange)="load()">
+          <option value="">All terms</option>
+          @for (t of termsForYear(); track t.id) {
+            <option [value]="t.id">{{ t.name }}</option>
+          }
+        </select>
+      </label>
+      <label class="fld">
+        <span>Grade / Form</span>
+        <select [(ngModel)]="filters.formId" (ngModelChange)="load()">
+          <option value="">All grades</option>
+          @for (f of options().forms; track f.id) {
+            <option [value]="f.id">{{ f.name }}</option>
+          }
+        </select>
+      </label>
+      <label class="fld">
+        <span>Class</span>
+        <select [(ngModel)]="filters.classId" (ngModelChange)="load()">
+          <option value="">All classes</option>
+          @for (c of options().classes; track c.id) {
+            <option [value]="c.id">{{ c.name }}</option>
+          }
+        </select>
+      </label>
+      <button type="button" class="btn-ghost" (click)="resetFilters()">Reset</button>
+    </div>
+    @if (data()) {
+      <p class="src-note">
+        Source: {{ data()!.source === 'snapshot' ? 'historical enrolment snapshot' : 'current active roll' }}
+      </p>
+    }
+  </section>
+
+  @if (loading()) {
+    <div class="card empty">Loading demographics…</div>
+  } @else if (!data() || data()!.totals.total === 0) {
+    <div class="card empty">No students match the selected filters.</div>
+  } @else {
+    <section class="stat-cards">
+      <div class="stat">
+        <span class="stat-label">Total students</span>
+        <span class="stat-value">{{ data()!.totals.total | number }}</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Male</span>
+        <span class="stat-value">{{ data()!.totals.male | number }}</span>
+        <span class="stat-pct">{{ pct(data()!.totals.male, data()!.totals.total) }}%</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Female</span>
+        <span class="stat-value">{{ data()!.totals.female | number }}</span>
+        <span class="stat-pct">{{ pct(data()!.totals.female, data()!.totals.total) }}%</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Boarders</span>
+        <span class="stat-value">{{ data()!.totals.boarders | number }}</span>
+        <span class="stat-pct">{{ pct(data()!.totals.boarders, data()!.totals.total) }}%</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Day scholars</span>
+        <span class="stat-value">{{ data()!.totals.dayScholars | number }}</span>
+        <span class="stat-pct">{{ pct(data()!.totals.dayScholars, data()!.totals.total) }}%</span>
+      </div>
+    </section>
+
+    <section class="chart-grid">
+      <div class="card chart-card">
+        <h3>Gender distribution</h3>
+        <div class="chart-wrap"><app-chart type="pie" [data]="genderChart()"></app-chart></div>
+      </div>
+      <div class="card chart-card">
+        <h3>Boarders vs day scholars</h3>
+        <div class="chart-wrap"><app-chart type="doughnut" [data]="typeChart()"></app-chart></div>
+      </div>
+      <div class="card chart-card wide">
+        <h3>Students by grade level &amp; gender</h3>
+        <div class="chart-wrap"><app-chart type="bar" [data]="gradeChart()" [options]="stackedBarOptions"></app-chart></div>
+      </div>
+      <div class="card chart-card wide">
+        <h3>Class composition (boarding status)</h3>
+        <div class="chart-wrap"><app-chart type="bar" [data]="classChart()" [options]="stackedBarOptions"></app-chart></div>
+      </div>
+      <div class="card chart-card">
+        <h3>Age distribution</h3>
+        <div class="chart-wrap"><app-chart type="bar" [data]="ageChart()" [options]="plainBarOptions"></app-chart></div>
+      </div>
+    </section>
+
+    <section class="card table-card">
+      <h3>By grade / form</h3>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr><th>Grade / Form</th><th class="num">Male</th><th class="num">Female</th><th class="num">Other</th><th class="num">Total</th></tr>
+          </thead>
+          <tbody>
+            @for (g of data()!.byGrade; track g.formId) {
+              <tr>
+                <td>{{ g.formName }}</td>
+                <td class="num">{{ g.male | number }}</td>
+                <td class="num">{{ g.female | number }}</td>
+                <td class="num">{{ g.unspecified | number }}</td>
+                <td class="num strong">{{ g.total | number }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card table-card">
+      <h3>By class</h3>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr><th>Class</th><th class="num">Male</th><th class="num">Female</th><th class="num">Boarders</th><th class="num">Day</th><th class="num">Total</th></tr>
+          </thead>
+          <tbody>
+            @for (c of data()!.byClass; track c.classId) {
+              <tr>
+                <td>{{ c.className }}</td>
+                <td class="num">{{ c.male | number }}</td>
+                <td class="num">{{ c.female | number }}</td>
+                <td class="num">{{ c.boarders | number }}</td>
+                <td class="num">{{ c.dayScholars | number }}</td>
+                <td class="num strong">{{ c.total | number }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+  }
+</app-portal-layout>

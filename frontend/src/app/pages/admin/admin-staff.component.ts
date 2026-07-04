@@ -28,6 +28,7 @@ export interface StaffMember {
   employeeNumber: string;
   userId: string;
   title?: string | null;
+  gender?: string | null;
   department?: string;
   qualification?: string;
   hireDate?: string;
@@ -133,6 +134,10 @@ export class AdminStaffComponent implements OnInit {
 
   readonly adminNav = ADMIN_NAV_SECTIONS;
   readonly teacherTitleOptions = TEACHER_TITLE_OPTIONS;
+  readonly genderOptions: { value: string; label: string }[] = [
+    { value: 'male', label: 'Male' },
+    { value: 'female', label: 'Female' },
+  ];
   readonly sortOptions: { value: SortKey; label: string }[] = [
     { value: 'name-asc', label: 'Name A–Z' },
     { value: 'name-desc', label: 'Name Z–A' },
@@ -194,6 +199,7 @@ export class AdminStaffComponent implements OnInit {
 
   newStaff = {
     title: '' as string,
+    gender: '' as string,
     firstName: '',
     lastName: '',
     email: '',
@@ -207,6 +213,7 @@ export class AdminStaffComponent implements OnInit {
 
   editForm = {
     title: '' as string,
+    gender: '' as string,
     firstName: '',
     lastName: '',
     email: '',
@@ -759,6 +766,7 @@ export class AdminStaffComponent implements OnInit {
     this.loadDepartments();
     this.editForm = {
       title: s.title || '',
+      gender: s.gender || '',
       firstName: s.user.firstName,
       lastName: s.user.lastName,
       email: s.user.email,
@@ -773,6 +781,13 @@ export class AdminStaffComponent implements OnInit {
 
   cancelEdit() {
     this.editingStaff.set(null);
+  }
+
+  genderLabel(value?: string | null): string {
+    const v = String(value || '').trim().toLowerCase();
+    if (v === 'male') return 'Male';
+    if (v === 'female') return 'Female';
+    return '—';
   }
 
   saveEdit() {
@@ -906,6 +921,7 @@ export class AdminStaffComponent implements OnInit {
   resetNewForm() {
     this.newStaff = {
       title: '',
+      gender: '',
       firstName: '',
       lastName: '',
       email: '',

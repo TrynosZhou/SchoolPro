@@ -1,0 +1,190 @@
+<div class="public-shell">
+  <header class="public-topbar">
+    <div class="brand">
+      <span class="brand-badge">SP</span>
+      <div class="brand-text">
+        <strong>School Pro Academy</strong>
+        <small>Admissions</small>
+      </div>
+    </div>
+    <nav class="public-links">
+      <a routerLink="/apply/status">Track application</a>
+      <a routerLink="/login">Sign in</a>
+    </nav>
+  </header>
+
+  <main class="public-main">
+    @if (submitted(); as result) {
+      <section class="card success-card" aria-live="polite">
+        <div class="success-icon" aria-hidden="true">✓</div>
+        <h1>Application submitted</h1>
+        <p class="lead">
+          Thank you for applying. We've sent a confirmation to
+          <strong>{{ form.contactEmail }}</strong> and by SMS to
+          <strong>{{ form.contactPhone }}</strong>.
+        </p>
+        <div class="ref-box">
+          <span>Your application reference</span>
+          <strong>{{ result.referenceNumber }}</strong>
+        </div>
+        <p class="muted">
+          Keep this reference safe. You can use it together with your email address to check your
+          status at any time.
+        </p>
+        <div class="success-actions">
+          <a class="btn-primary" [routerLink]="['/apply/status']" [queryParams]="{ ref: result.referenceNumber }">
+            Track my application
+          </a>
+          <a class="btn-secondary" routerLink="/login">Back to sign in</a>
+        </div>
+      </section>
+    } @else {
+      <section class="card form-card">
+        <div class="form-head">
+          <p class="eyebrow">Admissions</p>
+          <h1>Online application form</h1>
+          <p class="lead">
+            Complete the form below to apply for enrollment. Fields marked with
+            <span class="req">*</span> are required.
+          </p>
+        </div>
+
+        @if (prefilled()) {
+          <div class="alert info" role="status">
+            Welcome back! We've pre-filled your contact details from your account. Just add the new child's information below.
+          </div>
+        }
+
+        @if (error()) {
+          <div class="alert error" role="alert">{{ error() }}</div>
+        }
+
+        <form (ngSubmit)="submit()" novalidate>
+          <fieldset class="section">
+            <legend>Student details</legend>
+            <div class="grid">
+              <div class="field">
+                <label>First name <span class="req">*</span></label>
+                <input [(ngModel)]="form.studentFirstName" name="sfn" required placeholder="Student first name" />
+              </div>
+              <div class="field">
+                <label>Last name <span class="req">*</span></label>
+                <input [(ngModel)]="form.studentLastName" name="sln" required placeholder="Student last name" />
+              </div>
+              <div class="field">
+                <label>Date of birth</label>
+                <input type="date" [(ngModel)]="form.dateOfBirth" name="dob" />
+              </div>
+              <div class="field">
+                <label>Gender</label>
+                <select [(ngModel)]="form.gender" name="gender">
+                  <option value="">— Select —</option>
+                  <option value="male">Male</option>
+                  <option value="female">Female</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>Class applying for <span class="req">*</span></label>
+                @if (classOptions().length) {
+                  <select [(ngModel)]="form.classAppliedFor" name="classAppliedFor" required>
+                    <option value="">— Select class —</option>
+                    @for (c of classOptions(); track c.id) {
+                      <option [value]="c.name">{{ c.name }}</option>
+                    }
+                  </select>
+                } @else {
+                  <input [(ngModel)]="form.classAppliedFor" name="classAppliedFor" required placeholder="e.g. Grade 1 / Form 1" />
+                }
+              </div>
+              <div class="field">
+                <label>Previous school</label>
+                <input [(ngModel)]="form.previousSchool" name="prev" placeholder="Last school attended (if any)" />
+              </div>
+            </div>
+          </fieldset>
+
+          <fieldset class="section">
+            <legend>Parent / guardian &amp; contact</legend>
+            <div class="grid">
+              <div class="field">
+                <label>Parent / guardian name <span class="req">*</span></label>
+                <input [(ngModel)]="form.guardianName" name="gname" required placeholder="Full name" />
+              </div>
+              <div class="field">
+                <label>Relationship</label>
+                <select [(ngModel)]="form.guardianRelationship" name="grel">
+                  <option value="Parent">Parent</option>
+                  <option value="Guardian">Guardian</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>Contact phone <span class="req">*</span></label>
+                <input [(ngModel)]="form.contactPhone" name="phone" required placeholder="+263..." />
+              </div>
+              <div class="field">
+                <label>Contact email <span class="req">*</span></label>
+                <input type="email" [(ngModel)]="form.contactEmail" name="email" required placeholder="you@example.com" />
+              </div>
+              <div class="field span-2">
+                <label>Home address</label>
+                <input [(ngModel)]="form.address" name="addr" placeholder="Residential address" />
+              </div>
+            </div>
+          </fieldset>
+
+          <fieldset class="section">
+            <legend>Supporting documents</legend>
+            <p class="section-hint">Accepted formats: PDF, JPG, PNG · Max 5MB per file.</p>
+            <div class="doc-list">
+              @for (slot of docSlots; track slot.field) {
+                <div class="doc-slot" [class.has-file]="!!files[slot.field]" [class.has-error]="!!fileErrors()[slot.field]">
+                  <div class="doc-info">
+                    <strong>
+                      {{ slot.label }}
+                      @if (slot.required) { <span class="req">*</span> }
+                    </strong>
+                    <small>{{ slot.hint }}</small>
+                  </div>
+
+                  <div class="doc-control">
+                    @if (files[slot.field]; as file) {
+                      <div class="doc-file">
+                        <span class="doc-file-name" [title]="file.name">{{ file.name }}</span>
+                        <span class="doc-file-size">{{ formatBytes(file.size) }}</span>
+                        <button type="button" class="doc-remove" (click)="clearFile(slot.field)" aria-label="Remove file">×</button>
+                      </div>
+                    } @else {
+                      <label class="doc-upload-btn">
+                        <span>Choose file</span>
+                        <input
+                          type="file"
+                          accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+                          (change)="onFileSelected(slot.field, $event)"
+                          hidden
+                        />
+                      </label>
+                    }
+                  </div>
+
+                  @if (fileErrors()[slot.field]; as fe) {
+                    <p class="doc-error">{{ fe }}</p>
+                  }
+                </div>
+              }
+            </div>
+          </fieldset>
+
+          <div class="form-foot">
+            <a routerLink="/login" class="btn-secondary">Cancel</a>
+            <button type="submit" class="btn-primary" [disabled]="submitting()">
+              {{ submitting() ? 'Submitting…' : 'Submit application' }}
+            </button>
+          </div>
+        </form>
+      </section>
+    }
+
+    <p class="public-foot">© {{ currentYear }} School Pro Academy · <a routerLink="/apply/status">Track an existing application</a></p>
+  </main>
+</div>

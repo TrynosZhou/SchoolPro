@@ -56,4 +56,17 @@ export class ApiService {
     }
     return this.http.get(`${this.base}${path}`, { params: httpParams, responseType: 'blob' });
   }
+
+  postBlob(path: string, body: unknown, params?: Record<string, string>) {
+    let httpParams = new HttpParams();
+    if (params) {
+      Object.entries(params).forEach(([k, v]) => {
+        if (v != null && v !== '') httpParams = httpParams.set(k, v);
+      });
+    }
+    return this.http.post(`${this.base}${path}`, body, {
+      params: httpParams,
+      responseType: 'blob',
+    });
+  }
 }

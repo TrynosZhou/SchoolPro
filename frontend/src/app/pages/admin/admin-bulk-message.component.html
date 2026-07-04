@@ -1,0 +1,172 @@
+<app-portal-layout portalTitle="Admin Portal" pageTitle="Bulk SMS / Email" [navSections]="adminNav">
+  @if (toast(); as t) {
+    <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">
+      {{ t.msg }}
+    </div>
+  }
+
+  <header class="hero">
+    <p class="eyebrow">Communication</p>
+    <h2>Bulk SMS &amp; Email</h2>
+    <p class="hero-sub">Send one message to a whole class, form, or group — by SMS, email, or both.</p>
+  </header>
+
+  <div class="bulk-grid">
+    <!-- Compose -->
+    <section class="card">
+      <h3 class="card-title">1 · Choose your audience</h3>
+
+      <label class="field-label">Send to</label>
+      <div class="segmented">
+        <button type="button" [class.active]="scope === 'class'" (click)="scope = 'class'">A class</button>
+        <button type="button" [class.active]="scope === 'form'" (click)="scope = 'form'">A form / grade</button>
+        <button type="button" [class.active]="scope === 'all'" (click)="scope = 'all'">All students</button>
+      </div>
+
+      @if (scope === 'class') {
+        <label class="field-label">Class</label>
+        <select class="input" [(ngModel)]="classId">
+          <option value="">Select a class…</option>
+          @for (c of classes(); track c.id) {
+            <option [value]="c.id">{{ c.name }}{{ c.formName ? ' · ' + c.formName : '' }}</option>
+          }
+        </select>
+      }
+
+      @if (scope === 'form') {
+        <label class="field-label">Form / grade</label>
+        <select class="input" [(ngModel)]="formId">
+          <option value="">Select a form…</option>
+          @for (f of forms(); track f.id) {
+            <option [value]="f.id">{{ f.name }}</option>
+          }
+        </select>
+      }
+
+      <label class="field-label">Recipients</label>
+      <div class="segmented">
+        <button type="button" [class.active]="audience === 'parents'" (click)="audience = 'parents'">Parents</button>
+        <button type="button" [class.active]="audience === 'students'" (click)="audience = 'students'">Students</button>
+        <button type="button" [class.active]="audience === 'both'" (click)="audience = 'both'">Both</button>
+      </div>
+
+      <h3 class="card-title mt">2 · Channels</h3>
+      <div class="channels">
+        <label class="check"><input type="checkbox" [(ngModel)]="channelEmail" /> <span>✉️ Email</span></label>
+        <label class="check"><input type="checkbox" [(ngModel)]="channelSms" /> <span>📱 SMS</span></label>
+      </div>
+
+      <h3 class="card-title mt">3 · Message</h3>
+      <label class="field-label">Subject</label>
+      <input class="input" type="text" [(ngModel)]="subject" placeholder="Message subject" />
+      <label class="field-label">Message</label>
+      <textarea class="input" rows="6" [(ngModel)]="body" placeholder="Type your message…"></textarea>
+
+      <div class="actions">
+        <button type="button" class="btn-outline" [disabled]="previewing()" (click)="runPreview()">
+          {{ previewing() ? 'Checking…' : 'Preview audience' }}
+        </button>
+        <button type="button" class="btn-primary" [disabled]="sending()" (click)="send()">
+          {{ sending() ? 'Sending…' : 'Send message' }}
+        </button>
+      </div>
+    </section>
+
+    <!-- Preview + history -->
+    <section class="side">
+      @if (preview(); as p) {
+        <div class="card preview-card">
+          <h3 class="card-title">Audience preview</h3>
+          <p class="preview-label">{{ p.label }}</p>
+          <div class="stat-row">
+            <div class="stat"><span class="num">{{ p.total }}</span><span class="lbl">recipients</span></div>
+            <div class="stat"><span class="num">{{ p.withEmail }}</span><span class="lbl">have email</span></div>
+            <div class="stat"><span class="num">{{ p.withPhone }}</span><span class="lbl">have phone</span></div>
+          </div>
+          @if (p.sample.length) {
+            <ul class="sample">
+              @for (s of p.sample; track s.name) {
+                <li><span class="tag">{{ s.type }}</span> {{ s.name }}
+                  <span class="muted">{{ s.email || s.phone || 'no contact' }}</span>
+                </li>
+              }
+            </ul>
+          }
+          @if (!p.total) { <p class="muted">No recipients match this selection.</p> }
+        </div>
+      }
+
+      <div class="card">
+        <h3 class="card-title">Delivery log</h3>
+        @if (!history().length) {
+          <p class="muted">No bulk messages sent yet.</p>
+        } @else {
+          <ul class="history">
+            @for (h of history(); track h.id) {
+              <li class="history-item" (click)="openDetail(h.id)">
+                <div class="hi-top">
+                  <span class="hi-subject">{{ h.subject }}</span>
+                  <span class="hi-time">{{ h.createdAt | date: 'MMM d, h:mm a' }}</span>
+                </div>
+                <div class="hi-meta">
+                  <span>{{ h.audienceLabel }}</span>
+                  <span class="hi-channels">
+                    @for (c of h.channels; track c) { <span class="chip">{{ c }}</span> }
+                  </span>
+                </div>
+                <div class="hi-stats">
+                  <span class="ok">✔ {{ h.sentCount }} sent</span>
+                  @if (h.failedCount > 0) { <span class="fail">✘ {{ h.failedCount }} failed</span> }
+                  <span class="muted">of {{ h.totalRecipients }}</span>
+                </div>
+              </li>
+            }
+          </ul>
+        }
+      </div>
+    </section>
+  </div>
+
+  @if (detail(); as d) {
+    <div class="modal-backdrop" (click)="closeDetail()">
+      <div class="modal" (click)="$event.stopPropagation()">
+        <div class="modal-head">
+          <div>
+            <h3>{{ d.subject }}</h3>
+            <p class="muted">{{ d.audienceLabel }} · {{ d.createdAt | date: 'medium' }}</p>
+          </div>
+          <button type="button" class="icon-btn" (click)="closeDetail()">✕</button>
+        </div>
+        <p class="modal-body-text">{{ d.body }}</p>
+        <div class="stat-row">
+          <div class="stat"><span class="num">{{ d.totalRecipients }}</span><span class="lbl">recipients</span></div>
+          <div class="stat"><span class="num ok">{{ d.sentCount }}</span><span class="lbl">delivered</span></div>
+          <div class="stat"><span class="num fail">{{ d.failedCount }}</span><span class="lbl">failed</span></div>
+        </div>
+        <div class="log-table-wrap">
+          <table class="log-table">
+            <thead>
+              <tr><th>Recipient</th><th>Type</th><th>Channel</th><th>Destination</th><th>Status</th></tr>
+            </thead>
+            <tbody>
+              @for (r of d.recipients; track r.id) {
+                <tr>
+                  <td>{{ r.recipientName }}</td>
+                  <td class="cap">{{ r.recipientType }}</td>
+                  <td class="cap">{{ r.channel }}</td>
+                  <td class="muted">{{ r.destination || '—' }}</td>
+                  <td>
+                    <span class="status" [class.s-sent]="r.status === 'sent'" [class.s-mock]="r.status === 'mock'" [class.s-failed]="r.status === 'failed'" [class.s-skipped]="r.status === 'skipped'">
+                      {{ r.status }}
+                    </span>
+                    @if (r.error) { <span class="err" [title]="r.error">ⓘ</span> }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  }
+</app-portal-layout>

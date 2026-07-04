@@ -20,15 +20,51 @@
       </div>
     }
 
+    @if (teacherContextMenu(); as menu) {
+      <div
+        class="slot-context-menu"
+        [style.left.px]="menu.x"
+        [style.top.px]="menu.y"
+        (click)="$event.stopPropagation()"
+        (contextmenu)="$event.preventDefault()"
+      >
+        <div class="context-menu-heading">{{ menu.teacherName }}</div>
+        <button type="button" (click)="previewTeacherFromMenu()">Preview timetable</button>
+        <button type="button" (click)="editLessonsFromMenu()">Edit lessons</button>
+      </div>
+    }
+
     @if (slotMoveHint(); as hint) {
       <div
         class="slot-move-hint"
         [class.above]="hint.above"
         [style.left.px]="hint.x"
         [style.top.px]="hint.y"
+        [class.actionable]="!!hint.action"
         role="alert"
       >
-        {{ hint.msg }}
+        @if (hint.action) {
+          <strong class="slot-move-hint-title">Conflict</strong>
+        }
+        <span class="slot-move-hint-msg">{{ hint.msg }}</span>
+        @if (hint.action; as action) {
+          <div class="slot-move-hint-actions">
+            <button
+              type="button"
+              class="slot-move-hint-action"
+              (click)="runSlotMoveHintAction()"
+            >
+              {{ action.label }}
+            </button>
+            <button
+              type="button"
+              class="slot-move-hint-cancel"
+              (click)="closeSlotMoveHint()"
+            >
+              Cancel
+            </button>
+          </div>
+        }
       </div>
     }
 
@@ -514,8 +550,12 @@
             @if (mode === 'teachers') {
               @for (teacher of summaryGridTeachers(); track teacher.teacherId; let rowIdx = $index) {
                 <tr>
-                  <td class="row-label" [title]="teacher.name + (teacher.employeeNumber ? ' · ' + teacher.employeeNumber : '')">
-                    <strong>{{ fullPage ? teacher.name : teacher.label }}</strong>
+                  <td
+                    class="row-label row-label-teacher"
+                    [title]="teacher.name + (teacher.employeeNumber ? ' · ' + teacher.employeeNumber : '') + ' — right-click for options'"
+                    (contextmenu)="onTeacherContextMenu(teacher.teacherId, teacher.name, $event)"
+                  >
+                    <strong>{{ teacher.label }}</strong>
                   </td>
                   @for (d of days; track d.value) {
                     @for (p of periods(); track p.id; let first = $first) {
@@ -538,7 +578,7 @@
                           (dragleave)="onCellDragLeave(d.value, p)"
                           (drop)="onCellDrop(teacher.teacherId, d.value, p, 'teacher', teacher.slots, $event)"
                         >
-                          @if (slotAt(teacher.slots, d.value, p); as slot) {
+                          @for (slot of slotsAt(teacher.slots, d.value, p); track slot.id) {
                             <div
                               class="lesson-card"
                               [class.dragging]="draggingSlotId() === slot.id"

@@ -75,6 +75,22 @@
                   </span>
                 </div>
               }
+            } @else if (stat.key === 'staff') {
+              @if (loading()) {
+                <span class="stat-caption">Teaching & support</span>
+              } @else {
+                <div class="stat-breakdown" aria-label="Staff by gender">
+                  <span class="stat-breakdown-item">
+                    <strong>{{ overview()?.maleStaff ?? 0 }}</strong>
+                    Male
+                  </span>
+                  <span class="stat-breakdown-sep" aria-hidden="true">·</span>
+                  <span class="stat-breakdown-item">
+                    <strong>{{ overview()?.femaleStaff ?? 0 }}</strong>
+                    Female
+                  </span>
+                </div>
+              }
             } @else {
               <span class="stat-caption">{{ stat.caption }}</span>
             }

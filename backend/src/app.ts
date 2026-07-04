@@ -18,6 +18,12 @@ import payrollRoutes from './routes/payroll.routes';
 import generalLedgerRoutes from './routes/general-ledger.routes';
 import chartOfAccountsRoutes from './routes/chart-of-accounts.routes';
 import teacherAssignmentRoutes from './routes/teacher-assignment.routes';
+import admissionsRoutes from './routes/admissions.routes';
+import publicRoutes from './routes/public.routes';
+import communicationRoutes from './routes/communication.routes';
+import analyticsRoutes from './routes/analytics.routes';
+import reportsRoutes from './routes/reports.routes';
+import accessControlRoutes from './routes/access-control.routes';
 
 const app = express();
 
@@ -64,6 +70,12 @@ app.use('/api/payroll', payrollRoutes);
 app.use('/api/general-ledger', generalLedgerRoutes);
 app.use('/api/chart-of-accounts', chartOfAccountsRoutes);
 app.use('/api/admin/assignments', teacherAssignmentRoutes);
+app.use('/api/admissions', admissionsRoutes);
+app.use('/api/public', publicRoutes);
+app.use('/api/communication', communicationRoutes);
+app.use('/api/analytics', analyticsRoutes);
+app.use('/api/reports', reportsRoutes);
+app.use('/api/access-control', accessControlRoutes);
 
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error(err);

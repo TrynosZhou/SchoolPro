@@ -29,7 +29,19 @@ router.get('/overview', authorize(UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRol
         COUNT(*) FILTER (WHERE "studentType" IS DISTINCT FROM 'boarder')::int AS "dayScholars"
       FROM students WHERE "isActive" = true
     `),
-    AppDataSource.query(`SELECT COUNT(*) as count FROM staff WHERE "isActive" = true`),
+    AppDataSource.query(`
+      SELECT
+        COUNT(*)::int AS count,
+        COUNT(*) FILTER (
+          WHERE lower(gender) = 'male'
+             OR (gender IS NULL AND lower(title) = 'mr')
+        )::int AS "maleStaff",
+        COUNT(*) FILTER (
+          WHERE lower(gender) = 'female'
+             OR (gender IS NULL AND lower(title) IN ('mrs', 'ms', 'miss'))
+        )::int AS "femaleStaff"
+      FROM staff WHERE "isActive" = true
+    `),
     AppDataSource.query(`
       SELECT status, COUNT(*) as count FROM student_attendance
       WHERE date = CURRENT_DATE GROUP BY status
@@ -53,6 +65,8 @@ router.get('/overview', authorize(UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRol
     boarders: Number(students[0]?.boarders || 0),
     dayScholars: Number(students[0]?.dayScholars || 0),
     totalStaff: Number(staff[0]?.count || 0),
+    maleStaff: Number(staff[0]?.maleStaff || 0),
+    femaleStaff: Number(staff[0]?.femaleStaff || 0),
     attendanceToday,
     monthlyCollections: Number(collections[0]?.total || 0),
     totalDebtors: Number(debtors[0]?.total || 0),

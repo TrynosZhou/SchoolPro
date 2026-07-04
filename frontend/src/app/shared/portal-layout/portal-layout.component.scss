@@ -12,9 +12,14 @@ $sidebar-transition: 0.15s ease;
 
 .layout {
   --sidebar-width: #{$sidebar-width};
+  --appbar-h: 4rem;
   min-height: 100vh;
   display: grid;
   grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+  grid-template-rows: var(--appbar-h) minmax(0, 1fr);
+  grid-template-areas:
+    "appbar appbar"
+    "sidebar content";
   background: #f8fafc;
   transition: grid-template-columns 0.2s ease;
 
@@ -24,14 +29,15 @@ $sidebar-transition: 0.15s ease;
 }
 
 .sidebar {
+  grid-area: sidebar;
   display: flex;
   flex-direction: column;
-  padding: 1.25rem 0.875rem 1rem;
+  padding: 1rem 0.875rem 1rem;
   background: $sidebar-bg;
   color: $nav-text;
   position: sticky;
-  top: 0;
-  height: 100vh;
+  top: var(--appbar-h);
+  height: calc(100vh - var(--appbar-h));
   border-right: 1px solid $sidebar-border;
   transition: padding 0.2s ease;
 }
@@ -39,41 +45,44 @@ $sidebar-transition: 0.15s ease;
 .brand {
   display: flex;
   align-items: center;
+  height: 100%;
   gap: 0.75rem;
-  padding: 0 0.35rem 1.25rem;
-  flex: 0 0 auto;
+  margin: 0;
+  padding: 0;
+  flex: 0 1 auto;
   min-width: 0;
+  max-width: 15rem;
 }
 
 .brand-text {
+  display: flex;
+  align-items: center;
+  height: 100%;
   min-width: 0;
+  margin: 0;
+  padding: 0;
   overflow: hidden;
   transition: opacity 0.15s ease;
 
   strong {
     display: block;
+    margin: 0;
+    padding: 0;
     font-size: 0.95rem;
-    color: #1e293b;
-    line-height: 1.25;
+    color: #ffffff;
+    line-height: 1;
     font-weight: 700;
-    white-space: normal;
-    word-break: break-word;
-  }
-
-  small {
-    display: block;
-    margin-top: 0.15rem;
-    color: $nav-group-label;
-    font-size: 0.75rem;
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 }
 
-.sidebar-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
+// Mobile-only close button row inside the off-canvas drawer.
+.sidebar-mobile-bar {
+  display: none;
+  justify-content: flex-end;
+  margin-bottom: 0.5rem;
 }
 
 .sidebar-close {
@@ -124,7 +133,7 @@ $sidebar-transition: 0.15s ease;
   width: 2.25rem;
   height: 2.25rem;
   border-radius: 10px;
-  background: $nav-active-bg;
+  background: rgba(255, 255, 255, 0.14);
   color: #ffffff;
   display: inline-flex;
   align-items: center;
@@ -475,7 +484,6 @@ $sidebar-transition: 0.15s ease;
 }
 
 .layout.sidebar-collapsed {
-  .brand-text,
   .nav-group-label,
   .nav-item-label,
   .nav-subitem-label,
@@ -492,12 +500,6 @@ $sidebar-transition: 0.15s ease;
   .sidebar {
     padding-left: 0.625rem;
     padding-right: 0.625rem;
-  }
-
-  .brand {
-    justify-content: center;
-    padding-left: 0;
-    padding-right: 0;
   }
 
   .nav-item,
@@ -610,15 +612,20 @@ $sidebar-transition: 0.15s ease;
 }
 
 .topbar {
+  // One continuous dark header spanning the full width (over the sidebar column too),
+  // so there is a single top bar from the left corner to the right edge.
+  grid-area: appbar;
+  position: sticky;
+  top: 0;
+  z-index: 100;
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 1rem;
+  height: var(--appbar-h);
   background: #0a2540;
-  border: 1px solid #0a2540;
-  border-radius: 12px;
-  padding: 0.6rem 1.1rem;
-  margin-bottom: 1rem;
+  border: none;
+  border-radius: 0;
+  padding: 0 1.25rem;
   color: #fff;
 
   h1 {
@@ -1335,17 +1342,22 @@ $sidebar-transition: 0.15s ease;
 }
 
 .content {
+  grid-area: content;
   min-width: 0;
-  padding: 1.1rem 1.25rem;
+  padding: 0;
 }
 
 .page-body {
   min-width: 0;
+  padding: 1.1rem 1.25rem;
 }
 
 @media (max-width: 980px) {
   .layout {
     grid-template-columns: 1fr;
+    grid-template-areas:
+      "appbar"
+      "content";
 
     &.sidebar-collapsed {
       --sidebar-width: 0;
@@ -1355,6 +1367,10 @@ $sidebar-transition: 0.15s ease;
   .nav-toggle,
   .sidebar-close {
     display: inline-flex;
+  }
+
+  .sidebar-mobile-bar {
+    display: flex;
   }
 
   .sidebar-backdrop {
@@ -1431,16 +1447,25 @@ $sidebar-transition: 0.15s ease;
       max(0.75rem, env(safe-area-inset-left));
   }
 
+  // On mobile the content wrapper supplies the page padding, so avoid doubling it.
+  .page-body {
+    padding: 0;
+  }
+
   .topbar {
-    position: sticky;
     top: max(0px, env(safe-area-inset-top));
-    z-index: 50;
-    padding: 0.6rem 0.75rem;
+    padding: 0 0.75rem;
+    border-radius: 0;
     gap: 0.5rem;
   }
 
   .topbar-nav-toggle {
     display: inline-flex;
+  }
+
+  // Icon-only Home on mobile to keep the single bar uncluttered.
+  .topbar-home span {
+    display: none;
   }
 
   .topbar-actions {

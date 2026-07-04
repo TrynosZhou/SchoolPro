@@ -2,7 +2,7 @@ import { Component, computed, HostListener, inject, OnDestroy, OnInit, signal } 
 import { FormsModule } from '@angular/forms';
 import { NgStyle, NgTemplateOutlet } from '@angular/common';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
 import { ApiService } from '../../core/services/api.service';
@@ -131,6 +131,7 @@ export class AdminTimetableGenerateComponent implements OnInit, OnDestroy {
   private api = inject(ApiService);
   private periodsSvc = inject(TimetablePeriodsService);
   private sanitizer = inject(DomSanitizer);
+  private router = inject(Router);
   private slotMoveHintTimer: ReturnType<typeof setTimeout> | null = null;
   private pdfObjectUrl: string | null = null;
 
@@ -168,7 +169,16 @@ export class AdminTimetableGenerateComponent implements OnInit, OnDestroy {
   dragOverKey = signal<string | null>(null);
   slotMoving = signal(false);
   slotContextMenu = signal<{ x: number; y: number; slot: TimetableSlotView } | null>(null);
-  slotMoveHint = signal<{ x: number; y: number; msg: string; above?: boolean } | null>(null);
+  teacherContextMenu = signal<{ x: number; y: number; teacherId: string; teacherName: string } | null>(
+    null,
+  );
+  slotMoveHint = signal<{
+    x: number;
+    y: number;
+    msg: string;
+    above?: boolean;
+    action?: { label: string; run: () => void };
+  } | null>(null);
   slotLockUpdating = signal(false);
   editorWindow = signal<EditorMode | null>(null);
   editorPdfMode = signal<EditorPdfMode>('teachers');
@@ -420,6 +430,13 @@ export class AdminTimetableGenerateComponent implements OnInit, OnDestroy {
     );
   }
 
+  /** All lessons placed in a single cell (supports a teacher teaching 2+ classes at once). */
+  slotsAt(slots: TimetableSlotView[], day: number, period: TimetablePeriod): TimetableSlotView[] {
+    return slots.filter(
+      (s) => s.dayOfWeek === day && s.startTime === period.startTime && s.endTime === period.endTime,
+    );
+  }
+
   cellKey(day: number, period: TimetablePeriod): string {
     return `${day}|${period.startTime}|${period.endTime}`;
   }
@@ -545,12 +562,17 @@ export class AdminTimetableGenerateComponent implements OnInit, OnDestroy {
     const target = event.target as HTMLElement;
     if (target.closest('.slot-context-menu')) return;
     this.closeSlotContextMenu();
+    this.closeTeacherContextMenu();
   }
 
   @HostListener('document:keydown.escape')
   onEscapeKey() {
     if (this.slotMoveHint()) {
       this.closeSlotMoveHint();
+      return;
+    }
+    if (this.teacherContextMenu()) {
+      this.closeTeacherContextMenu();
       return;
     }
     if (this.slotContextMenu()) {
@@ -630,16 +652,6 @@ export class AdminTimetableGenerateComponent implements OnInit, OnDestroy {
       return;
     }
 
-    const occupied = this.slotAt(slots, day, period);
-    if (occupied && occupied.id !== slotId) {
-      this.showSlotMoveHint(
-        'That period already has a lesson.',
-        dropCell,
-        event,
-      );
-      return;
-    }
-
     if (
       slot.dayOfWeek === day &&
       slot.startTime === period.startTime &&
@@ -648,6 +660,37 @@ export class AdminTimetableGenerateComponent implements OnInit, OnDestroy {
       return;
     }
 
+    const occupied = this.slotAt(slots, day, period);
+    if (occupied && occupied.id !== slotId) {
+      // Manual move onto an already-occupied slot in the teacher grid: let the user
+      // decide — ignore the conflict to place the lesson here (teacher takes both), or cancel.
+      if (mode === 'teacher') {
+        this.showSlotMoveHint(
+          `${slot.className} would share this period with ${occupied.className} for this teacher.`,
+          dropCell,
+          event,
+          {
+            label: 'Ignore conflicts',
+            run: () => this.performSlotMove(slotId, day, period, dropCell, event, true),
+          },
+        );
+      } else {
+        this.showSlotMoveHint('That period already has a lesson.', dropCell, event);
+      }
+      return;
+    }
+
+    this.performSlotMove(slotId, day, period, dropCell, event, false);
+  }
+
+  private performSlotMove(
+    slotId: string,
+    day: number,
+    period: TimetablePeriod,
+    dropCell: HTMLElement | null,
+    event: DragEvent | MouseEvent | undefined,
+    ignoreConflicts: boolean,
+  ) {
     this.closeSlotMoveHint();
     this.slotMoving.set(true);
     this.api
@@ -655,6 +698,7 @@ export class AdminTimetableGenerateComponent implements OnInit, OnDestroy {
         dayOfWeek: day,
         startTime: period.startTime,
         endTime: period.endTime,
+        ignoreConflicts,
       })
       .subscribe({
         next: () => {
@@ -724,6 +768,37 @@ export class AdminTimetableGenerateComponent implements OnInit, OnDestroy {
 
   previewTeacherPdf() {
     this.exportTeacherPdf(true);
+  }
+
+  /** Right-click a teacher's initials to choose: preview PDF or edit lessons. */
+  onTeacherContextMenu(teacherId: string, teacherName: string, event: MouseEvent) {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!teacherId) return;
+    this.closeSlotContextMenu();
+    this.teacherContextMenu.set({ x: event.clientX, y: event.clientY, teacherId, teacherName });
+  }
+
+  closeTeacherContextMenu() {
+    this.teacherContextMenu.set(null);
+  }
+
+  /** Menu action: preview the selected teacher's timetable PDF. */
+  previewTeacherFromMenu() {
+    const menu = this.teacherContextMenu();
+    if (!menu) return;
+    this.selectedTeacherId = menu.teacherId;
+    this.closeTeacherContextMenu();
+    this.previewTeacherPdf();
+  }
+
+  /** Menu action: open the teacher's class-assignment editor (Class Assignments page). */
+  editLessonsFromMenu() {
+    const menu = this.teacherContextMenu();
+    if (!menu) return;
+    const teacherId = menu.teacherId;
+    this.closeTeacherContextMenu();
+    void this.router.navigate(['/admin/class-assignments'], { queryParams: { teacherId } });
   }
 
   downloadTeacherPdf() {
@@ -924,6 +999,7 @@ export class AdminTimetableGenerateComponent implements OnInit, OnDestroy {
     msg: string,
     anchor?: HTMLElement | null,
     event?: MouseEvent | DragEvent,
+    action?: { label: string; run: () => void },
   ) {
     if (this.slotMoveHintTimer) {
       clearTimeout(this.slotMoveHintTimer);
@@ -945,8 +1021,17 @@ export class AdminTimetableGenerateComponent implements OnInit, OnDestroy {
       }
     }
 
-    this.slotMoveHint.set({ x, y, msg, above });
-    this.slotMoveHintTimer = setTimeout(() => this.closeSlotMoveHint(), 5000);
+    this.slotMoveHint.set({ x, y, msg, above, action });
+    // Actionable (conflict) hints require an explicit choice — Ignore, Cancel, Esc, or a
+    // new drag dismisses them — so they are not auto-dismissed on a timer.
+    if (!action) {
+      this.slotMoveHintTimer = setTimeout(() => this.closeSlotMoveHint(), 5000);
+    }
+  }
+
+  runSlotMoveHintAction() {
+    const action = this.slotMoveHint()?.action;
+    if (action) action.run();
   }
 
   closeSlotMoveHint() {

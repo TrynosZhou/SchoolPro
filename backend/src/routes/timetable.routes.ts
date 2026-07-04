@@ -453,8 +453,12 @@ router.get('/generate/class/pdf', authorize(...viewRoles), async (req, res: Resp
 
 router.patch('/slots/:id/move', authorize(...manageRoles), async (req: AuthRequest, res: Response) => {
   try {
-    const { dayOfWeek, startTime, endTime } = req.body || {};
-    const result = await moveTimetableSlot(req.params.id, { dayOfWeek, startTime, endTime });
+    const { dayOfWeek, startTime, endTime, ignoreConflicts } = req.body || {};
+    const result = await moveTimetableSlot(
+      req.params.id,
+      { dayOfWeek, startTime, endTime },
+      { ignoreConflicts: ignoreConflicts === true || ignoreConflicts === 'true' },
+    );
     res.json(result);
   } catch (err) {
     const e = err as Error & { conflict?: unknown };

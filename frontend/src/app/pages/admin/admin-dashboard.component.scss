@@ -192,17 +192,19 @@
   gap: var(--space-1) var(--space-2);
   margin-top: var(--space-1);
   font-size: var(--font-size-sm);
-  color: var(--color-text-muted);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-secondary);
 }
 
 .stat-breakdown-item {
   display: inline-flex;
   align-items: baseline;
   gap: 0.25rem;
+  font-weight: var(--font-weight-semibold);
 
   strong {
     font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-semibold);
+    font-weight: var(--font-weight-bold);
     color: var(--color-text-primary);
   }
 }

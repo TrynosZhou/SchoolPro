@@ -1,8 +1,9 @@
 // @ts-nocheck
 import { Router, Response } from 'express';
+import { In } from 'typeorm';
 import { AppDataSource } from '../config/data-source';
 import { Student, Guardian, User, SchoolSettings, Form, Invoice } from '../entities';
-import { UserRole, StudentType } from '../entities/enums';
+import { UserRole, StudentType, StudentStatus } from '../entities/enums';
 import { authenticate, authorize, AuthRequest } from '../middleware/auth';
 import bcrypt from 'bcryptjs';
 import { relations, param } from '../utils/typeorm-helpers';
@@ -11,11 +12,37 @@ import { generateClassListPdf, generateStudentIdCardPdf } from '../utils/pdf';
 import { loadSchoolBranding } from '../services/school-branding.service';
 import { assertTeacherClassAccess } from '../utils/teacher-class-access';
 import { createRegistrationInvoiceForStudent } from '../services/registration-invoice.service';
+import {
+  recordStudentExit,
+  reinstateStudent,
+  upsertEnrollmentSnapshot,
+  getActiveSchoolYear,
+} from '../services/student-lifecycle.service';
+import { requireModuleAccess } from '../middleware/access-control';
+import { AccessControlService } from '../services/access-control.service';
+import { logAudit, diffObjects } from '../services/audit-log.service';
 
 const router = Router();
 router.use(authenticate);
 
-router.get('/', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.TEACHER), async (req: AuthRequest, res: Response) => {
+const stuView = requireModuleAccess('students', 'view');
+const stuCreate = requireModuleAccess('students', 'create');
+const stuEdit = requireModuleAccess('students', 'edit');
+const stuDelete = requireModuleAccess('students', 'delete');
+const enrollEdit = requireModuleAccess('enrollment', 'edit');
+const enrollCreate = requireModuleAccess('enrollment', 'create');
+
+async function filterAccessibleStudents(req: AuthRequest, qb: ReturnType<ReturnType<typeof AppDataSource.getRepository<Student>>['createQueryBuilder']>) {
+  const accessible = await AccessControlService.getAccessibleStudentIds(req.user!);
+  if (accessible === 'all') return;
+  if (!accessible.length) {
+    qb.andWhere('1 = 0');
+    return;
+  }
+  qb.andWhere('s.id IN (:...accessibleIds)', { accessibleIds: accessible });
+}
+
+router.get('/', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.TEACHER), stuView, async (req: AuthRequest, res: Response) => {
   const repo = AppDataSource.getRepository(Student);
   const { classId, search, unenrolled, enrolled } = req.query;
 
@@ -36,6 +63,7 @@ router.get('/', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL,
   if (search) {
     qb.andWhere('(s.firstName ILIKE :s OR s.lastName ILIKE :s OR s.admissionNumber ILIKE :s)', { s: `%${search}%` });
   }
+  await filterAccessibleStudents(req, qb);
   const students = await qb.orderBy('s.lastName', 'ASC').getMany();
   res.json(students);
 });
@@ -43,6 +71,7 @@ router.get('/', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL,
 router.get(
   '/class-list/pdf',
   authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.TEACHER),
+  stuView,
   async (req: AuthRequest, res: Response) => {
     const classId = req.query.classId as string;
     if (!classId) return res.status(400).json({ message: 'classId is required' });
@@ -97,7 +126,7 @@ router.get(
   },
 );
 
-router.get('/next-student-id', authorize(UserRole.ADMIN), async (_req, res: Response) => {
+router.get('/next-student-id', authorize(UserRole.ADMIN), stuCreate, async (_req, res: Response) => {
   const studentId = await generateStudentId();
   res.json({ studentId });
 });
@@ -115,13 +144,57 @@ router.get('/parent/my-children', authorize(UserRole.PARENT), async (req: AuthRe
   })));
 });
 
+// Parent-facing student lookup used when linking a child. Searches by Student ID
+// (admission number) OR by last/first name. Returns minimal, non-sensitive fields
+// so the parent can pick the correct record when several students match.
+router.get('/parent/search', authorize(UserRole.PARENT), async (req: AuthRequest, res: Response) => {
+  const parentId = req.user!.parentId;
+  if (!parentId) return res.status(400).json({ message: 'Parent profile not found. Sign out and sign in again.' });
+
+  const q = String(req.query.q ?? '').trim();
+  if (q.length < 2) {
+    return res.status(400).json({ message: 'Enter a Student ID or last name (at least 2 characters).' });
+  }
+
+  const studentRepo = AppDataSource.getRepository(Student);
+  const students = await studentRepo.createQueryBuilder('s')
+    .leftJoinAndSelect('s.schoolClass', 'c')
+    .leftJoinAndSelect('c.form', 'f')
+    .leftJoinAndSelect('s.form', 'studentForm')
+    .where('s.isActive = true')
+    .andWhere('(s.admissionNumber ILIKE :q OR s.lastName ILIKE :q OR s.firstName ILIKE :q)', { q: `%${q}%` })
+    .orderBy('s.lastName', 'ASC')
+    .addOrderBy('s.firstName', 'ASC')
+    .take(25)
+    .getMany();
+
+  let linkedIds = new Set<string>();
+  if (students.length) {
+    const links = await AppDataSource.getRepository(Guardian).find({
+      where: { parentId, studentId: In(students.map((s) => s.id)) },
+    });
+    linkedIds = new Set(links.map((l) => l.studentId));
+  }
+
+  res.json(students.map((s) => ({
+    id: s.id,
+    admissionNumber: s.admissionNumber,
+    firstName: s.firstName,
+    lastName: s.lastName,
+    gender: s.gender || undefined,
+    className: s.schoolClass?.name,
+    formName: s.schoolClass?.form?.name || s.form?.name,
+    alreadyLinked: linkedIds.has(s.id),
+  })));
+});
+
 router.post('/parent/link-child', authorize(UserRole.PARENT), async (req: AuthRequest, res: Response) => {
   const parentId = req.user!.parentId;
   if (!parentId) return res.status(400).json({ message: 'Parent profile not found. Sign out and sign in again.' });
 
-  const { admissionNumber, relationship } = req.body;
-  if (!admissionNumber?.trim()) {
-    return res.status(400).json({ message: 'Student ID is required' });
+  const { admissionNumber, studentId, relationship } = req.body;
+  if (!admissionNumber?.trim() && !studentId?.trim()) {
+    return res.status(400).json({ message: 'Provide a Student ID or select a student to link.' });
   }
 
   const userRepo = AppDataSource.getRepository(User);
@@ -131,13 +204,25 @@ router.post('/parent/link-child', authorize(UserRole.PARENT), async (req: AuthRe
   const user = await userRepo.findOne({ where: { id: req.user!.userId } });
   if (!user) return res.status(404).json({ message: 'User not found' });
 
-  const admission = String(admissionNumber).trim().toUpperCase();
-  const student = await studentRepo.findOne({
-    where: { admissionNumber: admission, isActive: true },
-    relations: relations('schoolClass', 'schoolClass.form', 'form'),
-  });
-  if (!student) {
-    return res.status(404).json({ message: 'No student found with that Student ID. Check the number on the admission letter or with the school office.' });
+  let student;
+  if (studentId?.trim()) {
+    // Parent picked a specific record from the search results.
+    student = await studentRepo.findOne({
+      where: { id: String(studentId).trim(), isActive: true },
+      relations: relations('schoolClass', 'schoolClass.form', 'form'),
+    });
+    if (!student) {
+      return res.status(404).json({ message: 'That student record could not be found. Try searching again.' });
+    }
+  } else {
+    const admission = String(admissionNumber).trim().toUpperCase();
+    student = await studentRepo.findOne({
+      where: { admissionNumber: admission, isActive: true },
+      relations: relations('schoolClass', 'schoolClass.form', 'form'),
+    });
+    if (!student) {
+      return res.status(404).json({ message: 'No student found with that Student ID. Check the number on the admission letter or with the school office.' });
+    }
   }
 
   const alreadyLinked = await guardianRepo.findOne({ where: { studentId: student.id, parentId } });
@@ -193,9 +278,35 @@ router.post('/parent/link-child', authorize(UserRole.PARENT), async (req: AuthRe
   });
 });
 
+// Detach a student from the parent's account. Non-destructive: the guardian
+// contact record is kept (parentId cleared) so any school-entered contact
+// details remain, and the parent can re-link the child later.
+router.delete('/parent/unlink-child/:studentId', authorize(UserRole.PARENT), async (req: AuthRequest, res: Response) => {
+  const parentId = req.user!.parentId;
+  if (!parentId) return res.status(400).json({ message: 'Parent profile not found. Sign out and sign in again.' });
+
+  const studentId = param(req.params.studentId);
+  const guardianRepo = AppDataSource.getRepository(Guardian);
+
+  const guardian = await guardianRepo.findOne({
+    where: { studentId, parentId },
+    relations: relations('student'),
+  });
+  if (!guardian) {
+    return res.status(404).json({ message: 'That child is not linked to your account.' });
+  }
+
+  const name = guardian.student ? `${guardian.student.firstName} ${guardian.student.lastName}` : 'Child';
+  guardian.parentId = null;
+  await guardianRepo.save(guardian);
+
+  res.json({ message: `${name} has been unlinked from your account.` });
+});
+
 router.get(
   '/:id/id-card/pdf',
   authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.TEACHER),
+  stuView,
   async (req: AuthRequest, res: Response) => {
     const repo = AppDataSource.getRepository(Student);
     const student = await repo.findOne({
@@ -203,6 +314,10 @@ router.get(
       relations: relations('schoolClass', 'schoolClass.form', 'form'),
     });
     if (!student) return res.status(404).json({ message: 'Student not found' });
+
+    if (!(await AccessControlService.userCanAccessStudent(req.user!, student.id))) {
+      return res.status(403).json({ message: 'You do not have access to this student record' });
+    }
 
     if (student.classId && !(await assertTeacherClassAccess(req, student.classId))) {
       return res.status(403).json({ message: 'You are not assigned to this class' });
@@ -234,7 +349,7 @@ router.get(
   },
 );
 
-router.get('/:id', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.TEACHER, UserRole.PARENT, UserRole.STUDENT), async (req: AuthRequest, res: Response) => {
+router.get('/:id', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.TEACHER, UserRole.PARENT, UserRole.STUDENT), stuView, async (req: AuthRequest, res: Response) => {
   const repo = AppDataSource.getRepository(Student);
   const student = await repo.findOne({
     where: { id: param(req.params.id) },
@@ -242,19 +357,14 @@ router.get('/:id', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIP
   });
   if (!student) return res.status(404).json({ message: 'Student not found' });
 
-  if (req.user!.role === UserRole.PARENT) {
-    const guardianRepo = AppDataSource.getRepository(Guardian);
-    const link = await guardianRepo.findOne({ where: { studentId: student.id, parentId: req.user!.parentId } });
-    if (!link) return res.status(403).json({ message: 'Access denied' });
-  }
-  if (req.user!.role === UserRole.STUDENT && req.user!.studentId !== student.id) {
+  if (!(await AccessControlService.userCanAccessStudent(req.user!, student.id))) {
     return res.status(403).json({ message: 'Access denied' });
   }
 
   res.json(student);
 });
 
-router.post('/', authorize(UserRole.ADMIN), async (req, res: Response) => {
+router.post('/', authorize(UserRole.ADMIN), stuCreate, async (req: AuthRequest, res: Response) => {
   const repo = AppDataSource.getRepository(Student);
   const guardianRepo = AppDataSource.getRepository(Guardian);
   const formRepo = AppDataSource.getRepository(Form);
@@ -339,6 +449,17 @@ router.post('/', authorize(UserRole.ADMIN), async (req, res: Response) => {
     where: { id: student.id },
     relations: relations('guardians', 'schoolClass', 'form'),
   });
+
+  void logAudit({
+    userId: req.user!.userId,
+    userRole: req.user!.role,
+    userEmail: req.user!.email,
+    action: 'create',
+    module: 'students',
+    recordId: student.id,
+    recordLabel: `${student.firstName} ${student.lastName} (${student.admissionNumber})`,
+  });
+
   res.status(201).json({
     ...full,
     registrationInvoice: {
@@ -349,7 +470,7 @@ router.post('/', authorize(UserRole.ADMIN), async (req, res: Response) => {
   });
 });
 
-router.patch('/:id/enroll', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.TEACHER), async (req, res: Response) => {
+router.patch('/:id/enroll', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.TEACHER), enrollCreate, async (req: AuthRequest, res: Response) => {
   const repo = AppDataSource.getRepository(Student);
   const { classId } = req.body;
   if (!classId) return res.status(400).json({ message: 'Class is required' });
@@ -357,22 +478,54 @@ router.patch('/:id/enroll', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRol
   const student = await repo.findOne({ where: { id: req.params.id } });
   if (!student) return res.status(404).json({ message: 'Student not found' });
 
+  if (!(await AccessControlService.userCanAccessStudent(req.user!, student.id))) {
+    return res.status(403).json({ message: 'You do not have access to this student record' });
+  }
+  if (!(await assertTeacherClassAccess(req, classId))) {
+    return res.status(403).json({ message: 'You are not assigned to this class' });
+  }
+
+  const beforeClassId = student.classId;
   student.classId = classId;
   student.enrollmentDate = today();
   await repo.save(student);
+
+  try {
+    const year = await getActiveSchoolYear();
+    if (year) await upsertEnrollmentSnapshot(student, year.id);
+  } catch (err) {
+    console.error('[students] enrollment snapshot failed:', err);
+  }
 
   const full = await repo.findOne({
     where: { id: student.id },
     relations: relations('schoolClass', 'schoolClass.form', 'guardians'),
   });
+
+  void logAudit({
+    userId: req.user!.userId,
+    userRole: req.user!.role,
+    userEmail: req.user!.email,
+    action: 'edit',
+    module: 'enrollment',
+    recordId: student.id,
+    recordLabel: `${student.firstName} ${student.lastName}`,
+    changes: diffObjects({ classId: beforeClassId }, { classId: student.classId }),
+  });
+
   res.json(full);
 });
 
-router.patch('/:id/unenroll', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.TEACHER), async (req, res: Response) => {
+router.patch('/:id/unenroll', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.TEACHER), enrollEdit, async (req: AuthRequest, res: Response) => {
   const repo = AppDataSource.getRepository(Student);
   const student = await repo.findOne({ where: { id: req.params.id } });
   if (!student) return res.status(404).json({ message: 'Student not found' });
 
+  if (!(await AccessControlService.userCanAccessStudent(req.user!, student.id))) {
+    return res.status(403).json({ message: 'You do not have access to this student record' });
+  }
+
+  const beforeClassId = student.classId;
   student.classId = null;
   student.enrollmentDate = null;
   await repo.save(student);
@@ -381,10 +534,22 @@ router.patch('/:id/unenroll', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserR
     where: { id: student.id },
     relations: relations('guardians'),
   });
+
+  void logAudit({
+    userId: req.user!.userId,
+    userRole: req.user!.role,
+    userEmail: req.user!.email,
+    action: 'edit',
+    module: 'enrollment',
+    recordId: student.id,
+    recordLabel: `${student.firstName} ${student.lastName}`,
+    changes: diffObjects({ classId: beforeClassId }, { classId: null }),
+  });
+
   res.json(full);
 });
 
-router.put('/:id', authorize(UserRole.ADMIN), async (req, res: Response) => {
+router.put('/:id', authorize(UserRole.ADMIN, UserRole.TEACHER), stuEdit, async (req: AuthRequest, res: Response) => {
   const repo = AppDataSource.getRepository(Student);
   const guardianRepo = AppDataSource.getRepository(Guardian);
   const student = await repo.findOne({
@@ -393,6 +558,20 @@ router.put('/:id', authorize(UserRole.ADMIN), async (req, res: Response) => {
   });
   if (!student) return res.status(404).json({ message: 'Student not found' });
 
+  if (!(await AccessControlService.userCanAccessStudent(req.user!, student.id))) {
+    return res.status(403).json({ message: 'You do not have access to this student record' });
+  }
+
+  const beforeSnapshot = {
+    firstName: student.firstName,
+    lastName: student.lastName,
+    dateOfBirth: student.dateOfBirth,
+    gender: student.gender,
+    studentType: student.studentType,
+    address: student.address,
+    previousSchool: student.previousSchool,
+    formId: student.formId,
+  };
   const {
     guardians,
     admissionNumber: _admission,
@@ -455,10 +634,31 @@ router.put('/:id', authorize(UserRole.ADMIN), async (req, res: Response) => {
     where: { id: student.id },
     relations: relations('schoolClass', 'schoolClass.form', 'form', 'guardians'),
   });
+
+  void logAudit({
+    userId: req.user!.userId,
+    userRole: req.user!.role,
+    userEmail: req.user!.email,
+    action: 'edit',
+    module: 'students',
+    recordId: student.id,
+    recordLabel: `${student.firstName} ${student.lastName}`,
+    changes: diffObjects(beforeSnapshot, {
+      firstName: student.firstName,
+      lastName: student.lastName,
+      dateOfBirth: student.dateOfBirth,
+      gender: student.gender,
+      studentType: student.studentType,
+      address: student.address,
+      previousSchool: student.previousSchool,
+      formId: student.formId,
+    }),
+  });
+
   res.json(full);
 });
 
-router.post('/:id/registration-invoice', authorize(UserRole.ADMIN), async (req, res: Response) => {
+router.post('/:id/registration-invoice', authorize(UserRole.ADMIN), stuEdit, async (req, res: Response) => {
   const studentRepo = AppDataSource.getRepository(Student);
   const invoiceRepo = AppDataSource.getRepository(Invoice);
   const student = await studentRepo.findOne({
@@ -499,12 +699,92 @@ router.post('/:id/registration-invoice', authorize(UserRole.ADMIN), async (req, 
   });
 });
 
-router.delete('/:id', authorize(UserRole.ADMIN), async (req, res: Response) => {
-  const repo = AppDataSource.getRepository(Student);
-  const student = await repo.findOne({ where: { id: param(req.params.id) } });
+const EXIT_STATUSES = [
+  StudentStatus.WITHDRAWN,
+  StudentStatus.TRANSFERRED,
+  StudentStatus.GRADUATED,
+  StudentStatus.SUSPENDED,
+];
+
+/**
+ * Record a student's exit from the roll (withdrawn / transferred / graduated / suspended)
+ * with a reason and date, for retention & dropout analytics.
+ */
+router.patch('/:id/status', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), stuEdit, async (req: AuthRequest, res: Response) => {
+  const { status, reason, exitDate } = req.body || {};
+  if (!EXIT_STATUSES.includes(status)) {
+    return res.status(400).json({
+      message: `status must be one of: ${EXIT_STATUSES.join(', ')}`,
+    });
+  }
+  const studentId = param(req.params.id);
+  const before = await AppDataSource.getRepository(Student).findOne({ where: { id: studentId } });
+  const student = await recordStudentExit(studentId, status, {
+    reason: reason ? String(reason).slice(0, 255) : undefined,
+    exitDate: exitDate || undefined,
+  });
   if (!student) return res.status(404).json({ message: 'Student not found' });
-  student.isActive = false;
-  await repo.save(student);
+
+  void logAudit({
+    userId: req.user!.userId,
+    userRole: req.user!.role,
+    userEmail: req.user!.email,
+    action: 'edit',
+    module: 'students',
+    recordId: student.id,
+    recordLabel: `${student.firstName} ${student.lastName}`,
+    changes: diffObjects(
+      { status: before?.status, exitDate: before?.exitDate, exitReason: before?.exitReason },
+      { status: student.status, exitDate: student.exitDate, exitReason: student.exitReason },
+    ),
+  });
+
+  res.json({
+    message: `Student marked as ${status}.`,
+    id: student.id,
+    status: student.status,
+    exitDate: student.exitDate,
+    exitReason: student.exitReason,
+  });
+});
+
+/** Reinstate a previously exited student back to active status. */
+router.patch('/:id/reinstate', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), stuEdit, async (req: AuthRequest, res: Response) => {
+  const studentId = param(req.params.id);
+  const before = await AppDataSource.getRepository(Student).findOne({ where: { id: studentId } });
+  const student = await reinstateStudent(studentId);
+  if (!student) return res.status(404).json({ message: 'Student not found' });
+
+  void logAudit({
+    userId: req.user!.userId,
+    userRole: req.user!.role,
+    userEmail: req.user!.email,
+    action: 'edit',
+    module: 'students',
+    recordId: student.id,
+    recordLabel: `${student.firstName} ${student.lastName}`,
+    changes: diffObjects({ status: before?.status }, { status: student.status }),
+  });
+
+  res.json({ message: 'Student reinstated.', id: student.id, status: student.status });
+});
+
+router.delete('/:id', authorize(UserRole.ADMIN), stuDelete, async (req: AuthRequest, res: Response) => {
+  const reason = req.body?.reason ? String(req.body.reason).slice(0, 255) : 'Record removed';
+  const student = await recordStudentExit(param(req.params.id), StudentStatus.WITHDRAWN, { reason });
+  if (!student) return res.status(404).json({ message: 'Student not found' });
+
+  void logAudit({
+    userId: req.user!.userId,
+    userRole: req.user!.role,
+    userEmail: req.user!.email,
+    action: 'delete',
+    module: 'students',
+    recordId: student.id,
+    recordLabel: `${student.firstName} ${student.lastName}`,
+    changes: [{ field: 'reason', before: null, after: reason }],
+  });
+
   res.json({ message: 'Student record deleted', id: student.id });
 });
 

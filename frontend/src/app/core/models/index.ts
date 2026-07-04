@@ -53,6 +53,8 @@ export interface DashboardOverview {
   boarders: number;
   dayScholars: number;
   totalStaff: number;
+  maleStaff: number;
+  femaleStaff: number;
   attendanceToday: { status: string; count: string }[];
   monthlyCollections: number;
   totalDebtors: number;

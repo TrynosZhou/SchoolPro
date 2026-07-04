@@ -6,7 +6,8 @@ import {
   SchoolYear, Term, Form, SchoolClass, Subject, Department, ClassSubject, Staff, User, TuckshopItem, UniformSale, TuckshopSale,
   SchoolSettings, ExamType, ClassPromotionRule, Student, Parent, Guardian, SchoolRole,
 } from '../entities';
-import { UserRole } from '../entities/enums';
+import { UserRole, StudentStatus } from '../entities/enums';
+import { recordPromotionSnapshots } from '../services/student-lifecycle.service';
 import { authenticate, authorize, AuthRequest } from '../middleware/auth';
 import bcrypt from 'bcryptjs';
 import { relations } from '../utils/typeorm-helpers';
@@ -49,6 +50,14 @@ router.use(authenticate);
 
 const SETTINGS_ID = 'default';
 const logosDir = path.join(process.cwd(), 'uploads', 'logos');
+
+/** Normalize an incoming staff gender value to 'male' | 'female' | null. */
+function normalizeGender(value: unknown): string | null {
+  const v = String(value ?? '').trim().toLowerCase();
+  if (v === 'male' || v === 'm') return 'male';
+  if (v === 'female' || v === 'f') return 'female';
+  return null;
+}
 
 const logoUpload = multer({
   storage: multer.diskStorage({
@@ -845,6 +854,8 @@ router.post('/class-promotion/promote', authorize(UserRole.ADMIN), async (req, r
 
   const enrollmentDate = targetYear.startDate || today();
 
+  const promotedStudentIds = students.map((s) => s.id);
+
   if (toClass) {
     await studentRepo
       .createQueryBuilder()
@@ -858,17 +869,38 @@ router.post('/class-promotion/promote', authorize(UserRole.ADMIN), async (req, r
       .andWhere('isActive = true')
       .execute();
   } else {
-    // Completion: remove from class; keep student active.
+    // Completion: student has finished the top level — record graduation & remove from class.
     await studentRepo
       .createQueryBuilder()
       .update(Student)
       .set({
         classId: null,
         enrollmentDate: null,
+        status: StudentStatus.GRADUATED,
+        exitDate: completingYear.endDate || today(),
+        isActive: false,
       })
       .where('classId = :classId', { classId: fromClass.id })
       .andWhere('isActive = true')
       .execute();
+  }
+
+  // Maintain year-over-year enrollment snapshots for retention analytics.
+  try {
+    await recordPromotionSnapshots({
+      studentIds: promotedStudentIds,
+      completingYearId: completingYear.id,
+      completingYearEndDate: completingYear.endDate,
+      targetYearId: targetYear.id,
+      targetYearStartDate: targetYear.startDate,
+      toClassId: toClass?.id ?? null,
+      toFormId: toClass?.formId ?? null,
+      toClassName: toClass?.name ?? null,
+      toFormName: toClass?.form?.name ?? null,
+      graduation: !toClass,
+    });
+  } catch (err) {
+    console.error('[class-promotion] enrollment snapshot update failed:', err);
   }
 
   const fromLabel = `${fromClass.form?.name || 'Form'} ${fromClass.name}`;
@@ -1033,6 +1065,7 @@ router.post('/staff', authorize(UserRole.ADMIN), async (req, res: Response) => {
     qualification,
     hireDate,
     title,
+    gender,
     employeeNumber: _ignored,
   } = req.body;
   const userRepo = AppDataSource.getRepository(User);
@@ -1060,10 +1093,13 @@ router.post('/staff', authorize(UserRole.ADMIN), async (req, res: Response) => {
   }));
 
   const employeeNumber = await generateEmployeeNumber();
+  const normalizedGender = normalizeGender(gender);
+
   const staff = await staffRepo.save(staffRepo.create({
     userId: user.id,
     employeeNumber,
     title: title ? String(title).trim() : null,
+    gender: normalizedGender,
     department,
     qualification,
     hireDate: hireDate || today(),
@@ -1098,6 +1134,7 @@ router.patch('/staff/:id', authorize(UserRole.ADMIN), async (req, res: Response)
     qualification,
     hireDate,
     title,
+    gender,
     employeeNumber: _ignored,
     isActive,
   } = req.body;
@@ -1126,6 +1163,7 @@ router.patch('/staff/:id', authorize(UserRole.ADMIN), async (req, res: Response)
     staff.hireDate = trimmedHireDate || null;
   }
   if (title !== undefined) staff.title = title ? String(title).trim() : null;
+  if (gender !== undefined) staff.gender = normalizeGender(gender);
   if (isActive !== undefined) {
     staff.isActive = isActive;
     staff.user.isActive = isActive;

@@ -17,6 +17,63 @@
   pointer-events: none;
 }
 
+.public-nav {
+  position: absolute;
+  top: 1.25rem;
+  right: 1.5rem;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.public-nav-link {
+  color: #e2e8f0;
+  text-decoration: none;
+  font-size: 0.9rem;
+  font-weight: 600;
+
+  &:hover {
+    color: #fff;
+    text-decoration: underline;
+  }
+}
+
+.apply-now-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.6rem 1.15rem;
+  border-radius: 999px;
+  background: #6366f1;
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.9rem;
+  text-decoration: none;
+  box-shadow: 0 8px 20px rgba(99, 102, 241, 0.4);
+  transition: transform 0.15s ease, background 0.15s ease;
+
+  &:hover {
+    background: #4f46e5;
+    transform: translateY(-1px);
+  }
+}
+
+@media (max-width: 560px) {
+  .public-nav {
+    top: 0.85rem;
+    right: 0.9rem;
+    gap: 0.65rem;
+  }
+  .public-nav-link {
+    display: none;
+  }
+  .apply-now-btn {
+    padding: 0.5rem 0.9rem;
+    font-size: 0.82rem;
+  }
+}
+
 .orb {
   position: absolute;
   border-radius: 50%;
@@ -68,13 +125,28 @@
     grid-template-columns: 1fr;
     align-items: stretch;
   }
+
+  /* Sign up: use the full page width so the form can be a wide, landscape card. */
+  &.mode-signup {
+    grid-template-columns: 1fr;
+
+    .brand-panel {
+      display: none;
+    }
+
+    /* Keep the SP brand mark on the card since the side panel is hidden. */
+    .mobile-brand {
+      display: flex;
+    }
+  }
 }
 
 /* —— Brand panel —— */
 .brand-panel {
   display: flex;
-  align-items: center;
-  padding: 1.5rem 2rem;
+  align-items: flex-start;
+  align-self: start;
+  padding: 0.85rem 2rem 2rem;
   color: #fff;
 
   @media (max-width: 960px) {
@@ -104,6 +176,20 @@
   font-weight: 800;
   font-size: 1.1rem;
   box-shadow: 0 8px 24px rgba(99, 102, 241, 0.45);
+  overflow: hidden;
+  flex-shrink: 0;
+
+  &.has-logo {
+    background: #ffffff;
+    padding: 4px;
+  }
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    border-radius: 10px;
+  }
 }
 
 .brand-name {
@@ -184,11 +270,9 @@
   align-items: center;
   justify-content: center;
   padding: 1rem 1.25rem;
-  background: rgba(248, 250, 252, 0.97);
-  backdrop-filter: blur(20px);
+  background: transparent;
 
   @media (max-width: 960px) {
-    background: transparent;
     padding: 1rem 0.75rem;
   }
 }
@@ -205,11 +289,37 @@
   border: 1px solid rgba(255, 255, 255, 0.8);
 
   &--wide {
-    max-width: 460px;
+    max-width: 900px;
   }
 
   @media (max-width: 960px) {
     box-shadow: 0 24px 48px rgba(0, 0, 0, 0.35);
+  }
+}
+
+/* Landscape (two-column) layout for the taller Sign Up form. */
+.signin-card--wide .signin-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.7rem 1.1rem;
+  align-items: start;
+}
+
+.signin-card--wide .signin-form > .role-picker,
+.signin-card--wide .signin-form > .name-row,
+.signin-card--wide .signin-form > .field.span-2,
+.signin-card--wide .signin-form > .password-rules,
+.signin-card--wide .signin-form > .alert-error,
+.signin-card--wide .signin-form > .alert-success,
+.signin-card--wide .signin-form > .dev-reset-hint,
+.signin-card--wide .signin-form > .btn-signin {
+  grid-column: 1 / -1;
+}
+
+/* Collapse back to a single column on narrow screens. */
+@media (max-width: 720px) {
+  .signin-card--wide .signin-form {
+    grid-template-columns: 1fr;
   }
 }
 

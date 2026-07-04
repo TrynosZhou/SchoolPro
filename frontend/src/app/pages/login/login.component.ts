@@ -1,8 +1,9 @@
 import { Component, inject, OnInit, signal, computed } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../core/services/auth.service';
 import { ApiService } from '../../core/services/api.service';
+import { environment } from '../../../environments/environment';
 
 type AuthMode = 'signin' | 'signup' | 'forgot' | 'reset';
 type SignupRole = 'parent' | 'student';
@@ -18,7 +19,7 @@ interface PasswordPolicy {
 @Component({
   selector: 'app-login',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, RouterLink],
   templateUrl: './login.component.html',
   styleUrl: './login.component.scss',
 })
@@ -32,6 +33,10 @@ export class LoginComponent implements OnInit {
 
   mode = signal<AuthMode>('signin');
   signupRole = signal<SignupRole>('parent');
+
+  schoolName = signal('School Pro Academy');
+  schoolTagline = signal('School Management System');
+  schoolLogoUrl = signal<string | null>(null);
 
   username = '';
   signupEmail = '';
@@ -74,6 +79,21 @@ export class LoginComponent implements OnInit {
 
   readonly currentYear = new Date().getFullYear();
 
+  schoolInitials = computed(() => {
+    const words = this.schoolName().trim().split(/\s+/).filter(Boolean);
+    if (!words.length) return 'SP';
+    const initials = words.slice(0, 2).map((w) => w[0]).join('');
+    return initials.toUpperCase();
+  });
+
+  private toAssetUrl(path: string | null | undefined): string | null {
+    const value = path?.trim();
+    if (!value) return null;
+    if (/^https?:\/\//i.test(value)) return value;
+    const origin = environment.apiUrl.replace(/\/api$/, '');
+    return `${origin}${value.startsWith('/') ? value : `/${value}`}`;
+  }
+
   passwordRules = computed(() => {
     const p = this.passwordPolicy();
     const rules: string[] = [`At least ${p.minPasswordLength} characters`];
@@ -95,6 +115,17 @@ export class LoginComponent implements OnInit {
       next: (policy) => this.passwordPolicy.set(policy),
       error: () => {},
     });
+
+    this.api
+      .get<{ schoolName: string | null; tagline: string | null; logoUrl: string | null }>('/public/branding')
+      .subscribe({
+        next: (data) => {
+          if (data.schoolName) this.schoolName.set(data.schoolName);
+          if (data.tagline) this.schoolTagline.set(data.tagline);
+          this.schoolLogoUrl.set(this.toAssetUrl(data.logoUrl));
+        },
+        error: () => {},
+      });
 
     this.route.queryParamMap.subscribe((params) => {
       const token = params.get('reset')?.trim();

@@ -27,4 +27,11 @@ export const TEACHER_NAV_SECTIONS: NavSection[] = [
       { label: 'Report Cards', path: '/teacher/report-cards', icon: '📄' },
     ],
   },
+  {
+    heading: 'Communication',
+    items: [
+      { label: 'Messages', path: '/teacher/messages', icon: '💬' },
+      { label: 'Notifications', path: '/teacher/notifications', icon: '🔔' },
+    ],
+  },
 ];

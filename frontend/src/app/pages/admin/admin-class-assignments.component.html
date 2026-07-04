@@ -349,7 +349,7 @@
                   <select [(ngModel)]="addRow.subjectId" name="modalAddSubject">
                     <option value="">— Select —</option>
                     @for (sub of subjects(); track sub.id) {
-                      <option [value]="sub.id">{{ sub.name }}</option>
+                      <option [value]="sub.id">{{ sub.name }}{{ sub.code ? ' (' + sub.code + ')' : '' }}</option>
                     }
                   </select>
                 </label>
@@ -413,7 +413,7 @@
                           <select [(ngModel)]="draft.subjectId" [name]="'editSubject' + a.id" class="inline-select">
                             <option value="">— Select —</option>
                             @for (sub of subjects(); track sub.id) {
-                              <option [value]="sub.id">{{ sub.name }}</option>
+                              <option [value]="sub.id">{{ sub.name }}{{ sub.code ? ' (' + sub.code + ')' : '' }}</option>
                             }
                           </select>
                         } @else {

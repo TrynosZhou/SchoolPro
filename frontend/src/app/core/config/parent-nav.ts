@@ -7,5 +7,7 @@ export const PARENT_NAV_ITEMS: NavItem[] = [
   { label: 'Attendance', path: '/parent/attendance', icon: '📋' },
   { label: 'Report Cards', path: '/parent/report-cards', icon: '📄' },
   { label: 'Messages', path: '/parent/messages', icon: '💬' },
+  { label: 'Notifications', path: '/parent/notifications', icon: '🔔' },
   { label: 'Send Email', path: '/parent/send-email', icon: '✉️' },
+  { label: 'Apply for a Child', path: '/apply', icon: '🎓', queryParams: { prefill: 1 } },
 ];

@@ -18,6 +18,12 @@
 
   @if (loading()) {
     <div class="empty card"><p>Loading report card…</p></div>
+  } @else if (blockedMessage()) {
+    <div class="empty card locked">
+      <p class="locked-icon" aria-hidden="true">🔒</p>
+      <p class="locked-msg">{{ blockedMessage() }}</p>
+      <a routerLink="/parent/finance" [queryParams]="{ studentId }" class="btn-outline">View financial statement</a>
+    </div>
   } @else if (notFound()) {
     <div class="empty card">
       <p>No report card for this term yet. Marks appear here after teachers enter exam results.</p>

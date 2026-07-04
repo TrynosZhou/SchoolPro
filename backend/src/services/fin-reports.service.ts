@@ -180,7 +180,7 @@ function buildTuitionExemptionNarrative(
   return `Tuition exemption removed or reduced — $${termRoundMoney(amount).toFixed(2)} restored to ${invNum}.`;
 }
 
-async function fetchStudentInvoiceBalance(studentId: string): Promise<number> {
+export async function fetchStudentInvoiceBalance(studentId: string): Promise<number> {
   const result = await AppDataSource.query(
     `
       SELECT COALESCE(SUM(i."totalAmount" - i."amountPaid"), 0) as owed

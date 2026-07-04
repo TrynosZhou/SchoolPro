@@ -96,6 +96,10 @@
     border-right: 0;
   }
 
+  .row-label-teacher {
+    cursor: context-menu;
+  }
+
   .drop-cell {
     height: 2.1rem;
     min-width: 0;
@@ -103,6 +107,20 @@
     background: #fff;
     vertical-align: middle;
     overflow: hidden;
+
+    // Two clashing lessons in one cell are stacked vertically (one on top of the
+    // other) and split the cell height so together they fill it with no white gap.
+    &:has(.lesson-card + .lesson-card) {
+      .lesson-card {
+        height: 50%;
+        min-height: 0;
+        width: 100%;
+
+        &:not(:first-child) {
+          box-shadow: inset 0 1px 0 rgba(15, 23, 42, 0.35);
+        }
+      }
+    }
 
     &.break-slot {
       background: #f1f5f9;
@@ -291,6 +309,18 @@
       background: #f1f5f9;
     }
   }
+
+  .context-menu-heading {
+    padding: 0.4rem 0.75rem 0.3rem;
+    margin-bottom: 0.15rem;
+    border-bottom: 1px solid #e2e8f0;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #475569;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+  }
 }
 
 .slot-move-hint {
@@ -314,6 +344,75 @@
   &.above {
     transform: translate(-50%, -100%);
     animation: slotHintInAbove 0.15s ease;
+  }
+
+  &.actionable {
+    pointer-events: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.4rem;
+    background: #fef2f2;
+    color: #991b1b;
+    border-color: #fca5a5;
+  }
+
+  .slot-move-hint-title {
+    font-size: 0.82rem;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: #b91c1c;
+  }
+
+  .slot-move-hint-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-top: 0.1rem;
+  }
+
+  .slot-move-hint-action,
+  .slot-move-hint-cancel {
+    pointer-events: auto;
+    cursor: pointer;
+    border-radius: 999px;
+    padding: 0.3rem 0.85rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    line-height: 1;
+    transition: background 0.15s ease, border-color 0.15s ease;
+  }
+
+  .slot-move-hint-action {
+    border: none;
+    background: #b91c1c;
+    color: #fff;
+
+    &:hover {
+      background: #991b1b;
+    }
+
+    &:focus-visible {
+      outline: 2px solid #b91c1c;
+      outline-offset: 2px;
+    }
+  }
+
+  .slot-move-hint-cancel {
+    border: 1px solid #d1d5db;
+    background: #fff;
+    color: #374151;
+
+    &:hover {
+      background: #f3f4f6;
+      border-color: #9ca3af;
+    }
+
+    &:focus-visible {
+      outline: 2px solid #9ca3af;
+      outline-offset: 2px;
+    }
   }
 }
 
@@ -610,6 +709,19 @@
       max-height: var(--row-h);
       padding: 0;
       background: #d9d9d9;
+
+      &:has(.lesson-card + .lesson-card) {
+        .lesson-card {
+          height: 50%;
+          min-height: 0;
+          max-height: 50%;
+          width: 100%;
+
+          &:not(:first-child) {
+            box-shadow: inset 0 1px 0 rgba(15, 23, 42, 0.35);
+          }
+        }
+      }
 
       &.day-start {
         border-left: 1px solid #374151;

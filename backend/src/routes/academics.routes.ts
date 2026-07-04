@@ -12,12 +12,25 @@ import {
   resolveStaffRecipientByEmail,
   removeAttachmentFiles,
   MAX_MESSAGE_ATTACHMENTS,
-  PARENT_MESSAGE_RECIPIENT_ROLES,
 } from '../utils/message-attachments';
 import { assertTimetableTeacherMatchesAssignment } from '../services/class-subject-teacher.service';
+import {
+  conversationKey,
+  canMessageRecipient,
+  listParentMessagingRecipients,
+  listStudentMessagingRecipients,
+  listTeacherMessagingRecipients,
+} from '../services/messaging.service';
+import { notifyNewMessage } from '../services/message-notify.service';
+import { requireModuleAccess, denyUnlessModuleAccess } from '../middleware/access-control';
+import { logAudit } from '../services/audit-log.service';
 
 const router = Router();
 router.use(authenticate);
+
+const msgView = requireModuleAccess('communication', 'view');
+const msgCreate = requireModuleAccess('communication', 'create');
+const msgDelete = requireModuleAccess('communication', 'delete');
 
 const messageRelations = relations('sender', 'recipient', 'student', 'attachments');
 
@@ -95,8 +108,24 @@ router.post('/weekly-assessments/bulk', authorize(UserRole.TEACHER, UserRole.ADM
   res.json(saved);
 });
 
-router.get('/messages/recipients', authorize(UserRole.TEACHER, UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (req: AuthRequest, res: Response) => {
+router.get('/messages/recipients', authorize(UserRole.TEACHER, UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), msgView, async (req: AuthRequest, res: Response) => {
   const userRepo = AppDataSource.getRepository(User);
+
+  // Teachers only see parents/students they teach — not the full user directory.
+  if (req.user!.role === UserRole.TEACHER && req.user!.staffId) {
+    const list = await listTeacherMessagingRecipients(req.user!.staffId);
+    return res.json({
+      recipients: list.map((r) => ({
+        id: r.id,
+        firstName: r.firstName,
+        lastName: r.lastName,
+        email: r.email,
+        role: r.role,
+      })),
+      registeredParentCount: list.filter((r) => r.role === UserRole.PARENT).length,
+    });
+  }
+
   const users = await userRepo.find({
     where: { isActive: true },
     relations: relations('parentProfile'),
@@ -119,7 +148,7 @@ router.get('/messages/recipients', authorize(UserRole.TEACHER, UserRole.ADMIN, U
   });
 });
 
-router.get('/messages/unread-count', authorize(UserRole.TEACHER, UserRole.PARENT, UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (req: AuthRequest, res: Response) => {
+router.get('/messages/unread-count', authorize(UserRole.TEACHER, UserRole.PARENT, UserRole.STUDENT, UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), msgView, async (req: AuthRequest, res: Response) => {
   const rows = await AppDataSource.query(
     `SELECT COUNT(*)::int AS count FROM messages WHERE "recipientId" = $1 AND "isRead" = false`,
     [req.user!.userId],
@@ -127,7 +156,7 @@ router.get('/messages/unread-count', authorize(UserRole.TEACHER, UserRole.PARENT
   res.json({ count: Number(rows[0]?.count || 0) });
 });
 
-router.get('/messages/inbox', authorize(UserRole.TEACHER, UserRole.PARENT, UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (req: AuthRequest, res: Response) => {
+router.get('/messages/inbox', authorize(UserRole.TEACHER, UserRole.PARENT, UserRole.STUDENT, UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), msgView, async (req: AuthRequest, res: Response) => {
   const repo = AppDataSource.getRepository(Message);
   const messages = await repo.find({
     where: { recipientId: req.user!.userId },
@@ -137,7 +166,7 @@ router.get('/messages/inbox', authorize(UserRole.TEACHER, UserRole.PARENT, UserR
   res.json(messages);
 });
 
-router.get('/messages/sent', authorize(UserRole.TEACHER, UserRole.PARENT, UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (req: AuthRequest, res: Response) => {
+router.get('/messages/sent', authorize(UserRole.TEACHER, UserRole.PARENT, UserRole.STUDENT, UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), msgView, async (req: AuthRequest, res: Response) => {
   const repo = AppDataSource.getRepository(Message);
   const messages = await repo.find({
     where: { senderId: req.user!.userId },
@@ -147,7 +176,7 @@ router.get('/messages/sent', authorize(UserRole.TEACHER, UserRole.PARENT, UserRo
   res.json(messages);
 });
 
-router.get('/messages', async (req: AuthRequest, res: Response) => {
+router.get('/messages', msgView, async (req: AuthRequest, res: Response) => {
   const repo = AppDataSource.getRepository(Message);
   const messages = await repo.find({
     where: [{ recipientId: req.user!.userId }, { senderId: req.user!.userId }],
@@ -157,28 +186,94 @@ router.get('/messages', async (req: AuthRequest, res: Response) => {
   res.json(messages);
 });
 
-router.get('/messages/staff-recipients', authorize(UserRole.PARENT, UserRole.STUDENT), async (_req: AuthRequest, res: Response) => {
-  const userRepo = AppDataSource.getRepository(User);
-  const staff = await userRepo.find({
-    where: PARENT_MESSAGE_RECIPIENT_ROLES.map((role) => ({ role, isActive: true })),
-    order: { role: 'ASC', lastName: 'ASC', firstName: 'ASC' },
+router.get('/messages/staff-recipients', authorize(UserRole.PARENT, UserRole.STUDENT), msgView, async (req: AuthRequest, res: Response) => {
+  // Restrict teachers to those actually assigned to the requester's child(ren)
+  // (or, for students, their own teachers) — plus the school office.
+  let list: Awaited<ReturnType<typeof listParentMessagingRecipients>> = [];
+  if (req.user!.role === UserRole.PARENT && req.user!.parentId) {
+    list = await listParentMessagingRecipients(req.user!.parentId);
+  } else if (req.user!.role === UserRole.STUDENT && req.user!.studentId) {
+    list = await listStudentMessagingRecipients(req.user!.studentId);
+  }
+  res.json(list);
+});
+
+// Recipients a teacher may contact: parents/students of the students they teach, plus office.
+router.get('/messages/teacher-recipients', authorize(UserRole.TEACHER), msgView, async (req: AuthRequest, res: Response) => {
+  if (!req.user!.staffId) return res.json([]);
+  const list = await listTeacherMessagingRecipients(req.user!.staffId);
+  res.json(list);
+});
+
+// Threaded conversation list for the current user: one entry per counterpart.
+router.get('/messages/threads', msgView, async (req: AuthRequest, res: Response) => {
+  const repo = AppDataSource.getRepository(Message);
+  const me = req.user!.userId;
+  const messages = await repo.find({
+    where: [{ recipientId: me }, { senderId: me }],
+    relations: relations('sender', 'recipient'),
+    order: { sentAt: 'DESC' },
   });
-  res.json(
-    staff.map((u) => ({
-      id: u.id,
-      email: u.email,
-      firstName: u.firstName,
-      lastName: u.lastName,
-      role: u.role,
-    })),
-  );
+
+  const threads = new Map<string, {
+    threadId: string;
+    counterpart: { id: string; firstName: string; lastName: string; role: string } | null;
+    lastMessage: { subject: string; body: string; sentAt: Date; fromMe: boolean };
+    unreadCount: number;
+  }>();
+
+  for (const m of messages) {
+    const key = m.threadId || conversationKey(m.senderId, m.recipientId);
+    const fromMe = m.senderId === me;
+    const other = fromMe ? m.recipient : m.sender;
+    let entry = threads.get(key);
+    if (!entry) {
+      entry = {
+        threadId: key,
+        counterpart: other
+          ? { id: other.id, firstName: other.firstName, lastName: other.lastName, role: other.role }
+          : null,
+        lastMessage: { subject: m.subject, body: m.body, sentAt: m.sentAt, fromMe },
+        unreadCount: 0,
+      };
+      threads.set(key, entry);
+    }
+    if (!fromMe && !m.isRead) entry.unreadCount += 1;
+  }
+
+  res.json([...threads.values()]);
+});
+
+// All messages in a single conversation (and mark inbound ones read).
+router.get('/messages/threads/:threadId', msgView, async (req: AuthRequest, res: Response) => {
+  const repo = AppDataSource.getRepository(Message);
+  const me = req.user!.userId;
+  const threadId = String(req.params.threadId);
+  const messages = await repo.find({
+    where: [
+      { threadId, recipientId: me },
+      { threadId, senderId: me },
+    ],
+    relations: messageRelations,
+    order: { sentAt: 'ASC' },
+  });
+
+  const unreadIds = messages.filter((m) => m.recipientId === me && !m.isRead).map((m) => m.id);
+  if (unreadIds.length) {
+    await repo.createQueryBuilder().update(Message).set({ isRead: true }).whereInIds(unreadIds).execute();
+    for (const m of messages) if (unreadIds.includes(m.id)) m.isRead = true;
+  }
+
+  res.json(messages);
 });
 
 router.post(
   '/messages/to-admin',
   authorize(UserRole.PARENT, UserRole.STUDENT),
+  msgCreate,
   messageAttachmentUpload.array('attachments', MAX_MESSAGE_ATTACHMENTS),
   async (req: AuthRequest, res: Response) => {
+    if (!denyUnlessModuleAccess(req, res, 'communication', 'create')) return;
     const trimmedSubject = String(req.body?.subject || '').trim();
     const trimmedBody = String(req.body?.body || '').trim();
     const studentId = String(req.body?.studentId || '').trim() || undefined;
@@ -207,6 +302,16 @@ router.post(
     if (recipient.id === req.user!.userId) {
       return res.status(400).json({ message: 'You cannot send a message to yourself' });
     }
+
+    // Restrict who a parent/student can reach: office staff, or only the
+    // teacher(s) actually assigned to their child(ren) / themselves.
+    const allowed = await canMessageRecipient(req.user!, { id: recipient.id, role: recipient.role });
+    if (!allowed) {
+      return res.status(403).json({
+        message: 'You can only message the school office or a teacher assigned to your child.',
+      });
+    }
+
     if (studentId) {
       const parentId = req.user!.parentId;
       if (!parentId) {
@@ -222,12 +327,25 @@ router.post(
       messageRepo.create({
         recipientId: recipient.id,
         senderId: req.user!.userId,
+        threadId: conversationKey(req.user!.userId, recipient.id),
         subject: trimmedSubject,
         body: trimmedBody,
         studentId,
         isRead: false,
       }),
     );
+
+    void notifyNewMessage(msg);
+
+    void logAudit({
+      userId: req.user!.userId,
+      userRole: req.user!.role,
+      userEmail: req.user!.email,
+      action: 'create',
+      module: 'communication',
+      recordId: msg.id,
+      recordLabel: trimmedSubject,
+    });
 
     const files = Array.isArray(req.files) ? req.files : [];
     const savedAttachments = [];
@@ -256,6 +374,7 @@ router.post(
 router.get(
   '/messages/attachments/:attachmentId',
   authorize(UserRole.TEACHER, UserRole.PARENT, UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.STUDENT),
+  msgView,
   async (req: AuthRequest, res: Response) => {
     const attachmentRepo = AppDataSource.getRepository(MessageAttachment);
     const attachment = await attachmentRepo.findOne({
@@ -286,7 +405,7 @@ router.get(
   },
 );
 
-router.post('/messages', authorize(UserRole.TEACHER, UserRole.PARENT, UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (req: AuthRequest, res: Response) => {
+router.post('/messages', authorize(UserRole.TEACHER, UserRole.PARENT, UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), msgCreate, async (req: AuthRequest, res: Response) => {
   const { recipientId, subject, body, studentId, broadcastToAllParents } = req.body || {};
   const trimmedSubject = String(subject || '').trim();
   const trimmedBody = String(body || '').trim();
@@ -324,10 +443,23 @@ router.post('/messages', authorize(UserRole.TEACHER, UserRole.PARENT, UserRole.A
         subject: trimmedSubject,
         body: trimmedBody,
         senderId: req.user!.userId,
+        threadId: conversationKey(req.user!.userId, recipient.id),
         isRead: false,
       }),
     );
     await repo.save(messages);
+
+    for (const m of messages) {
+      void logAudit({
+        userId: req.user!.userId,
+        userRole: req.user!.role,
+        userEmail: req.user!.email,
+        action: 'create',
+        module: 'communication',
+        recordId: m.id,
+        recordLabel: trimmedSubject,
+      });
+    }
 
     return res.status(201).json({
       broadcast: true,
@@ -348,6 +480,14 @@ router.post('/messages', authorize(UserRole.TEACHER, UserRole.PARENT, UserRole.A
   const recipient = await userRepo.findOne({ where: { id: recipientId, isActive: true } });
   if (!recipient) return res.status(404).json({ message: 'Recipient not found' });
 
+  // Enforce parent↔teacher (and student↔teacher) messaging restrictions.
+  const allowed = await canMessageRecipient(req.user!, { id: recipient.id, role: recipient.role });
+  if (!allowed) {
+    return res.status(403).json({
+      message: 'You are not allowed to message this recipient.',
+    });
+  }
+
   const msg = await repo.save(
     repo.create({
       recipientId,
@@ -355,9 +495,20 @@ router.post('/messages', authorize(UserRole.TEACHER, UserRole.PARENT, UserRole.A
       body: trimmedBody,
       studentId: studentId || undefined,
       senderId: req.user!.userId,
+      threadId: conversationKey(req.user!.userId, recipient.id),
       isRead: false,
     }),
   );
+  void notifyNewMessage(msg);
+  void logAudit({
+    userId: req.user!.userId,
+    userRole: req.user!.role,
+    userEmail: req.user!.email,
+    action: 'create',
+    module: 'communication',
+    recordId: msg.id,
+    recordLabel: trimmedSubject,
+  });
   const full = await repo.findOne({
     where: { id: msg.id },
     relations: messageRelations,
@@ -365,7 +516,7 @@ router.post('/messages', authorize(UserRole.TEACHER, UserRole.PARENT, UserRole.A
   res.status(201).json(full);
 });
 
-router.patch('/messages/:id/read', authorize(UserRole.TEACHER, UserRole.PARENT, UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (req: AuthRequest, res: Response) => {
+router.patch('/messages/:id/read', authorize(UserRole.TEACHER, UserRole.PARENT, UserRole.STUDENT, UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), msgView, async (req: AuthRequest, res: Response) => {
   const repo = AppDataSource.getRepository(Message);
   const msg = await repo.findOne({
     where: { id: req.params.id, recipientId: req.user!.userId },
@@ -377,7 +528,7 @@ router.patch('/messages/:id/read', authorize(UserRole.TEACHER, UserRole.PARENT, 
   res.json(msg);
 });
 
-router.delete('/messages/:id', authorize(UserRole.TEACHER, UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (req: AuthRequest, res: Response) => {
+router.delete('/messages/:id', authorize(UserRole.TEACHER, UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), msgDelete, async (req: AuthRequest, res: Response) => {
   const repo = AppDataSource.getRepository(Message);
   const msg = await repo.findOne({
     where: { id: req.params.id },
@@ -390,6 +541,15 @@ router.delete('/messages/:id', authorize(UserRole.TEACHER, UserRole.ADMIN, UserR
   const storedNames = (msg.attachments || []).map((a) => a.storedName);
   await repo.remove(msg);
   removeAttachmentFiles(storedNames);
+  void logAudit({
+    userId: req.user!.userId,
+    userRole: req.user!.role,
+    userEmail: req.user!.email,
+    action: 'delete',
+    module: 'communication',
+    recordId: msg.id,
+    recordLabel: msg.subject,
+  });
   res.json({ ok: true });
 });
 

@@ -1,8 +1,9 @@
 // @ts-nocheck
 import { Router, Response } from 'express';
 import { AppDataSource } from '../config/data-source';
-import { ExamType, ExamMark, ReportCard, Student, HonourRoll, SchoolYear, SchoolSettings, SchoolClass } from '../entities';
+import { ExamType, ExamMark, ReportCard, Student, HonourRoll, SchoolYear, SchoolSettings, SchoolClass, Guardian } from '../entities';
 import { UserRole } from '../entities/enums';
+import { fetchStudentInvoiceBalance } from '../services/fin-reports.service';
 import { authenticate, authorize, AuthRequest } from '../middleware/auth';
 import { gradeForMarks, getGradeBoundaries } from '../services/grade.service';
 import { formatStudentClassLabel, isALevelClassOption } from '../utils/class-display';
@@ -36,8 +37,15 @@ import {
   unpublishResults,
 } from '../services/publish-results.service';
 import { ResultsPublication } from '../entities/ResultsPublication';
+import { requireModuleAccess } from '../middleware/access-control';
+import { AccessControlService } from '../services/access-control.service';
+import { assertTeacherClassAccess } from '../utils/teacher-class-access';
 
 const PUBLISH_ROLES = [UserRole.ADMIN, UserRole.PRINCIPAL, UserRole.DIRECTOR];
+
+const acadView = requireModuleAccess('academics', 'view');
+const acadCreate = requireModuleAccess('academics', 'create');
+const acadEdit = requireModuleAccess('academics', 'edit');
 
 function isPortalViewer(role: UserRole): boolean {
   return role === UserRole.PARENT || role === UserRole.STUDENT;
@@ -61,10 +69,55 @@ async function assertReportVisibleToPortalUser(
   return null;
 }
 
+/**
+ * Gate report-card access for portal users (parents & students). Returns an error
+ * message string to block with a 403, or null to allow. Admin/teacher/etc. bypass.
+ * Enforces, in order:
+ *   1. the viewer is actually linked to the student (student = self, parent = guardian),
+ *   2. the results have been published,
+ *   3. the student has NO outstanding fees balance.
+ */
+async function assertPortalReportCardAccess(
+  req: AuthRequest,
+  report: ReportCard,
+  examTypeId?: string,
+): Promise<string | null> {
+  const role = req.user!.role;
+  if (!isPortalViewer(role)) return null;
+
+  const studentId = report.studentId;
+
+  if (role === UserRole.STUDENT) {
+    if (req.user!.studentId !== studentId) {
+      return 'You can only view your own report card.';
+    }
+  } else if (role === UserRole.PARENT) {
+    if (!req.user!.parentId) {
+      return 'Parent profile not linked. Please sign out and sign in again.';
+    }
+    const link = await AppDataSource.getRepository(Guardian).findOne({
+      where: { parentId: req.user!.parentId, studentId },
+    });
+    if (!link) {
+      return 'You can only view report cards for your linked children.';
+    }
+  }
+
+  const publishBlock = await assertReportVisibleToPortalUser(report, examTypeId);
+  if (publishBlock) return publishBlock;
+
+  const owed = await fetchStudentInvoiceBalance(studentId);
+  if (owed > 0.005) {
+    return `This report card is locked because of an outstanding fees balance of $${owed.toFixed(2)}. Please settle the balance with the school finance office to view or download the report card.`;
+  }
+
+  return null;
+}
+
 const router = Router();
 router.use(authenticate);
 
-router.get('/types', async (req: AuthRequest, res: Response) => {
+router.get('/types', acadView, async (req: AuthRequest, res: Response) => {
   const { termId } = req.query;
   if (termId && isPortalViewer(req.user!.role)) {
     return res.json(await listPublishedExamTypesForTerm(termId as string));
@@ -83,6 +136,7 @@ router.get(
     UserRole.PARENT,
     UserRole.STUDENT,
   ),
+  acadView,
   async (_req, res: Response) => {
     res.json(await getGradeBoundaries());
   },
@@ -152,7 +206,7 @@ router.get(
   },
 );
 
-router.get('/terms', authorize(UserRole.TEACHER, UserRole.ADMIN, UserRole.PRINCIPAL, UserRole.DIRECTOR, UserRole.PARENT, UserRole.STUDENT), async (_req, res: Response) => {
+router.get('/terms', authorize(UserRole.TEACHER, UserRole.ADMIN, UserRole.PRINCIPAL, UserRole.DIRECTOR, UserRole.PARENT, UserRole.STUDENT), acadView, async (_req, res: Response) => {
   const years = await AppDataSource.getRepository(SchoolYear).find({
     relations: relations('terms'),
     order: { startDate: 'DESC' },
@@ -161,9 +215,12 @@ router.get('/terms', authorize(UserRole.TEACHER, UserRole.ADMIN, UserRole.PRINCI
   res.json(terms);
 });
 
-router.get('/class-subjects', authorize(UserRole.TEACHER, UserRole.ADMIN, UserRole.PRINCIPAL, UserRole.DIRECTOR), async (req, res: Response) => {
+router.get('/class-subjects', authorize(UserRole.TEACHER, UserRole.ADMIN, UserRole.PRINCIPAL, UserRole.DIRECTOR), acadView, async (req: AuthRequest, res: Response) => {
   const { classId } = req.query;
   if (!classId) return res.status(400).json({ message: 'classId is required' });
+  if (!(await assertTeacherClassAccess(req, classId as string))) {
+    return res.status(403).json({ message: 'You are not assigned to this class' });
+  }
   const rows = await AppDataSource.getRepository(ClassSubject).find({
     where: { classId: classId as string },
     relations: relations('subject'),
@@ -172,10 +229,13 @@ router.get('/class-subjects', authorize(UserRole.TEACHER, UserRole.ADMIN, UserRo
   res.json(rows.map((r) => r.subject).filter(Boolean));
 });
 
-router.get('/marks/entry', authorize(UserRole.TEACHER, UserRole.ADMIN, UserRole.PRINCIPAL, UserRole.DIRECTOR), async (req, res: Response) => {
+router.get('/marks/entry', authorize(UserRole.TEACHER, UserRole.ADMIN, UserRole.PRINCIPAL, UserRole.DIRECTOR), acadView, async (req: AuthRequest, res: Response) => {
   const { classId, subjectId, examTypeId, termId } = req.query;
   if (!classId || !subjectId || !examTypeId || !termId) {
     return res.status(400).json({ message: 'classId, subjectId, examTypeId, and termId are required' });
+  }
+  if (!(await assertTeacherClassAccess(req, classId as string))) {
+    return res.status(403).json({ message: 'You are not assigned to this class' });
   }
 
   const examType = await AppDataSource.getRepository(ExamType).findOne({ where: { id: examTypeId as string } });
@@ -222,7 +282,7 @@ router.get('/marks/entry', authorize(UserRole.TEACHER, UserRole.ADMIN, UserRole.
   });
 });
 
-router.get('/marks', authorize(UserRole.TEACHER, UserRole.ADMIN, UserRole.PRINCIPAL, UserRole.DIRECTOR, UserRole.PARENT, UserRole.STUDENT), async (req, res: Response) => {
+router.get('/marks', authorize(UserRole.TEACHER, UserRole.ADMIN, UserRole.PRINCIPAL, UserRole.DIRECTOR, UserRole.PARENT, UserRole.STUDENT), acadView, async (req: AuthRequest, res: Response) => {
   const repo = AppDataSource.getRepository(ExamMark);
   const { classId, subjectId, termId, examTypeId, studentId } = req.query;
   const where: Record<string, string> = {};
@@ -232,11 +292,31 @@ router.get('/marks', authorize(UserRole.TEACHER, UserRole.ADMIN, UserRole.PRINCI
   if (examTypeId) where.examTypeId = examTypeId as string;
   if (studentId) where.studentId = studentId as string;
 
+  if (isPortalViewer(req.user!.role)) {
+    const accessible = await AccessControlService.getAccessibleStudentIds(req.user!);
+    const ids = accessible === 'all' ? [] : accessible;
+    if (studentId && !ids.includes(studentId as string)) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+    if (!studentId && ids.length === 1) {
+      where.studentId = ids[0];
+    }
+  }
+
   const marks = await repo.find({
     where,
     relations: relations('student', 'subject', 'examType', 'term', 'enteredBy', 'enteredBy.user'),
     order: { student: { lastName: 'ASC' } },
   });
+
+  if (isPortalViewer(req.user!.role)) {
+    const accessible = await AccessControlService.getAccessibleStudentIds(req.user!);
+    const ids = new Set(accessible === 'all' ? [] : accessible);
+    if (ids.size) {
+      return res.json(marks.filter((m) => ids.has(m.studentId)));
+    }
+  }
+
   res.json(marks);
 });
 
@@ -284,13 +364,19 @@ async function upsertExamMark(
   return saved;
 }
 
-router.post('/marks/save-one', authorize(UserRole.TEACHER, UserRole.ADMIN, UserRole.PRINCIPAL, UserRole.DIRECTOR), async (req: AuthRequest, res: Response) => {
+router.post('/marks/save-one', authorize(UserRole.TEACHER, UserRole.ADMIN, UserRole.PRINCIPAL, UserRole.DIRECTOR), acadCreate, async (req: AuthRequest, res: Response) => {
   const { studentId, examTypeId, classId, subjectId, termId, marks, remarks } = req.body;
   if (!studentId || !examTypeId || !classId || !subjectId || !termId) {
     return res.status(400).json({ message: 'Missing required fields' });
   }
   if (marks === null || marks === undefined || marks === '') {
     return res.status(400).json({ message: 'Marks value required' });
+  }
+  if (!(await AccessControlService.userCanAccessStudent(req.user!, studentId))) {
+    return res.status(403).json({ message: 'You do not have access to this student record' });
+  }
+  if (!(await assertTeacherClassAccess(req, classId))) {
+    return res.status(403).json({ message: 'You are not assigned to this class' });
   }
 
   const repo = AppDataSource.getRepository(ExamMark);
@@ -307,14 +393,20 @@ router.post('/marks/save-one', authorize(UserRole.TEACHER, UserRole.ADMIN, UserR
   res.json(saved);
 });
 
-router.post('/marks/bulk', authorize(UserRole.TEACHER, UserRole.ADMIN, UserRole.PRINCIPAL, UserRole.DIRECTOR), async (req: AuthRequest, res: Response) => {
+router.post('/marks/bulk', authorize(UserRole.TEACHER, UserRole.ADMIN, UserRole.PRINCIPAL, UserRole.DIRECTOR), acadCreate, async (req: AuthRequest, res: Response) => {
   const repo = AppDataSource.getRepository(ExamMark);
   const { examTypeId, classId, subjectId, termId, marks } = req.body;
+  if (classId && !(await assertTeacherClassAccess(req, classId))) {
+    return res.status(403).json({ message: 'You are not assigned to this class' });
+  }
   const saved = [];
   const syncedStudents = new Set<string>();
 
   for (const m of marks) {
     if (m.marks === null || m.marks === undefined || m.marks === '') continue;
+    if (!(await AccessControlService.userCanAccessStudent(req.user!, m.studentId))) {
+      continue;
+    }
     const row = await upsertExamMark(repo, {
       studentId: m.studentId,
       examTypeId,
@@ -332,7 +424,7 @@ router.post('/marks/bulk', authorize(UserRole.TEACHER, UserRole.ADMIN, UserRole.
   res.json({ saved: saved.length, students: syncedStudents.size });
 });
 
-router.post('/report-cards/generate', authorize(UserRole.ADMIN, UserRole.PRINCIPAL), async (req, res: Response) => {
+router.post('/report-cards/generate', authorize(UserRole.ADMIN, UserRole.PRINCIPAL), acadCreate, async (req, res: Response) => {
   const { termId, classId } = req.body;
   const markRepo = AppDataSource.getRepository(ExamMark);
   const reportRepo = AppDataSource.getRepository(ReportCard);
@@ -776,7 +868,7 @@ router.get(
   },
 );
 
-router.get('/report-cards/:studentId/:termId', authorize(UserRole.ADMIN, UserRole.PRINCIPAL, UserRole.DIRECTOR, UserRole.TEACHER, UserRole.PARENT, UserRole.STUDENT), async (req: AuthRequest, res: Response) => {
+router.get('/report-cards/:studentId/:termId', authorize(UserRole.ADMIN, UserRole.PRINCIPAL, UserRole.DIRECTOR, UserRole.TEACHER, UserRole.PARENT, UserRole.STUDENT), acadView, async (req: AuthRequest, res: Response) => {
   const repo = AppDataSource.getRepository(ReportCard);
   const where: { studentId: string; termId: string; examTypeId?: string } = {
     studentId: req.params.studentId,
@@ -800,18 +892,36 @@ router.get('/report-cards/:studentId/:termId', authorize(UserRole.ADMIN, UserRol
   }
   if (!report) return res.status(404).json({ message: 'Report card not found' });
 
-  if (isPortalViewer(req.user!.role)) {
-    const block = await assertReportVisibleToPortalUser(
-      report,
-      req.query.examTypeId as string | undefined,
-    );
-    if (block) return res.status(403).json({ message: block });
+  if (req.user!.role === UserRole.TEACHER) {
+    if (!(await AccessControlService.userCanAccessStudent(req.user!, report.studentId))) {
+      return res.status(403).json({ message: 'You do not have access to this student record' });
+    }
   }
 
-  res.json(report);
+  const portalBlock = await assertPortalReportCardAccess(
+    req,
+    report,
+    req.query.examTypeId as string | undefined,
+  );
+  if (portalBlock) return res.status(403).json({ message: portalBlock });
+
+  // Recompute class & form position (and totals) so the rank always shows on the
+  // portal view, even for reports created via paths that didn't persist positions.
+  const maxMarks = Number(report.examType?.maxMarks) || 100;
+  const metrics = await getReportCardPdfMetrics(report, maxMarks);
+  res.json({
+    ...report,
+    subjectResults: metrics.subjectResults,
+    classPosition: metrics.classPosition ?? report.classPosition ?? null,
+    formPosition: metrics.formPosition ?? report.formPosition ?? null,
+    classTotal: metrics.classTotal ?? report.classTotal ?? null,
+    formTotal: metrics.formTotal ?? report.formTotal ?? null,
+    subjectsPassed: metrics.subjectsPassed ?? report.subjectsPassed ?? null,
+    totalSubjects: metrics.totalSubjects ?? report.totalSubjects ?? null,
+  });
 });
 
-router.get('/report-cards/:studentId/:termId/pdf', authorize(UserRole.ADMIN, UserRole.PRINCIPAL, UserRole.DIRECTOR, UserRole.TEACHER, UserRole.PARENT, UserRole.STUDENT), async (req: AuthRequest, res: Response) => {
+router.get('/report-cards/:studentId/:termId/pdf', authorize(UserRole.ADMIN, UserRole.PRINCIPAL, UserRole.DIRECTOR, UserRole.TEACHER, UserRole.PARENT, UserRole.STUDENT), acadView, async (req: AuthRequest, res: Response) => {
   try {
     const repo = AppDataSource.getRepository(ReportCard);
     const where: { studentId: string; termId: string; examTypeId?: string } = {
@@ -827,13 +937,18 @@ router.get('/report-cards/:studentId/:termId/pdf', authorize(UserRole.ADMIN, Use
     });
     if (!report) return res.status(404).json({ message: 'Report card not found' });
 
-    if (isPortalViewer(req.user!.role)) {
-      const block = await assertReportVisibleToPortalUser(
-        report,
-        req.query.examTypeId as string | undefined,
-      );
-      if (block) return res.status(403).json({ message: block });
+    if (req.user!.role === UserRole.TEACHER) {
+      if (!(await AccessControlService.userCanAccessStudent(req.user!, report.studentId))) {
+        return res.status(403).json({ message: 'You do not have access to this student record' });
+      }
     }
+
+    const portalBlock = await assertPortalReportCardAccess(
+      req,
+      report,
+      req.query.examTypeId as string | undefined,
+    );
+    if (portalBlock) return res.status(403).json({ message: portalBlock });
 
     const settings = await AppDataSource.getRepository(SchoolSettings).findOne({ where: { id: 'default' } });
     const inline = req.query.preview === 'true';

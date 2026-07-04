@@ -262,6 +262,47 @@ export async function computeFormPositionMap(
   return positionMap;
 }
 
+/** Rank students within a single class by overall average for an exam session. */
+export async function computeClassPositionMap(
+  examTypeId: string,
+  termId: string,
+  classId: string,
+): Promise<Map<string, number>> {
+  const markRepo = AppDataSource.getRepository(ExamMark);
+  const where: { termId: string; classId: string; examTypeId?: string } = { termId, classId };
+  if (examTypeId) where.examTypeId = examTypeId;
+  const classMarks = await markRepo.find({ where });
+
+  const marksByStudent = new Map<string, number[]>();
+  for (const m of classMarks) {
+    const list = marksByStudent.get(m.studentId) || [];
+    list.push(Number(m.marks));
+    marksByStudent.set(m.studentId, list);
+  }
+
+  const averages: { studentId: string; average: number }[] = [];
+  marksByStudent.forEach((markList, studentId) => {
+    if (!markList.length) return;
+    averages.push({
+      studentId,
+      average: markList.reduce((s, v) => s + v, 0) / markList.length,
+    });
+  });
+
+  averages.sort((a, b) => b.average - a.average);
+  const positionMap = new Map<string, number>();
+  let rank = 0;
+  let lastAvg: number | null = null;
+  averages.forEach((row, idx) => {
+    if (idx === 0 || row.average !== lastAvg) {
+      rank = idx + 1;
+      lastAvg = row.average;
+    }
+    positionMap.set(row.studentId, rank);
+  });
+  return positionMap;
+}
+
 /** Apply form-wide rankings (by average mark across the stream) to loaded report cards. */
 export async function applyFormRankingsToReports(
   reports: ReportCard[],
@@ -368,6 +409,11 @@ export async function getReportCardPdfMetrics(
   if (report.examTypeId && formId) {
     const formPosMap = await computeFormPositionMap(report.examTypeId, report.termId, formId);
     formPosition = formPosMap.get(report.studentId) ?? formPosition;
+  }
+
+  if (report.examTypeId && classId) {
+    const classPosMap = await computeClassPositionMap(report.examTypeId, report.termId, classId);
+    classPosition = classPosMap.get(report.studentId) ?? classPosition;
   }
 
   const attendance = await getStudentTermAttendance(

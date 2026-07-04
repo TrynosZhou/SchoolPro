@@ -6,6 +6,19 @@ import { ensureUploadDirs } from './utils/pdf';
 
 async function runDeferredStartup(): Promise<void> {
   try {
+    const { backfillStudentLifecycle } = await import('./services/student-lifecycle.service');
+    const lifecycle = await backfillStudentLifecycle();
+    if (lifecycle.statusFixed > 0 || lifecycle.snapshotsCreated > 0) {
+      console.log(
+        `[analytics] Student lifecycle backfill: ${lifecycle.statusFixed} status(es) normalised, ` +
+          `${lifecycle.snapshotsCreated} enrollment snapshot(s) created`,
+      );
+    }
+  } catch (err) {
+    console.error('[startup] Student lifecycle backfill failed:', err);
+  }
+
+  try {
     const { backfillGeneralLedgerFromHistory } = await import('./services/gl-backfill.service');
     const backfill = await backfillGeneralLedgerFromHistory();
     const posted =
@@ -50,6 +63,9 @@ async function bootstrap() {
     app.listen(env.port, () => {
       console.log(`School Pro API running on http://localhost:${env.port}`);
     });
+
+    const { startScheduler } = await import('./services/scheduler.service');
+    startScheduler();
 
     void runDeferredStartup();
   } catch (err) {

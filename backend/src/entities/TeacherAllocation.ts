@@ -16,7 +16,9 @@ import { SchoolClass } from './SchoolClass';
 
 @Entity('teacher_allocations')
 @Unique('UQ_teacher_allocations_timetable_entry', ['timetableEntryId'])
-@Unique('UQ_teacher_allocations_teacher_slot', ['teacherId', 'dayOfWeek', 'startTime', 'endTime'])
+// NOTE: a teacher may be allocated to 2+ classes in the same slot (double-booking is
+// allowed via the timetable "Ignore conflicts" flow), so there is intentionally no
+// unique constraint on (teacherId, dayOfWeek, startTime, endTime).
 export class TeacherAllocation {
   @PrimaryGeneratedColumn('uuid')
   id!: string;

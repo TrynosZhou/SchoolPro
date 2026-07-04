@@ -58,24 +58,24 @@ import {
 } from '../services/fee-collection-revenue.service';
 import { generateReconciliationPdf } from '../utils/pdf';
 import { resolveStudentInvoiceForLookup } from '../services/invoice-lookup.service';
+import { requireModuleAccess } from '../middleware/access-control';
+import { AccessControlService } from '../services/access-control.service';
 
 const router = Router();
 router.use(authenticate);
 
-async function assertParentStudentAccess(req: AuthRequest, studentId: string): Promise<string | null> {
-  if (req.user!.role === UserRole.STUDENT) {
-    return req.user!.studentId === studentId ? null : 'You can only view your own finance records';
+const finView = requireModuleAccess('finance', 'view');
+const finCreate = requireModuleAccess('finance', 'create');
+const finEdit = requireModuleAccess('finance', 'edit');
+
+async function assertFinanceStudentAccess(req: AuthRequest, studentId: string): Promise<string | null> {
+  if (!AccessControlService.can(req.user!, 'finance', 'view')) {
+    return 'You do not have permission to view finance records';
   }
-  if (req.user!.role !== UserRole.PARENT) {
-    return null;
+  if (!(await AccessControlService.userCanAccessStudent(req.user!, studentId))) {
+    return 'You can only view finance records for students you are linked to';
   }
-  if (!req.user!.parentId) {
-    return 'Parent profile not linked';
-  }
-  const link = await AppDataSource.getRepository(Guardian).findOne({
-    where: { parentId: req.user!.parentId, studentId },
-  });
-  return link ? null : 'You can only view finance for your linked students';
+  return null;
 }
 
 async function notifyLinkedParentUsersOfReceipt(
@@ -288,7 +288,7 @@ router.delete('/fees/:id', authorize(UserRole.ADMIN), async (req, res: Response)
   });
 });
 
-router.get('/invoices', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.PARENT), async (req: AuthRequest, res: Response) => {
+router.get('/invoices', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.PARENT, UserRole.STUDENT), finView, async (req: AuthRequest, res: Response) => {
   const repo = AppDataSource.getRepository(Invoice);
   const { studentId, status, termId } = req.query;
   const qb = repo.createQueryBuilder('i')
@@ -300,12 +300,9 @@ router.get('/invoices', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PR
   if (status) qb.andWhere('i.status = :status', { status });
   if (termId) qb.andWhere('i.termId = :termId', { termId });
 
-  if (req.user!.role === UserRole.PARENT) {
-    const children = await AppDataSource.query(
-      `SELECT "studentId" FROM guardians WHERE "parentId" = $1`,
-      [req.user!.parentId]
-    );
-    const ids = children.map((c: { studentId: string }) => c.studentId);
+  if (req.user!.role === UserRole.PARENT || req.user!.role === UserRole.STUDENT) {
+    const accessible = await AccessControlService.getAccessibleStudentIds(req.user!);
+    const ids = accessible === 'all' ? [] : accessible;
     if (!ids.length) return res.json([]);
     qb.andWhere('i.studentId IN (:...ids)', { ids });
   }
@@ -313,17 +310,15 @@ router.get('/invoices', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PR
   res.json(await qb.orderBy('i.createdAt', 'DESC').getMany());
 });
 
-router.get('/invoices/resolve', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.PARENT), async (req: AuthRequest, res: Response) => {
+router.get('/invoices/resolve', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.PARENT, UserRole.STUDENT), finView, async (req: AuthRequest, res: Response) => {
   const studentId = String(req.query.studentId || '').trim();
   if (!studentId) {
     return res.status(400).json({ message: 'studentId is required' });
   }
 
-  if (req.user!.role === UserRole.PARENT) {
-    const accessError = await assertParentStudentAccess(req, studentId);
-    if (accessError) {
-      return res.status(403).json({ message: accessError });
-    }
+  const accessError = await assertFinanceStudentAccess(req, studentId);
+  if (accessError && (req.user!.role === UserRole.PARENT || req.user!.role === UserRole.STUDENT)) {
+    return res.status(403).json({ message: accessError });
   }
 
   const invoice = await resolveStudentInvoiceForLookup(studentId);
@@ -341,7 +336,7 @@ router.get('/invoices/resolve', authorize(UserRole.ADMIN, UserRole.DIRECTOR, Use
   });
 });
 
-router.get('/invoices/bulk-tuition/preview', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (_req, res: Response) => {
+router.get('/invoices/bulk-tuition/preview', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), finView, async (_req, res: Response) => {
   try {
     res.json(await previewBulkTuitionInvoices());
   } catch (err) {
@@ -349,7 +344,7 @@ router.get('/invoices/bulk-tuition/preview', authorize(UserRole.ADMIN, UserRole.
   }
 });
 
-router.post('/invoices/bulk-tuition', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (_req, res: Response) => {
+router.post('/invoices/bulk-tuition', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), finCreate, async (_req, res: Response) => {
   try {
     const result = await createBulkTuitionInvoices();
     res.status(201).json({
@@ -361,7 +356,7 @@ router.post('/invoices/bulk-tuition', authorize(UserRole.ADMIN, UserRole.DIRECTO
   }
 });
 
-router.post('/invoices/bulk-tuition/reverse', authorize(UserRole.ADMIN), async (req, res: Response) => {
+router.post('/invoices/bulk-tuition/reverse', authorize(UserRole.ADMIN), finEdit, async (req, res: Response) => {
   try {
     const nextTermName = typeof req.body?.nextTermName === 'string' ? req.body.nextTermName.trim() : undefined;
     const result = await reverseBulkTuitionInvoices(nextTermName || undefined);
@@ -568,7 +563,7 @@ router.post('/invoice-adjustments/debit-note', authorize(...financeStaff), async
   }
 });
 
-router.post('/invoices', authorize(UserRole.ADMIN), async (req, res: Response) => {
+router.post('/invoices', authorize(UserRole.ADMIN), finCreate, async (req, res: Response) => {
   const repo = AppDataSource.getRepository(Invoice);
   const ledgerRepo = AppDataSource.getRepository(LedgerEntry);
   const studentRepo = AppDataSource.getRepository(Student);
@@ -663,7 +658,7 @@ router.post('/invoices', authorize(UserRole.ADMIN), async (req, res: Response) =
   res.status(201).json(invoice);
 });
 
-router.post('/payments', authorize(UserRole.ADMIN), async (req: AuthRequest, res: Response) => {
+router.post('/payments', authorize(UserRole.ADMIN), finCreate, async (req: AuthRequest, res: Response) => {
   const { studentId, invoiceId, amount, method, feeType, label, notes } = req.body;
   const paymentAmount = Number(amount) || 0;
   if (paymentAmount <= 0) {
@@ -860,7 +855,7 @@ router.post('/payments', authorize(UserRole.ADMIN), async (req: AuthRequest, res
   }
 });
 
-router.get('/receipts/:id/pdf', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.PARENT), async (req: AuthRequest, res: Response) => {
+router.get('/receipts/:id/pdf', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.PARENT, UserRole.STUDENT), finView, async (req: AuthRequest, res: Response) => {
   const repo = AppDataSource.getRepository(Receipt);
   const receipt = await repo.findOne({
     where: { id: req.params.id },
@@ -870,8 +865,8 @@ router.get('/receipts/:id/pdf', authorize(UserRole.ADMIN, UserRole.DIRECTOR, Use
     return res.status(404).json({ message: 'Receipt not found' });
   }
 
-  const accessError = await assertParentStudentAccess(req, receipt.payment.studentId);
-  if (accessError) {
+  const accessError = await assertFinanceStudentAccess(req, receipt.payment.studentId);
+  if (accessError && (req.user!.role === UserRole.PARENT || req.user!.role === UserRole.STUDENT)) {
     return res.status(403).json({ message: accessError });
   }
 
@@ -903,7 +898,7 @@ router.get('/receipts/:id/pdf', authorize(UserRole.ADMIN, UserRole.DIRECTOR, Use
   res.sendFile(path.resolve(pdfPath));
 });
 
-router.get('/invoices/:id/pdf', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.PARENT), async (req, res: Response) => {
+router.get('/invoices/:id/pdf', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.PARENT, UserRole.STUDENT), finView, async (req: AuthRequest, res: Response) => {
   const repo = AppDataSource.getRepository(Invoice);
   const invoice = await repo.findOne({
     where: { id: req.params.id },
@@ -913,15 +908,9 @@ router.get('/invoices/:id/pdf', authorize(UserRole.ADMIN, UserRole.DIRECTOR, Use
     return res.status(404).json({ message: 'Invoice not found' });
   }
 
-  if (req.user!.role === UserRole.PARENT) {
-    const children = await AppDataSource.query(
-      `SELECT "studentId" FROM guardians WHERE "parentId" = $1`,
-      [req.user!.parentId],
-    );
-    const ids = children.map((c: { studentId: string }) => c.studentId);
-    if (!ids.includes(invoice.studentId)) {
-      return res.status(403).json({ message: 'Access denied' });
-    }
+  const accessError = await assertFinanceStudentAccess(req, invoice.studentId);
+  if (accessError && (req.user!.role === UserRole.PARENT || req.user!.role === UserRole.STUDENT)) {
+    return res.status(403).json({ message: accessError });
   }
 
   const branding = await loadSchoolBranding();
@@ -961,9 +950,9 @@ router.get('/invoices/:id/pdf', authorize(UserRole.ADMIN, UserRole.DIRECTOR, Use
   res.sendFile(path.resolve(pdfPath));
 });
 
-router.get('/receipts/student/:studentId', authorize(UserRole.ADMIN, UserRole.PARENT, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (req: AuthRequest, res: Response) => {
-  const accessError = await assertParentStudentAccess(req, req.params.studentId);
-  if (accessError) {
+router.get('/receipts/student/:studentId', authorize(UserRole.ADMIN, UserRole.PARENT, UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.STUDENT), finView, async (req: AuthRequest, res: Response) => {
+  const accessError = await assertFinanceStudentAccess(req, req.params.studentId);
+  if (accessError && (req.user!.role === UserRole.PARENT || req.user!.role === UserRole.STUDENT)) {
     return res.status(403).json({ message: accessError });
   }
 
@@ -975,9 +964,33 @@ router.get('/receipts/student/:studentId', authorize(UserRole.ADMIN, UserRole.PA
   res.json(payments.filter((p) => p.receipt).map((p) => ({ ...p.receipt, payment: p })));
 });
 
-router.get('/statement/:studentId', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.PARENT), async (req: AuthRequest, res: Response) => {
-  const accessError = await assertParentStudentAccess(req, req.params.studentId);
-  if (accessError) {
+/**
+ * Compute a student's statement summary the same way the admin balance views do
+ * (debtor-aging / student-balance / term balances):
+ *  - only billable invoices count (exclude cancelled & draft)
+ *  - totalPaid is the amount actually applied to invoices (SUM amountPaid)
+ *  - each invoice's outstanding is floored at 0, so an overpayment on one invoice
+ *    cannot mask what is still owed on another.
+ *
+ * The previous version used SUM(payments.amount) for "totalPaid" and
+ * totalInvoiced - totalPaid for the balance. When a student has unapplied /
+ * overflow payments, that raw payment total can exceed the invoiced amount and
+ * produce a bogus negative "Balance due" even while an invoice is still unpaid.
+ */
+function summarizeStudentInvoices(invoices: Invoice[]) {
+  const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
+  const billable = invoices.filter((i) => i.status !== 'cancelled' && i.status !== 'draft');
+  const totalInvoiced = round2(billable.reduce((s, i) => s + Number(i.totalAmount || 0), 0));
+  const totalPaid = round2(billable.reduce((s, i) => s + Number(i.amountPaid || 0), 0));
+  const balance = round2(
+    billable.reduce((s, i) => s + Math.max(Number(i.totalAmount || 0) - Number(i.amountPaid || 0), 0), 0),
+  );
+  return { totalInvoiced, totalPaid, balance };
+}
+
+router.get('/statement/:studentId', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.PARENT, UserRole.STUDENT), finView, async (req: AuthRequest, res: Response) => {
+  const accessError = await assertFinanceStudentAccess(req, req.params.studentId);
+  if (accessError && (req.user!.role === UserRole.PARENT || req.user!.role === UserRole.STUDENT)) {
     return res.status(403).json({ message: accessError });
   }
 
@@ -993,14 +1006,12 @@ router.get('/statement/:studentId', authorize(UserRole.ADMIN, UserRole.DIRECTOR,
   const invoices = await invoiceRepo.find({ where: { studentId: req.params.studentId } });
   const payments = await paymentRepo.find({ where: { studentId: req.params.studentId } });
 
-  const totalInvoiced = invoices.reduce((s, i) => s + Number(i.totalAmount), 0);
-  const totalPaid = payments.reduce((s, p) => s + Number(p.amount), 0);
-  const balance = totalInvoiced - totalPaid;
+  const summary = summarizeStudentInvoices(invoices);
 
-  res.json({ ledger, invoices, payments, summary: { totalInvoiced, totalPaid, balance } });
+  res.json({ ledger, invoices, payments, summary });
 });
 
-router.get('/statement/:studentId/pdf', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.PARENT), async (req: AuthRequest, res: Response) => {
+router.get('/statement/:studentId/pdf', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.PARENT, UserRole.STUDENT), finView, async (req: AuthRequest, res: Response) => {
   const requestedStudentId = String(req.params.studentId || '').trim();
   const studentRepo = AppDataSource.getRepository(Student);
   let resolvedForAccess = requestedStudentId;
@@ -1008,8 +1019,8 @@ router.get('/statement/:studentId/pdf', authorize(UserRole.ADMIN, UserRole.DIREC
     ?? await studentRepo.findOne({ where: { admissionNumber: requestedStudentId } });
   if (studentForAccess) resolvedForAccess = studentForAccess.id;
 
-  const accessError = await assertParentStudentAccess(req, resolvedForAccess);
-  if (accessError) {
+  const accessError = await assertFinanceStudentAccess(req, resolvedForAccess);
+  if (accessError && (req.user!.role === UserRole.PARENT || req.user!.role === UserRole.STUDENT)) {
     return res.status(403).json({ message: accessError });
   }
 
@@ -1037,9 +1048,7 @@ router.get('/statement/:studentId/pdf', authorize(UserRole.ADMIN, UserRole.DIREC
   const invoices = await invoiceRepo.find({ where: { studentId: resolvedStudentId }, order: { issuedDate: 'ASC' } });
   const payments = await paymentRepo.find({ where: { studentId: resolvedStudentId }, order: { paidAt: 'ASC' } });
 
-  const totalInvoiced = invoices.reduce((s, i) => s + Number(i.totalAmount), 0);
-  const totalPaid = payments.reduce((s, p) => s + Number(p.amount), 0);
-  const balance = totalInvoiced - totalPaid;
+  const { totalInvoiced, totalPaid, balance } = summarizeStudentInvoices(invoices);
 
   const doc = new PDFDocument({ size: 'A4', margin: 36 });
   const chunks: Buffer[] = [];

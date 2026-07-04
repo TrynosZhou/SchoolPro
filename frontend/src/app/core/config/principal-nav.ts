@@ -7,5 +7,8 @@ export const PRINCIPAL_NAV_ITEMS: NavItem[] = [
   { label: 'Payroll', path: '/principal/payroll', icon: '🧾' },
   { label: 'Attendance', path: '/principal/attendance', icon: '📋' },
   { label: 'Academics', path: '/principal/academics', icon: '📚' },
+  { label: 'Demographics', path: '/principal/analytics/demographics', icon: '👥' },
+  { label: 'Retention', path: '/principal/analytics/retention', icon: '📉' },
+  { label: 'Report Builder', path: '/principal/analytics/report-builder', icon: '🧩' },
   { label: 'Store & Inventory', path: '/principal/store', icon: '🏪' },
 ];

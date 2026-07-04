@@ -8,13 +8,14 @@
     <div class="hero-text">
       <p class="hero-eyebrow">Parent Portal</p>
       <h1>My Children</h1>
-      <p>One parent account can be linked to multiple children. Enter each child's Student ID to add them.</p>
+      <p>One parent account can be linked to multiple children. Search by Student ID or last name to add each child.</p>
     </div>
     @if (isParent()) {
       <div class="hero-actions">
         <button type="button" class="btn-primary" (click)="toggleLinkForm()">
           {{ showLinkForm() ? 'Cancel' : '+ Link a child' }}
         </button>
+        <a routerLink="/apply" [queryParams]="{ prefill: 1 }" class="btn-outline">🎓 Apply for another child</a>
         <a routerLink="/parent/send-email" class="btn-outline">✉ Send Email</a>
       </div>
     }
@@ -26,23 +27,26 @@
         <span class="link-icon">🔗</span>
         <div>
           <h2>Link a child to your account</h2>
-          <p>Enter your child's <strong>Student ID</strong> exactly as shown on the school admission letter. Repeat for each child you want on this account.</p>
+          <p>Search by your child's <strong>Student ID</strong> (e.g. SP000001) <strong>or their last name</strong>. If several students match, pick the correct record from the list.</p>
         </div>
       </div>
-      <form class="link-form" (ngSubmit)="linkChild()">
+      <form class="link-form" (ngSubmit)="searchChildren()">
         <div class="form-grid form-grid--link">
           <div class="field field-student-id">
-            <label for="admissionNumber">Student ID <span class="required">*</span></label>
-            <input
-              id="admissionNumber"
-              [(ngModel)]="linkForm.admissionNumber"
-              name="admissionNumber"
-              placeholder="e.g. SP000001"
-              required
-              autocapitalize="characters"
-              autocomplete="off"
-            />
-            <small class="field-hint">The unique ID assigned to your child when registered at the school.</small>
+            <label for="searchTerm">Student ID or last name <span class="required">*</span></label>
+            <div class="search-input-group">
+              <input
+                id="searchTerm"
+                [(ngModel)]="linkForm.term"
+                name="searchTerm"
+                placeholder="e.g. SP000001 or Banda"
+                autocomplete="off"
+              />
+              <button type="submit" class="search-icon-btn" [disabled]="searching()" title="Search" aria-label="Search">
+                {{ searching() ? '…' : '🔍' }}
+              </button>
+            </div>
+            <small class="field-hint">Use the unique Student ID from the admission letter, or type the surname to search.</small>
           </div>
           <div class="field">
             <label for="relationship">Your relationship</label>
@@ -54,12 +58,54 @@
             </select>
           </div>
         </div>
-        <div class="link-actions">
-          <button type="submit" class="btn-primary" [disabled]="linking()">
-            {{ linking() ? 'Linking…' : 'Link child' }}
-          </button>
-        </div>
+        @if (hasSearched()) {
+          <div class="link-actions">
+            <button type="button" class="btn-ghost" (click)="resetSearch()">Clear</button>
+          </div>
+        }
       </form>
+
+      @if (hasSearched()) {
+        @if (results().length) {
+          <div class="results-block">
+            <p class="results-head">
+              {{ results().length }} {{ results().length === 1 ? 'match' : 'matches' }} found — select your child to link:
+            </p>
+            <ul class="results-list">
+              @for (m of results(); track m.id) {
+                <li class="result-item" [class.linked]="m.alreadyLinked">
+                  <div class="result-avatar">{{ m.firstName.charAt(0) }}{{ m.lastName.charAt(0) }}</div>
+                  <div class="result-info">
+                    <span class="result-name">{{ m.firstName }} {{ m.lastName }}</span>
+                    <span class="result-meta">
+                      @if (m.admissionNumber) { <span class="chip id">{{ m.admissionNumber }}</span> }
+                      @if (m.className) { <span class="chip class">{{ m.className }}</span> }
+                      @else if (m.formName) { <span class="chip class">{{ m.formName }}</span> }
+                      @if (m.gender) { <span class="chip">{{ m.gender }}</span> }
+                    </span>
+                  </div>
+                  @if (m.alreadyLinked) {
+                    <span class="result-linked-tag">✓ Linked</span>
+                  } @else {
+                    <button
+                      type="button"
+                      class="btn-link-child"
+                      [disabled]="linkingId() === m.id"
+                      (click)="linkSelected(m)"
+                    >
+                      {{ linkingId() === m.id ? 'Linking…' : 'Link' }}
+                    </button>
+                  }
+                </li>
+              }
+            </ul>
+          </div>
+        } @else {
+          <div class="results-empty">
+            <p>No students matched “{{ linkForm.term }}”. Check the Student ID or surname, or contact the school office.</p>
+          </div>
+        }
+      }
     </section>
   }
 
@@ -73,7 +119,7 @@
       <span class="empty-icon">👨‍👩‍👧</span>
       <h2>No children linked yet</h2>
       @if (isParent()) {
-        <p>Link each child using their Student ID. You can add as many children as you need to this account.</p>
+        <p>Search by Student ID or last name to link each child. You can add as many children as you need to this account.</p>
         @if (!showLinkForm()) {
           <button type="button" class="btn-primary" (click)="showLinkForm.set(true)">Link your first child</button>
         }
@@ -109,6 +155,17 @@
                 }
               </div>
             </div>
+            @if (isParent()) {
+              <button
+                type="button"
+                class="unlink-btn"
+                [disabled]="unlinkingId() === child.student.id"
+                (click)="unlinkChild(child)"
+                title="Unlink this child from your account"
+              >
+                {{ unlinkingId() === child.student.id ? 'Unlinking…' : '✕ Unlink' }}
+              </button>
+            }
           </div>
 
           <div class="child-stats">

@@ -77,6 +77,7 @@ export class ParentReportCardComponent implements OnInit {
   } | null>(null);
   loading = signal(false);
   notFound = signal(false);
+  blockedMessage = signal<string | null>(null);
 
   readonly nav = PARENT_NAV_ITEMS;
   readonly formatStudentClassLabel = formatStudentClassLabel;
@@ -135,6 +136,7 @@ export class ParentReportCardComponent implements OnInit {
     if (!this.studentId || !termId) return;
     this.loading.set(true);
     this.notFound.set(false);
+    this.blockedMessage.set(null);
     this.report.set(null);
 
     this.api.get<ReportCardDto>(`/exams/report-cards/${this.studentId}/${termId}`).subscribe({
@@ -142,9 +144,14 @@ export class ParentReportCardComponent implements OnInit {
         this.report.set(r);
         this.loading.set(false);
       },
-      error: () => {
-        this.notFound.set(true);
+      error: (e) => {
         this.loading.set(false);
+        const msg = e?.error?.message;
+        if (e?.status === 403 && msg) {
+          this.blockedMessage.set(msg);
+        } else {
+          this.notFound.set(true);
+        }
       },
     });
   }

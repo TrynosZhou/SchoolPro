@@ -1,0 +1,50 @@
+<app-portal-layout
+  [portalTitle]="portalTitle"
+  pageTitle="Notifications"
+  [navItems]="navItems"
+  [navSections]="navSections"
+>
+  <header class="page-hero">
+    <div class="hero-text">
+      <p class="hero-eyebrow">Communication</p>
+      <h1>Notifications</h1>
+      <p>Absence alerts, fee reminders, published results, and new messages.</p>
+    </div>
+    <div class="hero-actions">
+      <button type="button" class="btn-outline" (click)="toggleFilter()">
+        {{ filterUnread() ? 'Show all' : 'Unread only' }}
+      </button>
+      <button type="button" class="btn-primary" [disabled]="unreadCount() === 0" (click)="markAllRead()">
+        Mark all read
+      </button>
+    </div>
+  </header>
+
+  <div class="card">
+    @if (loading()) {
+      <p class="muted pad">Loading notifications…</p>
+    } @else if (!visible().length) {
+      <div class="empty">
+        <div class="empty-emoji">🔔</div>
+        <p>{{ filterUnread() ? 'No unread notifications.' : 'No notifications yet.' }}</p>
+      </div>
+    } @else {
+      <ul class="notif-list">
+        @for (n of visible(); track n.id) {
+          <li class="notif" [class.unread]="!n.isRead" (click)="markRead(n)">
+            <span class="notif-icon">{{ meta(n.type).icon }}</span>
+            <div class="notif-main">
+              <div class="notif-top">
+                <span class="notif-title">{{ n.title }}</span>
+                <span class="notif-time">{{ n.createdAt | date: 'MMM d, h:mm a' }}</span>
+              </div>
+              <p class="notif-body">{{ n.message }}</p>
+              <span class="notif-tag">{{ meta(n.type).label }}</span>
+            </div>
+            @if (!n.isRead) { <span class="dot" aria-label="Unread"></span> }
+          </li>
+        }
+      </ul>
+    }
+  </div>
+</app-portal-layout>

@@ -3,19 +3,141 @@
     <button type="button" class="sidebar-backdrop no-print" (click)="closeSidebar()" aria-label="Close navigation menu"></button>
   }
 
-  <aside class="sidebar" [class.open]="sidebarOpen()" aria-label="Main navigation">
-    <div class="sidebar-header">
-      <div class="brand">
-        @if (schoolLogoUrl(); as logoUrl) {
-          <img class="brand-logo" [src]="logoUrl" [alt]="schoolName() + ' logo'" />
-        } @else {
-          <span class="brand-icon">{{ schoolBrandInitials }}</span>
-        }
-        <div class="brand-text">
-          <strong>{{ schoolName() }}</strong>
-          <small>{{ portalTitle }}</small>
-        </div>
+  <header class="topbar">
+    <button
+      type="button"
+      class="topbar-nav-toggle"
+      (click)="toggleSidebar()"
+      [attr.aria-expanded]="sidebarOpen()"
+      aria-label="Open navigation menu"
+    >
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+      </svg>
+    </button>
+
+    <div class="brand">
+      @if (schoolLogoUrl(); as logoUrl) {
+        <img class="brand-logo" [src]="logoUrl" [alt]="schoolName() + ' logo'" />
+      } @else {
+        <span class="brand-icon">{{ schoolBrandInitials }}</span>
+      }
+      <div class="brand-text">
+        <strong>{{ schoolName() }}</strong>
       </div>
+    </div>
+
+    <nav class="topbar-actions" aria-label="Quick actions">
+      @if (schoolFacebookUrl(); as fbUrl) {
+        <a class="topbar-action" [href]="fbUrl" target="_blank" rel="noopener noreferrer" aria-label="Facebook page">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M14 8.5V7.2c0-.7.6-1.2 1.3-1.2H17V4h-2.2C12.7 4 11 5.7 11 7.8V8.5H9v3h2V20h3v-8.5h2.6l.4-3H14z" fill="currentColor" />
+          </svg>
+          <span>Facebook</span>
+        </a>
+      }
+
+      @if (schoolWebsiteUrl(); as siteUrl) {
+        <a class="topbar-action" [href]="siteUrl" target="_blank" rel="noopener noreferrer" aria-label="School website">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8" />
+            <path d="M3 12h18M12 3c2.5 2.8 4 6.2 4 9s-1.5 6.2-4 9M12 3c-2.5 2.8-4 6.2-4 9s1.5 6.2 4 9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+          </svg>
+          <span>Website</span>
+        </a>
+      }
+
+      @if (showBalanceEnquiry) {
+        <button type="button" class="topbar-action" aria-label="Balance enquiry" (click)="openBalanceEnquiry()">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <rect x="3" y="6" width="18" height="12" rx="2" stroke="currentColor" stroke-width="1.8" />
+            <path d="M3 10h18" stroke="currentColor" stroke-width="1.8" />
+            <path d="M7 15h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+          </svg>
+          <span>Balance enquiry</span>
+        </button>
+      }
+
+      @if (showMessagesAction) {
+        <a
+          class="topbar-action topbar-messages"
+          [routerLink]="effectiveMessagesPath"
+          routerLinkActive="active"
+          aria-label="Messages"
+        >
+          <span class="topbar-icon-wrap">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M5 6.5h14a2 2 0 0 1 2 2v6.5a2 2 0 0 1-2 2H9l-4 3v-3H5a2 2 0 0 1-2-2V8.5a2 2 0 0 1 2-2z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+            </svg>
+            @if (unreadMessageCount() > 0) {
+              <span class="msg-badge" [attr.aria-label]="unreadMessageCount() + ' unread messages'">
+                {{ unreadBadgeLabel(unreadMessageCount()) }}
+              </span>
+            }
+          </span>
+          <span>Messages</span>
+        </a>
+      }
+
+      <button type="button" class="topbar-action" aria-label="Help" (click)="openHelp()">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8" />
+          <path d="M9.6 9.4a2.4 2.4 0 0 1 4.4 1.3c0 1.5-1.9 1.9-1.9 3.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+          <circle cx="12" cy="17" r="0.7" fill="currentColor" />
+        </svg>
+        <span>Help</span>
+      </button>
+
+      <div class="user-menu">
+        <button
+          type="button"
+          class="user-icon-btn"
+          (click)="toggleUserMenu()"
+          [attr.aria-label]="'Account menu for ' + fullName"
+          [attr.aria-expanded]="userMenuOpen()"
+        >
+          <span class="user-avatar-ring" aria-hidden="true">
+            @if (avatarUrl) {
+              <img class="user-avatar-image" [src]="avatarUrl" [alt]="fullName" />
+            } @else {
+              <svg class="user-avatar-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
+              </svg>
+            }
+            <span class="online-dot" aria-hidden="true"></span>
+          </span>
+          <svg class="user-chevron" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </button>
+        @if (userMenuOpen()) {
+          <div class="user-menu-dropdown">
+            <div class="user-menu-account">
+              <div class="user-menu-field">
+                <span class="user-menu-label">Account name</span>
+                <strong>{{ fullName }}</strong>
+              </div>
+              <div class="user-menu-field">
+                <span class="user-menu-label">Email address</span>
+                <span class="user-menu-email">{{ accountEmail }}</span>
+              </div>
+            </div>
+            <button type="button" class="user-menu-item user-menu-signout" (click)="requestLogout()">
+              <span>Sign out</span>
+              <svg class="sign-out-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M16 17l5-5-5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M21 12H9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+          </div>
+        }
+      </div>
+    </nav>
+  </header>
+
+  <aside class="sidebar" [class.open]="sidebarOpen()" aria-label="Main navigation">
+    <div class="sidebar-mobile-bar">
       <button type="button" class="sidebar-close" (click)="closeSidebar()" aria-label="Close navigation menu">
         <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
           <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
@@ -88,7 +210,7 @@
         }
       } @else {
         @for (item of navItems; track item.path) {
-          <a class="nav-item" [routerLink]="item.path" routerLinkActive="active">
+          <a class="nav-item" [routerLink]="item.path" [queryParams]="item.queryParams ?? null" routerLinkActive="active">
             @if (item.icon) {
               <span class="nav-item-icon nav-item-icon--emoji" aria-hidden="true">{{ item.icon }}</span>
             }
@@ -116,134 +238,6 @@
   </aside>
 
   <main class="content">
-    <header class="topbar">
-      <button
-        type="button"
-        class="topbar-nav-toggle"
-        (click)="toggleSidebar()"
-        [attr.aria-expanded]="sidebarOpen()"
-        aria-label="Open navigation menu"
-      >
-        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
-        </svg>
-      </button>
-
-      <a class="topbar-home" [routerLink]="homeLink">
-        <svg class="topbar-home-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path d="M3 11l9-7 9 7M5 10v9a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1v-9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-        </svg>
-        <span>Home</span>
-      </a>
-
-      <nav class="topbar-actions" aria-label="Quick actions">
-        @if (schoolFacebookUrl(); as fbUrl) {
-          <a class="topbar-action" [href]="fbUrl" target="_blank" rel="noopener noreferrer" aria-label="Facebook page">
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M14 8.5V7.2c0-.7.6-1.2 1.3-1.2H17V4h-2.2C12.7 4 11 5.7 11 7.8V8.5H9v3h2V20h3v-8.5h2.6l.4-3H14z" fill="currentColor" />
-            </svg>
-            <span>Facebook</span>
-          </a>
-        }
-
-        @if (schoolWebsiteUrl(); as siteUrl) {
-          <a class="topbar-action" [href]="siteUrl" target="_blank" rel="noopener noreferrer" aria-label="School website">
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8" />
-              <path d="M3 12h18M12 3c2.5 2.8 4 6.2 4 9s-1.5 6.2-4 9M12 3c-2.5 2.8-4 6.2-4 9s1.5 6.2 4 9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-            </svg>
-            <span>Website</span>
-          </a>
-        }
-
-        @if (showBalanceEnquiry) {
-          <button type="button" class="topbar-action" aria-label="Balance enquiry" (click)="openBalanceEnquiry()">
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <rect x="3" y="6" width="18" height="12" rx="2" stroke="currentColor" stroke-width="1.8" />
-              <path d="M3 10h18" stroke="currentColor" stroke-width="1.8" />
-              <path d="M7 15h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-            </svg>
-            <span>Balance enquiry</span>
-          </button>
-        }
-
-        @if (showMessagesAction) {
-          <a
-            class="topbar-action topbar-messages"
-            [routerLink]="effectiveMessagesPath"
-            routerLinkActive="active"
-            aria-label="Messages"
-          >
-            <span class="topbar-icon-wrap">
-              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path d="M5 6.5h14a2 2 0 0 1 2 2v6.5a2 2 0 0 1-2 2H9l-4 3v-3H5a2 2 0 0 1-2-2V8.5a2 2 0 0 1 2-2z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
-              </svg>
-              @if (unreadMessageCount() > 0) {
-                <span class="msg-badge" [attr.aria-label]="unreadMessageCount() + ' unread messages'">
-                  {{ unreadBadgeLabel(unreadMessageCount()) }}
-                </span>
-              }
-            </span>
-            <span>Messages</span>
-          </a>
-        }
-
-        <button type="button" class="topbar-action" aria-label="Help" (click)="openHelp()">
-          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8" />
-            <path d="M9.6 9.4a2.4 2.4 0 0 1 4.4 1.3c0 1.5-1.9 1.9-1.9 3.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-            <circle cx="12" cy="17" r="0.7" fill="currentColor" />
-          </svg>
-          <span>Help</span>
-        </button>
-
-        <div class="user-menu">
-          <button
-            type="button"
-            class="user-icon-btn"
-            (click)="toggleUserMenu()"
-            [attr.aria-label]="'Account menu for ' + fullName"
-            [attr.aria-expanded]="userMenuOpen()"
-          >
-            <span class="user-avatar-ring" aria-hidden="true">
-              @if (avatarUrl) {
-                <img class="user-avatar-image" [src]="avatarUrl" [alt]="fullName" />
-              } @else {
-                <svg class="user-avatar-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                  <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
-                </svg>
-              }
-              <span class="online-dot" aria-hidden="true"></span>
-            </span>
-            <svg class="user-chevron" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-            </svg>
-          </button>
-          @if (userMenuOpen()) {
-            <div class="user-menu-dropdown">
-              <div class="user-menu-account">
-                <div class="user-menu-field">
-                  <span class="user-menu-label">Account name</span>
-                  <strong>{{ fullName }}</strong>
-                </div>
-                <div class="user-menu-field">
-                  <span class="user-menu-label">Email address</span>
-                  <span class="user-menu-email">{{ accountEmail }}</span>
-                </div>
-              </div>
-              <button type="button" class="user-menu-item user-menu-signout" (click)="requestLogout()">
-                <span>Sign out</span>
-                <svg class="sign-out-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                  <path d="M16 17l5-5-5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                  <path d="M21 12H9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-              </button>
-            </div>
-          }
-        </div>
-      </nav>
-    </header>
     <div class="page-body">
       <ng-content />
     </div>

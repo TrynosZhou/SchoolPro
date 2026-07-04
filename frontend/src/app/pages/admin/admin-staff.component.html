@@ -466,6 +466,15 @@
           </select>
         </div>
         <div class="field">
+          <label>Gender</label>
+          <select [(ngModel)]="newStaff.gender" name="ngender">
+            <option value="">— Select —</option>
+            @for (g of genderOptions; track g.value) {
+              <option [value]="g.value">{{ g.label }}</option>
+            }
+          </select>
+        </div>
+        <div class="field">
           <label>First name *</label>
           <input [(ngModel)]="newStaff.firstName" name="nfn" required placeholder="Enter first name" autocomplete="given-name" />
         </div>
@@ -547,6 +556,7 @@
           <div class="drawer-body">
             <div class="detail-grid">
               <div><span class="lbl">Title</span><strong>{{ s.title || '—' }}</strong></div>
+              <div><span class="lbl">Gender</span><strong>{{ genderLabel(s.gender) }}</strong></div>
               <div><span class="lbl">Role</span><span class="role-badge" [attr.data-role]="s.user.role">{{ roleLabel(s.user.role) }}</span></div>
               <div><span class="lbl">Status</span>
                 @if (s.isActive) { <span class="status-pill active">Active</span> }
@@ -588,6 +598,15 @@
                   <option value="">— None —</option>
                   @for (t of teacherTitleOptions; track t) {
                     <option [value]="t">{{ t }}</option>
+                  }
+                </select>
+              </div>
+              <div class="field">
+                <label>Gender</label>
+                <select [(ngModel)]="editForm.gender" name="egender">
+                  <option value="">— Select —</option>
+                  @for (g of genderOptions; track g.value) {
+                    <option [value]="g.value">{{ g.label }}</option>
                   }
                 </select>
               </div>

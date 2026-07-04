@@ -8,6 +8,8 @@ import { authenticate, authorize, AuthRequest } from '../middleware/auth';
 import { today, termReportDateRange } from '../utils/helpers';
 import { relations } from '../utils/typeorm-helpers';
 import { assertTeacherClassAccess } from '../utils/teacher-class-access';
+import { sendAbsenceAlerts } from '../services/auto-notify.service';
+import { AttendanceStatus } from '../entities/enums';
 
 const router = Router();
 router.use(authenticate);
@@ -167,8 +169,10 @@ router.post('/students/bulk', authorize(UserRole.TEACHER, UserRole.ADMIN), async
   }
 
   const saved = [];
+  const newlyAbsent: string[] = [];
   for (const r of records) {
     let existing = await repo.findOne({ where: { studentId: r.studentId, date } });
+    const wasAbsent = existing?.status === AttendanceStatus.ABSENT;
     if (existing) {
       existing.status = r.status;
       existing.remarks = r.remarks;
@@ -177,6 +181,12 @@ router.post('/students/bulk', authorize(UserRole.TEACHER, UserRole.ADMIN), async
     } else {
       saved.push(await repo.save(repo.create({ ...r, date, markedById: req.user!.staffId })));
     }
+    // Only alert when a student becomes absent (avoid re-alerting on edits).
+    if (r.status === AttendanceStatus.ABSENT && !wasAbsent) newlyAbsent.push(r.studentId);
+  }
+
+  if (newlyAbsent.length) {
+    void sendAbsenceAlerts(newlyAbsent, date);
   }
   res.json(saved);
 });

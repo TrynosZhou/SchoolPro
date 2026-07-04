@@ -1,0 +1,195 @@
+<app-portal-layout
+  [portalTitle]="portalLayout.portalTitle"
+  pageTitle="Custom Report Builder"
+  [navSections]="portalLayout.navSections || []"
+  [navItems]="portalLayout.navItems || []"
+>
+  @if (toast(); as t) {
+    <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>
+  }
+
+  <section class="an-head">
+    <div>
+      <h1>Custom Report Builder</h1>
+      <p class="an-sub">Select fields, filters and grouping — export as PDF, Excel or CSV. Save templates for reuse.</p>
+    </div>
+  </section>
+
+  <div class="builder-layout">
+    <aside class="builder-panel card">
+      <h3>1. Dataset</h3>
+      <label class="fld full">
+        <span>Data source</span>
+        <select [(ngModel)]="config.dataset" (ngModelChange)="onDatasetChange()">
+          @for (d of datasets(); track d.key) {
+            <option [value]="d.key">{{ d.label }}</option>
+          }
+        </select>
+      </label>
+      @if (activeDataset(); as ds) {
+        <p class="hint">{{ ds.description }}</p>
+      }
+
+      <h3>2. Fields</h3>
+      <div class="field-checks">
+        @for (f of activeDataset()?.fields ?? []; track f.key) {
+          <label class="check">
+            <input type="checkbox" [checked]="isFieldSelected(f.key)" (change)="toggleField(f.key)" />
+            {{ f.label }}
+          </label>
+        }
+      </div>
+
+      <h3>3. Filters</h3>
+      @for (f of availableFilters(); track f.id) {
+        @if (f.id === 'classId') {
+          <label class="fld full">
+            <span>{{ f.label }}</span>
+            <select [(ngModel)]="config.filters![f.id]">
+              <option value="">All</option>
+              @for (c of filterOptions().classes; track c.id) {
+                <option [value]="c.id">{{ c.name }}</option>
+              }
+            </select>
+          </label>
+        } @else if (f.id === 'formId') {
+          <label class="fld full">
+            <span>{{ f.label }}</span>
+            <select [(ngModel)]="config.filters![f.id]">
+              <option value="">All</option>
+              @for (form of filterOptions().forms; track form.id) {
+                <option [value]="form.id">{{ form.name }}</option>
+              }
+            </select>
+          </label>
+        } @else if (f.id === 'termId') {
+          <label class="fld full">
+            <span>{{ f.label }}</span>
+            <select [(ngModel)]="config.filters![f.id]">
+              <option value="">All / latest</option>
+              @for (t of filterOptions().terms; track t.id) {
+                <option [value]="t.id">{{ t.name }}</option>
+              }
+            </select>
+          </label>
+        } @else if (f.id === 'schoolYearId') {
+          <label class="fld full">
+            <span>{{ f.label }}</span>
+            <select [(ngModel)]="config.filters![f.id]">
+              <option value="">All</option>
+              @for (y of filterOptions().schoolYears; track y.id) {
+                <option [value]="y.id">{{ y.name }}</option>
+              }
+            </select>
+          </label>
+        } @else if (f.id === 'status') {
+          <label class="fld full">
+            <span>{{ f.label }}</span>
+            <select [(ngModel)]="config.filters![f.id]">
+              <option value="">Active only</option>
+              <option value="all">All statuses</option>
+              <option value="active">Active</option>
+              <option value="withdrawn">Withdrawn</option>
+              <option value="transferred">Transferred</option>
+              <option value="graduated">Graduated</option>
+              <option value="suspended">Suspended</option>
+            </select>
+          </label>
+        } @else if (f.id === 'dateFrom' || f.id === 'dateTo') {
+          <label class="fld full">
+            <span>{{ f.label }}</span>
+            <input type="date" [(ngModel)]="config.filters![f.id]" />
+          </label>
+        }
+      }
+
+      <h3>4. Group by</h3>
+      <label class="fld full">
+        <span>Group / aggregate</span>
+        <select [(ngModel)]="config.groupBy">
+          <option [ngValue]="null">None (detail rows)</option>
+          @for (g of activeDataset()?.groupable ?? []; track g) {
+            <option [value]="g">{{ groupLabel(g) }}</option>
+          }
+        </select>
+      </label>
+
+      <div class="panel-actions">
+        <button type="button" class="btn-primary" [disabled]="loading()" (click)="runReport()">
+          {{ loading() ? 'Running…' : 'Run report' }}
+        </button>
+      </div>
+    </aside>
+
+    <main class="builder-main">
+      <section class="card toolbar">
+        <label class="fld grow">
+          <span>Report title</span>
+          <input type="text" [(ngModel)]="reportTitle" placeholder="Custom Report" />
+        </label>
+        <div class="export-btns">
+          <button type="button" class="btn-outline" [disabled]="exporting()" (click)="exportReport('csv')">CSV</button>
+          <button type="button" class="btn-outline" [disabled]="exporting()" (click)="exportReport('xlsx')">Excel</button>
+          <button type="button" class="btn-outline" [disabled]="exporting()" (click)="exportReport('pdf')">PDF</button>
+        </div>
+      </section>
+
+      <section class="card templates-bar">
+        <label class="fld grow">
+          <span>Saved templates</span>
+          <select [(ngModel)]="selectedTemplateId" (ngModelChange)="loadTemplate()">
+            <option value="">— New report —</option>
+            @for (t of templates(); track t.id) {
+              <option [value]="t.id">{{ t.name }}</option>
+            }
+          </select>
+        </label>
+        <label class="fld grow">
+          <span>Template name</span>
+          <input type="text" [(ngModel)]="templateName" placeholder="My report template" />
+        </label>
+        <button type="button" class="btn-ghost" [disabled]="saving()" (click)="saveTemplate()">
+          {{ saving() ? 'Saving…' : 'Save template' }}
+        </button>
+        @if (selectedTemplateId) {
+          <button type="button" class="btn-danger" (click)="deleteTemplate()">Delete</button>
+        }
+      </section>
+
+      <section class="card preview-card">
+        @if (loading()) {
+          <p class="empty-inline">Running report…</p>
+        } @else if (!result()) {
+          <p class="empty-inline">Configure fields and filters, then click <strong>Run report</strong>.</p>
+        } @else {
+          <header class="preview-head">
+            <h3>{{ reportTitle }}</h3>
+            <span class="meta">{{ result()!.totalRows | number }} row(s) · {{ result()!.datasetLabel }}</span>
+          </header>
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  @for (c of result()!.columns; track c.key) {
+                    <th [class.num]="c.type !== 'string' && c.type !== 'date'">{{ c.label }}</th>
+                  }
+                </tr>
+              </thead>
+              <tbody>
+                @for (row of result()!.rows; track $index) {
+                  <tr>
+                    @for (c of result()!.columns; track c.key) {
+                      <td [class.num]="c.type !== 'string' && c.type !== 'date'">
+                        {{ formatCell(row[c.key], c.type) }}
+                      </td>
+                    }
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </section>
+    </main>
+  </div>
+</app-portal-layout>

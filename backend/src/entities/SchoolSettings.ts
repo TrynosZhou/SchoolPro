@@ -7,6 +7,7 @@ import {
 import type { GradeBoundary } from '../types/grade-boundaries';
 import type { SecurityPolicy } from '../types/security-policy';
 import type { IntegrationsConfig } from '../types/integrations-config';
+import type { NotificationSettings } from '../types/notification-settings';
 
 @Entity('school_settings')
 export class SchoolSettings {
@@ -70,6 +71,10 @@ export class SchoolSettings {
   /** Third-party API integrations (WhatsApp, email, webhooks, payments, etc.). */
   @Column({ type: 'jsonb', nullable: true })
   integrationsConfig?: IntegrationsConfig;
+
+  /** Automated notification triggers: absence alerts, fee reminders, exam results. */
+  @Column({ type: 'jsonb', nullable: true })
+  notificationSettings?: NotificationSettings;
 
   /** Label shown on timetables, e.g. "1" in "Term 2 (2026) Version 1". */
   @Column({ type: 'varchar', length: 32, default: '1' })

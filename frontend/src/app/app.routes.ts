@@ -1,6 +1,8 @@
 import { Routes } from '@angular/router';
 import { authGuard, roleGuard } from './core/guards/auth.guard';
 import { LoginComponent } from './pages/login/login.component';
+import { ApplyComponent } from './pages/public/apply.component';
+import { ApplicationStatusComponent } from './pages/public/application-status.component';
 import { DirectorDashboardComponent } from './pages/director/director-dashboard.component';
 import { DirectorFinanceComponent } from './pages/director/director-finance.component';
 import { DirectorAcademicsComponent } from './pages/director/director-academics.component';
@@ -23,8 +25,11 @@ import { ParentDashboardComponent } from './pages/parent/parent-dashboard.compon
 import { ParentFinanceComponent } from './pages/parent/parent-finance.component';
 import { ParentReportCardComponent } from './pages/parent/parent-report-card.component';
 import { ParentReportCardsComponent } from './pages/parent/parent-report-cards.component';
-import { ParentMessagesComponent } from './pages/parent/parent-messages.component';
 import { ParentSendEmailComponent } from './pages/parent/parent-send-email.component';
+import { MessagingCenterComponent } from './shared/messaging/messaging-center.component';
+import { NotificationsComponent } from './shared/notifications/notifications.component';
+import { AdminBulkMessageComponent } from './pages/admin/admin-bulk-message.component';
+import { AdminNotificationSettingsComponent } from './pages/admin/admin-notification-settings.component';
 import { ParentAttendanceComponent } from './pages/parent/parent-attendance.component';
 import { AttendanceMarkRegisterComponent } from './pages/attendance/attendance-mark-register.component';
 import { AttendanceReportComponent } from './pages/attendance/attendance-report.component';
@@ -55,10 +60,19 @@ import { AdminParentsComponent } from './pages/admin/admin-parents.component';
 import { AdminParentDetailComponent } from './pages/admin/admin-parent-detail.component';
 import { AdminPayrollComponent } from './pages/admin/admin-payroll.component';
 import { AdminGeneralLedgerComponent } from './pages/admin/admin-general-ledger.component';
+import { AdminAdmissionsComponent } from './pages/admin/admin-admissions.component';
+import { AdminAnalyticsDemographicsComponent } from './pages/admin/admin-analytics-demographics.component';
+import { AdminAnalyticsRetentionComponent } from './pages/admin/admin-analytics-retention.component';
+import { AdminReportBuilderComponent } from './pages/admin/admin-report-builder.component';
+import { AdminAuditTrailComponent } from './pages/admin/admin-audit-trail.component';
 
 export const routes: Routes = [
   { path: '', redirectTo: 'login', pathMatch: 'full' },
   { path: 'login', component: LoginComponent },
+  { path: 'apply', component: ApplyComponent },
+  { path: 'apply/status', component: ApplicationStatusComponent },
+  { path: 'admissions', redirectTo: 'apply', pathMatch: 'full' },
+  { path: 'admissions/status', redirectTo: 'apply/status', pathMatch: 'full' },
 
   {
     path: 'director',
@@ -75,6 +89,9 @@ export const routes: Routes = [
       { path: 'mark-sheet', component: AdminMarkSheetComponent },
       { path: 'results-analysis', component: AdminResultsAnalysisComponent },
       { path: 'ranking', component: AdminRankingComponent },
+      { path: 'analytics/demographics', component: AdminAnalyticsDemographicsComponent },
+      { path: 'analytics/retention', component: AdminAnalyticsRetentionComponent },
+      { path: 'analytics/report-builder', component: AdminReportBuilderComponent },
     ],
   },
   {
@@ -92,6 +109,9 @@ export const routes: Routes = [
       { path: 'mark-sheet', component: AdminMarkSheetComponent },
       { path: 'results-analysis', component: AdminResultsAnalysisComponent },
       { path: 'ranking', component: AdminRankingComponent },
+      { path: 'analytics/demographics', component: AdminAnalyticsDemographicsComponent },
+      { path: 'analytics/retention', component: AdminAnalyticsRetentionComponent },
+      { path: 'analytics/report-builder', component: AdminReportBuilderComponent },
     ],
   },
   {
@@ -100,6 +120,7 @@ export const routes: Routes = [
     children: [
       { path: '', component: AdminDashboardComponent },
       { path: 'students', component: AdminStudentsComponent },
+      { path: 'admissions', component: AdminAdmissionsComponent },
       { path: 'parents', component: AdminParentsComponent },
       { path: 'parents/:id', component: AdminParentDetailComponent },
       { path: 'enrollment', component: AdminEnrollmentComponent },
@@ -120,6 +141,9 @@ export const routes: Routes = [
       { path: 'fin-reports/general-ledger', component: AdminGeneralLedgerComponent },
       { path: 'communication/send', component: AdminSendMessageComponent },
       { path: 'communication/inbox', component: AdminInboxComponent },
+      { path: 'communication/bulk', component: AdminBulkMessageComponent },
+      { path: 'communication/notifications', component: NotificationsComponent },
+      { path: 'communication/notification-settings', component: AdminNotificationSettingsComponent },
       { path: 'timetable', redirectTo: 'timetable/configure-periods', pathMatch: 'full' },
       { path: 'timetable/configure-periods', component: AdminTimetableConfigurePeriodsComponent },
       { path: 'timetable/generate', component: AdminTimetableGenerateComponent },
@@ -135,6 +159,9 @@ export const routes: Routes = [
       { path: 'mark-sheet', component: AdminMarkSheetComponent },
       { path: 'results-analysis', component: AdminResultsAnalysisComponent },
       { path: 'ranking', component: AdminRankingComponent },
+      { path: 'analytics/demographics', component: AdminAnalyticsDemographicsComponent },
+      { path: 'analytics/retention', component: AdminAnalyticsRetentionComponent },
+      { path: 'analytics/report-builder', component: AdminReportBuilderComponent },
       { path: 'classes', component: AdminDashboardComponent },
       { path: 'staff-attendance', component: AdminStaffAttendanceComponent },
       { path: 'class-assignments', component: AdminClassAssignmentsComponent },
@@ -142,6 +169,7 @@ export const routes: Routes = [
       { path: 'academic-settings', component: AdminAcademicSettingsComponent },
       { path: 'user-management', component: AdminUserManagementComponent },
       { path: 'user-permissions', component: AdminUserPermissionsComponent },
+      { path: 'audit-trail', component: AdminAuditTrailComponent },
       { path: 'integrations', component: AdminIntegrationsComponent },
     ],
   },
@@ -160,7 +188,8 @@ export const routes: Routes = [
       { path: 'assessments', component: TeacherDashboardComponent },
       { path: 'schedules', component: TeacherDashboardComponent },
       { path: 'timetable', component: TeacherDashboardComponent },
-      { path: 'messages', component: TeacherDashboardComponent },
+      { path: 'messages', component: MessagingCenterComponent },
+      { path: 'notifications', component: NotificationsComponent },
     ],
   },
   {
@@ -173,7 +202,8 @@ export const routes: Routes = [
       { path: 'attendance', component: ParentAttendanceComponent },
       { path: 'report-card/:studentId', component: ParentReportCardComponent },
       { path: 'report-cards', component: ParentReportCardsComponent },
-      { path: 'messages', component: ParentMessagesComponent },
+      { path: 'messages', component: MessagingCenterComponent },
+      { path: 'notifications', component: NotificationsComponent },
       { path: 'send-email', component: ParentSendEmailComponent },
     ],
   },

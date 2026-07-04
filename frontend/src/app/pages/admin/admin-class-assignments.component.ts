@@ -1,5 +1,6 @@
 import { Component, computed, HostListener, inject, OnDestroy, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute } from '@angular/router';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
@@ -50,6 +51,7 @@ export class AdminClassAssignmentsComponent implements OnInit, OnDestroy {
   private assignmentsApi = inject(TeacherAssignmentService);
   private periodsSvc = inject(TimetablePeriodsService);
   private sanitizer = inject(DomSanitizer);
+  private route = inject(ActivatedRoute);
   private pdfObjectUrl: string | null = null;
 
   readonly adminNav = ADMIN_NAV_SECTIONS;
@@ -113,6 +115,24 @@ export class AdminClassAssignmentsComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.reloadAll();
+    const teacherId = this.route.snapshot.queryParamMap.get('teacherId') || '';
+    if (teacherId) {
+      this.openTeacherAssignmentsFromRoute(teacherId);
+    }
+  }
+
+  /** Deep-link support: open a teacher's "Current assignments" modal (e.g. from Generate Timetable). */
+  private openTeacherAssignmentsFromRoute(teacherId: string): void {
+    this.assignmentsApi.workloadSummary().subscribe({
+      next: (rows) => {
+        this.workload.set(rows);
+        const row = rows.find((r) => r.teacherId === teacherId);
+        this.openTeacherAssignmentsModal(row ?? this.workloadRowForTeacher(teacherId, 0));
+      },
+      error: () => {
+        this.openTeacherAssignmentsModal(this.workloadRowForTeacher(teacherId, 0));
+      },
+    });
   }
 
   ngOnDestroy(): void {

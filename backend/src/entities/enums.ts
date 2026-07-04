@@ -37,6 +37,25 @@ export enum StudentType {
   BOARDER = 'boarder',
 }
 
+/** Lifecycle status of a student on the roll (for retention / dropout analytics). */
+export enum StudentStatus {
+  ACTIVE = 'active',
+  GRADUATED = 'graduated',
+  TRANSFERRED = 'transferred',
+  WITHDRAWN = 'withdrawn',
+  SUSPENDED = 'suspended',
+}
+
+/** Status of a per-academic-year enrollment snapshot. */
+export enum EnrollmentStatus {
+  /** Currently enrolled / on the roll for that academic year. */
+  ENROLLED = 'enrolled',
+  /** Completed the year and expected to continue (promoted). */
+  COMPLETED = 'completed',
+  /** Left during or at the end of the year and did not continue. */
+  LEFT = 'left',
+}
+
 export enum FeeType {
   TUITION = 'tuition',
   BUS_LEVY = 'bus_levy',
@@ -134,5 +153,22 @@ export enum DayOfWeek {
 export enum TeacherAssignmentRole {
   CLASS_TEACHER = 'class_teacher',
   SUBJECT_TEACHER = 'subject_teacher',
+}
+
+/** Admission application pipeline stages. */
+export enum ApplicationStatus {
+  APPLIED = 'applied',
+  SHORTLISTED = 'shortlisted',
+  ADMITTED = 'admitted',
+  REJECTED = 'rejected',
+}
+
+/** Supporting document categories for an admission application. */
+export enum ApplicationDocumentType {
+  BIRTH_CERTIFICATE = 'birth_certificate',
+  REPORT_CARD = 'report_card',
+  PASSPORT_PHOTO = 'passport_photo',
+  ID_COPY = 'id_copy',
+  OTHER = 'other',
 }
 

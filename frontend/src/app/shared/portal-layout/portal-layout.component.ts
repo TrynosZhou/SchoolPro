@@ -15,6 +15,7 @@ export interface NavItem {
   path: string;
   icon?: string;
   badge?: string | number;
+  queryParams?: Record<string, string | number>;
 }
 
 export interface NavSection {

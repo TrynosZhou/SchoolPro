@@ -49,6 +49,13 @@ import { TuitionExemption } from './TuitionExemption';
 import { InvoiceAdjustment } from './InvoiceAdjustment';
 import { ChartOfAccount } from './ChartOfAccount';
 import { GeneralLedgerEntry } from './GeneralLedgerEntry';
+import { Application } from './Application';
+import { ApplicationDocument } from './ApplicationDocument';
+import { BulkMessage } from './BulkMessage';
+import { BulkMessageRecipient } from './BulkMessageRecipient';
+import { StudentEnrollment } from './StudentEnrollment';
+import { ReportTemplate } from './ReportTemplate';
+import { AuditLog } from './AuditLog';
 
 export const entities = [
   User,
@@ -102,6 +109,13 @@ export const entities = [
   InvoiceAdjustment,
   ChartOfAccount,
   GeneralLedgerEntry,
+  Application,
+  ApplicationDocument,
+  BulkMessage,
+  BulkMessageRecipient,
+  StudentEnrollment,
+  ReportTemplate,
+  AuditLog,
 ];
 
 export * from './enums';
@@ -157,5 +171,12 @@ export {
   InvoiceAdjustment,
   ChartOfAccount,
   GeneralLedgerEntry,
+  Application,
+  ApplicationDocument,
+  BulkMessage,
+  BulkMessageRecipient,
+  StudentEnrollment,
+  ReportTemplate,
+  AuditLog,
 };
 

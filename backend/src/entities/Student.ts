@@ -7,9 +7,10 @@ import {
   ManyToOne,
   OneToMany,
   CreateDateColumn,
+  UpdateDateColumn,
 } from 'typeorm';
 import { FK_CASCADE, FK_SET_NULL } from './constraints';
-import { StudentType } from './enums';
+import { StudentType, StudentStatus } from './enums';
 import { User } from './User';
 import { SchoolClass } from './SchoolClass';
 import { Form } from './Form';
@@ -75,6 +76,20 @@ export class Student {
   @Column({ default: true })
   isActive!: boolean;
 
+  /**
+   * Lifecycle status on the roll. `active` students are `isActive = true`; any exit
+   * (graduated / transferred / withdrawn) is recorded here with `exitDate`/`exitReason`
+   * for retention & dropout analytics. `isActive` is kept in sync for backward compat.
+   */
+  @Column({ type: 'varchar', length: 24, default: StudentStatus.ACTIVE })
+  status!: string;
+
+  @Column({ type: 'date', nullable: true })
+  exitDate?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  exitReason?: string;
+
   @Column({ type: 'date', nullable: true })
   enrollmentDate?: string;
 
@@ -95,5 +110,8 @@ export class Student {
 
   @CreateDateColumn()
   createdAt!: Date;
+
+  @UpdateDateColumn()
+  updatedAt!: Date;
 }
 

@@ -5,14 +5,25 @@
     <span class="orb orb-3"></span>
   </div>
 
-  <div class="login-layout">
+  <nav class="public-nav" aria-label="Admissions">
+    <a routerLink="/apply/status" class="public-nav-link">Check status</a>
+    <a routerLink="/apply" class="apply-now-btn">🎓 Apply Now</a>
+  </nav>
+
+  <div class="login-layout" [class.mode-signup]="mode() === 'signup'">
     <aside class="brand-panel">
       <div class="brand-panel-inner">
         <div class="brand-lockup">
-          <span class="brand-mark">SP</span>
+          <span class="brand-mark" [class.has-logo]="schoolLogoUrl()">
+            @if (schoolLogoUrl(); as logo) {
+              <img [src]="logo" [alt]="schoolName()" />
+            } @else {
+              {{ schoolInitials() }}
+            }
+          </span>
           <div>
-            <h1 class="brand-name">School Pro</h1>
-            <p class="brand-tagline">School Management System</p>
+            <h1 class="brand-name">{{ schoolName() }}</h1>
+            <p class="brand-tagline">{{ schoolTagline() }}</p>
           </div>
         </div>
 
@@ -44,8 +55,14 @@
       <div class="signin-card" [class.signin-card--wide]="mode() === 'signup'">
         <header class="signin-header">
           <div class="mobile-brand">
-            <span class="brand-mark sm">SP</span>
-            <span class="mobile-brand-name">School Pro</span>
+            <span class="brand-mark sm" [class.has-logo]="schoolLogoUrl()">
+              @if (schoolLogoUrl(); as logo) {
+                <img [src]="logo" [alt]="schoolName()" />
+              } @else {
+                {{ schoolInitials() }}
+              }
+            </span>
+            <span class="mobile-brand-name">{{ schoolName() }}</span>
           </div>
 
           @if (mode() === 'signin' || mode() === 'signup') {
@@ -369,6 +386,13 @@
             }
           }
         </p>
+
+        @if (mode() === 'signin' || mode() === 'signup') {
+          <p class="apply-prompt">
+            New to the school?
+            <a routerLink="/apply" class="link-btn">Apply for admission online</a>
+          </p>
+        }
       </div>
     </main>
   </div>

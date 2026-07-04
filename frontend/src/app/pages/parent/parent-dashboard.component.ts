@@ -24,6 +24,17 @@ interface ParentChildSummary {
   attendance: { status: string; count: string }[];
 }
 
+interface StudentMatch {
+  id: string;
+  admissionNumber?: string;
+  firstName: string;
+  lastName: string;
+  gender?: string;
+  className?: string;
+  formName?: string;
+  alreadyLinked?: boolean;
+}
+
 @Component({
   selector: 'app-parent-dashboard',
   standalone: true,
@@ -37,12 +48,17 @@ export class ParentDashboardComponent implements OnInit {
 
   children = signal<ParentChildSummary[]>([]);
   loading = signal(true);
-  linking = signal(false);
   showLinkForm = signal(false);
   toast = signal<{ type: 'success' | 'error'; msg: string } | null>(null);
 
+  searching = signal(false);
+  hasSearched = signal(false);
+  results = signal<StudentMatch[]>([]);
+  linkingId = signal<string | null>(null);
+  unlinkingId = signal<string | null>(null);
+
   linkForm = {
-    admissionNumber: '',
+    term: '',
     relationship: 'Parent',
   };
 
@@ -74,30 +90,82 @@ export class ParentDashboardComponent implements OnInit {
   }
 
   toggleLinkForm() {
-    this.showLinkForm.update((v) => !v);
+    this.showLinkForm.update((v) => {
+      const next = !v;
+      if (!next) this.resetSearch();
+      return next;
+    });
   }
 
-  linkChild() {
-    if (!this.linkForm.admissionNumber.trim()) {
-      this.showToast('error', 'Enter your child\'s Student ID');
+  resetSearch() {
+    this.linkForm = { term: '', relationship: this.linkForm.relationship };
+    this.results.set([]);
+    this.hasSearched.set(false);
+  }
+
+  searchChildren() {
+    const term = this.linkForm.term.trim();
+    if (term.length < 2) {
+      this.showToast('error', 'Enter a Student ID or last name (at least 2 characters)');
       return;
     }
 
-    this.linking.set(true);
+    this.searching.set(true);
+    this.api.get<StudentMatch[]>('/students/parent/search', { q: term }).subscribe({
+      next: (rows) => {
+        this.searching.set(false);
+        this.hasSearched.set(true);
+        this.results.set(rows);
+      },
+      error: (e) => {
+        this.searching.set(false);
+        this.hasSearched.set(true);
+        this.results.set([]);
+        this.showToast('error', e.error?.message || 'Search failed. Try again.');
+      },
+    });
+  }
+
+  linkSelected(match: StudentMatch) {
+    if (match.alreadyLinked || this.linkingId()) return;
+
+    this.linkingId.set(match.id);
     this.api.post<{ message: string }>('/students/parent/link-child', {
-      admissionNumber: this.linkForm.admissionNumber.trim().toUpperCase(),
+      studentId: match.id,
       relationship: this.linkForm.relationship,
     }).subscribe({
       next: (res) => {
-        this.linking.set(false);
-        this.linkForm = { admissionNumber: '', relationship: 'Parent' };
-        this.showLinkForm.set(true);
-        this.showToast('success', res.message || 'Child linked. Add another Student ID or close this form.');
+        this.linkingId.set(null);
+        this.results.update((rows) =>
+          rows.map((r) => (r.id === match.id ? { ...r, alreadyLinked: true } : r)),
+        );
+        this.showToast('success', res.message || 'Child linked to your account.');
         this.loadChildren();
       },
       error: (e) => {
-        this.linking.set(false);
+        this.linkingId.set(null);
         this.showToast('error', e.error?.message || 'Could not link child');
+      },
+    });
+  }
+
+  unlinkChild(child: ParentChildSummary) {
+    if (this.unlinkingId()) return;
+
+    const name = `${child.student.firstName} ${child.student.lastName}`;
+    const ok = confirm(`Unlink ${name} from your account? You can re-link them later using their Student ID or last name.`);
+    if (!ok) return;
+
+    this.unlinkingId.set(child.student.id);
+    this.api.delete<{ message: string }>(`/students/parent/unlink-child/${child.student.id}`).subscribe({
+      next: (res) => {
+        this.unlinkingId.set(null);
+        this.showToast('success', res.message || `${name} unlinked from your account.`);
+        this.loadChildren();
+      },
+      error: (e) => {
+        this.unlinkingId.set(null);
+        this.showToast('error', e.error?.message || 'Could not unlink child');
       },
     });
   }
