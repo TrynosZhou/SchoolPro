@@ -1,0 +1,83 @@
+<app-portal-layout portalTitle="Student Portal" pageTitle="Homework & Assignments" [navItems]="nav">
+  <header class="page-intro">
+    <p>View weekly assessments and class learning schedules posted by your teachers.</p>
+  </header>
+
+  <section class="toolbar card">
+    <div class="field">
+      <label for="termSelect">Term</label>
+      <select id="termSelect" [(ngModel)]="selectedTermId" name="term" (ngModelChange)="onTermChange()" [disabled]="loading() || !terms().length">
+        @if (!terms().length) {
+          <option value="">No terms available</option>
+        } @else {
+          @for (t of terms(); track t.id) {
+            <option [value]="t.id">{{ t.name }}{{ t.isCurrent ? ' (current)' : '' }}</option>
+          }
+        }
+      </select>
+    </div>
+
+    <nav class="tab-bar" aria-label="Homework views">
+      <button type="button" class="tab-btn" [class.active]="activeTab === 'assignments'" (click)="setTab('assignments')">
+        My assignments
+      </button>
+      <button type="button" class="tab-btn" [class.active]="activeTab === 'schedules'" (click)="setTab('schedules')">
+        Class schedules
+      </button>
+    </nav>
+  </section>
+
+  @if (loading() || loadingData()) {
+    <div class="empty card"><p>Loading…</p></div>
+  } @else if (activeTab === 'assignments') {
+    @if (!assessments().length) {
+      <div class="empty card">
+        <span class="empty-icon">📝</span>
+        <p>No assignments recorded for this term yet.</p>
+      </div>
+    } @else {
+      <div class="item-grid">
+        @for (a of assessments(); track a.id) {
+          <article class="item-card">
+            <header>
+              <span class="subject-pill">{{ subjectLabel(a) }}</span>
+              <time>{{ formatWeek(a.weekStart) }}</time>
+            </header>
+            <h3>{{ a.topic || 'Weekly assessment' }}</h3>
+            @if (a.score != null && a.maxScore != null) {
+              <p class="score-line">Score: <strong>{{ a.score }} / {{ a.maxScore }}</strong></p>
+            }
+            @if (a.remarks) {
+              <p class="remarks">{{ a.remarks }}</p>
+            }
+          </article>
+        }
+      </div>
+    }
+  } @else {
+    @if (!schedules().length) {
+      <div class="empty card">
+        <span class="empty-icon">📚</span>
+        <p>No learning schedules posted for your class this term.</p>
+      </div>
+    } @else {
+      <div class="item-grid">
+        @for (s of schedules(); track s.id) {
+          <article class="item-card">
+            <header>
+              <span class="subject-pill">{{ subjectLabel(s) }}</span>
+              <time>{{ formatWeek(s.weekStart) }}</time>
+            </header>
+            <h3>{{ s.topic || 'Class schedule' }}</h3>
+            @if (s.homework) {
+              <p class="homework"><strong>Homework:</strong> {{ s.homework }}</p>
+            }
+            @if (s.objectives) {
+              <p class="objectives">{{ s.objectives }}</p>
+            }
+          </article>
+        }
+      </div>
+    }
+  }
+</app-portal-layout>

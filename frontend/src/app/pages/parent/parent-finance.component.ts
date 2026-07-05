@@ -1,11 +1,13 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { DatePipe, DecimalPipe } from '@angular/common';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { PARENT_NAV_ITEMS } from '../../core/config/parent-nav';
+import { STUDENT_NAV_ITEMS } from '../../core/config/student-nav';
 import { ApiService } from '../../core/services/api.service';
+import { AuthService } from '../../core/services/auth.service';
 
 interface LinkedChild {
   linkId?: string;
@@ -76,10 +78,14 @@ interface ReceiptRow {
 })
 export class ParentFinanceComponent implements OnInit {
   private api = inject(ApiService);
+  private auth = inject(AuthService);
   private route = inject(ActivatedRoute);
   private sanitizer = inject(DomSanitizer);
 
-  readonly nav = PARENT_NAV_ITEMS;
+  readonly isStudent = computed(() => this.auth.user()?.role === 'student');
+  readonly portalTitle = computed(() => (this.isStudent() ? 'Student Portal' : 'Parent Portal'));
+  readonly nav = computed(() => (this.isStudent() ? STUDENT_NAV_ITEMS : PARENT_NAV_ITEMS));
+  readonly homeLink = computed(() => (this.isStudent() ? '/student' : '/parent'));
 
   children = signal<LinkedChild[]>([]);
   statement = signal<StatementData | null>(null);
@@ -113,6 +119,27 @@ export class ParentFinanceComponent implements OnInit {
         this.loadFinance();
       }
     });
+
+    this.loadChildren();
+  }
+
+  private loadChildren() {
+    const studentUserId = this.auth.user()?.studentId;
+    if (this.isStudent() && studentUserId) {
+      this.api.get<LinkedChild['student']>(`/students/${studentUserId}`).subscribe({
+        next: (student) => {
+          this.children.set([{ student }]);
+          this.selectedStudentId = student.id;
+          this.loading.set(false);
+          this.loadFinance();
+        },
+        error: () => {
+          this.loading.set(false);
+          this.showToast('error', 'Could not load student profile');
+        },
+      });
+      return;
+    }
 
     this.api.get<LinkedChild[]>('/students/parent/my-children').subscribe({
       next: (kids) => {

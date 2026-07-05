@@ -4,7 +4,8 @@ import { DecimalPipe, NgClass, SlicePipe } from '@angular/common';
 import { Router, RouterLink } from '@angular/router';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
-import { TEACHER_NAV_SECTIONS } from '../../core/config/teacher-nav';
+import { buildTeacherNavSections } from '../../core/config/teacher-nav';
+import { AuthService } from '../../core/services/auth.service';
 import { DIRECTOR_NAV_ITEMS } from '../../core/config/director-nav';
 import { PRINCIPAL_NAV_ITEMS } from '../../core/config/principal-nav';
 import { ApiService } from '../../core/services/api.service';
@@ -65,12 +66,15 @@ type ViewMode = 'table' | 'cards';
 export class AttendanceReportComponent implements OnInit {
   private api = inject(ApiService);
   private router = inject(Router);
+  private auth = inject(AuthService);
 
   readonly isTeacherPortal = this.router.url.startsWith('/teacher');
   readonly isDirectorPortal = this.router.url.startsWith('/director');
   readonly isPrincipalPortal = this.router.url.startsWith('/principal');
   readonly adminNav = ADMIN_NAV_SECTIONS;
-  readonly teacherNav = TEACHER_NAV_SECTIONS;
+  get teacherNav() {
+    return buildTeacherNavSections(this.auth.user()?.permissions);
+  }
   readonly directorNav = DIRECTOR_NAV_ITEMS;
   readonly principalNav = PRINCIPAL_NAV_ITEMS;
   portalTitle = this.isPrincipalPortal ? 'Principal Portal' : this.isDirectorPortal ? 'Director Portal' : this.isTeacherPortal ? 'Teacher Portal' : 'Admin Portal';

@@ -17,6 +17,8 @@
       <p>
         @if (isTeacher) {
           Chat directly with the parents and students of the classes you teach.
+        } @else if (isStudent) {
+          Message your teachers or the school office. Tick one or more recipients below.
         } @else {
           Message your child's teachers or the school office. Conversations are grouped by person.
         }
@@ -90,6 +92,43 @@
             <p class="muted">Loading contacts…</p>
           } @else if (!recipients().length) {
             <p class="muted">No contacts available to message yet.</p>
+          } @else if (isStudent) {
+            <input
+              class="input to-field"
+              type="text"
+              readonly
+              [value]="selectedRecipientEmails()"
+              placeholder="Select recipients below — their email addresses will appear here"
+            />
+            <input
+              class="input"
+              type="text"
+              placeholder="Search contacts…"
+              [(ngModel)]="recipientSearch"
+            />
+            <div class="recipient-list">
+              @for (r of filteredRecipients(); track r.id) {
+                <label class="recipient recipient--checkbox" [class.selected]="isRecipientChecked(r.id)">
+                  <input
+                    type="checkbox"
+                    class="recipient-check"
+                    [checked]="isRecipientChecked(r.id)"
+                    (change)="toggleRecipient(r.id, $any($event.target).checked)"
+                  />
+                  <span class="avatar sm">{{ r.firstName.charAt(0) }}{{ r.lastName.charAt(0) }}</span>
+                  <span class="recipient-main">
+                    <span class="recipient-name">
+                      {{ r.firstName }} {{ r.lastName }}
+                      <span class="role-chip">{{ r.role }}</span>
+                    </span>
+                    <span class="recipient-email">{{ r.email }}</span>
+                    @if (r.context) {
+                      <span class="recipient-context">{{ r.context }}</span>
+                    }
+                  </span>
+                </label>
+              }
+            </div>
           } @else {
             <input
               class="input"
@@ -126,7 +165,13 @@
           <div class="compose-actions">
             <button type="button" class="btn-outline" (click)="cancelCompose()">Cancel</button>
             <button type="button" class="btn-primary" [disabled]="sending()" (click)="sendCompose()">
-              {{ sending() ? 'Sending…' : 'Send message' }}
+              @if (sending()) {
+                Sending…
+              } @else if (isStudent && selectedRecipientIds().size > 1) {
+                Send to {{ selectedRecipientIds().size }} recipients
+              } @else {
+                Send message
+              }
             </button>
           </div>
         </div>

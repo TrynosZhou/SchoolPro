@@ -25,6 +25,13 @@ export class AuthService {
     );
   }
 
+  /** Student portal: Student ID + date of birth (YYYY-MM-DD). */
+  studentLogin(admissionNumber: string, dateOfBirth: string) {
+    return this.api.post<AuthResponse>('/auth/student-login', { admissionNumber, dateOfBirth }).pipe(
+      tap((res) => this.persistSession(res))
+    );
+  }
+
   forgotPassword(username: string) {
     return this.api.post<{ message: string; resetUrl?: string; emailSent?: boolean }>(
       '/auth/forgot-password',
@@ -41,7 +48,7 @@ export class AuthService {
     password: string;
     firstName: string;
     lastName: string;
-    role: 'parent' | 'student';
+    role: 'parent';
     phone?: string;
     admissionNumber?: string;
     dateOfBirth?: string;
@@ -98,6 +105,11 @@ export class AuthService {
     return !!u && roles.includes(u.role);
   }
 
+  hasPermission(...keys: string[]): boolean {
+    const granted = new Set(this.userSignal()?.permissions ?? []);
+    return keys.some((key) => granted.has(key));
+  }
+
   getPortalRoute(): string {
     const role = this.userSignal()?.role;
     const map: Record<UserRole, string> = {
@@ -106,7 +118,7 @@ export class AuthService {
       admin: '/admin',
       teacher: '/teacher',
       parent: '/parent',
-      student: '/parent',
+      student: '/student',
     };
     return role ? map[role] : '/login';
   }

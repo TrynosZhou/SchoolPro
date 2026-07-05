@@ -323,27 +323,6 @@
           </section>
         } @else {
           <div class="results-layout">
-            <aside class="jump-nav card" aria-label="Student navigation">
-              <h3>Class ranking</h3>
-              <ol class="jump-list">
-                @for (report of filteredReports(); track report.id) {
-                  <li>
-                    <button
-                      type="button"
-                      class="jump-item"
-                      [class.active]="activeStudentId() === report.studentId"
-                      (click)="scrollToReport(report.studentId)"
-                    >
-                      <span class="jump-pos" [class.top]="(report.classPosition || 0) <= 3">
-                        {{ report.classPosition }}
-                      </span>
-                      <span class="jump-name">{{ report.student?.lastName }}, {{ report.student?.firstName }}</span>
-                    </button>
-                  </li>
-                }
-              </ol>
-            </aside>
-
             <div class="report-sequence" [class.compact]="viewMode() === 'compact'">
               @for (report of filteredReports(); track report.id) {
                 <article
@@ -551,11 +530,48 @@
                       </div>
                       <div class="comments remarks-editor">
                         <p class="remarks-hint">
-                          Teachers and administrators may comment on each learner’s performance and behaviour.
-                          Remarks save automatically when you leave the text box.
+                          Class teacher remarks are generated from behaviour, attitude, and attendance (only when critically low).
+                          Headmaster remarks reflect academic performance only. Edits save when you leave a text box.
                         </p>
                         <div class="comment-box">
-                          <span class="comment-label">Class teacher — performance &amp; behaviour</span>
+                          <span class="comment-label">Class teacher — behaviour &amp; attitude</span>
+                          @if (canEditClassTeacherRemark()) {
+                            <div class="conduct-rating-row">
+                              <label>
+                                <span>Behaviour</span>
+                                <select
+                                  [ngModel]="report.behaviorRating || ''"
+                                  (ngModelChange)="onConductRatingChange(report, 'behaviorRating', $event)"
+                                  [ngModelOptions]="{ standalone: true }"
+                                  [disabled]="savingRemarks()[report.id]"
+                                >
+                                  <option value="">— Select —</option>
+                                  @for (opt of conductRatingOptions; track opt.value) {
+                                    <option [value]="opt.value">{{ opt.label }}</option>
+                                  }
+                                </select>
+                              </label>
+                              <label>
+                                <span>Attitude</span>
+                                <select
+                                  [ngModel]="report.attitudeRating || ''"
+                                  (ngModelChange)="onConductRatingChange(report, 'attitudeRating', $event)"
+                                  [ngModelOptions]="{ standalone: true }"
+                                  [disabled]="savingRemarks()[report.id]"
+                                >
+                                  <option value="">— Select —</option>
+                                  @for (opt of conductRatingOptions; track opt.value) {
+                                    <option [value]="opt.value">{{ opt.label }}</option>
+                                  }
+                                </select>
+                              </label>
+                            </div>
+                          } @else if (report.behaviorRating || report.attitudeRating) {
+                            <p class="conduct-summary">
+                              Behaviour: {{ conductRatingLabel(report.behaviorRating) }} ·
+                              Attitude: {{ conductRatingLabel(report.attitudeRating) }}
+                            </p>
+                          }
                           <textarea
                             rows="4"
                             [value]="remarkDraft(report.id).classTeacherRemarks"
@@ -563,11 +579,11 @@
                             (blur)="onRemarksBlur(report)"
                             [readonly]="!canEditClassTeacherRemark()"
                             [class.readonly]="!canEditClassTeacherRemark()"
-                            placeholder="Comment on academic performance, attitude, conduct, and participation…"
+                            placeholder="Comment on behaviour, attitude, and participation…"
                           ></textarea>
                         </div>
                         <div class="comment-box">
-                          <span class="comment-label">Principal / head — performance &amp; behaviour</span>
+                          <span class="comment-label">Principal / head — academic performance</span>
                           <textarea
                             rows="4"
                             [value]="remarkDraft(report.id).principalRemarks"
@@ -575,8 +591,13 @@
                             (blur)="onRemarksBlur(report)"
                             [readonly]="!canEditPrincipalRemark()"
                             [class.readonly]="!canEditPrincipalRemark()"
-                            placeholder="Overall assessment of performance, behaviour, and recommendations…"
+                            placeholder="Overall assessment of academic performance and recommendations…"
                           ></textarea>
+                          @if (headmasterName()) {
+                            <p class="headmaster-signature-preview">
+                              On report cards: {{ principalRemarksForDisplay(remarkDraft(report.id).principalRemarks) || '—' }}
+                            </p>
+                          }
                         </div>
                       </div>
                       <div class="remarks-actions">

@@ -17,8 +17,49 @@ import {
 } from '../services/role-permissions.service';
 import { requestPasswordReset, resetPasswordWithToken } from '../services/password-reset.service';
 import { findActiveUserByLoginIdentifier } from '../utils/user-auth';
+import { authenticateStudentPortal } from '../services/student-portal-auth.service';
 
 const router = Router();
+
+async function issueAuthToken(fullUser: User, res: Response) {
+  await ensureDefaultRoles();
+  const permissions = resolvePermissionsForUser(fullUser);
+
+  const payload: Record<string, unknown> = {
+    userId: fullUser.id,
+    email: fullUser.email,
+    role: fullUser.role,
+    permissions,
+  };
+
+  if (fullUser.schoolRoleId) payload.schoolRoleId = fullUser.schoolRoleId;
+  if (fullUser.staffProfile) payload.staffId = fullUser.staffProfile.id;
+  if (fullUser.parentProfile) payload.parentId = fullUser.parentProfile.id;
+  if (fullUser.studentProfile) payload.studentId = fullUser.studentProfile.id;
+
+  const policy = await getSecurityPolicy();
+  const expiresIn = sessionTimeoutToJwtExpires(policy.sessionTimeoutMinutes);
+  const token = jwt.sign(payload, env.jwt.secret, { expiresIn: expiresIn as jwt.SignOptions['expiresIn'] });
+
+  res.json({
+    token,
+    sessionTimeoutMinutes: policy.sessionTimeoutMinutes,
+    user: {
+      id: fullUser.id,
+      email: fullUser.email,
+      username: fullUser.username ?? null,
+      firstName: fullUser.firstName,
+      lastName: fullUser.lastName,
+      role: fullUser.role,
+      schoolRoleId: fullUser.schoolRoleId ?? null,
+      schoolRoleName: fullUser.schoolRole?.name ?? null,
+      permissions,
+      staffId: fullUser.staffProfile?.id,
+      parentId: fullUser.parentProfile?.id,
+      studentId: fullUser.studentProfile?.id,
+    },
+  });
+}
 
 function formatLockoutRemaining(until: Date): string {
   const mins = Math.max(1, Math.ceil((until.getTime() - Date.now()) / 60_000));
@@ -81,47 +122,35 @@ router.post('/login', async (req, res: Response) => {
     user.lockedUntil = null;
     await userRepo.save(user);
 
-    await ensureDefaultRoles();
     const fullUser = (await loadUserWithRole(user.id)) ?? user;
-    const permissions = resolvePermissionsForUser(fullUser);
-
-    const payload: Record<string, unknown> = {
-      userId: fullUser.id,
-      email: fullUser.email,
-      role: fullUser.role,
-      permissions,
-    };
-
-    if (fullUser.schoolRoleId) payload.schoolRoleId = fullUser.schoolRoleId;
-    if (fullUser.staffProfile) payload.staffId = fullUser.staffProfile.id;
-    if (fullUser.parentProfile) payload.parentId = fullUser.parentProfile.id;
-    if (fullUser.studentProfile) payload.studentId = fullUser.studentProfile.id;
-
-    const expiresIn = sessionTimeoutToJwtExpires(policy.sessionTimeoutMinutes);
-    const token = jwt.sign(payload, env.jwt.secret, { expiresIn: expiresIn as jwt.SignOptions['expiresIn'] });
-
-    res.json({
-      token,
-      sessionTimeoutMinutes: policy.sessionTimeoutMinutes,
-      user: {
-        id: fullUser.id,
-        email: fullUser.email,
-        username: fullUser.username ?? null,
-        firstName: fullUser.firstName,
-        lastName: fullUser.lastName,
-        role: fullUser.role,
-        schoolRoleId: fullUser.schoolRoleId ?? null,
-        schoolRoleName: fullUser.schoolRole?.name ?? null,
-        permissions,
-        staffId: fullUser.staffProfile?.id,
-        parentId: fullUser.parentProfile?.id,
-        studentId: fullUser.studentProfile?.id,
-      },
-    });
+    await issueAuthToken(fullUser, res);
   } catch (err) {
     console.error('Login error:', err);
     res.status(500).json({
       message: 'Login failed',
+      error: env.nodeEnv === 'development' && err instanceof Error ? err.message : undefined,
+    });
+  }
+});
+
+/** Student portal sign-in: Student ID + date of birth (no self-registration). */
+router.post('/student-login', async (req, res: Response) => {
+  try {
+    const { admissionNumber, studentId, dateOfBirth, username } = req.body;
+    const id = String(admissionNumber || studentId || username || '').trim();
+    const dob = String(dateOfBirth || '').trim();
+
+    const result = await authenticateStudentPortal(id, dob);
+    if (!result.ok) {
+      return res.status(result.status).json({ message: result.message });
+    }
+
+    const fullUser = (await loadUserWithRole(result.user.id)) ?? result.user;
+    await issueAuthToken(fullUser, res);
+  } catch (err) {
+    console.error('Student login error:', err);
+    res.status(500).json({
+      message: 'Student login failed',
       error: env.nodeEnv === 'development' && err instanceof Error ? err.message : undefined,
     });
   }
@@ -196,9 +225,9 @@ router.post('/register', async (req, res: Response) => {
       relationship,
     } = req.body;
 
-    const allowedRoles = [UserRole.PARENT, UserRole.STUDENT];
+    const allowedRoles = [UserRole.PARENT];
     if (!allowedRoles.includes(role)) {
-      return res.status(400).json({ message: 'Registration is only available for parent and student accounts' });
+      return res.status(400).json({ message: 'Registration is only available for parent accounts' });
     }
     if (!email?.trim() || !password || !firstName?.trim() || !lastName?.trim()) {
       return res.status(400).json({ message: 'Email, password, first name, and last name are required' });
@@ -213,35 +242,6 @@ router.post('/register', async (req, res: Response) => {
     if (pwdErr) return res.status(400).json({ message: pwdErr });
 
     const passwordHash = await bcrypt.hash(password, 10);
-    let linkedStudent: Student | null = null;
-
-    if (role === UserRole.STUDENT) {
-      if (!admissionNumber?.trim()) {
-        return res.status(400).json({ message: 'Student ID (admission number) is required' });
-      }
-      const studentRepo = AppDataSource.getRepository(Student);
-      const admission = String(admissionNumber).trim().toUpperCase();
-      const student = await studentRepo.findOne({ where: { admissionNumber: admission, isActive: true } });
-      if (!student) {
-        return res.status(404).json({ message: 'No matching student record found. Ask the school office to register you first.' });
-      }
-      if (student.userId) {
-        return res.status(409).json({ message: 'A portal account is already linked to this student ID' });
-      }
-      const fn = String(firstName).trim().toLowerCase();
-      const ln = String(lastName).trim().toLowerCase();
-      if (student.dateOfBirth && dateOfBirth) {
-        if (student.dateOfBirth !== dateOfBirth) {
-          return res.status(400).json({ message: 'Date of birth does not match school records' });
-        }
-      } else if (
-        student.firstName.trim().toLowerCase() !== fn ||
-        student.lastName.trim().toLowerCase() !== ln
-      ) {
-        return res.status(400).json({ message: 'Name does not match school records for this student ID' });
-      }
-      linkedStudent = student;
-    }
 
     const user = await userRepo.save(userRepo.create({
       email: email.toLowerCase().trim(),
@@ -282,11 +282,6 @@ router.post('/register', async (req, res: Response) => {
           await guardianRepo.save(guardian);
         }
       }
-    }
-
-    if (role === UserRole.STUDENT && linkedStudent) {
-      linkedStudent.userId = user.id;
-      await AppDataSource.getRepository(Student).save(linkedStudent);
     }
 
     const fullUser = await userRepo.findOne({

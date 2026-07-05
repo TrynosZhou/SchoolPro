@@ -385,9 +385,17 @@
             </label>
 
             @if (isEditMode()) {
-              <label class="checkbox span-2">
-                <input type="checkbox" [(ngModel)]="form.isActive" name="isActive" />
+              <label class="checkbox span-2" [class.disabled]="isEditingSelf()">
+                <input
+                  type="checkbox"
+                  [(ngModel)]="form.isActive"
+                  name="isActive"
+                  [disabled]="isEditingSelf()"
+                />
                 Account is active
+                @if (isEditingSelf()) {
+                  <span class="hint">You cannot deactivate your own account.</span>
+                }
               </label>
             }
           </div>

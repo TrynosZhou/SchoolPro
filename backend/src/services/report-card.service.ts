@@ -1,7 +1,7 @@
 import { AppDataSource } from '../config/data-source';
 import { ExamMark, ExamType, ReportCard, SchoolClass, Student, Term } from '../entities';
 import { gradeForMarks } from './grade.service';
-import { buildReportCardRemarks, sanitizeReportCardRemark } from './report-card-remarks.service';
+import { buildReportCardRemarks, isValidConductRating, sanitizeReportCardRemark } from './report-card-remarks.service';
 import { relations } from '../utils/typeorm-helpers';
 import { termReportDateRange } from '../utils/helpers';
 import { In } from 'typeorm';
@@ -710,6 +710,8 @@ export async function generateClassReportCards(params: ClassReportCardParams) {
     ? await computeFormPositionMap(examTypeId, termId, formId)
     : new Map<string, number>();
 
+  const attendanceMap = await getClassTermAttendanceMap(classId, termId);
+
   const saved: ReportCard[] = [];
   for (const row of scoreRows) {
     const student = students.find((s) => s.id === row.studentId);
@@ -731,6 +733,10 @@ export async function generateClassReportCards(params: ClassReportCardParams) {
     report.isPublished = false;
 
     if (student) {
+      const attendance = attendanceMap.get(row.studentId) ?? parseAttendanceRow({});
+      const behaviorRating = isValidConductRating(report.behaviorRating) ? report.behaviorRating : null;
+      const attitudeRating = isValidConductRating(report.attitudeRating) ? report.attitudeRating : null;
+
       const remarks = buildReportCardRemarks({
         firstName: student.firstName,
         lastName: student.lastName,
@@ -740,7 +746,13 @@ export async function generateClassReportCards(params: ClassReportCardParams) {
         totalSubjects: report.totalSubjects,
         subjectResults: row.subjectResults,
         classTeacherName,
+        behaviorRating,
+        attitudeRating,
+        attendance,
       });
+
+      if (!behaviorRating) report.behaviorRating = remarks.behaviorRating;
+      if (!attitudeRating) report.attitudeRating = remarks.attitudeRating;
 
       if (!(report.classTeacherRemarks || '').trim()) {
         report.classTeacherRemarks = remarks.classTeacherRemarks;
@@ -774,7 +786,6 @@ export async function generateClassReportCards(params: ClassReportCardParams) {
 
   saved.sort((a, b) => (a.classPosition ?? 999) - (b.classPosition ?? 999));
 
-  const attendanceMap = await getClassTermAttendanceMap(classId, termId);
   return {
     examType: { id: examType.id, name: examType.name },
     count: saved.length,

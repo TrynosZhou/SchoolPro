@@ -453,6 +453,91 @@ router.get('/parent', authorize(UserRole.PARENT), async (req: AuthRequest, res: 
   res.json(summaries);
 });
 
+router.get('/student', authorize(UserRole.STUDENT), async (req: AuthRequest, res: Response) => {
+  const studentId = req.user!.studentId;
+  if (!studentId) {
+    return res.json({
+      student: null,
+      currentTerm: null,
+      balanceOwed: 0,
+      attendance: [],
+      recentAssessments: [],
+      recentSchedules: [],
+      unreadMessages: 0,
+    });
+  }
+
+  const studentRows = await AppDataSource.query(
+    `
+    SELECT s.*, c.name AS "className", f.name AS "formName"
+    FROM students s
+    LEFT JOIN classes c ON c.id = s."classId"
+    LEFT JOIN forms f ON f.id = COALESCE(c."formId", s."formId")
+    WHERE s.id = $1 AND s."isActive" = true
+    LIMIT 1
+    `,
+    [studentId],
+  );
+  const student = studentRows[0] || null;
+
+  const [attendance, balance, recentAssessment, unreadRow, termRow, recentSchedules] = await Promise.all([
+    AppDataSource.query(
+      `
+      SELECT status, COUNT(*)::text AS count FROM student_attendance
+      WHERE "studentId" = $1 AND date >= CURRENT_DATE - INTERVAL '30 days'
+      GROUP BY status
+      `,
+      [studentId],
+    ),
+    AppDataSource.query(
+      `
+      SELECT COALESCE(SUM("totalAmount" - "amountPaid"), 0) AS owed
+      FROM invoices WHERE "studentId" = $1 AND status IN ('sent','partial','overdue')
+      `,
+      [studentId],
+    ),
+    AppDataSource.query(
+      `
+      SELECT a.*, sub.name AS "subjectName"
+      FROM weekly_assessments a
+      LEFT JOIN subjects sub ON sub.id = a."subjectId"
+      WHERE a."studentId" = $1
+      ORDER BY a."weekStart" DESC
+      LIMIT 8
+      `,
+      [studentId],
+    ),
+    AppDataSource.query(
+      `SELECT COUNT(*)::int AS count FROM messages WHERE "recipientId" = $1 AND "isRead" = false`,
+      [req.user!.userId],
+    ),
+    AppDataSource.query(`SELECT id, name FROM terms WHERE "isCurrent" = true ORDER BY "startDate" DESC LIMIT 1`),
+    student?.classId
+      ? AppDataSource.query(
+          `
+          SELECT ls.*, sub.name AS "subjectName", sub.code AS "subjectCode"
+          FROM learning_schedules ls
+          LEFT JOIN subjects sub ON sub.id = ls."subjectId"
+          WHERE ls."classId" = $1
+          ORDER BY ls."weekStart" DESC
+          LIMIT 6
+          `,
+          [student.classId],
+        )
+      : Promise.resolve([]),
+  ]);
+
+  res.json({
+    student,
+    currentTerm: termRow[0] ? { id: termRow[0].id, name: termRow[0].name } : null,
+    balanceOwed: Number(balance[0]?.owed || 0),
+    attendance,
+    recentAssessments: recentAssessment,
+    recentSchedules,
+    unreadMessages: Number(unreadRow[0]?.count || 0),
+  });
+});
+
 router.get('/notifications', async (req: AuthRequest, res: Response) => {
   const notifs = await AppDataSource.query(`
     SELECT * FROM notifications

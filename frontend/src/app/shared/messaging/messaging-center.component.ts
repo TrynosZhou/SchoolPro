@@ -2,9 +2,11 @@ import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
+import { forkJoin } from 'rxjs';
 import { PortalLayoutComponent, NavItem, NavSection } from '../portal-layout/portal-layout.component';
 import { PARENT_NAV_ITEMS } from '../../core/config/parent-nav';
-import { TEACHER_NAV_SECTIONS } from '../../core/config/teacher-nav';
+import { STUDENT_NAV_ITEMS } from '../../core/config/student-nav';
+import { buildTeacherNavSections } from '../../core/config/teacher-nav';
 import { ApiService } from '../../core/services/api.service';
 import { AuthService } from '../../core/services/auth.service';
 import { MessageBadgeService } from '../../core/services/message-badge.service';
@@ -81,6 +83,7 @@ export class MessagingCenterComponent implements OnInit {
   recipientsLoaded = signal(false);
   recipientSearch = '';
   composeRecipientId = '';
+  selectedRecipientIds = signal<Set<string>>(new Set());
   composeSubject = '';
   composeBody = '';
   sending = signal(false);
@@ -91,17 +94,23 @@ export class MessagingCenterComponent implements OnInit {
     return this.role === 'teacher';
   }
 
+  get isStudent(): boolean {
+    return this.role === 'student';
+  }
+
   get portalTitle(): string {
     if (this.isTeacher) return 'Teacher Portal';
     return this.role === 'student' ? 'Student Portal' : 'Parent Portal';
   }
 
   get navItems(): NavItem[] {
-    return this.isTeacher ? [] : PARENT_NAV_ITEMS;
+    if (this.isTeacher) return [];
+    if (this.role === 'student') return STUDENT_NAV_ITEMS;
+    return PARENT_NAV_ITEMS;
   }
 
   get navSections(): NavSection[] {
-    return this.isTeacher ? TEACHER_NAV_SECTIONS : [];
+    return this.isTeacher ? buildTeacherNavSections(this.auth.user()?.permissions) : [];
   }
 
   private get recipientsEndpoint(): string {
@@ -214,8 +223,10 @@ export class MessagingCenterComponent implements OnInit {
     this.showCompose.set(true);
     this.activeThread.set(null);
     this.composeRecipientId = recipientId;
+    this.selectedRecipientIds.set(recipientId ? new Set([recipientId]) : new Set());
     this.composeSubject = '';
     this.composeBody = '';
+    this.recipientSearch = '';
     if (!this.recipientsLoaded()) this.loadRecipients();
   }
 
@@ -241,36 +252,75 @@ export class MessagingCenterComponent implements OnInit {
     return this.recipients().find((r) => r.id === id) || null;
   });
 
+  selectedRecipients = computed(() => {
+    const ids = this.selectedRecipientIds();
+    return this.recipients().filter((r) => ids.has(r.id));
+  });
+
+  selectedRecipientEmails = computed(() =>
+    this.selectedRecipients()
+      .map((r) => r.email)
+      .filter(Boolean)
+      .join(', '),
+  );
+
+  isRecipientChecked(id: string): boolean {
+    return this.selectedRecipientIds().has(id);
+  }
+
+  toggleRecipient(id: string, checked: boolean): void {
+    this.selectedRecipientIds.update((set) => {
+      const next = new Set(set);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }
+
   sendCompose(): void {
     const subject = this.composeSubject.trim();
     const body = this.composeBody.trim();
-    if (!this.composeRecipientId) {
-      this.showToast('error', 'Choose someone to message.');
+    const recipientIds = this.isStudent
+      ? [...this.selectedRecipientIds()]
+      : this.composeRecipientId
+        ? [this.composeRecipientId]
+        : [];
+
+    if (!recipientIds.length) {
+      this.showToast('error', this.isStudent ? 'Select at least one recipient.' : 'Choose someone to message.');
       return;
     }
     if (!subject || !body) {
       this.showToast('error', 'Enter a subject and a message.');
       return;
     }
+
     this.sending.set(true);
-    this.api
-      .post('/academics/messages', { recipientId: this.composeRecipientId, subject, body })
-      .subscribe({
-        next: () => {
-          this.sending.set(false);
-          this.showCompose.set(false);
-          this.showToast('success', 'Message sent.');
-          this.loadThreads();
-        },
-        error: (e) => {
-          this.sending.set(false);
-          this.showToast('error', e?.error?.message || 'Could not send your message.');
-        },
-      });
+    forkJoin(
+      recipientIds.map((recipientId) =>
+        this.api.post('/academics/messages', { recipientId, subject, body }),
+      ),
+    ).subscribe({
+      next: () => {
+        this.sending.set(false);
+        this.showCompose.set(false);
+        this.selectedRecipientIds.set(new Set());
+        this.composeRecipientId = '';
+        const count = recipientIds.length;
+        this.showToast('success', count === 1 ? 'Message sent.' : `Message sent to ${count} recipients.`);
+        this.loadThreads();
+      },
+      error: (e) => {
+        this.sending.set(false);
+        this.showToast('error', e?.error?.message || 'Could not send your message.');
+      },
+    });
   }
 
   cancelCompose(): void {
     this.showCompose.set(false);
+    this.selectedRecipientIds.set(new Set());
+    this.composeRecipientId = '';
   }
 
   private showToast(type: 'success' | 'error', msg: string): void {

@@ -1,6 +1,7 @@
 import { NgTemplateOutlet } from '@angular/common';
-import { Component, ElementRef, HostListener, Input, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, ElementRef, HostListener, Input, OnChanges, OnDestroy, OnInit, SimpleChanges, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { Title } from '@angular/platform-browser';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive } from '@angular/router';
 import { filter, Subscription } from 'rxjs';
 import { AuthService } from '../../core/services/auth.service';
@@ -16,6 +17,8 @@ export interface NavItem {
   icon?: string;
   badge?: string | number;
   queryParams?: Record<string, string | number>;
+  /** When set, the item is shown only if the user has at least one of these permissions. */
+  permission?: string | string[];
 }
 
 export interface NavSection {
@@ -42,7 +45,7 @@ interface BalanceEnquiryRow {
   templateUrl: './portal-layout.component.html',
   styleUrl: './portal-layout.component.scss',
 })
-export class PortalLayoutComponent implements OnInit, OnDestroy {
+export class PortalLayoutComponent implements OnInit, OnChanges, OnDestroy {
   @Input() portalTitle = 'Portal';
   @Input() pageTitle = 'Dashboard';
   /** Target for the "Home" link in the top bar. Falls back to the first nav path. */
@@ -57,6 +60,7 @@ export class PortalLayoutComponent implements OnInit, OnDestroy {
   private api = inject(ApiService);
   private messageBadge = inject(MessageBadgeService);
   private router = inject(Router);
+  private title = inject(Title);
   private elementRef = inject(ElementRef<HTMLElement>);
   private routerSub?: Subscription;
   readonly userMenuOpen = signal(false);
@@ -154,6 +158,7 @@ export class PortalLayoutComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit(): void {
+    this.updateDocumentTitle();
     this.initExpandedSections();
     if (this.auth.isLoggedIn()) {
       this.loadSchoolLinks();
@@ -166,6 +171,12 @@ export class PortalLayoutComponent implements OnInit, OnDestroy {
         this.ensureActiveSectionExpanded();
         this.messageBadge.refresh();
       });
+  }
+
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes['pageTitle'] || changes['portalTitle']) {
+      this.updateDocumentTitle();
+    }
   }
 
   ngOnDestroy(): void {
@@ -446,12 +457,15 @@ export class PortalLayoutComponent implements OnInit, OnDestroy {
     if (path === '/admin') {
       return url === '/admin' || url === '/admin/';
     }
+    if (path === '/teacher') {
+      return url === '/teacher' || url === '/teacher/';
+    }
     return url === path || url.startsWith(`${path}/`);
   }
 
   sectionGroup(heading: string): string {
     const h = heading.toLowerCase();
-    if (h === 'overview' || h === 'dashboard') return 'Main';
+    if (h === 'overview' || h === 'dashboard' || h === 'teacher dashboard') return 'Main';
     if (h === 'students' || h === 'all students' || h === 'parents' || h === 'all parents' || h === 'staff' || h === 'all teachers' || h === 'attendance' || h === 'communication') return 'People';
     if (h === 'academics' || h === 'examination' || h === 'examinations' || h === 'timetable') return 'Learning';
     if (h === 'finance' || h === 'fin.reports') return 'Finance';
@@ -464,7 +478,7 @@ export class PortalLayoutComponent implements OnInit, OnDestroy {
 
   sectionIconKey(heading: string): string {
     const h = heading.toLowerCase();
-    if (h === 'overview' || h === 'dashboard') return 'dashboard';
+    if (h === 'overview' || h === 'dashboard' || h === 'teacher dashboard') return 'dashboard';
     if (h === 'students' || h === 'all students') return 'students';
     if (h === 'parents' || h === 'all parents') return 'parents';
     if (h === 'payroll') return 'staff';
@@ -477,6 +491,11 @@ export class PortalLayoutComponent implements OnInit, OnDestroy {
     if (h === 'timetable') return 'timetable';
     if (h === 'system admin') return 'system-admin';
     return 'default';
+  }
+
+  private updateDocumentTitle(): void {
+    const label = [this.pageTitle, this.portalTitle].filter(Boolean).join(' · ');
+    this.title.setTitle(label ? `${label} | School Pro` : 'School Pro');
   }
 
   private loadSchoolLinks(): void {

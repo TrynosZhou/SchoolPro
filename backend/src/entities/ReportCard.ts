@@ -75,6 +75,14 @@ export class ReportCard {
   @Column({ nullable: true })
   principalRemarks?: string;
 
+  /** Behaviour rating used to generate class-teacher remarks. */
+  @Column({ type: 'varchar', length: 32, nullable: true })
+  behaviorRating?: string;
+
+  /** Attitude rating used to generate class-teacher remarks. */
+  @Column({ type: 'varchar', length: 32, nullable: true })
+  attitudeRating?: string;
+
   @Column({ nullable: true })
   conduct?: string;
 

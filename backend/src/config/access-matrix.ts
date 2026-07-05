@@ -193,7 +193,7 @@ export const DEFAULT_ACCESS_MATRIX: Record<AccessRole, RoleModuleMatrix> = {
     label: 'Student',
     description: 'Read-only access to own records where appropriate.',
     modules: {
-      communication: grants('self', 'none', 'none', 'none'),
+      communication: grants('self', 'self', 'none', 'none'),
       students: grants('self', 'none', 'none', 'none'),
       enrollment: grants('none', 'none', 'none', 'none'),
       admissions: grants('none', 'none', 'none', 'none'),

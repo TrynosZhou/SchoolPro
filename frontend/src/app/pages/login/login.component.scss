@@ -351,6 +351,34 @@
   }
 }
 
+.audience-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.35rem;
+  padding: 0.25rem;
+  margin-top: 0.85rem;
+  background: #eff6ff;
+  border-radius: 12px;
+}
+
+.audience-tab {
+  border: none;
+  background: transparent;
+  padding: 0.5rem 0.7rem;
+  border-radius: 10px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #64748b;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+
+  &.active {
+    background: #fff;
+    color: #2563eb;
+    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.12);
+  }
+}
+
 .signin-badge.signup {
   color: #0f766e;
   background: #ccfbf1;

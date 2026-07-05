@@ -106,6 +106,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
       { key: 'portal.student.dashboard', label: 'Student dashboard' },
       { key: 'portal.student.report_cards', label: 'Own report cards' },
       { key: 'portal.student.attendance', label: 'Own attendance' },
+      { key: 'portal.student.messages', label: 'Messages' },
     ],
   },
 ];
@@ -145,6 +146,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<UserRole, string[]> = {
     'portal.student.dashboard',
     'portal.student.report_cards',
     'portal.student.attendance',
+    'portal.student.messages',
   ],
 };
 

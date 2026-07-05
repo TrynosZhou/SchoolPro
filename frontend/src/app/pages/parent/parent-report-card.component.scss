@@ -188,37 +188,37 @@
   font-size: calc(0.88rem * var(--rc-text-scale));
 
   .col-subject {
-    width: 24%;
+    width: 22%;
     min-width: 8.5rem;
     word-wrap: break-word;
     overflow-wrap: anywhere;
   }
 
   .col-code {
-    width: 3.25rem;
-    min-width: 3.25rem;
+    width: 5.75rem;
+    min-width: 5.75rem;
     text-align: center;
     white-space: nowrap;
   }
 
   .col-mark {
-    width: 3.5rem;
-    min-width: 3.5rem;
+    width: 4.5rem;
+    min-width: 4.5rem;
     white-space: nowrap;
     text-align: center;
   }
 
   .col-grade {
-    width: 4.125rem;
-    min-width: 4.125rem;
+    width: 4.75rem;
+    min-width: 4.75rem;
     white-space: nowrap;
     text-align: center;
   }
 
   .col-points,
   .points-cell {
-    width: 4.25rem;
-    min-width: 4.25rem;
+    width: 4.75rem;
+    min-width: 4.75rem;
     white-space: nowrap;
     text-align: center;
     font-weight: 700;
@@ -226,18 +226,35 @@
   }
 
   .col-rank {
-    width: 3.25rem;
-    min-width: 3.25rem;
+    width: 4.25rem;
+    min-width: 4.25rem;
     white-space: nowrap;
     text-align: center;
   }
 
   .col-avg,
-  td.col-avg {
-    width: 3.5rem;
-    min-width: 3.5rem;
+  td.col-avg,
+  td.mean {
+    width: 4.5rem;
+    min-width: 4.5rem;
     white-space: nowrap;
     text-align: center;
+  }
+
+  th.col-code,
+  td.col-code,
+  th.col-mark,
+  td.mark-cell,
+  th.col-grade,
+  th.col-points,
+  td.points-cell,
+  th.col-rank,
+  td.rank,
+  th.col-avg,
+  td.col-avg,
+  td.mean {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
   }
 
   th.col-avg {
@@ -338,6 +355,7 @@
   border-top: 1px solid #e2e8f0;
   font-size: calc(0.9rem * var(--rc-text-scale));
   p { margin: 0.5rem 0; }
+  .principal-remarks { white-space: pre-line; }
 }
 
 .empty {

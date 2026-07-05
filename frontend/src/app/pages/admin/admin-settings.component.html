@@ -120,6 +120,11 @@
                   <label>Facebook page</label>
                   <input [(ngModel)]="profileForm.facebookPageUrl" name="facebookPageUrl" placeholder="https://www.facebook.com/yourschool" />
                 </div>
+                <div class="field span-2">
+                  <label>Headmaster / Principal name</label>
+                  <input [(ngModel)]="profileForm.headmasterName" name="headmasterName" placeholder="e.g. Mr. John Smith" />
+                  <small>Appended as a signature on principal remarks on report cards.</small>
+                </div>
                 <div class="field">
                   <label>Currency</label>
                   <select [(ngModel)]="profileForm.currency" name="currency">

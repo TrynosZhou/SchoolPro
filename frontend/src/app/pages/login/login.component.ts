@@ -6,7 +6,7 @@ import { ApiService } from '../../core/services/api.service';
 import { environment } from '../../../environments/environment';
 
 type AuthMode = 'signin' | 'signup' | 'forgot' | 'reset';
-type SignupRole = 'parent' | 'student';
+type SignInAudience = 'portal' | 'student';
 
 interface PasswordPolicy {
   minPasswordLength: number;
@@ -32,13 +32,14 @@ export class LoginComponent implements OnInit {
   private readonly rememberKey = 'school_pro_remember_username';
 
   mode = signal<AuthMode>('signin');
-  signupRole = signal<SignupRole>('parent');
+  signInAudience = signal<SignInAudience>('portal');
 
   schoolName = signal('School Pro Academy');
   schoolTagline = signal('School Management System');
   schoolLogoUrl = signal<string | null>(null);
 
   username = '';
+  studentDob = '';
   signupEmail = '';
   password = '';
   rememberMe = true;
@@ -138,11 +139,22 @@ export class LoginComponent implements OnInit {
     });
   }
 
+  setSignInAudience(audience: SignInAudience) {
+    this.signInAudience.set(audience);
+    this.error.set('');
+    this.password = '';
+    this.studentDob = '';
+    this.showPassword.set(false);
+  }
+
   setMode(next: AuthMode) {
     this.mode.set(next);
     this.error.set('');
     this.success.set('');
     this.devResetUrl.set('');
+    if (next === 'signin') {
+      this.signInAudience.set('portal');
+    }
     if (next !== 'reset') {
       this.resetToken = '';
       this.password = '';
@@ -153,11 +165,6 @@ export class LoginComponent implements OnInit {
         replaceUrl: true,
       });
     }
-  }
-
-  setSignupRole(role: SignupRole) {
-    this.signupRole.set(role);
-    this.error.set('');
   }
 
   togglePassword() {
@@ -239,6 +246,11 @@ export class LoginComponent implements OnInit {
   }
 
   private submitSignIn() {
+    if (this.signInAudience() === 'student') {
+      this.submitStudentSignIn();
+      return;
+    }
+
     if (!this.username.trim() || !this.password) {
       this.error.set('Enter your username and password.');
       return;
@@ -258,6 +270,33 @@ export class LoginComponent implements OnInit {
       next: () => this.router.navigate([this.auth.getPortalRoute()]),
       error: (e) => {
         this.error.set(e.error?.message || 'Invalid username or password. Please try again.');
+        this.loading.set(false);
+      },
+      complete: () => this.loading.set(false),
+    });
+  }
+
+  private submitStudentSignIn() {
+    const id = this.username.trim().toUpperCase();
+    if (!id || !this.studentDob) {
+      this.error.set('Enter your Student ID and date of birth.');
+      return;
+    }
+
+    this.loading.set(true);
+    this.error.set('');
+    this.success.set('');
+
+    if (this.rememberMe) {
+      localStorage.setItem(this.rememberKey, id);
+    } else {
+      localStorage.removeItem(this.rememberKey);
+    }
+
+    this.auth.studentLogin(id, this.studentDob).subscribe({
+      next: () => this.router.navigate([this.auth.getPortalRoute()]),
+      error: (e) => {
+        this.error.set(e.error?.message || 'Invalid Student ID or date of birth.');
         this.loading.set(false);
       },
       complete: () => this.loading.set(false),
@@ -284,10 +323,6 @@ export class LoginComponent implements OnInit {
       this.error.set('Passwords do not match.');
       return;
     }
-    if (this.signupRole() === 'student' && !this.signup.admissionNumber.trim()) {
-      this.error.set('Enter your student ID (admission number).');
-      return;
-    }
 
     this.loading.set(true);
 
@@ -296,15 +331,12 @@ export class LoginComponent implements OnInit {
       password: this.password,
       firstName: this.signup.firstName.trim(),
       lastName: this.signup.lastName.trim(),
-      role: this.signupRole(),
+      role: 'parent',
       phone: this.signup.phone.trim() || undefined,
-      admissionNumber: this.signupRole() === 'student' ? this.signup.admissionNumber.trim().toUpperCase() : undefined,
-      dateOfBirth: this.signupRole() === 'student' && this.signup.dateOfBirth ? this.signup.dateOfBirth : undefined,
-      linkAdmissionNumber:
-        this.signupRole() === 'parent' && this.signup.linkAdmissionNumber.trim()
-          ? this.signup.linkAdmissionNumber.trim().toUpperCase()
-          : undefined,
-      relationship: this.signupRole() === 'parent' ? this.signup.relationship.trim() || 'Parent' : undefined,
+      linkAdmissionNumber: this.signup.linkAdmissionNumber.trim()
+        ? this.signup.linkAdmissionNumber.trim().toUpperCase()
+        : undefined,
+      relationship: this.signup.relationship.trim() || 'Parent',
     }).subscribe({
       next: () => this.router.navigate([this.auth.getPortalRoute()]),
       error: (e) => {

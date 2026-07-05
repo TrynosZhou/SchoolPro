@@ -5,10 +5,11 @@ import { AppDataSource } from '../config/data-source';
 import { StudentAttendance, StaffAttendance, Student, Term, Guardian } from '../entities';
 import { UserRole } from '../entities/enums';
 import { authenticate, authorize, AuthRequest } from '../middleware/auth';
-import { today, termReportDateRange } from '../utils/helpers';
+import { today, termReportDateRange, isSchoolDay } from '../utils/helpers';
 import { relations } from '../utils/typeorm-helpers';
-import { assertTeacherClassAccess } from '../utils/teacher-class-access';
+import { assertTeacherClassAccess, assertTeacherClassTeacherAccess } from '../utils/teacher-class-access';
 import { sendAbsenceAlerts } from '../services/auto-notify.service';
+import { getUnmarkedClassesForDate } from '../services/attendance-register.service';
 import { AttendanceStatus } from '../entities/enums';
 
 const router = Router();
@@ -123,10 +124,30 @@ router.get(
   },
 );
 
+router.get(
+  '/unmarked-classes',
+  authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL),
+  async (req: AuthRequest, res: Response) => {
+    const date = (req.query.date as string) || today();
+    res.json(await getUnmarkedClassesForDate(date));
+  },
+);
+
 router.get('/students', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.TEACHER, UserRole.PARENT), async (req: AuthRequest, res: Response) => {
   const { studentId, classId, date, from, to } = req.query;
-  if (classId && !(await assertTeacherClassAccess(req, classId as string))) {
-    return res.status(403).json({ message: 'You are not assigned to this class' });
+  if (classId) {
+    const allowed =
+      req.user!.role === UserRole.TEACHER
+        ? await assertTeacherClassTeacherAccess(req, classId as string)
+        : await assertTeacherClassAccess(req, classId as string);
+    if (!allowed) {
+      return res.status(403).json({
+        message:
+          req.user!.role === UserRole.TEACHER
+            ? 'Only the class teacher can view or mark attendance for this class'
+            : 'You are not assigned to this class',
+      });
+    }
   }
 
   const repo = AppDataSource.getRepository(StudentAttendance);
@@ -146,6 +167,12 @@ router.post('/students/bulk', authorize(UserRole.TEACHER, UserRole.ADMIN), async
   const studentRepo = AppDataSource.getRepository(Student);
   const { date = today(), records } = req.body;
 
+  if (!isSchoolDay(date)) {
+    return res.status(400).json({
+      message: 'Attendance registers cannot be marked on weekends. Registers are marked Monday to Friday only.',
+    });
+  }
+
   if (!Array.isArray(records) || !records.length) {
     return res.status(400).json({ message: 'records array is required' });
   }
@@ -164,7 +191,11 @@ router.post('/students/bulk', authorize(UserRole.TEACHER, UserRole.ADMIN), async
     return res.status(400).json({ message: 'All students must belong to the same class' });
   }
 
-  if (!(await assertTeacherClassAccess(req, classIds[0]!))) {
+  if (req.user!.role === UserRole.TEACHER) {
+    if (!(await assertTeacherClassTeacherAccess(req, classIds[0]!))) {
+      return res.status(403).json({ message: 'Only the class teacher can mark attendance for this class' });
+    }
+  } else if (!(await assertTeacherClassAccess(req, classIds[0]!))) {
     return res.status(403).json({ message: 'You are not assigned to this class' });
   }
 

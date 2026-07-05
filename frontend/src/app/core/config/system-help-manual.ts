@@ -142,15 +142,15 @@ export const ADMIN_HELP_TOPICS: HelpTopic[] = [
   {
     id: 'record-marks',
     section: 'Examinations',
-    title: 'Record Marks',
+    title: 'Input Marks',
     path: '/admin/exams',
     summary: 'Enter exam marks by class, subject, and term.',
     steps: [
-      'Open Record Marks under Examinations.',
+      'Open Input Marks under Examinations.',
       'Select class, exam type, subject, and term.',
       'Enter marks for each student and save.',
     ],
-    keywords: ['exam marks', 'record marks', 'marks', 'results', 'scores', 'exams'],
+    keywords: ['exam marks', 'input marks', 'record marks', 'marks', 'results', 'scores', 'exams'],
   },
   {
     id: 'report-cards',

@@ -1,9 +1,10 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { PARENT_NAV_ITEMS } from '../../core/config/parent-nav';
+import { STUDENT_NAV_ITEMS } from '../../core/config/student-nav';
 import { reportCardPdfFilename } from '../../core/utils/report-card-filename';
 import { ApiService } from '../../core/services/api.service';
 import { AuthService } from '../../core/services/auth.service';
@@ -34,7 +35,10 @@ export class ParentReportCardsComponent implements OnInit {
   private sanitizer = inject(DomSanitizer);
   private route = inject(ActivatedRoute);
 
-  readonly nav = PARENT_NAV_ITEMS;
+  readonly isStudent = computed(() => this.auth.user()?.role === 'student');
+  readonly portalTitle = computed(() => (this.isStudent() ? 'Student Portal' : 'Parent Portal'));
+  readonly nav = computed(() => (this.isStudent() ? STUDENT_NAV_ITEMS : PARENT_NAV_ITEMS));
+  readonly homeLink = computed(() => (this.isStudent() ? '/student' : '/parent'));
 
   children = signal<LinkedChild[]>([]);
   terms = signal<{ id: string; name: string; isCurrent?: boolean }[]>([]);

@@ -1531,6 +1531,12 @@ router.patch('/users/:id', authorize(UserRole.ADMIN), async (req: AuthRequest, r
     await AppDataSource.getRepository(Staff).save(user.staffProfile);
   }
 
+  if (user.studentProfile && user.role === UserRole.STUDENT) {
+    user.studentProfile.firstName = user.firstName;
+    user.studentProfile.lastName = user.lastName;
+    await AppDataSource.getRepository(Student).save(user.studentProfile);
+  }
+
   const full = await loadManagedUser(user.id);
   res.json(serializeManagedUser(full!));
 });

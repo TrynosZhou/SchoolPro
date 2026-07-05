@@ -2,8 +2,9 @@ import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { PortalLayoutComponent, NavItem, NavSection } from '../portal-layout/portal-layout.component';
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
-import { TEACHER_NAV_SECTIONS } from '../../core/config/teacher-nav';
+import { buildTeacherNavSections } from '../../core/config/teacher-nav';
 import { PARENT_NAV_ITEMS } from '../../core/config/parent-nav';
+import { STUDENT_NAV_ITEMS } from '../../core/config/student-nav';
 import { DIRECTOR_NAV_ITEMS } from '../../core/config/director-nav';
 import { PRINCIPAL_NAV_ITEMS } from '../../core/config/principal-nav';
 import { ApiService } from '../../core/services/api.service';
@@ -64,8 +65,8 @@ export class NotificationsComponent implements OnInit {
     switch (this.role) {
       case 'director': return DIRECTOR_NAV_ITEMS;
       case 'principal': return PRINCIPAL_NAV_ITEMS;
-      case 'parent':
-      case 'student': return PARENT_NAV_ITEMS;
+      case 'student': return STUDENT_NAV_ITEMS;
+      case 'parent': return PARENT_NAV_ITEMS;
       default: return [];
     }
   }
@@ -73,7 +74,7 @@ export class NotificationsComponent implements OnInit {
   get navSections(): NavSection[] {
     switch (this.role) {
       case 'admin': return ADMIN_NAV_SECTIONS;
-      case 'teacher': return TEACHER_NAV_SECTIONS;
+      case 'teacher': return buildTeacherNavSections(this.auth.user()?.permissions);
       default: return [];
     }
   }

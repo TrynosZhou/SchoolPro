@@ -146,6 +146,9 @@
     </div>
 
     <nav class="sidebar-nav">
+      @if (!useSections && portalTitle) {
+        <div class="sidebar-portal-title">{{ portalTitle }}</div>
+      }
       @if (useSections) {
         @for (group of groupedNav; track group.label) {
           <div class="nav-group">

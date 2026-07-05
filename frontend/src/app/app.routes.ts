@@ -31,6 +31,8 @@ import { NotificationsComponent } from './shared/notifications/notifications.com
 import { AdminBulkMessageComponent } from './pages/admin/admin-bulk-message.component';
 import { AdminNotificationSettingsComponent } from './pages/admin/admin-notification-settings.component';
 import { ParentAttendanceComponent } from './pages/parent/parent-attendance.component';
+import { StudentDashboardComponent } from './pages/student/student-dashboard.component';
+import { StudentHomeworkComponent } from './pages/student/student-homework.component';
 import { AttendanceMarkRegisterComponent } from './pages/attendance/attendance-mark-register.component';
 import { AttendanceReportComponent } from './pages/attendance/attendance-report.component';
 import { AdminMarkSheetComponent } from './pages/admin/admin-mark-sheet.component';
@@ -180,6 +182,9 @@ export const routes: Routes = [
       { path: '', component: TeacherDashboardComponent },
       { path: 'exams', component: TeacherExamsComponent },
       { path: 'report-cards', component: AdminReportCardsComponent },
+      { path: 'mark-sheet', component: AdminMarkSheetComponent },
+      { path: 'results-analysis', component: AdminResultsAnalysisComponent },
+      { path: 'ranking', component: AdminRankingComponent },
       { path: 'attendance', redirectTo: 'attendance/mark-register', pathMatch: 'full' },
       { path: 'attendance/mark-register', component: AttendanceMarkRegisterComponent },
       { path: 'attendance/report', component: AttendanceReportComponent },
@@ -194,7 +199,7 @@ export const routes: Routes = [
   },
   {
     path: 'parent',
-    canActivate: [authGuard, roleGuard('parent', 'student')],
+    canActivate: [authGuard, roleGuard('parent')],
     children: [
       { path: '', component: ParentDashboardComponent },
       { path: 'finance', component: ParentFinanceComponent },
@@ -205,6 +210,20 @@ export const routes: Routes = [
       { path: 'messages', component: MessagingCenterComponent },
       { path: 'notifications', component: NotificationsComponent },
       { path: 'send-email', component: ParentSendEmailComponent },
+    ],
+  },
+  {
+    path: 'student',
+    canActivate: [authGuard, roleGuard('student')],
+    children: [
+      { path: '', component: StudentDashboardComponent },
+      { path: 'finance', component: ParentFinanceComponent },
+      { path: 'attendance', component: ParentAttendanceComponent },
+      { path: 'report-cards', component: ParentReportCardsComponent },
+      { path: 'report-card/:studentId', component: ParentReportCardComponent },
+      { path: 'homework', component: StudentHomeworkComponent },
+      { path: 'messages', component: MessagingCenterComponent },
+      { path: 'notifications', component: NotificationsComponent },
     ],
   },
 

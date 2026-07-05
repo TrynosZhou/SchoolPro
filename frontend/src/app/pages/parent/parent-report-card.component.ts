@@ -1,12 +1,15 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { DecimalPipe } from '@angular/common';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { ApiService } from '../../core/services/api.service';
+import { AuthService } from '../../core/services/auth.service';
 import { formatStudentClassLabel, isALevelForm, reportCardClassValue } from '../../core/utils/class-display';
 import { environment } from '../../../environments/environment';
 import { PARENT_NAV_ITEMS } from '../../core/config/parent-nav';
+import { STUDENT_NAV_ITEMS } from '../../core/config/student-nav';
 import { reportCardPdfFilename } from '../../core/utils/report-card-filename';
+import { appendHeadmasterToPrincipalRemarks } from '../../core/utils/principal-remarks.util';
 
 interface GradeBoundaryRow {
   grade: string;
@@ -60,6 +63,7 @@ interface ReportCardDto {
 })
 export class ParentReportCardComponent implements OnInit {
   private api = inject(ApiService);
+  private auth = inject(AuthService);
   private route = inject(ActivatedRoute);
 
   studentId = '';
@@ -74,12 +78,16 @@ export class ParentReportCardComponent implements OnInit {
     address?: string;
     email?: string;
     website?: string;
+    headmasterName?: string;
   } | null>(null);
   loading = signal(false);
   notFound = signal(false);
   blockedMessage = signal<string | null>(null);
 
-  readonly nav = PARENT_NAV_ITEMS;
+  readonly isStudent = computed(() => this.auth.user()?.role === 'student');
+  readonly portalTitle = computed(() => (this.isStudent() ? 'Student Portal' : 'Parent Portal'));
+  readonly nav = computed(() => (this.isStudent() ? STUDENT_NAV_ITEMS : PARENT_NAV_ITEMS));
+  readonly homeLink = computed(() => (this.isStudent() ? '/student/report-cards' : '/parent/report-cards'));
   readonly formatStudentClassLabel = formatStudentClassLabel;
   readonly reportCardClassValue = reportCardClassValue;
 
@@ -104,6 +112,7 @@ export class ParentReportCardComponent implements OnInit {
       address?: string;
       email?: string;
       website?: string;
+      headmasterName?: string;
     }>('/exams/school-branding').subscribe({
       next: (b) => this.schoolBranding.set(b),
       error: () => this.schoolBranding.set({ schoolName: 'School Pro Academy' }),
@@ -112,6 +121,18 @@ export class ParentReportCardComponent implements OnInit {
 
   schoolName(): string {
     return this.schoolBranding()?.schoolName || 'School Pro Academy';
+  }
+
+  headmasterName(): string {
+    return (this.schoolBranding()?.headmasterName || '').trim();
+  }
+
+  principalRemarksForDisplay(): string {
+    return appendHeadmasterToPrincipalRemarks(this.report()?.principalRemarks, this.headmasterName());
+  }
+
+  hasPrincipalRemarksSection(): boolean {
+    return !!(this.report()?.principalRemarks?.trim() || this.headmasterName());
   }
 
   logoFullUrl(): string | null {

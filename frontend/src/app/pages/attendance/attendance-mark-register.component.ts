@@ -3,9 +3,11 @@ import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
-import { TEACHER_NAV_SECTIONS } from '../../core/config/teacher-nav';
+import { buildTeacherNavSections } from '../../core/config/teacher-nav';
+import { AuthService } from '../../core/services/auth.service';
 import { ApiService } from '../../core/services/api.service';
 import { classDisplayName } from '../../core/utils/class-display';
+import { isSchoolDay, weekendDayName } from '../../core/utils/school-day.util';
 import { Student } from '../../core/models';
 
 type AttendanceStatus = 'present' | 'absent' | 'late' | 'excused';
@@ -43,10 +45,13 @@ interface StudentRow {
 export class AttendanceMarkRegisterComponent implements OnInit {
   private api = inject(ApiService);
   private router = inject(Router);
+  private auth = inject(AuthService);
 
   readonly isTeacherPortal = this.router.url.startsWith('/teacher');
   readonly adminNav = ADMIN_NAV_SECTIONS;
-  readonly teacherNav = TEACHER_NAV_SECTIONS;
+  get teacherNav() {
+    return buildTeacherNavSections(this.auth.user()?.permissions);
+  }
   portalTitle = this.isTeacherPortal ? 'Teacher Portal' : 'Admin Portal';
   pageTitle = 'Mark Register';
 
@@ -132,18 +137,33 @@ export class AttendanceMarkRegisterComponent implements OnInit {
     () => Boolean(this.search().trim()) || this.statusFilter() !== 'all',
   );
 
+  /** Registers are marked Monday–Friday only. */
+  canMarkSelectedDate = computed(() => isSchoolDay(this.selectedDate));
+
+  selectedWeekendLabel = computed(() => weekendDayName(this.selectedDate));
+
   ngOnInit(): void {
     if (this.isTeacherPortal) {
-      this.api.get<{ assignedClasses: ClassOption[] }>('/dashboard/teacher').subscribe({
-        next: (d) => {
-          this.classes.set(d.assignedClasses || []);
-          this.loadingClasses.set(false);
-        },
-        error: () => {
-          this.loadingClasses.set(false);
-          this.showToast('error', 'Could not load your classes.');
-        },
-      });
+      this.api
+        .get<{ classTeacherOf: { classId: string; className: string; formName?: string }[] }>(
+          '/dashboard/teacher',
+        )
+        .subscribe({
+          next: (d) => {
+            this.classes.set(
+              (d.classTeacherOf || []).map((c) => ({
+                id: c.classId,
+                name: c.className,
+                form: c.formName ? { name: c.formName } : undefined,
+              })),
+            );
+            this.loadingClasses.set(false);
+          },
+          error: () => {
+            this.loadingClasses.set(false);
+            this.showToast('error', 'Could not load your classes.');
+          },
+        });
       return;
     }
 
@@ -199,6 +219,12 @@ export class AttendanceMarkRegisterComponent implements OnInit {
     }
     if (!this.selectedDate) {
       this.showToast('error', 'Select a date.');
+      return;
+    }
+    if (!this.canMarkSelectedDate()) {
+      this.hasLoaded.set(false);
+      this.students.set([]);
+      this.showToast('error', `Registers cannot be marked on ${this.selectedWeekendLabel()}. Attendance is recorded Monday to Friday only.`);
       return;
     }
 
@@ -261,10 +287,15 @@ export class AttendanceMarkRegisterComponent implements OnInit {
   }
 
   setStatus(studentId: string, status: AttendanceStatus): void {
+    if (!this.canMarkSelectedDate()) return;
     this.marks.set({ ...this.marks(), [studentId]: status });
   }
 
   saveRegister(): void {
+    if (!this.canMarkSelectedDate()) {
+      this.showToast('error', `Registers cannot be marked on ${this.selectedWeekendLabel()}. Attendance is recorded Monday to Friday only.`);
+      return;
+    }
     if (!this.hasLoaded() || !this.students().length) {
       this.showToast('error', 'Load the register before saving.');
       return;
@@ -290,6 +321,7 @@ export class AttendanceMarkRegisterComponent implements OnInit {
   }
 
   markAll(status: AttendanceStatus): void {
+    if (!this.canMarkSelectedDate()) return;
     const marks: Record<string, AttendanceStatus> = {};
     for (const s of this.students()) marks[s.id] = status;
     this.marks.set(marks);

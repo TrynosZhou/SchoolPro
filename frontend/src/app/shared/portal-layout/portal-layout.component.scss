@@ -152,6 +152,18 @@ $sidebar-transition: 0.15s ease;
   background: #fff;
 }
 
+.sidebar-portal-title {
+  margin: 0.15rem 0.5rem 0.65rem;
+  padding: 0.45rem 0.55rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #2563eb;
+  background: #eff6ff;
+  border-radius: 8px;
+}
+
 .sidebar-nav {
   flex: 1;
   display: flex;

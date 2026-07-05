@@ -49,8 +49,9 @@ export class MessageBadgeService {
     switch (role) {
       case 'admin':
         return '/admin/communication/inbox';
-      case 'parent':
       case 'student':
+        return '/student/messages';
+      case 'parent':
         return '/parent/messages';
       case 'teacher':
         return '/teacher/messages';

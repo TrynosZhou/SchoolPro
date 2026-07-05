@@ -42,7 +42,7 @@ export const ADMIN_NAV_SECTIONS: NavSection[] = [
   {
     heading: 'Examinations',
     items: [
-      { label: 'Record Marks', path: '/admin/exams', icon: '📝' },
+      { label: 'Input Marks', path: '/admin/exams', icon: '📝' },
       { label: 'Report Cards', path: '/admin/report-cards', icon: '📄' },
       { label: 'Mark Sheet', path: '/admin/mark-sheet', icon: '📑' },
       { label: 'Results Analysis', path: '/admin/results-analysis', icon: '📈' },

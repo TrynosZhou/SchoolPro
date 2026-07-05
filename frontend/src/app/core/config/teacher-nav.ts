@@ -1,37 +1,57 @@
-import { NavSection } from '../../shared/portal-layout/portal-layout.component';
+import { NavItem, NavSection } from '../../shared/portal-layout/portal-layout.component';
 
-/** Grouped sidebar navigation for Teacher Portal pages. */
+/** Full teacher sidebar catalog — filtered at runtime by user permissions. */
 export const TEACHER_NAV_SECTIONS: NavSection[] = [
   {
-    heading: 'Overview',
-    items: [{ label: 'Dashboard', path: '/teacher', icon: '🏠' }],
+    heading: 'Teacher Dashboard',
+    items: [],
+    path: '/teacher',
   },
   {
     heading: 'Students',
     items: [
-      { label: 'Class List', path: '/teacher/class-list', icon: '📋' },
-      { label: 'Class Enrollment', path: '/teacher/enrollment', icon: '🎓' },
+      { label: 'Class List', path: '/teacher/class-list', icon: '📋', permission: 'students.view' },
+      { label: 'Class Enrollment', path: '/teacher/enrollment', icon: '🎓', permission: 'enrollment.manage' },
     ],
   },
   {
     heading: 'Attendance',
     items: [
-      { label: 'Mark Register', path: '/teacher/attendance/mark-register', icon: '✅' },
-      { label: 'Attendance Report', path: '/teacher/attendance/report', icon: '📊' },
+      { label: 'Mark Register', path: '/teacher/attendance/mark-register', icon: '✅', permission: 'attendance.mark' },
+      { label: 'Attendance Report', path: '/teacher/attendance/report', icon: '📊', permission: 'attendance.report' },
     ],
   },
   {
     heading: 'Academics',
     items: [
-      { label: 'Exam Marks', path: '/teacher/exams', icon: '📝' },
-      { label: 'Report Cards', path: '/teacher/report-cards', icon: '📄' },
+      { label: 'Input Marks', path: '/teacher/exams', icon: '📝', permission: 'academics.exams' },
+      { label: 'Report Cards', path: '/teacher/report-cards', icon: '📄', permission: 'academics.report_cards' },
+      { label: 'Mark Sheet', path: '/teacher/mark-sheet', icon: '📑', permission: 'academics.mark_sheet' },
+      { label: 'Results Analysis', path: '/teacher/results-analysis', icon: '📈', permission: 'academics.results' },
+      { label: 'Ranking', path: '/teacher/ranking', icon: '🏆', permission: 'academics.ranking' },
     ],
   },
   {
     heading: 'Communication',
     items: [
-      { label: 'Messages', path: '/teacher/messages', icon: '💬' },
+      { label: 'Messages', path: '/teacher/messages', icon: '💬', permission: ['communication.inbox', 'communication.send'] },
       { label: 'Notifications', path: '/teacher/notifications', icon: '🔔' },
     ],
   },
 ];
+
+function itemAllowed(granted: Set<string>, item: NavItem): boolean {
+  const key = item.permission;
+  if (!key) return true;
+  if (Array.isArray(key)) return key.some((k) => granted.has(k));
+  return granted.has(key);
+}
+
+/** Build teacher sidebar sections visible for the signed-in user's permissions. */
+export function buildTeacherNavSections(userPermissions: string[] | undefined): NavSection[] {
+  const granted = new Set(userPermissions ?? []);
+  return TEACHER_NAV_SECTIONS.map((section) => ({
+    ...section,
+    items: section.items.filter((item) => itemAllowed(granted, item)),
+  })).filter((section) => section.path || section.items.length > 0);
+}

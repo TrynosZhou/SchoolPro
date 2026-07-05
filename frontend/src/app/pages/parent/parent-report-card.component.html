@@ -1,6 +1,6 @@
-<app-portal-layout portalTitle="Parent Portal" pageTitle="Report Card" [navItems]="nav">
+<app-portal-layout [portalTitle]="portalTitle()" pageTitle="Report Card" [navItems]="nav()">
 
-  <a routerLink="/parent" class="back-link">← Back to My Children</a>
+  <a [routerLink]="homeLink()" class="back-link">← Back to {{ isStudent() ? 'Report Cards' : 'My Children' }}</a>
 
   <div class="toolbar card">
     <label class="term-field">
@@ -142,13 +142,13 @@
       </table>
     </div>
 
-    @if (report()!.classTeacherRemarks || report()!.principalRemarks) {
+    @if (report()!.classTeacherRemarks || hasPrincipalRemarksSection()) {
       <div class="comments">
         @if (report()!.classTeacherRemarks) {
-          <p><strong>Class teacher:</strong> {{ report()!.classTeacherRemarks }}</p>
+          <p><strong>Class teacher (behaviour &amp; attitude):</strong> {{ report()!.classTeacherRemarks }}</p>
         }
-        @if (report()!.principalRemarks) {
-          <p><strong>Principal:</strong> {{ report()!.principalRemarks }}</p>
+        @if (hasPrincipalRemarksSection()) {
+          <p class="principal-remarks"><strong>Principal (academic performance):</strong> {{ principalRemarksForDisplay() }}</p>
         }
       </div>
     }

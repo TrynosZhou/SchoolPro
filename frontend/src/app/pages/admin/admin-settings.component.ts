@@ -38,6 +38,7 @@ interface SchoolSettings {
   email?: string;
   website?: string;
   facebookPageUrl?: string;
+  headmasterName?: string;
   logoUrl?: string;
   updatedAt?: string;
   currency: string;

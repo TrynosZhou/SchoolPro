@@ -25,6 +25,7 @@ export interface SchoolBranding {
   phone?: string;
   email?: string;
   website?: string;
+  headmasterName?: string;
   currency?: string;
   bankAccountName?: string;
   bankName?: string;
@@ -1042,6 +1043,7 @@ export async function generateReportCardPdf(data: {
   };
   classTeacherRemarks?: string;
   principalRemarks?: string;
+  headmasterName?: string;
   generatedAt?: Date;
   gradeBoundaries?: GradeBoundary[];
   reportCardId?: string;

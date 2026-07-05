@@ -1,19 +1,29 @@
-<app-portal-layout portalTitle="Parent Portal" pageTitle="Report Cards" [navItems]="nav">
+<app-portal-layout [portalTitle]="portalTitle()" pageTitle="Report Cards" [navItems]="nav()">
   @if (toast(); as t) {
     <div class="toast" [class.error]="t.type === 'error'">{{ t.msg }}</div>
   }
 
   <section class="page-intro card">
     <h3>View report cards</h3>
-    <p class="sub">Select your child, term, and exam type, then click <strong>View</strong> to open the report card PDF.</p>
-    <a routerLink="/parent" class="back-link">← Back to My Children</a>
+    <p class="sub">
+      @if (isStudent()) {
+        Select term and exam type, then click <strong>View</strong> to open your report card PDF.
+      } @else {
+        Select your child, term, and exam type, then click <strong>View</strong> to open the report card PDF.
+      }
+    </p>
+    <a [routerLink]="homeLink()" class="back-link">← Back to {{ isStudent() ? 'Dashboard' : 'My Children' }}</a>
   </section>
 
   @if (loading()) {
     <div class="empty card"><p>Loading…</p></div>
   } @else if (!children().length) {
     <div class="empty card">
-      <p>No linked children found. Link a student on <a routerLink="/parent">My Children</a> first.</p>
+      @if (isStudent()) {
+        <p>Your student profile could not be loaded. Please contact the school office.</p>
+      } @else {
+        <p>No linked children found. Link a student on <a [routerLink]="homeLink()">My Children</a> first.</p>
+      }
     </div>
   } @else {
     <section class="toolbar card">

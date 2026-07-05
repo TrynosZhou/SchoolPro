@@ -5,7 +5,8 @@ import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { Router, RouterLink } from '@angular/router';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
-import { TEACHER_NAV_SECTIONS } from '../../core/config/teacher-nav';
+import { buildTeacherNavSections } from '../../core/config/teacher-nav';
+import { AuthService } from '../../core/services/auth.service';
 import { ApiService } from '../../core/services/api.service';
 import { classDisplayName } from '../../core/utils/class-display';
 import { Student } from '../../core/models';
@@ -39,13 +40,16 @@ export class ClassListComponent implements OnInit, OnDestroy {
   private api = inject(ApiService);
   private router = inject(Router);
   private sanitizer = inject(DomSanitizer);
+  private auth = inject(AuthService);
 
   readonly isTeacherPortal = this.router.url.startsWith('/teacher');
   portalTitle = this.isTeacherPortal ? 'Teacher Portal' : 'Admin Portal';
   pageTitle = 'Class List';
 
   readonly adminNav = ADMIN_NAV_SECTIONS;
-  readonly teacherNav = TEACHER_NAV_SECTIONS;
+  get teacherNav() {
+    return buildTeacherNavSections(this.auth.user()?.permissions);
+  }
 
   classes = signal<ClassOption[]>([]);
   terms = signal<TermOption[]>([]);

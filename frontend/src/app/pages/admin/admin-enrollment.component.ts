@@ -4,7 +4,8 @@ import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
-import { TEACHER_NAV_SECTIONS } from '../../core/config/teacher-nav';
+import { buildTeacherNavSections } from '../../core/config/teacher-nav';
+import { AuthService } from '../../core/services/auth.service';
 import { ApiService } from '../../core/services/api.service';
 import { classSelectLabel, formatGenderLabel, formatStudentClassLabel } from '../../core/utils/class-display';
 import { Student } from '../../core/models';
@@ -32,13 +33,16 @@ type EnrolledViewMode = 'table' | 'cards';
 export class AdminEnrollmentComponent implements OnInit {
   private api = inject(ApiService);
   private router = inject(Router);
+  private auth = inject(AuthService);
 
   portalTitle = 'Admin Portal';
   pageTitle = 'Class Enrollment';
   studentsLink = '/admin/students';
 
   readonly adminNav = ADMIN_NAV_SECTIONS;
-  readonly teacherNav = TEACHER_NAV_SECTIONS;
+  get teacherNav() {
+    return buildTeacherNavSections(this.auth.user()?.permissions);
+  }
   readonly classSelectLabel = classSelectLabel;
 
   view = signal<EnrollmentView>('pending');

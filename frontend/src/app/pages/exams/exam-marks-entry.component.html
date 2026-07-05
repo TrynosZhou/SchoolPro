@@ -1,6 +1,6 @@
 <app-portal-layout
   [portalTitle]="portalTitle()"
-  [pageTitle]="pageTitle"
+  [pageTitle]="pageTitle()"
   [navSections]="isAdminRoute() ? adminNav : (isDirectorRoute() || isPrincipalRoute() ? [] : teacherNav)"
   [navItems]="isDirectorRoute() ? directorNav : (isPrincipalRoute() ? principalNav : [])"
 >
@@ -34,7 +34,7 @@
   } @else {
     <header class="page-hero">
       <div class="hero-text">
-        <h2 class="hero-title">Exam marks capture</h2>
+        <h2 class="hero-title">Input marks</h2>
         <p class="hero-sub">Enter scores and remarks for enrolled learners. Changes sync to report cards automatically.</p>
       </div>
       @if (hasFetched()) {

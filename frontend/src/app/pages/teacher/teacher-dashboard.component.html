@@ -1,10 +1,10 @@
-<app-portal-layout portalTitle="Teacher Portal" pageTitle="Dashboard" [navSections]="teacherNav">
+<app-portal-layout portalTitle="Teacher Portal" pageTitle="Teacher Dashboard" homePath="/teacher" [navSections]="teacherNav">
   <div class="teacher-dashboard">
     <section class="hero">
       <div class="hero-glow" aria-hidden="true"></div>
       <div class="hero-content">
-        <p class="eyebrow">{{ greeting() }}</p>
-        <h2>{{ teacherName() }}</h2>
+        <p class="eyebrow">Teacher Dashboard</p>
+        <h2>{{ greeting() }}, {{ teacherName() }}</h2>
         <p class="hero-sub">Your teaching hub — classes, attendance, exams, and reports at a glance.</p>
         <div class="hero-meta">
           <span class="meta-chip">
@@ -80,8 +80,10 @@
                   }
                 </div>
                 <div class="class-actions">
-                  <a [routerLink]="['/teacher/attendance/mark-register']" class="mini-btn">Mark register</a>
-                  <a [routerLink]="['/teacher/exams']" class="mini-btn">Exam marks</a>
+                  @if (group.isClassTeacher) {
+                    <a [routerLink]="['/teacher/attendance/mark-register']" class="mini-btn">Mark register</a>
+                  }
+                  <a [routerLink]="['/teacher/exams']" class="mini-btn">Input marks</a>
                 </div>
               </article>
             }
@@ -191,7 +193,7 @@
         <span class="chip accent">Shortcuts</span>
       </div>
       <div class="action-columns">
-        @for (group of actionGroups; track group.title) {
+        @for (group of visibleActionGroups(); track group.title) {
           <div class="action-group">
             <h4>{{ group.title }}</h4>
             <div class="action-grid">

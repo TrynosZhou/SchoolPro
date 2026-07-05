@@ -5,10 +5,12 @@ import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { RouterLink, Router } from '@angular/router';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
-import { TEACHER_NAV_SECTIONS } from '../../core/config/teacher-nav';
+import { buildTeacherNavSections } from '../../core/config/teacher-nav';
 import { DIRECTOR_NAV_ITEMS } from '../../core/config/director-nav';
 import { PRINCIPAL_NAV_ITEMS } from '../../core/config/principal-nav';
 import { reportCardPdfFilename } from '../../core/utils/report-card-filename';
+import { appendHeadmasterToPrincipalRemarks } from '../../core/utils/principal-remarks.util';
+import { CONDUCT_RATING_OPTIONS, conductRatingLabel, type ConductRating } from '../../core/utils/conduct-ratings.util';
 import type { NavItem, NavSection } from '../../shared/portal-layout/portal-layout.component';
 import { ApiService } from '../../core/services/api.service';
 import { classDisplayName, formatStudentClassLabel, isALevelForm, reportCardClassValue } from '../../core/utils/class-display';
@@ -30,6 +32,7 @@ interface SchoolBranding {
   address?: string;
   email?: string;
   website?: string;
+  headmasterName?: string;
 }
 
 interface GradeBoundaryRow {
@@ -67,6 +70,8 @@ export interface ReportCardRow {
   totalSubjects?: number;
   classTeacherRemarks?: string;
   principalRemarks?: string;
+  behaviorRating?: ConductRating | string;
+  attitudeRating?: ConductRating | string;
   student?: {
     firstName: string;
     lastName: string;
@@ -103,6 +108,8 @@ export class AdminReportCardsComponent implements OnInit, OnDestroy {
 
   readonly formatStudentClassLabel = formatStudentClassLabel;
   readonly reportCardClassValue = reportCardClassValue;
+  readonly conductRatingOptions = CONDUCT_RATING_OPTIONS;
+  readonly conductRatingLabel = conductRatingLabel;
 
   portalTitle = signal('Admin Portal');
   navSections = signal<NavSection[]>(ADMIN_NAV_SECTIONS);
@@ -304,6 +311,14 @@ export class AdminReportCardsComponent implements OnInit, OnDestroy {
 
   schoolName(): string {
     return this.schoolBranding()?.schoolName || 'School Pro Academy';
+  }
+
+  headmasterName(): string {
+    return (this.schoolBranding()?.headmasterName || '').trim();
+  }
+
+  principalRemarksForDisplay(remarks?: string | null): string {
+    return appendHeadmasterToPrincipalRemarks(remarks, this.headmasterName());
   }
 
   logoFullUrl(): string | null {
@@ -661,6 +676,41 @@ export class AdminReportCardsComponent implements OnInit, OnDestroy {
     this.clearRemarksSaved(reportId);
   }
 
+  onConductRatingChange(
+    report: ReportCardRow,
+    field: 'behaviorRating' | 'attitudeRating',
+    value: string,
+  ): void {
+    if (!this.canEditClassTeacherRemark() || !value) return;
+    const payload: Record<string, string> = { [field]: value };
+    this.savingRemarks.update((state) => ({ ...state, [report.id]: true }));
+    this.api.patch<ReportCardRow>(`/exams/report-cards/${report.id}/remarks`, payload).subscribe({
+      next: (saved) => {
+        this.reports.update((rows) => rows.map((r) => (r.id === report.id ? { ...r, ...saved } : r)));
+        this.remarkDrafts.update((drafts) => ({
+          ...drafts,
+          [report.id]: {
+            classTeacherRemarks: saved.classTeacherRemarks || '',
+            principalRemarks: saved.principalRemarks || '',
+          },
+        }));
+        this.savingRemarks.update((state) => ({ ...state, [report.id]: false }));
+        this.remarksSavedIds.update((set) => new Set(set).add(report.id));
+        setTimeout(() => {
+          this.remarksSavedIds.update((set) => {
+            const next = new Set(set);
+            next.delete(report.id);
+            return next;
+          });
+        }, 2000);
+      },
+      error: (e) => {
+        this.savingRemarks.update((state) => ({ ...state, [report.id]: false }));
+        this.showToast('error', e.error?.message || 'Could not update conduct ratings.');
+      },
+    });
+  }
+
   onRemarksBlur(report: ReportCardRow): void {
     this.saveRemarks(report, { silent: true, onlyIfChanged: true });
   }
@@ -817,7 +867,7 @@ export class AdminReportCardsComponent implements OnInit, OnDestroy {
     }
     if (this.currentRole === 'teacher') {
       this.portalTitle.set('Teacher Portal');
-      this.navSections.set(TEACHER_NAV_SECTIONS);
+      this.navSections.set(buildTeacherNavSections(this.getUserPermissions()));
       this.navItems.set([]);
       return;
     }
@@ -831,6 +881,17 @@ export class AdminReportCardsComponent implements OnInit, OnDestroy {
     if (this.router.url.includes('/principal')) return `/principal/${segment}`;
     if (this.router.url.includes('/teacher')) return `/teacher/${segment}`;
     return `/admin/${segment}`;
+  }
+
+  private getUserPermissions(): string[] | undefined {
+    try {
+      const raw = localStorage.getItem('school_pro_user');
+      if (!raw) return undefined;
+      const parsed = JSON.parse(raw) as { permissions?: string[] };
+      return parsed.permissions;
+    } catch {
+      return undefined;
+    }
   }
 
   private getCurrentRole(): UserRole | null {

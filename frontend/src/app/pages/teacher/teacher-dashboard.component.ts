@@ -1,10 +1,10 @@
 import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
-import { TEACHER_NAV_SECTIONS } from '../../core/config/teacher-nav';
+import { buildTeacherNavSections } from '../../core/config/teacher-nav';
+import { AuthService } from '../../core/services/auth.service';
 import { ApiService } from '../../core/services/api.service';
 import { formatStudentClassLabel } from '../../core/utils/class-display';
-import { AuthService } from '../../core/services/auth.service';
 
 interface TeacherAssignment {
   id: string;
@@ -62,7 +62,9 @@ export class TeacherDashboardComponent implements OnInit {
   private api = inject(ApiService);
   private auth = inject(AuthService);
 
-  readonly teacherNav = TEACHER_NAV_SECTIONS;
+  get teacherNav() {
+    return buildTeacherNavSections(this.auth.user()?.permissions);
+  }
 
   data = signal<TeacherDashboardData | null>(null);
   loading = signal(true);
@@ -157,25 +159,43 @@ export class TeacherDashboardComponent implements OnInit {
     {
       title: 'Students',
       links: [
-        { label: 'Class List', path: '/teacher/class-list', icon: '📋' },
-        { label: 'Class Enrollment', path: '/teacher/enrollment', icon: '🎓' },
+        { label: 'Class List', path: '/teacher/class-list', icon: '📋', permission: 'students.view' },
+        { label: 'Class Enrollment', path: '/teacher/enrollment', icon: '🎓', permission: 'enrollment.manage' },
       ],
     },
     {
       title: 'Attendance',
       links: [
-        { label: 'Mark Register', path: '/teacher/attendance/mark-register', icon: '✅' },
-        { label: 'Attendance Report', path: '/teacher/attendance/report', icon: '📊' },
+        { label: 'Mark Register', path: '/teacher/attendance/mark-register', icon: '✅', permission: 'attendance.mark' },
+        { label: 'Attendance Report', path: '/teacher/attendance/report', icon: '📊', permission: 'attendance.report' },
       ],
     },
     {
       title: 'Academics',
       links: [
-        { label: 'Exam Marks', path: '/teacher/exams', icon: '📝' },
-        { label: 'Report Cards', path: '/teacher/report-cards', icon: '📄' },
+        { label: 'Input Marks', path: '/teacher/exams', icon: '📝', permission: 'academics.exams' },
+        { label: 'Report Cards', path: '/teacher/report-cards', icon: '📄', permission: 'academics.report_cards' },
+        { label: 'Mark Sheet', path: '/teacher/mark-sheet', icon: '📑', permission: 'academics.mark_sheet' },
+        { label: 'Results Analysis', path: '/teacher/results-analysis', icon: '📈', permission: 'academics.results' },
+        { label: 'Ranking', path: '/teacher/ranking', icon: '🏆', permission: 'academics.ranking' },
       ],
     },
   ];
+
+  readonly visibleActionGroups = computed(() => {
+    const granted = new Set(this.auth.user()?.permissions ?? []);
+    const isClassTeacher = (this.data()?.classTeacherOf?.length ?? 0) > 0;
+    const allowed = (permission?: string) => !permission || granted.has(permission);
+    return this.actionGroups
+      .map((group) => ({
+        ...group,
+        links: group.links.filter((link) => {
+          if (link.path === '/teacher/attendance/mark-register' && !isClassTeacher) return false;
+          return allowed(link.permission);
+        }),
+      }))
+      .filter((group) => group.links.length > 0);
+  });
 
   ngOnInit() {
     this.api.get<TeacherDashboardData>('/dashboard/teacher').subscribe({

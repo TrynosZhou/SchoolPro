@@ -5,7 +5,8 @@ import { Router, RouterLink } from '@angular/router';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { ApiService } from '../../core/services/api.service';
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
-import { TEACHER_NAV_SECTIONS } from '../../core/config/teacher-nav';
+import { buildTeacherNavSections } from '../../core/config/teacher-nav';
+import { AuthService } from '../../core/services/auth.service';
 import { DIRECTOR_NAV_ITEMS } from '../../core/config/director-nav';
 import { PRINCIPAL_NAV_ITEMS } from '../../core/config/principal-nav';
 import { formatStudentClassLabel, isALevelClassOption } from '../../core/utils/class-display';
@@ -51,6 +52,7 @@ type ViewMode = 'table' | 'list';
 export class ExamMarksEntryComponent implements OnInit, OnDestroy {
   private api = inject(ApiService);
   private router = inject(Router);
+  private auth = inject(AuthService);
   private saveTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
   readonly isAdminPortal = computed(() => {
@@ -82,9 +84,13 @@ export class ExamMarksEntryComponent implements OnInit, OnDestroy {
     if (this.isAdminPortal()) return 'Admin Portal';
     return 'Teacher Portal';
   });
-  readonly pageTitle = 'Exam Marks Entry';
+  readonly pageTitle = computed(() =>
+    this.isAdminPortal() ? 'Exam Marks Entry' : 'Input Marks',
+  );
   readonly adminNav = ADMIN_NAV_SECTIONS;
-  readonly teacherNav = TEACHER_NAV_SECTIONS;
+  get teacherNav() {
+    return buildTeacherNavSections(this.auth.user()?.permissions);
+  }
   readonly directorNav = DIRECTOR_NAV_ITEMS;
   readonly principalNav = PRINCIPAL_NAV_ITEMS;
   readonly isAdminRoute = computed(() => this.router.url.includes('/admin'));
@@ -208,9 +214,13 @@ export class ExamMarksEntryComponent implements OnInit, OnDestroy {
 
   ngOnInit() {
     this.api.get<{ id: string; name: string }[]>('/exams/types').subscribe((t) => this.examTypes.set(t));
-    this.api
-      .get<{ id: string; name: string; form?: { id: string; name: string; level: number } }[]>('/admin/classes')
-      .subscribe((c) => this.classes.set(c));
+    if (this.isAdminPortal()) {
+      this.api
+        .get<{ id: string; name: string; form?: { id: string; name: string; level: number } }[]>('/admin/classes')
+        .subscribe((c) => this.classes.set(c));
+    } else {
+      this.loadTeacherClasses();
+    }
     this.api.get<GradeBoundaryRow[]>('/exams/grade-boundaries').subscribe((b) => this.gradeBoundaries.set(b));
     this.api.get<{ id: string; name: string; isCurrent?: boolean }[]>('/exams/terms').subscribe((terms) => {
       this.terms.set(terms);
@@ -224,6 +234,33 @@ export class ExamMarksEntryComponent implements OnInit, OnDestroy {
   ngOnDestroy() {
     this.saveTimers.forEach((t) => clearTimeout(t));
     this.saveTimers.clear();
+  }
+
+  private loadTeacherClasses() {
+    this.api
+      .get<{
+        assignments?: { classId: string; className: string; formName?: string }[];
+        classTeacherOf?: { classId: string; className: string; formName?: string }[];
+        assignedClasses?: { id: string; name: string }[];
+      }>('/dashboard/teacher')
+      .subscribe({
+        next: (d) => {
+          const map = new Map<string, { id: string; name: string; form?: { id: string; name: string; level: number } }>();
+          for (const c of d.assignedClasses || []) {
+            map.set(c.id, { id: c.id, name: c.name });
+          }
+          for (const a of d.assignments || []) {
+            map.set(a.classId, { id: a.classId, name: a.className });
+          }
+          for (const c of d.classTeacherOf || []) {
+            map.set(c.classId, { id: c.classId, name: c.className });
+          }
+          this.classes.set(
+            [...map.values()].sort((a, b) => a.name.localeCompare(b.name)),
+          );
+        },
+        error: () => this.classes.set([]),
+      });
   }
 
   setEntryFilter(id: EntryFilter) {
@@ -295,14 +332,20 @@ export class ExamMarksEntryComponent implements OnInit, OnDestroy {
     if (!this.filters.classId) return;
     this.api
       .get<{ id: string; code: string; name: string }[]>('/exams/class-subjects', { classId: this.filters.classId })
-      .subscribe((s) => {
-        if (s.length) {
-          this.subjects.set(s);
-        } else {
+      .subscribe({
+        next: (s) => {
+          if (s.length || !this.isAdminPortal()) {
+            this.subjects.set(s);
+            return;
+          }
           this.api
             .get<{ id: string; code: string; name: string }[]>('/admin/subjects')
             .subscribe((all) => this.subjects.set(all));
-        }
+        },
+        error: (e) => {
+          this.subjects.set([]);
+          this.showToast('error', e?.error?.message || 'Could not load subjects for this class.');
+        },
       });
   }
 

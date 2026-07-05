@@ -80,10 +80,18 @@
             <span class="signin-badge">Secure sign in</span>
             <h2>Welcome back</h2>
             <p>Enter your credentials to access your portal</p>
+            <nav class="audience-tabs" aria-label="Sign in type">
+              <button type="button" class="audience-tab" [class.active]="signInAudience() === 'portal'" (click)="setSignInAudience('portal')">
+                Staff &amp; Parent
+              </button>
+              <button type="button" class="audience-tab" [class.active]="signInAudience() === 'student'" (click)="setSignInAudience('student')">
+                Student
+              </button>
+            </nav>
           } @else if (mode() === 'signup') {
             <span class="signin-badge signup">Create account</span>
             <h2>Join School Pro</h2>
-            <p>Parents and students can register to access the portal</p>
+            <p>Parents can register to access the portal and link their children</p>
           } @else if (mode() === 'forgot') {
             <span class="signin-badge">Account recovery</span>
             <h2>Forgot password?</h2>
@@ -97,29 +105,6 @@
 
         <form class="signin-form" (ngSubmit)="onSubmit()">
           @if (mode() === 'signup') {
-            <div class="role-picker">
-              <button
-                type="button"
-                class="role-card"
-                [class.active]="signupRole() === 'parent'"
-                (click)="setSignupRole('parent')"
-              >
-                <span class="role-icon">👨‍👩‍👧</span>
-                <strong>Parent</strong>
-                <small>View fees, report cards &amp; messages</small>
-              </button>
-              <button
-                type="button"
-                class="role-card"
-                [class.active]="signupRole() === 'student'"
-                (click)="setSignupRole('student')"
-              >
-                <span class="role-icon">🎓</span>
-                <strong>Student</strong>
-                <small>Access your academic portal</small>
-              </button>
-            </div>
-
             <div class="name-row">
               <div class="field">
                 <label for="firstName">First name</label>
@@ -138,9 +123,17 @@
 
           @if (mode() === 'signin' || mode() === 'forgot') {
             <div class="field" [class.has-error]="error()">
-              <label for="username">{{ mode() === 'forgot' ? 'Username or email' : 'Username' }}</label>
+              <label for="username">
+                @if (mode() === 'forgot') {
+                  Username or email
+                } @else if (signInAudience() === 'student') {
+                  Student ID
+                } @else {
+                  Username
+                }
+              </label>
               <div class="input-wrap">
-                <span class="input-icon" aria-hidden="true">👤</span>
+                <span class="input-icon" aria-hidden="true">{{ signInAudience() === 'student' && mode() === 'signin' ? '🆔' : '👤' }}</span>
                 <input
                   id="username"
                   type="text"
@@ -148,11 +141,14 @@
                   name="username"
                   required
                   autocomplete="username"
-                  placeholder="e.g. admin"
+                  [placeholder]="signInAudience() === 'student' && mode() === 'signin' ? 'e.g. SP000001' : 'e.g. admin'"
                   autocapitalize="none"
                   spellcheck="false"
                 />
               </div>
+              @if (mode() === 'signin' && signInAudience() === 'student') {
+                <small class="field-hint">Use the Student ID assigned by the school. Students do not sign up — your record is already on file.</small>
+              }
             </div>
           }
 
@@ -183,65 +179,56 @@
               </div>
             </div>
 
-            @if (signupRole() === 'student') {
-              <div class="field">
-                <label for="admissionNumber">Student ID</label>
-                <div class="input-wrap">
-                  <span class="input-icon" aria-hidden="true">🆔</span>
-                  <input
-                    id="admissionNumber"
-                    [(ngModel)]="signup.admissionNumber"
-                    name="admissionNumber"
-                    required
-                    placeholder="e.g. SP000001"
-                    autocapitalize="characters"
-                  />
-                </div>
-                <small class="field-hint">Must match the ID assigned when the school registered you.</small>
+            <div class="field span-2">
+              <label for="linkAdmission">First child's Student ID (optional)</label>
+              <div class="input-wrap">
+                <span class="input-icon" aria-hidden="true">🔗</span>
+                <input
+                  id="linkAdmission"
+                  [(ngModel)]="signup.linkAdmissionNumber"
+                  name="linkAdmissionNumber"
+                  placeholder="e.g. SP000001"
+                  autocapitalize="characters"
+                />
               </div>
-              <div class="field">
-                <label for="dateOfBirth">Date of birth (verification)</label>
-                <div class="input-wrap">
-                  <input id="dateOfBirth" type="date" [(ngModel)]="signup.dateOfBirth" name="dateOfBirth" />
-                </div>
-                <small class="field-hint">Used to verify your identity against school records.</small>
+              <small class="field-hint">You can link more children later from the parent portal using each Student ID.</small>
+            </div>
+            <div class="field">
+              <label for="relationship">Relationship</label>
+              <div class="input-wrap">
+                <select id="relationship" [(ngModel)]="signup.relationship" name="relationship">
+                  <option value="Parent">Parent</option>
+                  <option value="Mother">Mother</option>
+                  <option value="Father">Father</option>
+                  <option value="Guardian">Guardian</option>
+                </select>
               </div>
-            }
-
-            @if (signupRole() === 'parent') {
-              <div class="field span-2">
-                <label for="linkAdmission">First child's Student ID (optional)</label>
-                <div class="input-wrap">
-                  <span class="input-icon" aria-hidden="true">🔗</span>
-                  <input
-                    id="linkAdmission"
-                    [(ngModel)]="signup.linkAdmissionNumber"
-                    name="linkAdmissionNumber"
-                    placeholder="e.g. SP000001"
-                    autocapitalize="characters"
-                  />
-                </div>
-                <small class="field-hint">You can link more children later from the parent portal using each Student ID.</small>
-              </div>
-              <div class="field">
-                <label for="relationship">Relationship</label>
-                <div class="input-wrap">
-                  <select id="relationship" [(ngModel)]="signup.relationship" name="relationship">
-                    <option value="Parent">Parent</option>
-                    <option value="Mother">Mother</option>
-                    <option value="Father">Father</option>
-                    <option value="Guardian">Guardian</option>
-                  </select>
-                </div>
-              </div>
-            }
+            </div>
           }
 
-          @if (mode() === 'signin' || mode() === 'signup' || mode() === 'reset') {
+          @if (mode() === 'signin' && signInAudience() === 'student') {
+            <div class="field">
+              <label for="studentDob">Date of birth</label>
+              <div class="input-wrap">
+                <span class="input-icon" aria-hidden="true">📅</span>
+                <input
+                  id="studentDob"
+                  type="date"
+                  [(ngModel)]="studentDob"
+                  name="studentDob"
+                  required
+                  autocomplete="bday"
+                />
+              </div>
+              <small class="field-hint">Enter your date of birth exactly as recorded at the school.</small>
+            </div>
+          }
+
+          @if ((mode() === 'signin' && signInAudience() === 'portal') || mode() === 'signup' || mode() === 'reset') {
             <div class="field">
               <div class="label-row">
                 <label for="password">{{ mode() === 'reset' ? 'New password' : 'Password' }}</label>
-                @if (mode() === 'signin') {
+                @if (mode() === 'signin' && signInAudience() === 'portal') {
                   <button type="button" class="link-btn link-btn--inline" (click)="setMode('forgot')">
                     Forgot password?
                   </button>

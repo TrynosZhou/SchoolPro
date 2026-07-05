@@ -3,11 +3,26 @@ import { NavItem, NavSection } from '../../shared/portal-layout/portal-layout.co
 import { DIRECTOR_NAV_ITEMS } from '../config/director-nav';
 import { PRINCIPAL_NAV_ITEMS } from '../config/principal-nav';
 import { ADMIN_NAV_SECTIONS } from '../config/admin-nav';
+import { buildTeacherNavSections } from '../config/teacher-nav';
 
 export interface PortalLayoutConfig {
   portalTitle: string;
   navSections?: NavSection[];
   navItems?: NavItem[];
+}
+
+/** Resolve sidebar layout for teacher, director, principal, or admin routes. */
+export function resolvePortalLayout(
+  router: Router,
+  options?: { defaultTitle?: string; permissions?: string[] },
+): PortalLayoutConfig {
+  if (router.url.includes('/teacher')) {
+    return {
+      portalTitle: 'Teacher Portal',
+      navSections: buildTeacherNavSections(options?.permissions),
+    };
+  }
+  return resolveExecutivePortalLayout(router, options?.defaultTitle);
 }
 
 /** Resolve sidebar layout for director/principal routes vs default admin sections. */

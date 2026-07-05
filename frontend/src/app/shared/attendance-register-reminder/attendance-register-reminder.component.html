@@ -1,0 +1,26 @@
+@if (reminderService.visible() && reminderService.reminder(); as data) {
+  <aside class="register-reminder" role="alert" aria-live="polite">
+    <div class="register-reminder-head">
+      <div>
+        <strong>Attendance register reminder</strong>
+        <p>These classes have not had today's register marked ({{ data.date }}).</p>
+      </div>
+      <button type="button" class="dismiss-btn" (click)="dismiss()" aria-label="Dismiss reminder">×</button>
+    </div>
+    <ul class="class-list">
+      @for (row of data.unmarkedClasses; track row.classId) {
+        <li>
+          <span>{{ classLabel(row) }}</span>
+          @if (row.markedCount > 0) {
+            <small>{{ row.markedCount }}/{{ row.studentCount }} marked</small>
+          } @else {
+            <small>Not marked</small>
+          }
+        </li>
+      }
+    </ul>
+    <a [routerLink]="markRegisterPath()" class="action-link" (click)="dismiss()">
+      Open mark register →
+    </a>
+  </aside>
+}

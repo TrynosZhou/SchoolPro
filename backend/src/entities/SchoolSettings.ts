@@ -35,6 +35,10 @@ export class SchoolSettings {
   @Column({ nullable: true })
   facebookPageUrl?: string;
 
+  /** Name of the school head (headmaster/principal), shown on report card remarks. */
+  @Column({ nullable: true })
+  headmasterName?: string;
+
   /** Public path e.g. /uploads/logos/school-logo.png */
   @Column({ nullable: true })
   logoUrl?: string;

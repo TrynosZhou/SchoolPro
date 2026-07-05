@@ -13,13 +13,17 @@
         <p class="eyebrow">Attendance</p>
         <h2>Mark register</h2>
         <p class="hero-sub">
-          Select a class and date, mark each student's attendance, then save the register.
-          @if (!isTeacherPortal) {
+          @if (isTeacherPortal) {
+            Mark attendance for the class where you are the class teacher.
+            Registers are marked <strong>Monday to Friday</strong> only.
+          } @else {
+            Select a class and date, mark each student's attendance, then save the register.
+            Attendance registers are marked <strong>Monday to Friday</strong> only (not on weekends).
             View reports on the <a routerLink="/admin/attendance/report">Attendance Report</a> page.
           }
         </p>
         <div class="hero-actions">
-          <button type="button" class="refresh-action" (click)="loadRegister(true)" [disabled]="!selectedClassId || loadingRegister() || refreshing()">
+          <button type="button" class="refresh-action" (click)="loadRegister(true)" [disabled]="!selectedClassId || !canMarkSelectedDate() || loadingRegister() || refreshing()">
             {{ refreshing() ? 'Refreshing…' : 'Reload register' }}
           </button>
         </div>
@@ -79,10 +83,27 @@
               }
             </select>
           </div>
-          <button type="button" class="btn-load" [disabled]="loadingRegister() || !selectedClassId" (click)="loadRegister()">
+          <button type="button" class="btn-load" [disabled]="loadingRegister() || !selectedClassId || !canMarkSelectedDate()" (click)="loadRegister()">
             {{ loadingRegister() ? 'Loading…' : 'Load register' }}
           </button>
         </div>
+
+        @if (!canMarkSelectedDate()) {
+          <div class="weekend-notice" role="alert">
+            <strong>Weekend — register closed</strong>
+            <p>
+              {{ selectedWeekendLabel() }} ({{ selectedDate }}) is not a school day.
+              Attendance registers cannot be marked on Saturday or Sunday. Choose a weekday (Monday–Friday).
+            </p>
+          </div>
+        }
+
+        @if (isTeacherPortal && !loadingClasses() && !classes().length) {
+          <div class="empty-state compact">
+            <span class="empty-icon">👩‍🏫</span>
+            <p>You are not assigned as a class teacher. Only class teachers can mark attendance registers.</p>
+          </div>
+        }
 
         @if (classes().length > 1) {
           <div class="quick-class-wrap">
@@ -153,16 +174,16 @@
 
             <div class="toolbar-actions">
               <div class="bulk-btns">
-                <button type="button" class="bulk-btn" data-status="present" (click)="markAll('present')">All present</button>
-                <button type="button" class="bulk-btn" data-status="late" (click)="markAll('late')">All late</button>
-                <button type="button" class="bulk-btn" data-status="absent" (click)="markAll('absent')">All absent</button>
-                <button type="button" class="bulk-btn" data-status="excused" (click)="markAll('excused')">All excused</button>
+                <button type="button" class="bulk-btn" data-status="present" [disabled]="!canMarkSelectedDate()" (click)="markAll('present')">All present</button>
+                <button type="button" class="bulk-btn" data-status="late" [disabled]="!canMarkSelectedDate()" (click)="markAll('late')">All late</button>
+                <button type="button" class="bulk-btn" data-status="absent" [disabled]="!canMarkSelectedDate()" (click)="markAll('absent')">All absent</button>
+                <button type="button" class="bulk-btn" data-status="excused" [disabled]="!canMarkSelectedDate()" (click)="markAll('excused')">All excused</button>
               </div>
               <div class="view-toggle" role="group" aria-label="View mode">
                 <button type="button" class="view-btn" [class.active]="viewMode() === 'table'" (click)="viewMode.set('table')" title="Table view">☰</button>
                 <button type="button" class="view-btn" [class.active]="viewMode() === 'cards'" (click)="viewMode.set('cards')" title="Card view">▦</button>
               </div>
-              <button type="button" class="btn-primary" [disabled]="submitting() || !students().length" (click)="saveRegister()">
+              <button type="button" class="btn-primary" [disabled]="submitting() || !students().length || !canMarkSelectedDate()" (click)="saveRegister()">
                 {{ submitting() ? 'Saving…' : 'Save attendance' }}
               </button>
             </div>
@@ -190,7 +211,7 @@
                   </div>
                   <div class="status-btns" role="group" [attr.aria-label]="'Attendance for ' + s.firstName + ' ' + s.lastName">
                     @for (st of statusOptions; track st) {
-                      <button type="button" class="status-chip" [attr.data-status]="st" [class.active]="marks()[s.id] === st" (click)="setStatus(s.id, st)">
+                      <button type="button" class="status-chip" [attr.data-status]="st" [class.active]="marks()[s.id] === st" [disabled]="!canMarkSelectedDate()" (click)="setStatus(s.id, st)">
                         {{ statusLabel(st) }}
                       </button>
                     }
@@ -225,7 +246,7 @@
                       <td class="col-status">
                         <div class="status-btns" role="group" [attr.aria-label]="'Attendance for ' + s.firstName + ' ' + s.lastName">
                           @for (st of statusOptions; track st) {
-                            <button type="button" class="status-chip" [attr.data-status]="st" [class.active]="marks()[s.id] === st" (click)="setStatus(s.id, st)">
+                            <button type="button" class="status-chip" [attr.data-status]="st" [class.active]="marks()[s.id] === st" [disabled]="!canMarkSelectedDate()" (click)="setStatus(s.id, st)">
                               {{ statusLabel(st) }}
                             </button>
                           }

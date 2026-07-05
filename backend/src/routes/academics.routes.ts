@@ -62,11 +62,24 @@ router.post('/timetable', authorize(UserRole.TEACHER, UserRole.ADMIN), async (re
   }
 });
 
-router.get('/learning-schedules', authorize(UserRole.TEACHER, UserRole.ADMIN, UserRole.PARENT, UserRole.PRINCIPAL), async (req, res: Response) => {
+router.get('/learning-schedules', authorize(UserRole.TEACHER, UserRole.ADMIN, UserRole.PARENT, UserRole.PRINCIPAL, UserRole.STUDENT), async (req: AuthRequest, res: Response) => {
   const { classId, termId, weekStart } = req.query;
   const repo = AppDataSource.getRepository(LearningSchedule);
   const where: Record<string, string> = {};
-  if (classId) where.classId = classId as string;
+
+  if (req.user!.role === UserRole.STUDENT) {
+    if (!req.user!.studentId) return res.json([]);
+    const student = await AppDataSource.query(
+      `SELECT "classId" FROM students WHERE id = $1 AND "isActive" = true LIMIT 1`,
+      [req.user!.studentId],
+    );
+    const studentClassId = student[0]?.classId;
+    if (!studentClassId) return res.json([]);
+    where.classId = studentClassId;
+  } else if (classId) {
+    where.classId = classId as string;
+  }
+
   if (termId) where.termId = termId as string;
   if (weekStart) where.weekStart = weekStart as string;
   res.json(await repo.find({
@@ -82,7 +95,7 @@ router.post('/learning-schedules', authorize(UserRole.TEACHER, UserRole.ADMIN), 
   res.status(201).json(entry);
 });
 
-router.get('/weekly-assessments', authorize(UserRole.TEACHER, UserRole.ADMIN, UserRole.PARENT, UserRole.PRINCIPAL), async (req, res: Response) => {
+router.get('/weekly-assessments', authorize(UserRole.TEACHER, UserRole.ADMIN, UserRole.PARENT, UserRole.PRINCIPAL, UserRole.STUDENT), async (req: AuthRequest, res: Response) => {
   const { studentId, classId, termId, weekStart } = req.query;
   const repo = AppDataSource.getRepository(WeeklyAssessment);
   const qb = repo.createQueryBuilder('a')
@@ -90,8 +103,13 @@ router.get('/weekly-assessments', authorize(UserRole.TEACHER, UserRole.ADMIN, Us
     .leftJoinAndSelect('a.subject', 'sub')
     .leftJoinAndSelect('a.teacher', 't');
 
-  if (studentId) qb.andWhere('a.studentId = :studentId', { studentId });
-  if (classId) qb.andWhere('s.classId = :classId', { classId });
+  if (req.user!.role === UserRole.STUDENT) {
+    if (!req.user!.studentId) return res.json([]);
+    qb.andWhere('a.studentId = :studentId', { studentId: req.user!.studentId });
+  } else {
+    if (studentId) qb.andWhere('a.studentId = :studentId', { studentId });
+    if (classId) qb.andWhere('s.classId = :classId', { classId });
+  }
   if (termId) qb.andWhere('a.termId = :termId', { termId });
   if (weekStart) qb.andWhere('a.weekStart = :weekStart', { weekStart });
 
@@ -176,7 +194,7 @@ router.get('/messages/sent', authorize(UserRole.TEACHER, UserRole.PARENT, UserRo
   res.json(messages);
 });
 
-router.get('/messages', msgView, async (req: AuthRequest, res: Response) => {
+router.get('/messages', authorize(UserRole.TEACHER, UserRole.PARENT, UserRole.STUDENT, UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), msgView, async (req: AuthRequest, res: Response) => {
   const repo = AppDataSource.getRepository(Message);
   const messages = await repo.find({
     where: [{ recipientId: req.user!.userId }, { senderId: req.user!.userId }],
@@ -206,7 +224,7 @@ router.get('/messages/teacher-recipients', authorize(UserRole.TEACHER), msgView,
 });
 
 // Threaded conversation list for the current user: one entry per counterpart.
-router.get('/messages/threads', msgView, async (req: AuthRequest, res: Response) => {
+router.get('/messages/threads', authorize(UserRole.TEACHER, UserRole.PARENT, UserRole.STUDENT, UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), msgView, async (req: AuthRequest, res: Response) => {
   const repo = AppDataSource.getRepository(Message);
   const me = req.user!.userId;
   const messages = await repo.find({
@@ -245,7 +263,7 @@ router.get('/messages/threads', msgView, async (req: AuthRequest, res: Response)
 });
 
 // All messages in a single conversation (and mark inbound ones read).
-router.get('/messages/threads/:threadId', msgView, async (req: AuthRequest, res: Response) => {
+router.get('/messages/threads/:threadId', authorize(UserRole.TEACHER, UserRole.PARENT, UserRole.STUDENT, UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), msgView, async (req: AuthRequest, res: Response) => {
   const repo = AppDataSource.getRepository(Message);
   const me = req.user!.userId;
   const threadId = String(req.params.threadId);
@@ -405,7 +423,7 @@ router.get(
   },
 );
 
-router.post('/messages', authorize(UserRole.TEACHER, UserRole.PARENT, UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), msgCreate, async (req: AuthRequest, res: Response) => {
+router.post('/messages', authorize(UserRole.TEACHER, UserRole.PARENT, UserRole.STUDENT, UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), msgCreate, async (req: AuthRequest, res: Response) => {
   const { recipientId, subject, body, studentId, broadcastToAllParents } = req.body || {};
   const trimmedSubject = String(subject || '').trim();
   const trimmedBody = String(body || '').trim();

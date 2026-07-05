@@ -1,18 +1,32 @@
-<app-portal-layout portalTitle="Parent Portal" pageTitle="Finance" [navItems]="nav">
+<app-portal-layout [portalTitle]="portalTitle()" pageTitle="Finance" [navItems]="nav()">
   @if (toast(); as t) {
     <div class="toast" [class.error]="t.type === 'error'" [class.success]="t.type === 'success'">{{ t.msg }}</div>
   }
 
   <header class="page-intro">
-    <p>View the statement of account, invoice statements, and payment receipts for a linked student.</p>
-    <a routerLink="/parent" class="back-link">← Back to My Children</a>
+    <p>
+      @if (isStudent()) {
+        View your statement of account, invoice statements, and payment receipts.
+      } @else {
+        View the statement of account, invoice statements, and payment receipts for a linked student.
+      }
+    </p>
+    @if (!isStudent()) {
+      <a [routerLink]="homeLink()" class="back-link">← Back to My Children</a>
+    } @else {
+      <a [routerLink]="homeLink()" class="back-link">← Back to Dashboard</a>
+    }
   </header>
 
   @if (loading()) {
     <div class="empty card"><p>Loading…</p></div>
   } @else if (!children().length) {
     <div class="empty card">
-      <p>No linked children found. Link a student on <a routerLink="/parent">My Children</a> first.</p>
+      @if (isStudent()) {
+        <p>Your student profile could not be loaded. Please contact the school office.</p>
+      } @else {
+        <p>No linked children found. Link a student on <a [routerLink]="homeLink()">My Children</a> first.</p>
+      }
     </div>
   } @else {
     <section class="card filter-card">

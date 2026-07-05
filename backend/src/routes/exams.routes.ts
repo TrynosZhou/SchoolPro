@@ -14,6 +14,7 @@ import {
   generateClassReportCards,
   getClassTermAttendanceMap,
   getReportCardPdfMetrics,
+  getStudentTermAttendance,
   applyFormRankingsToReports,
   syncReportCardForStudent,
 } from '../services/report-card.service';
@@ -27,7 +28,11 @@ import {
   buildSubjectAnalysis,
 } from '../services/results-analysis.service';
 import { buildRankings, RankingType } from '../services/ranking.service';
-import { sanitizeReportCardRemark } from '../services/report-card-remarks.service';
+import {
+  buildClassTeacherRemarks,
+  isValidConductRating,
+  sanitizeReportCardRemark,
+} from '../services/report-card-remarks.service';
 import { reportCardPdfFilename } from '../utils/helpers';
 import { relations } from '../utils/typeorm-helpers';
 import {
@@ -39,7 +44,7 @@ import {
 import { ResultsPublication } from '../entities/ResultsPublication';
 import { requireModuleAccess } from '../middleware/access-control';
 import { AccessControlService } from '../services/access-control.service';
-import { assertTeacherClassAccess } from '../utils/teacher-class-access';
+import { assertTeacherClassAccess, assertTeacherSubjectAccess } from '../utils/teacher-class-access';
 
 const PUBLISH_ROLES = [UserRole.ADMIN, UserRole.PRINCIPAL, UserRole.DIRECTOR];
 
@@ -221,8 +226,13 @@ router.get('/class-subjects', authorize(UserRole.TEACHER, UserRole.ADMIN, UserRo
   if (!(await assertTeacherClassAccess(req, classId as string))) {
     return res.status(403).json({ message: 'You are not assigned to this class' });
   }
+  const where: { classId: string; teacherId?: string } = { classId: classId as string };
+  if (req.user!.role === UserRole.TEACHER) {
+    if (!req.user!.staffId) return res.json([]);
+    where.teacherId = req.user!.staffId;
+  }
   const rows = await AppDataSource.getRepository(ClassSubject).find({
-    where: { classId: classId as string },
+    where,
     relations: relations('subject'),
     order: { subject: { name: 'ASC' } },
   });
@@ -236,6 +246,9 @@ router.get('/marks/entry', authorize(UserRole.TEACHER, UserRole.ADMIN, UserRole.
   }
   if (!(await assertTeacherClassAccess(req, classId as string))) {
     return res.status(403).json({ message: 'You are not assigned to this class' });
+  }
+  if (!(await assertTeacherSubjectAccess(req, classId as string, subjectId as string))) {
+    return res.status(403).json({ message: 'You are not assigned to teach this subject' });
   }
 
   const examType = await AppDataSource.getRepository(ExamType).findOne({ where: { id: examTypeId as string } });
@@ -378,6 +391,9 @@ router.post('/marks/save-one', authorize(UserRole.TEACHER, UserRole.ADMIN, UserR
   if (!(await assertTeacherClassAccess(req, classId))) {
     return res.status(403).json({ message: 'You are not assigned to this class' });
   }
+  if (!(await assertTeacherSubjectAccess(req, classId, subjectId))) {
+    return res.status(403).json({ message: 'You are not assigned to teach this subject' });
+  }
 
   const repo = AppDataSource.getRepository(ExamMark);
   const saved = await upsertExamMark(repo, {
@@ -398,6 +414,9 @@ router.post('/marks/bulk', authorize(UserRole.TEACHER, UserRole.ADMIN, UserRole.
   const { examTypeId, classId, subjectId, termId, marks } = req.body;
   if (classId && !(await assertTeacherClassAccess(req, classId))) {
     return res.status(403).json({ message: 'You are not assigned to this class' });
+  }
+  if (classId && subjectId && !(await assertTeacherSubjectAccess(req, classId, subjectId))) {
+    return res.status(403).json({ message: 'You are not assigned to teach this subject' });
   }
   const saved = [];
   const syncedStudents = new Set<string>();
@@ -982,6 +1001,7 @@ router.get('/report-cards/:studentId/:termId/pdf', authorize(UserRole.ADMIN, Use
       attendance: metrics.attendance,
       classTeacherRemarks: report.classTeacherRemarks,
       principalRemarks: report.principalRemarks,
+      headmasterName: settings?.headmasterName || undefined,
       generatedAt: report.generatedAt ? new Date(report.generatedAt) : new Date(),
       gradeBoundaries: settings?.gradeBoundaries?.length
         ? settings.gradeBoundaries
@@ -1014,14 +1034,29 @@ router.patch(
   '/report-cards/:id/remarks',
   authorize(UserRole.ADMIN, UserRole.PRINCIPAL, UserRole.DIRECTOR, UserRole.TEACHER),
   async (req: AuthRequest, res: Response) => {
-    const { classTeacherRemarks, principalRemarks } = req.body as {
+    const {
+      classTeacherRemarks,
+      principalRemarks,
+      behaviorRating,
+      attitudeRating,
+      regenerateClassTeacherRemarks,
+    } = req.body as {
       classTeacherRemarks?: string;
       principalRemarks?: string;
+      behaviorRating?: string;
+      attitudeRating?: string;
+      regenerateClassTeacherRemarks?: boolean;
     };
     const repo = AppDataSource.getRepository(ReportCard);
     const report = await repo.findOne({
       where: { id: req.params.id },
-      relations: relations('student'),
+      relations: relations(
+        'student',
+        'student.schoolClass',
+        'student.schoolClass.form',
+        'student.schoolClass.classTeacher',
+        'student.schoolClass.classTeacher.user',
+      ),
     });
     if (!report) return res.status(404).json({ message: 'Report card not found' });
 
@@ -1039,6 +1074,22 @@ router.patch(
       }
     }
 
+    let ratingsChanged = false;
+    if (behaviorRating !== undefined) {
+      if (behaviorRating && !isValidConductRating(behaviorRating)) {
+        return res.status(400).json({ message: 'Invalid behavior rating' });
+      }
+      report.behaviorRating = behaviorRating || null;
+      ratingsChanged = true;
+    }
+    if (attitudeRating !== undefined) {
+      if (attitudeRating && !isValidConductRating(attitudeRating)) {
+        return res.status(400).json({ message: 'Invalid attitude rating' });
+      }
+      report.attitudeRating = attitudeRating || null;
+      ratingsChanged = true;
+    }
+
     if (classTeacherRemarks !== undefined) {
       const cleaned = sanitizeReportCardRemark(
         String(classTeacherRemarks || ''),
@@ -1046,7 +1097,37 @@ router.patch(
         report.student.lastName,
       );
       report.classTeacherRemarks = cleaned.trim() || null;
+    } else if (
+      ratingsChanged
+      || regenerateClassTeacherRemarks
+    ) {
+      if (
+        !isValidConductRating(report.behaviorRating)
+        || !isValidConductRating(report.attitudeRating)
+      ) {
+        return res.status(400).json({
+          message: 'Set behaviour and attitude ratings before regenerating class teacher remarks',
+        });
+      }
+      const attendance = await getStudentTermAttendance(
+        report.studentId,
+        report.termId,
+        report.student.classId,
+      );
+      const teacherUser = report.student.schoolClass?.classTeacher?.user;
+      const classTeacherName = teacherUser
+        ? `${(teacherUser.lastName || '').trim()} ${(teacherUser.firstName || '').charAt(0).toUpperCase()}.`.trim()
+        : null;
+      report.classTeacherRemarks = buildClassTeacherRemarks({
+        firstName: report.student.firstName,
+        lastName: report.student.lastName,
+        behaviorRating: report.behaviorRating,
+        attitudeRating: report.attitudeRating,
+        attendance,
+        classTeacherName,
+      });
     }
+
     if (principalRemarks !== undefined) {
       const cleaned = sanitizeReportCardRemark(
         String(principalRemarks || ''),

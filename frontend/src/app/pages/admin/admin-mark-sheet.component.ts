@@ -6,9 +6,11 @@ import { RouterLink, Router } from '@angular/router';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
 import { ApiService } from '../../core/services/api.service';
+import { AuthService } from '../../core/services/auth.service';
 import { classDisplayName, formatStudentClassLabel } from '../../core/utils/class-display';
 import { formatSubjectAbbrev } from '../../core/utils/subject-abbrev';
-import { resolveExecutivePortalLayout } from '../../core/utils/portal-layout.util';
+import { loadTeacherClassOptions } from '../../core/utils/teacher-classes.util';
+import { resolvePortalLayout } from '../../core/utils/portal-layout.util';
 
 interface MarkSheetSubject {
   id: string;
@@ -64,10 +66,14 @@ export class AdminMarkSheetComponent implements OnInit, OnDestroy {
   private api = inject(ApiService);
   private sanitizer = inject(DomSanitizer);
   private router = inject(Router);
+  private auth = inject(AuthService);
 
   readonly formatStudentClassLabel = formatStudentClassLabel;
 
-  readonly portalLayout = resolveExecutivePortalLayout(this.router);
+  readonly portalLayout = resolvePortalLayout(this.router, {
+    permissions: this.auth.user()?.permissions,
+  });
+  readonly isTeacherPortal = this.router.url.includes('/teacher');
   readonly adminNav = ADMIN_NAV_SECTIONS;
   readonly gradeLetters: (keyof MarkSheetGradeCounts)[] = ['A', 'B', 'C', 'D', 'E', 'U'];
 
@@ -121,10 +127,17 @@ export class AdminMarkSheetComponent implements OnInit, OnDestroy {
       },
       error: () => this.showToast('error', 'Could not load terms.'),
     });
-    this.api.get<{ id: string; name: string }[]>('/admin/classes').subscribe({
-      next: (c) => this.classes.set(c),
-      error: () => this.showToast('error', 'Could not load classes.'),
-    });
+    if (this.isTeacherPortal) {
+      loadTeacherClassOptions(this.api).subscribe({
+        next: (c) => this.classes.set(c),
+        error: () => this.showToast('error', 'Could not load classes.'),
+      });
+    } else {
+      this.api.get<{ id: string; name: string }[]>('/admin/classes').subscribe({
+        next: (c) => this.classes.set(c),
+        error: () => this.showToast('error', 'Could not load classes.'),
+      });
+    }
   }
 
   ngOnDestroy(): void {

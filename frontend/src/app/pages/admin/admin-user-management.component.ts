@@ -172,6 +172,11 @@ export class AdminUserManagementComponent implements OnInit {
   isParentRole = computed(() => this.form.role === 'parent');
   isStudentRole = computed(() => this.form.role === 'student');
   isEditMode = computed(() => this.drawerMode() === 'edit');
+  isEditingSelf = computed(() => {
+    const editing = this.editingUser();
+    const me = this.auth.user()?.id;
+    return Boolean(editing && me && editing.id === me);
+  });
 
   ngOnInit() {
     this.api.get<PasswordPolicy>('/auth/password-policy').subscribe({
@@ -292,13 +297,20 @@ export class AdminUserManagementComponent implements OnInit {
 
     if (this.isEditMode()) {
       const user = this.editingUser()!;
+      const currentUserId = this.auth.user()?.id;
       const body: Record<string, unknown> = {
         firstName: this.form.firstName.trim(),
         lastName: this.form.lastName.trim(),
         email: this.form.email.trim(),
         phone: this.form.phone.trim() || undefined,
-        isActive: this.form.isActive,
       };
+      if (user.id !== currentUserId) {
+        body['isActive'] = this.form.isActive;
+      } else if (!this.form.isActive) {
+        this.submitting.set(false);
+        this.showToast('error', 'You cannot deactivate your own account');
+        return;
+      }
       if (this.form.password.trim()) body['password'] = this.form.password;
       if (this.isStaffRole() && this.form.schoolRoleId) {
         body['schoolRoleId'] = this.form.schoolRoleId;
