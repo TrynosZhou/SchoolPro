@@ -1,8 +1,9 @@
 import { Component, inject, OnInit, signal, computed } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { DatePipe } from '@angular/common';
-import { RouterLink } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
+import { ChangePasswordFormComponent } from '../../shared/change-password/change-password-form.component';
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
 import { ApiService } from '../../core/services/api.service';
 import { AuthService } from '../../core/services/auth.service';
@@ -12,6 +13,7 @@ type StatusFilter = 'active' | 'inactive' | 'all';
 type DrawerMode = 'create' | 'edit' | null;
 type SortOrder = 'name-asc' | 'name-desc' | 'role-asc' | 'newest';
 type ViewMode = 'table' | 'cards';
+type PageTab = 'users' | 'change-password';
 
 interface SchoolRoleOption {
   id: string;
@@ -59,15 +61,18 @@ interface PasswordPolicy {
 @Component({
   selector: 'app-admin-user-management',
   standalone: true,
-  imports: [PortalLayoutComponent, FormsModule, DatePipe, RouterLink],
+  imports: [PortalLayoutComponent, FormsModule, DatePipe, RouterLink, ChangePasswordFormComponent],
   templateUrl: './admin-user-management.component.html',
   styleUrl: './admin-user-management.component.scss',
 })
 export class AdminUserManagementComponent implements OnInit {
   private api = inject(ApiService);
   private auth = inject(AuthService);
+  private route = inject(ActivatedRoute);
 
   readonly adminNav = ADMIN_NAV_SECTIONS;
+
+  pageTab = signal<PageTab>('users');
 
   users = signal<ManagedUser[]>([]);
   schoolRoles = signal<SchoolRoleOption[]>([]);
@@ -179,6 +184,9 @@ export class AdminUserManagementComponent implements OnInit {
   });
 
   ngOnInit() {
+    this.route.queryParamMap.subscribe((params) => {
+      this.pageTab.set(params.get('tab') === 'change-password' ? 'change-password' : 'users');
+    });
     this.api.get<PasswordPolicy>('/auth/password-policy').subscribe({
       next: (p) => this.passwordPolicy.set(p),
       error: () => undefined,
@@ -188,6 +196,13 @@ export class AdminUserManagementComponent implements OnInit {
       error: () => undefined,
     });
     this.loadUsers();
+  }
+
+  setPageTab(tab: PageTab): void {
+    this.pageTab.set(tab);
+    if (tab === 'users') {
+      this.closeDrawer();
+    }
   }
 
   loadUsers() {

@@ -1420,6 +1420,7 @@ export interface MarkSheetPdfData {
   examTypeName: string;
   termName: string;
   className: string;
+  classTeacherName?: string | null;
   maxMarks: number;
   generatedAt: Date;
   subjects: { code: string; name: string }[];
@@ -1655,11 +1656,23 @@ export async function generateMarkSheetPdf(data: MarkSheetPdfData): Promise<Buff
     };
 
     const drawMeta = (y: number) => {
-      const line =
+      const metaY = y + 4;
+      const leftLine =
         `Exam: ${data.examTypeName}    Term: ${data.termName}    ${formatStudentClassLabel(data.className)}    ` +
         `Max Marks: ${data.maxMarks}    Students: ${data.students.length}`;
+
       doc.fillColor(MS.meta).font('Helvetica').fontSize(8.5);
-      doc.text(line, margin, y + 4, { width: contentW, lineBreak: false });
+
+      if (data.classTeacherName) {
+        const teacherText = `Class Teacher: ${data.classTeacherName}`;
+        const teacherW = msTextWidth(doc, teacherText, 8.5) + 8;
+        const leftW = Math.max(120, contentW - teacherW);
+        doc.text(leftLine, margin, metaY, { width: leftW, lineBreak: false });
+        doc.text(teacherText, margin, metaY, { width: contentW, align: 'right', lineBreak: false });
+      } else {
+        doc.text(leftLine, margin, metaY, { width: contentW, lineBreak: false });
+      }
+
       return y + 18;
     };
 

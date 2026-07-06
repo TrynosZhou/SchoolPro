@@ -80,14 +80,6 @@
             <span class="signin-badge">Secure sign in</span>
             <h2>Welcome back</h2>
             <p>Enter your credentials to access your portal</p>
-            <nav class="audience-tabs" aria-label="Sign in type">
-              <button type="button" class="audience-tab" [class.active]="signInAudience() === 'portal'" (click)="setSignInAudience('portal')">
-                Staff &amp; Parent
-              </button>
-              <button type="button" class="audience-tab" [class.active]="signInAudience() === 'student'" (click)="setSignInAudience('student')">
-                Student
-              </button>
-            </nav>
           } @else if (mode() === 'signup') {
             <span class="signin-badge signup">Create account</span>
             <h2>Join School Pro</h2>
@@ -104,6 +96,25 @@
         </header>
 
         <form class="signin-form" (ngSubmit)="onSubmit()">
+          @if (mode() === 'signin') {
+            <div class="field role-select-field">
+              <label for="signInRole">Sign in as</label>
+              <div class="input-wrap">
+                <span class="input-icon" aria-hidden="true">🎭</span>
+                <select
+                  id="signInRole"
+                  [ngModel]="signInRole()"
+                  (ngModelChange)="setSignInRole($event)"
+                  name="signInRole"
+                >
+                  <option value="staff">Staff</option>
+                  <option value="parent">Parent</option>
+                  <option value="student">Student</option>
+                </select>
+              </div>
+            </div>
+          }
+
           @if (mode() === 'signup') {
             <div class="name-row">
               <div class="field">
@@ -126,14 +137,16 @@
               <label for="username">
                 @if (mode() === 'forgot') {
                   Username or email
-                } @else if (signInAudience() === 'student') {
+                } @else if (isStudentRole()) {
                   Student ID
+                } @else if (isParentRole()) {
+                  Username or email
                 } @else {
                   Username
                 }
               </label>
               <div class="input-wrap">
-                <span class="input-icon" aria-hidden="true">{{ signInAudience() === 'student' && mode() === 'signin' ? '🆔' : '👤' }}</span>
+                <span class="input-icon" aria-hidden="true">{{ isStudentRole() && mode() === 'signin' ? '🆔' : '👤' }}</span>
                 <input
                   id="username"
                   type="text"
@@ -141,13 +154,16 @@
                   name="username"
                   required
                   autocomplete="username"
-                  [placeholder]="signInAudience() === 'student' && mode() === 'signin' ? 'e.g. SP000001' : 'e.g. admin'"
+                  [placeholder]="isStudentRole() && mode() === 'signin' ? 'e.g. SP000001' : (isParentRole() ? 'e.g. you@schoolpro.ac.zw' : 'e.g. admin')"
                   autocapitalize="none"
                   spellcheck="false"
                 />
               </div>
-              @if (mode() === 'signin' && signInAudience() === 'student') {
+              @if (mode() === 'signin' && isStudentRole()) {
                 <small class="field-hint">Use the Student ID assigned by the school. Students do not sign up — your record is already on file.</small>
+              }
+              @if (mode() === 'signin' && isParentRole()) {
+                <small class="field-hint">Use the email or username from your parent account registration.</small>
               }
             </div>
           }
@@ -206,29 +222,43 @@
             </div>
           }
 
-          @if (mode() === 'signin' && signInAudience() === 'student') {
+          @if (mode() === 'signin' && isStudentRole()) {
             <div class="field">
-              <label for="studentDob">Date of birth</label>
-              <div class="input-wrap">
-                <span class="input-icon" aria-hidden="true">📅</span>
-                <input
-                  id="studentDob"
-                  type="date"
-                  [(ngModel)]="studentDob"
-                  name="studentDob"
-                  required
-                  autocomplete="bday"
-                />
+              <div class="label-row">
+                <label for="password">Date of birth or password</label>
               </div>
-              <small class="field-hint">Enter your date of birth exactly as recorded at the school.</small>
+              <div class="input-wrap">
+                <span class="input-icon" aria-hidden="true">🔒</span>
+                <input
+                  id="password"
+                  [type]="showPassword() ? 'text' : 'password'"
+                  [(ngModel)]="password"
+                  name="password"
+                  required
+                  autocomplete="current-password"
+                  placeholder="First sign-in: your date of birth"
+                />
+                <button
+                  type="button"
+                  class="toggle-pw"
+                  (click)="togglePassword()"
+                  [attr.aria-label]="showPassword() ? 'Hide password' : 'Show password'"
+                >
+                  {{ showPassword() ? '🙈' : '👁' }}
+                </button>
+              </div>
+              <small class="field-hint">
+                First time signing in? Enter your date of birth as recorded at the school (e.g. 01/01/2012 or 2012-01-01).
+                After you change your password, use your new password here instead.
+              </small>
             </div>
           }
 
-          @if ((mode() === 'signin' && signInAudience() === 'portal') || mode() === 'signup' || mode() === 'reset') {
+          @if ((mode() === 'signin' && !isStudentRole()) || mode() === 'signup' || mode() === 'reset') {
             <div class="field">
               <div class="label-row">
                 <label for="password">{{ mode() === 'reset' ? 'New password' : 'Password' }}</label>
-                @if (mode() === 'signin' && signInAudience() === 'portal') {
+                @if (mode() === 'signin' && !isStudentRole()) {
                   <button type="button" class="link-btn link-btn--inline" (click)="setMode('forgot')">
                     Forgot password?
                   </button>

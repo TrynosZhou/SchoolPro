@@ -10,6 +10,10 @@ import { MessageBadgeService } from '../../core/services/message-badge.service';
 import { environment } from '../../../environments/environment';
 import { HelpTopic, helpTopicsForRole, scoreHelpTopic } from '../../core/config/system-help-manual';
 import { downloadHelpManualPdf } from '../../core/utils/help-manual-pdf.util';
+import {
+  changePasswordPathForRole,
+  changePasswordQueryParamsForRole,
+} from '../../core/utils/change-password-route.util';
 
 export interface NavItem {
   label: string;
@@ -194,6 +198,14 @@ export class PortalLayoutComponent implements OnInit, OnChanges, OnDestroy {
     return this.auth.user()?.email?.trim() || '—';
   }
 
+  get changePasswordPath(): string | null {
+    return changePasswordPathForRole(this.auth.user()?.role);
+  }
+
+  get changePasswordQueryParams(): Record<string, string> | null {
+    return changePasswordQueryParamsForRole(this.auth.user()?.role);
+  }
+
   get avatarUrl(): string | null {
     const u = this.auth.user() as { avatarUrl?: string | null } | null;
     const url = u?.avatarUrl?.trim();
@@ -252,6 +264,10 @@ export class PortalLayoutComponent implements OnInit, OnChanges, OnDestroy {
       this.closeHelp();
       this.closeBalanceEnquiry();
     }
+  }
+
+  closeUserMenu(): void {
+    this.userMenuOpen.set(false);
   }
 
   openBalanceEnquiry(): void {

@@ -1,6 +1,9 @@
 import { NavItem } from '../../shared/portal-layout/portal-layout.component';
 import { DIRECTOR_NAV_ITEMS } from '../config/director-nav';
 import { PRINCIPAL_NAV_ITEMS } from '../config/principal-nav';
+import {
+  changePasswordDashboardLink,
+} from './change-password-route.util';
 import type { UserRole } from '../models';
 
 export interface ExecutivePortalContext {
@@ -24,7 +27,8 @@ export function executivePortalForRole(role?: UserRole | null): ExecutivePortalC
   };
 }
 
-export function executiveActionGroups(basePath: string) {
+export function executiveActionGroups(basePath: string, role: UserRole = 'director') {
+  const accountLink = changePasswordDashboardLink(role);
   return [
     {
       title: 'Finance',
@@ -46,7 +50,12 @@ export function executiveActionGroups(basePath: string) {
         { label: 'Mark Sheet', path: `${basePath}/mark-sheet`, icon: '📑' },
         { label: 'Results Analysis', path: `${basePath}/results-analysis`, icon: '📈' },
         { label: 'Ranking', path: `${basePath}/ranking`, icon: '🏆' },
+        { label: 'Mark Entry Progress', path: `${basePath}/mark-entry-progress`, icon: '📊' },
       ],
+    },
+    {
+      title: 'Account',
+      links: [{ label: accountLink.label, path: accountLink.path, icon: accountLink.icon }],
     },
   ];
 }

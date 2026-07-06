@@ -1,4 +1,5 @@
 import { NavSection } from '../../shared/portal-layout/portal-layout.component';
+import { CHANGE_PASSWORD_ICON, CHANGE_PASSWORD_LABEL, CHANGE_PASSWORD_PATHS } from '../utils/change-password-route.util';
 
 /** Grouped sidebar navigation for all Admin Portal pages. */
 export const ADMIN_NAV_SECTIONS: NavSection[] = [
@@ -47,6 +48,7 @@ export const ADMIN_NAV_SECTIONS: NavSection[] = [
       { label: 'Mark Sheet', path: '/admin/mark-sheet', icon: '📑' },
       { label: 'Results Analysis', path: '/admin/results-analysis', icon: '📈' },
       { label: 'Ranking', path: '/admin/ranking', icon: '🏆' },
+      { label: 'Mark Entry Progress', path: '/admin/mark-entry-progress', icon: '📊' },
     ],
   },
   {
@@ -104,6 +106,7 @@ export const ADMIN_NAV_SECTIONS: NavSection[] = [
       { label: 'School Settings', path: '/admin/settings', icon: '⚙' },
       { label: 'Academic Settings', path: '/admin/academic-settings', icon: '🧭' },
       { label: 'User Management', path: '/admin/user-management', icon: '👤' },
+      { label: CHANGE_PASSWORD_LABEL, path: CHANGE_PASSWORD_PATHS.admin, icon: CHANGE_PASSWORD_ICON },
       { label: 'User Permissions', path: '/admin/user-permissions', icon: '🔐' },
       { label: 'Audit Trail', path: '/admin/audit-trail', icon: '📜' },
       { label: 'Integrations', path: '/admin/integrations', icon: '🔌' },

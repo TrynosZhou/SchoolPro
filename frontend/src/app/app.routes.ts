@@ -33,11 +33,13 @@ import { AdminNotificationSettingsComponent } from './pages/admin/admin-notifica
 import { ParentAttendanceComponent } from './pages/parent/parent-attendance.component';
 import { StudentDashboardComponent } from './pages/student/student-dashboard.component';
 import { StudentHomeworkComponent } from './pages/student/student-homework.component';
+import { ChangePasswordPageComponent } from './pages/account/change-password-page.component';
 import { AttendanceMarkRegisterComponent } from './pages/attendance/attendance-mark-register.component';
 import { AttendanceReportComponent } from './pages/attendance/attendance-report.component';
 import { AdminMarkSheetComponent } from './pages/admin/admin-mark-sheet.component';
 import { AdminResultsAnalysisComponent } from './pages/admin/admin-results-analysis.component';
 import { AdminRankingComponent } from './pages/admin/admin-ranking.component';
+import { AdminMarkEntryProgressComponent } from './pages/admin/admin-mark-entry-progress.component';
 import { AdminManageFeesComponent } from './pages/admin/admin-manage-fees.component';
 import { AdminStudentBalanceComponent } from './pages/admin/admin-student-balance.component';
 import { AdminExemptionsComponent } from './pages/admin/admin-exemptions.component';
@@ -91,9 +93,11 @@ export const routes: Routes = [
       { path: 'mark-sheet', component: AdminMarkSheetComponent },
       { path: 'results-analysis', component: AdminResultsAnalysisComponent },
       { path: 'ranking', component: AdminRankingComponent },
+      { path: 'mark-entry-progress', component: AdminMarkEntryProgressComponent },
       { path: 'analytics/demographics', component: AdminAnalyticsDemographicsComponent },
       { path: 'analytics/retention', component: AdminAnalyticsRetentionComponent },
       { path: 'analytics/report-builder', component: AdminReportBuilderComponent },
+      { path: 'change-password', component: ChangePasswordPageComponent },
     ],
   },
   {
@@ -111,9 +115,11 @@ export const routes: Routes = [
       { path: 'mark-sheet', component: AdminMarkSheetComponent },
       { path: 'results-analysis', component: AdminResultsAnalysisComponent },
       { path: 'ranking', component: AdminRankingComponent },
+      { path: 'mark-entry-progress', component: AdminMarkEntryProgressComponent },
       { path: 'analytics/demographics', component: AdminAnalyticsDemographicsComponent },
       { path: 'analytics/retention', component: AdminAnalyticsRetentionComponent },
       { path: 'analytics/report-builder', component: AdminReportBuilderComponent },
+      { path: 'change-password', component: ChangePasswordPageComponent },
     ],
   },
   {
@@ -161,6 +167,7 @@ export const routes: Routes = [
       { path: 'mark-sheet', component: AdminMarkSheetComponent },
       { path: 'results-analysis', component: AdminResultsAnalysisComponent },
       { path: 'ranking', component: AdminRankingComponent },
+      { path: 'mark-entry-progress', component: AdminMarkEntryProgressComponent },
       { path: 'analytics/demographics', component: AdminAnalyticsDemographicsComponent },
       { path: 'analytics/retention', component: AdminAnalyticsRetentionComponent },
       { path: 'analytics/report-builder', component: AdminReportBuilderComponent },
@@ -170,6 +177,7 @@ export const routes: Routes = [
       { path: 'settings', component: AdminSettingsComponent },
       { path: 'academic-settings', component: AdminAcademicSettingsComponent },
       { path: 'user-management', component: AdminUserManagementComponent },
+      { path: 'change-password', component: ChangePasswordPageComponent },
       { path: 'user-permissions', component: AdminUserPermissionsComponent },
       { path: 'audit-trail', component: AdminAuditTrailComponent },
       { path: 'integrations', component: AdminIntegrationsComponent },
@@ -185,6 +193,7 @@ export const routes: Routes = [
       { path: 'mark-sheet', component: AdminMarkSheetComponent },
       { path: 'results-analysis', component: AdminResultsAnalysisComponent },
       { path: 'ranking', component: AdminRankingComponent },
+      { path: 'mark-entry-progress', component: AdminMarkEntryProgressComponent },
       { path: 'attendance', redirectTo: 'attendance/mark-register', pathMatch: 'full' },
       { path: 'attendance/mark-register', component: AttendanceMarkRegisterComponent },
       { path: 'attendance/report', component: AttendanceReportComponent },
@@ -195,6 +204,7 @@ export const routes: Routes = [
       { path: 'timetable', component: TeacherDashboardComponent },
       { path: 'messages', component: MessagingCenterComponent },
       { path: 'notifications', component: NotificationsComponent },
+      { path: 'change-password', component: ChangePasswordPageComponent },
     ],
   },
   {
@@ -210,6 +220,7 @@ export const routes: Routes = [
       { path: 'messages', component: MessagingCenterComponent },
       { path: 'notifications', component: NotificationsComponent },
       { path: 'send-email', component: ParentSendEmailComponent },
+      { path: 'change-password', component: ChangePasswordPageComponent },
     ],
   },
   {
@@ -224,6 +235,7 @@ export const routes: Routes = [
       { path: 'homework', component: StudentHomeworkComponent },
       { path: 'messages', component: MessagingCenterComponent },
       { path: 'notifications', component: NotificationsComponent },
+      { path: 'change-password', component: ChangePasswordPageComponent },
     ],
   },
 

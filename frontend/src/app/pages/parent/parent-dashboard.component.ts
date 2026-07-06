@@ -7,6 +7,7 @@ import { ApiService } from '../../core/services/api.service';
 import { formatStudentClassLabel } from '../../core/utils/class-display';
 import { AuthService } from '../../core/services/auth.service';
 import { PARENT_NAV_ITEMS } from '../../core/config/parent-nav';
+import { changePasswordDashboardLink } from '../../core/utils/change-password-route.util';
 
 interface ParentChildSummary {
   linkId?: string;
@@ -63,6 +64,7 @@ export class ParentDashboardComponent implements OnInit {
   };
 
   readonly nav = PARENT_NAV_ITEMS;
+  readonly changePasswordLink = changePasswordDashboardLink('parent');
 
   childCount = computed(() => this.children().length);
 

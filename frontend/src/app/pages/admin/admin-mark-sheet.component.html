@@ -80,10 +80,14 @@
   @if (hasGenerated() && sheet(); as data) {
     <section class="card toolbar-card">
       <div class="toolbar-top">
-        <div>
-          <h2>{{ data.class.name }}</h2>
-          <p class="meta">{{ sessionLabel() }} · Max {{ data.examType.maxMarks }} marks</p>
-        </div>
+        <input
+          type="search"
+          class="search"
+          placeholder="Search student…"
+          [ngModel]="search()"
+          (ngModelChange)="search.set($event)"
+          name="q"
+        />
         <div class="pdf-actions">
           <button type="button" class="btn-pdf btn-preview" (click)="previewPdf()" [disabled]="pdfLoading()">
             Preview PDF
@@ -93,14 +97,6 @@
           </button>
         </div>
       </div>
-      <input
-        type="search"
-        class="search"
-        placeholder="Search student…"
-        [ngModel]="search()"
-        (ngModelChange)="search.set($event)"
-        name="q"
-      />
     </section>
 
     <section class="card sheet-preview-card">
@@ -112,11 +108,16 @@
         <span class="exam-badge">{{ sessionLabel() }}</span>
       </div>
       <p class="sheet-meta-line">
-        <span><b>Exam:</b> {{ data.examType.name }}</span>
-        <span><b>Term:</b> {{ data.term.name }}</span>
-        <span>{{ formatStudentClassLabel(data.class.name) }}</span>
-        <span><b>Max Marks:</b> {{ data.examType.maxMarks }}</span>
-        <span><b>Students:</b> {{ data.students.length }}</span>
+        <span class="sheet-meta-left">
+          <span><b>Exam:</b> {{ data.examType.name }}</span>
+          <span><b>Term:</b> {{ data.term.name }}</span>
+          <span>{{ formatStudentClassLabel(data.class.name) }}</span>
+          <span><b>Max Marks:</b> {{ data.examType.maxMarks }}</span>
+          <span><b>Students:</b> {{ data.students.length }}</span>
+        </span>
+        @if (data.class.classTeacherName) {
+          <span class="sheet-meta-teacher"><b>Class Teacher:</b> {{ data.class.classTeacherName }}</span>
+        }
       </p>
       <div class="table-scroll">
         <table class="mark-sheet-table">

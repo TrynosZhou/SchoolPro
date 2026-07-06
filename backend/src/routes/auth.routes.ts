@@ -17,6 +17,7 @@ import {
 } from '../services/role-permissions.service';
 import { requestPasswordReset, resetPasswordWithToken } from '../services/password-reset.service';
 import { findActiveUserByLoginIdentifier } from '../utils/user-auth';
+import { verifyUserPassword } from '../utils/user-password';
 import { authenticateStudentPortal } from '../services/student-portal-auth.service';
 
 const router = Router();
@@ -133,14 +134,14 @@ router.post('/login', async (req, res: Response) => {
   }
 });
 
-/** Student portal sign-in: Student ID + date of birth (no self-registration). */
+/** Student portal sign-in: Student ID + date of birth (first sign-in) or custom password. */
 router.post('/student-login', async (req, res: Response) => {
   try {
-    const { admissionNumber, studentId, dateOfBirth, username } = req.body;
+    const { admissionNumber, studentId, dateOfBirth, password, username } = req.body;
     const id = String(admissionNumber || studentId || username || '').trim();
-    const dob = String(dateOfBirth || '').trim();
+    const secret = String(password || dateOfBirth || '').trim();
 
-    const result = await authenticateStudentPortal(id, dob);
+    const result = await authenticateStudentPortal(id, secret);
     if (!result.ok) {
       return res.status(result.status).json({ message: result.message });
     }
@@ -196,6 +197,44 @@ router.post('/reset-password', async (req, res: Response) => {
     return res.status(400).json({
       message: err instanceof Error ? err.message : 'Could not reset password',
     });
+  }
+});
+
+router.post('/change-password', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ message: 'Current password and new password are required' });
+    }
+
+    const userRepo = AppDataSource.getRepository(User);
+    const user = await userRepo.findOne({ where: { id: req.user!.userId } });
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    if (!(await verifyUserPassword(user, String(currentPassword)))) {
+      return res.status(400).json({ message: 'Current password is incorrect' });
+    }
+
+    const policy = await getSecurityPolicy();
+    const pwdErr = validatePasswordAgainstPolicy(String(newPassword), policy);
+    if (pwdErr) return res.status(400).json({ message: pwdErr });
+
+    if (await verifyUserPassword(user, String(newPassword))) {
+      return res.status(400).json({ message: 'New password must be different from your current password' });
+    }
+
+    user.passwordHash = await bcrypt.hash(String(newPassword), 10);
+    user.failedLoginAttempts = 0;
+    user.lockedUntil = null;
+    if (user.role === UserRole.STUDENT) {
+      user.portalPasswordCustomized = true;
+    }
+    await userRepo.save(user);
+
+    res.json({ message: 'Password changed successfully' });
+  } catch (err) {
+    console.error('Change password error:', err);
+    res.status(500).json({ message: 'Could not change password' });
   }
 });
 

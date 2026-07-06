@@ -6,6 +6,7 @@ import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
 import { ApiService } from '../../core/services/api.service';
 import { AuthService } from '../../core/services/auth.service';
+import { CHANGE_PASSWORD_ICON, CHANGE_PASSWORD_LABEL, CHANGE_PASSWORD_PATHS } from '../../core/utils/change-password-route.util';
 import { DashboardOverview } from '../../core/models';
 
 interface MajorMenu {
@@ -106,6 +107,7 @@ export class AdminDashboardComponent implements OnInit {
     { label: 'Announcements', path: '/admin/communication/send', icon: '✉️' },
     { label: 'Report cards', path: '/admin/report-cards', icon: '📄' },
     { label: 'Timetable', path: '/admin/timetable/generate', icon: '📅' },
+    { label: CHANGE_PASSWORD_LABEL, path: CHANGE_PASSWORD_PATHS.admin, icon: CHANGE_PASSWORD_ICON },
   ];
 
   readonly majorMenus: MajorMenu[] = [
@@ -156,6 +158,7 @@ export class AdminDashboardComponent implements OnInit {
         { label: 'Mark Sheet', path: '/admin/mark-sheet' },
         { label: 'Results Analysis', path: '/admin/results-analysis' },
         { label: 'Ranking', path: '/admin/ranking' },
+        { label: 'Mark Entry Progress', path: '/admin/mark-entry-progress' },
       ],
     },
     {
@@ -209,6 +212,7 @@ export class AdminDashboardComponent implements OnInit {
         { label: 'School Settings', path: '/admin/settings' },
         { label: 'Academic Settings', path: '/admin/academic-settings' },
         { label: 'User Management', path: '/admin/user-management' },
+        { label: CHANGE_PASSWORD_LABEL, path: CHANGE_PASSWORD_PATHS.admin },
         { label: 'User Permissions', path: '/admin/user-permissions' },
         { label: 'Integrations', path: '/admin/integrations' },
       ],

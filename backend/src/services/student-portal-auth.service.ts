@@ -2,18 +2,10 @@ import bcrypt from 'bcryptjs';
 import { AppDataSource } from '../config/data-source';
 import { Student, User } from '../entities';
 import { UserRole } from '../entities/enums';
+import { getSecurityPolicy } from './security-policy.service';
+import { normalizeDateOnly, secretMatchesRecordDob } from '../utils/date-only';
 import { USER_PROFILES } from '../utils/typeorm-helpers';
-
-/** Normalize a date string to YYYY-MM-DD for comparison. */
-export function normalizeDateOnly(value: string | null | undefined): string | null {
-  if (!value) return null;
-  const raw = String(value).trim();
-  if (!raw) return null;
-  if (/^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.slice(0, 10);
-  const d = new Date(raw);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toISOString().slice(0, 10);
-}
+import { verifyUserPassword } from '../utils/user-password';
 
 function studentPortalEmail(admissionNumber: string): string {
   const safe = admissionNumber.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -21,8 +13,11 @@ function studentPortalEmail(admissionNumber: string): string {
 }
 
 async function syncPortalPasswordHash(user: User, dateOfBirth: string): Promise<void> {
-  const matches = await bcrypt.compare(dateOfBirth, user.passwordHash);
+  if (user.portalPasswordCustomized) return;
+
+  const matches = await verifyUserPassword(user, dateOfBirth);
   if (matches) return;
+
   user.passwordHash = await bcrypt.hash(dateOfBirth, 10);
   user.failedLoginAttempts = 0;
   user.lockedUntil = null;
@@ -38,7 +33,9 @@ async function createStudentPortalUser(student: Student, dateOfBirth: string): P
   if (existing) {
     student.userId = existing.id;
     await AppDataSource.getRepository(Student).save(student);
-    await syncPortalPasswordHash(existing, dateOfBirth);
+    if (!existing.portalPasswordCustomized) {
+      await syncPortalPasswordHash(existing, dateOfBirth);
+    }
     return (await userRepo.findOne({ where: { id: existing.id }, relations: USER_PROFILES }))!;
   }
 
@@ -52,6 +49,7 @@ async function createStudentPortalUser(student: Student, dateOfBirth: string): P
       lastName: student.lastName,
       role: UserRole.STUDENT,
       isActive: true,
+      portalPasswordCustomized: false,
     }),
   );
 
@@ -63,26 +61,83 @@ async function createStudentPortalUser(student: Student, dateOfBirth: string): P
   return full;
 }
 
+function formatLockoutRemaining(until: Date): string {
+  const mins = Math.max(1, Math.ceil((until.getTime() - Date.now()) / 60_000));
+  if (mins >= 60) {
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    return m ? `${h}h ${m}m` : `${h}h`;
+  }
+  return `${mins} minute${mins === 1 ? '' : 's'}`;
+}
+
+async function recordFailedStudentLogin(user: User): Promise<StudentPortalAuthResult | null> {
+  const policy = await getSecurityPolicy();
+  const userRepo = AppDataSource.getRepository(User);
+
+  if (user.lockedUntil && new Date() < new Date(user.lockedUntil)) {
+    return {
+      ok: false,
+      status: 423,
+      message: `Account temporarily locked. Try again in ${formatLockoutRemaining(new Date(user.lockedUntil))}.`,
+    };
+  }
+
+  if (user.lockedUntil && new Date() >= new Date(user.lockedUntil)) {
+    user.lockedUntil = null;
+    user.failedLoginAttempts = 0;
+  }
+
+  user.failedLoginAttempts = (user.failedLoginAttempts || 0) + 1;
+  if (user.failedLoginAttempts >= policy.maxLoginAttempts) {
+    user.lockedUntil = new Date(Date.now() + policy.lockoutDurationMinutes * 60_000);
+    user.failedLoginAttempts = 0;
+    await userRepo.save(user);
+    return {
+      ok: false,
+      status: 423,
+      message: `Too many failed attempts. Account locked for ${policy.lockoutDurationMinutes} minutes.`,
+    };
+  }
+
+  await userRepo.save(user);
+  const remaining = policy.maxLoginAttempts - user.failedLoginAttempts;
+  return {
+    ok: false,
+    status: 401,
+    message:
+      remaining > 0
+        ? `Invalid Student ID or password. ${remaining} attempt${remaining === 1 ? '' : 's'} remaining.`
+        : 'Invalid Student ID or password',
+  };
+}
+
+async function clearStudentLoginFailures(user: User): Promise<void> {
+  user.failedLoginAttempts = 0;
+  user.lockedUntil = null;
+  await AppDataSource.getRepository(User).save(user);
+}
+
 export type StudentPortalAuthResult =
   | { ok: true; user: User }
   | { ok: false; status: number; message: string };
 
 /**
- * Authenticate a student using admission number + date of birth.
- * Auto-provisions a portal user on first successful login.
+ * Authenticate a student using admission number + date of birth (first sign-in)
+ * or admission number + custom password (after the student changes their password).
  */
 export async function authenticateStudentPortal(
   admissionNumber: string,
-  dateOfBirth: string,
+  secret: string,
 ): Promise<StudentPortalAuthResult> {
   const admission = String(admissionNumber || '').trim().toUpperCase();
-  const dob = normalizeDateOnly(dateOfBirth);
+  const trimmedSecret = String(secret || '').trim();
 
   if (!admission) {
     return { ok: false, status: 400, message: 'Student ID is required' };
   }
-  if (!dob) {
-    return { ok: false, status: 400, message: 'Date of birth is required' };
+  if (!trimmedSecret) {
+    return { ok: false, status: 400, message: 'Date of birth or password is required' };
   }
 
   const studentRepo = AppDataSource.getRepository(Student);
@@ -92,7 +147,31 @@ export async function authenticateStudentPortal(
   });
 
   if (!student) {
-    return { ok: false, status: 401, message: 'Invalid Student ID or date of birth' };
+    return { ok: false, status: 401, message: 'Invalid Student ID or credentials' };
+  }
+
+  const userRepo = AppDataSource.getRepository(User);
+  let user: User | null = null;
+
+  if (student.userId) {
+    user = await userRepo.findOne({
+      where: { id: student.userId },
+      relations: USER_PROFILES,
+    });
+  }
+
+  if (user?.portalPasswordCustomized) {
+    if (!user.isActive) {
+      return { ok: false, status: 403, message: 'This student portal account is inactive. Contact the school office.' };
+    }
+
+    if (!(await verifyUserPassword(user, trimmedSecret))) {
+      return (await recordFailedStudentLogin(user))!;
+    }
+
+    await clearStudentLoginFailures(user);
+    const full = await userRepo.findOne({ where: { id: user.id }, relations: USER_PROFILES });
+    return { ok: true, user: full ?? user };
   }
 
   if (!student.dateOfBirth) {
@@ -104,27 +183,20 @@ export async function authenticateStudentPortal(
   }
 
   const recordDob = normalizeDateOnly(student.dateOfBirth);
-  if (!recordDob || recordDob !== dob) {
+  if (!recordDob || !secretMatchesRecordDob(trimmedSecret, recordDob)) {
     return { ok: false, status: 401, message: 'Invalid Student ID or date of birth' };
   }
 
-  let user: User;
-  if (student.userId && student.user?.isActive !== false) {
-    user = (await AppDataSource.getRepository(User).findOne({
-      where: { id: student.userId },
-      relations: USER_PROFILES,
-    }))!;
-    if (!user) {
-      return { ok: false, status: 500, message: 'Student portal account is misconfigured. Contact the school office.' };
-    }
-    await syncPortalPasswordHash(user, dob);
-    user = (await AppDataSource.getRepository(User).findOne({
-      where: { id: user.id },
-      relations: USER_PROFILES,
-    }))!;
-  } else {
-    user = await createStudentPortalUser(student, dob);
+  if (user?.isActive === false) {
+    return { ok: false, status: 403, message: 'This student portal account is inactive. Contact the school office.' };
   }
 
+  if (user) {
+    await syncPortalPasswordHash(user, recordDob);
+    const full = await userRepo.findOne({ where: { id: user.id }, relations: USER_PROFILES });
+    return { ok: true, user: full ?? user };
+  }
+
+  user = await createStudentPortalUser(student, recordDob);
   return { ok: true, user };
 }

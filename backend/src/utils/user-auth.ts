@@ -15,17 +15,22 @@ export async function findActiveUserByLoginIdentifier(
   if (!normalized) return null;
 
   const userRepo = AppDataSource.getRepository(User);
+  const qb = userRepo
+    .createQueryBuilder('u')
+    .where('u.isActive = :active', { active: true })
+    .andWhere('(LOWER(u.username) = :id OR LOWER(u.email) = :id)', { id: normalized });
 
-  const byUsername = await userRepo.findOne({
-    where: { username: normalized, isActive: true },
-    ...(relations ? { relations } : {}),
-  });
-  if (byUsername) return byUsername;
+  if (relations) {
+    for (const [key, value] of Object.entries(relations)) {
+      if (value === true) {
+        qb.leftJoinAndSelect(`u.${key}`, key);
+      } else if (value && typeof value === 'object') {
+        qb.leftJoinAndSelect(`u.${key}`, key);
+      }
+    }
+  }
 
-  return userRepo.findOne({
-    where: { email: normalized, isActive: true },
-    ...(relations ? { relations } : {}),
-  });
+  return qb.getOne();
 }
 
 export function isLikelyEmail(value: string): boolean {

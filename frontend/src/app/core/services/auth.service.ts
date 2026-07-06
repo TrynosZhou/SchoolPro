@@ -3,6 +3,7 @@ import { Router } from '@angular/router';
 import { tap } from 'rxjs/operators';
 import { ApiService } from './api.service';
 import { AuthResponse, User, UserRole } from '../models';
+import { changePasswordPathForRole } from '../utils/change-password-route.util';
 
 const TOKEN_KEY = 'school_pro_token';
 const USER_KEY = 'school_pro_user';
@@ -25,9 +26,9 @@ export class AuthService {
     );
   }
 
-  /** Student portal: Student ID + date of birth (YYYY-MM-DD). */
-  studentLogin(admissionNumber: string, dateOfBirth: string) {
-    return this.api.post<AuthResponse>('/auth/student-login', { admissionNumber, dateOfBirth }).pipe(
+  /** Student portal: Student ID + date of birth (first sign-in) or custom password. */
+  studentLogin(admissionNumber: string, password: string) {
+    return this.api.post<AuthResponse>('/auth/student-login', { admissionNumber, password }).pipe(
       tap((res) => this.persistSession(res))
     );
   }
@@ -41,6 +42,10 @@ export class AuthService {
 
   resetPassword(token: string, password: string) {
     return this.api.post<{ message: string }>('/auth/reset-password', { token, password });
+  }
+
+  changePassword(currentPassword: string, newPassword: string) {
+    return this.api.post<{ message: string }>('/auth/change-password', { currentPassword, newPassword });
   }
 
   register(payload: {
@@ -121,6 +126,12 @@ export class AuthService {
       student: '/student',
     };
     return role ? map[role] : '/login';
+  }
+
+  getChangePasswordPath(): string | null {
+    const role = this.userSignal()?.role;
+    if (!role) return null;
+    return changePasswordPathForRole(role);
   }
 
   private loadUser(): User | null {

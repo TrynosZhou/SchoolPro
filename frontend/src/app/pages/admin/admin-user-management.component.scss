@@ -114,9 +114,21 @@
   font-size: 0.86rem;
   font-weight: 600;
   text-decoration: none;
+  cursor: pointer;
 
   &:hover {
     background: rgba(255, 255, 255, 0.22);
+  }
+
+  &.tab-action {
+    border: 0;
+    font: inherit;
+
+    &.active {
+      background: #fff;
+      color: #4338ca;
+      font-weight: 700;
+    }
   }
 }
 
@@ -209,6 +221,27 @@
   border-radius: 16px;
   overflow: hidden;
   box-shadow: 0 4px 18px rgba(15, 23, 42, 0.04);
+}
+
+.change-password-shell {
+  padding: 1.25rem 1.5rem 1.5rem;
+}
+
+.change-password-panel {
+  max-width: 36rem;
+
+  h3 {
+    margin: 0 0 0.35rem;
+    font-size: 1.15rem;
+    color: #0f172a;
+  }
+
+  p {
+    margin: 0 0 1rem;
+    color: #64748b;
+    font-size: 0.92rem;
+    line-height: 1.45;
+  }
 }
 
 .list-toolbar {

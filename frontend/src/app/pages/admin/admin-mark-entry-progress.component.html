@@ -1,0 +1,156 @@
+<app-portal-layout
+  [portalTitle]="portalLayout.portalTitle"
+  pageTitle="Mark Entry Progress"
+  [navSections]="portalLayout.navSections || []"
+  [navItems]="portalLayout.navItems || []"
+>
+
+  @if (toast(); as t) {
+    <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>
+  }
+
+  <header class="page-hero">
+    <div>
+      <p class="eyebrow">Examinations · Oversight</p>
+      <h1>Mark Entry Progress</h1>
+      <p class="hero-sub">
+        Track how complete exam mark entry is for each subject in each class. Progress is the percentage of enrolled learners with a mark recorded.
+      </p>
+    </div>
+  </header>
+
+  <section class="filters-card card">
+    <div class="filters-row">
+      <label class="field">
+        <span>Exam type <span class="req">*</span></span>
+        <select [(ngModel)]="filters.examTypeId" name="examType" (ngModelChange)="onFilterChange()">
+          <option value="">— Select —</option>
+          @for (t of examTypes(); track t.id) {
+            <option [value]="t.id">{{ t.name }}</option>
+          }
+        </select>
+      </label>
+      <label class="field">
+        <span>Term <span class="req">*</span></span>
+        <select [(ngModel)]="filters.termId" name="term" (ngModelChange)="onFilterChange()">
+          <option value="">— Select —</option>
+          @for (t of terms(); track t.id) {
+            <option [value]="t.id">{{ t.name }}</option>
+          }
+        </select>
+      </label>
+      <label class="field">
+        <span>Form (optional)</span>
+        <select [(ngModel)]="filters.formId" name="form" (ngModelChange)="onFilterChange()">
+          <option value="">All forms</option>
+          @for (f of forms(); track f.id) {
+            <option [value]="f.id">{{ f.name }}</option>
+          }
+        </select>
+      </label>
+      <label class="field">
+        <span>Class (optional)</span>
+        <select [(ngModel)]="filters.classId" name="class" (ngModelChange)="onFilterChange()">
+          <option value="">All classes</option>
+          @for (c of classes(); track c.id) {
+            <option [value]="c.id">{{ c.name }}</option>
+          }
+        </select>
+      </label>
+      <button type="button" class="btn-primary" (click)="loadProgress()" [disabled]="loading() || !filtersReady()">
+        {{ loading() ? 'Loading…' : 'Show progress' }}
+      </button>
+    </div>
+  </section>
+
+  @if (data(); as progress) {
+    <section class="summary-grid">
+      <article class="summary-card card">
+        <span class="summary-label">Overall progress</span>
+        <strong class="summary-value">{{ progress.summary.overallProgressPercent | number:'1.0-1' }}%</strong>
+        <span class="summary-caption">{{ progress.summary.totalMarked }} / {{ progress.summary.totalExpected }} marks entered</span>
+      </article>
+      <article class="summary-card card">
+        <span class="summary-label">Subjects complete</span>
+        <strong class="summary-value">{{ progress.summary.completeSubjects }} / {{ progress.summary.totalSubjects }}</strong>
+        <span class="summary-caption">100% of learners marked</span>
+      </article>
+      <article class="summary-card card">
+        <span class="summary-label">Session</span>
+        <strong class="summary-value session">{{ progress.examType.name }}</strong>
+        <span class="summary-caption">{{ progress.term.name }}</span>
+      </article>
+    </section>
+
+    <section class="toolbar card">
+      <label class="search-field">
+        <span>Search class or subject</span>
+        <input type="search" [ngModel]="search()" (ngModelChange)="search.set($event)" placeholder="Filter results…" />
+      </label>
+    </section>
+
+    @if (!classGroups().length) {
+      <section class="empty card">
+        <p>No class subjects match your filters.</p>
+      </section>
+    } @else {
+      @for (group of classGroups(); track group.classId) {
+        <section class="class-panel card">
+          <header class="class-panel-head">
+            <div>
+              <h2>{{ group.className }}</h2>
+              @if (group.formName) {
+                <span class="form-tag">{{ group.formName }}</span>
+              }
+            </div>
+            <span class="class-avg" [class]="progressTone(group.averageProgress)">
+              Class avg {{ group.averageProgress | number:'1.0-1' }}%
+            </span>
+          </header>
+          <div class="table-wrap">
+            <table class="progress-table">
+              <thead>
+                <tr>
+                  <th>Subject</th>
+                  <th>Teacher</th>
+                  <th class="num">Marked</th>
+                  <th class="num">Learners</th>
+                  <th>Progress</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (row of group.subjects; track row.subjectId) {
+                  <tr>
+                    <td>
+                      <strong>{{ row.subjectName }}</strong>
+                      <span class="sub">{{ row.subjectCode }}</span>
+                    </td>
+                    <td>{{ row.teacherName || '—' }}</td>
+                    <td class="num">{{ row.markedStudents }}</td>
+                    <td class="num">{{ row.totalStudents }}</td>
+                    <td>
+                      <div class="progress-cell">
+                        <div class="progress-bar" [class]="progressTone(row.progressPercent)">
+                          <span class="progress-fill" [style.width.%]="row.progressPercent"></span>
+                        </div>
+                        <span class="progress-pct" [class]="progressTone(row.progressPercent)">
+                          {{ row.progressPercent | number:'1.0-1' }}%
+                        </span>
+                      </div>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </section>
+      }
+    }
+  } @else if (hasLoaded()) {
+    <section class="empty card"><p>No progress data found.</p></section>
+  } @else {
+    <section class="empty card">
+      <p>Select exam type and term, then click <strong>Show progress</strong>.</p>
+    </section>
+  }
+</app-portal-layout>

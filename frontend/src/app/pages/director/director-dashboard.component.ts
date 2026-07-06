@@ -71,7 +71,11 @@ export class DirectorDashboardComponent implements OnInit {
   readonly formatStudentClassLabel = formatStudentClassLabel;
 
   readonly portal = computed(() => executivePortalForRole(this.auth.user()?.role));
-  readonly actionGroups = computed(() => executiveActionGroups(this.portal().basePath));
+  readonly actionGroups = computed(() => {
+    const ctx = this.portal();
+    const role = this.auth.user()?.role === 'principal' ? 'principal' : 'director';
+    return executiveActionGroups(ctx.basePath, role);
+  });
 
   data = signal<DirectorDashboardData | null>(null);
   loading = signal(true);

@@ -1379,6 +1379,7 @@ router.post('/users', authorize(UserRole.ADMIN), async (req: AuthRequest, res: R
       lastName: trimmedLast,
       phone: phone?.trim() || undefined,
       role: UserRole.STUDENT,
+      portalPasswordCustomized: true,
     }));
     student.userId = user.id;
     await studentRepo.save(student);
@@ -1495,6 +1496,9 @@ router.patch('/users/:id', authorize(UserRole.ADMIN), async (req: AuthRequest, r
     user.passwordHash = await bcrypt.hash(password, 10);
     user.failedLoginAttempts = 0;
     user.lockedUntil = null;
+    if (user.role === UserRole.STUDENT) {
+      user.portalPasswordCustomized = true;
+    }
   }
 
   if (schoolRoleId !== undefined) {

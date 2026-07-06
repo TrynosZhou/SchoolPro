@@ -28,6 +28,7 @@ import {
   buildSubjectAnalysis,
 } from '../services/results-analysis.service';
 import { buildRankings, RankingType } from '../services/ranking.service';
+import { buildMarkEntryProgress } from '../services/mark-entry-progress.service';
 import {
   buildClassTeacherRemarks,
   isValidConductRating,
@@ -778,6 +779,36 @@ router.get(
 );
 
 router.get(
+  '/mark-entry-progress',
+  authorize(UserRole.ADMIN, UserRole.PRINCIPAL, UserRole.DIRECTOR, UserRole.TEACHER),
+  acadView,
+  async (req: AuthRequest, res: Response) => {
+    const { examTypeId, termId, classId, formId } = req.query;
+    if (!examTypeId || !termId) {
+      return res.status(400).json({ message: 'examTypeId and termId are required' });
+    }
+    if (classId && !(await assertTeacherClassAccess(req, classId as string))) {
+      return res.status(403).json({ message: 'You are not assigned to this class' });
+    }
+    try {
+      const staffId = req.user!.role === UserRole.TEACHER ? req.user!.staffId : undefined;
+      const data = await buildMarkEntryProgress({
+        examTypeId: examTypeId as string,
+        termId: termId as string,
+        classId: classId as string | undefined,
+        formId: formId as string | undefined,
+        staffId,
+      });
+      res.json(data);
+    } catch (err) {
+      return res.status(400).json({
+        message: err instanceof Error ? err.message : 'Failed to load mark entry progress',
+      });
+    }
+  },
+);
+
+router.get(
   '/mark-sheet/pdf',
   authorize(UserRole.ADMIN, UserRole.PRINCIPAL, UserRole.DIRECTOR, UserRole.TEACHER),
   async (req, res: Response) => {
@@ -802,6 +833,7 @@ router.get(
         examTypeName: sheet.examType.name,
         termName: sheet.term.name,
         className: sheet.class.name,
+        classTeacherName: sheet.class.classTeacherName,
         maxMarks: sheet.examType.maxMarks,
         generatedAt: new Date(),
         subjects: sheet.subjects.map((s) => ({ code: s.code, name: s.name })),

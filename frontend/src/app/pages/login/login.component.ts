@@ -6,7 +6,7 @@ import { ApiService } from '../../core/services/api.service';
 import { environment } from '../../../environments/environment';
 
 type AuthMode = 'signin' | 'signup' | 'forgot' | 'reset';
-type SignInAudience = 'portal' | 'student';
+type SignInRole = 'staff' | 'parent' | 'student';
 
 interface PasswordPolicy {
   minPasswordLength: number;
@@ -32,14 +32,17 @@ export class LoginComponent implements OnInit {
   private readonly rememberKey = 'school_pro_remember_username';
 
   mode = signal<AuthMode>('signin');
-  signInAudience = signal<SignInAudience>('portal');
+  signInRole = signal<SignInRole>('staff');
+
+  readonly isStudentRole = computed(() => this.signInRole() === 'student');
+  readonly isStaffRole = computed(() => this.signInRole() === 'staff');
+  readonly isParentRole = computed(() => this.signInRole() === 'parent');
 
   schoolName = signal('School Pro Academy');
   schoolTagline = signal('School Management System');
   schoolLogoUrl = signal<string | null>(null);
 
   username = '';
-  studentDob = '';
   signupEmail = '';
   password = '';
   rememberMe = true;
@@ -76,6 +79,7 @@ export class LoginComponent implements OnInit {
     { icon: '📊', title: 'Exams & academics', text: 'Marks entry with auto-save to report cards' },
     { icon: '💳', title: 'Finance & billing', text: 'Invoices, payments, and debt tracking' },
     { icon: '👩‍🏫', title: 'Staff & attendance', text: 'Directory, roles, and daily attendance' },
+    { icon: '💬', title: 'Communication', text: 'School–parent updates and teacher–student messaging' },
   ];
 
   readonly currentYear = new Date().getFullYear();
@@ -139,11 +143,10 @@ export class LoginComponent implements OnInit {
     });
   }
 
-  setSignInAudience(audience: SignInAudience) {
-    this.signInAudience.set(audience);
+  setSignInRole(role: SignInRole) {
+    this.signInRole.set(role);
     this.error.set('');
     this.password = '';
-    this.studentDob = '';
     this.showPassword.set(false);
   }
 
@@ -153,7 +156,7 @@ export class LoginComponent implements OnInit {
     this.success.set('');
     this.devResetUrl.set('');
     if (next === 'signin') {
-      this.signInAudience.set('portal');
+      this.signInRole.set('staff');
     }
     if (next !== 'reset') {
       this.resetToken = '';
@@ -246,7 +249,7 @@ export class LoginComponent implements OnInit {
   }
 
   private submitSignIn() {
-    if (this.signInAudience() === 'student') {
+    if (this.isStudentRole()) {
       this.submitStudentSignIn();
       return;
     }
@@ -278,8 +281,8 @@ export class LoginComponent implements OnInit {
 
   private submitStudentSignIn() {
     const id = this.username.trim().toUpperCase();
-    if (!id || !this.studentDob) {
-      this.error.set('Enter your Student ID and date of birth.');
+    if (!id || !this.password) {
+      this.error.set('Enter your Student ID and date of birth or password.');
       return;
     }
 
@@ -293,10 +296,10 @@ export class LoginComponent implements OnInit {
       localStorage.removeItem(this.rememberKey);
     }
 
-    this.auth.studentLogin(id, this.studentDob).subscribe({
+    this.auth.studentLogin(id, this.password).subscribe({
       next: () => this.router.navigate([this.auth.getPortalRoute()]),
       error: (e) => {
-        this.error.set(e.error?.message || 'Invalid Student ID or date of birth.');
+        this.error.set(e.error?.message || 'Invalid Student ID or credentials.');
         this.loading.set(false);
       },
       complete: () => this.loading.set(false),

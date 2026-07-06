@@ -5,6 +5,7 @@ import { buildTeacherNavSections } from '../../core/config/teacher-nav';
 import { AuthService } from '../../core/services/auth.service';
 import { ApiService } from '../../core/services/api.service';
 import { formatStudentClassLabel } from '../../core/utils/class-display';
+import { changePasswordDashboardLink } from '../../core/utils/change-password-route.util';
 
 interface TeacherAssignment {
   id: string;
@@ -178,7 +179,12 @@ export class TeacherDashboardComponent implements OnInit {
         { label: 'Mark Sheet', path: '/teacher/mark-sheet', icon: '📑', permission: 'academics.mark_sheet' },
         { label: 'Results Analysis', path: '/teacher/results-analysis', icon: '📈', permission: 'academics.results' },
         { label: 'Ranking', path: '/teacher/ranking', icon: '🏆', permission: 'academics.ranking' },
+        { label: 'Mark Entry Progress', path: '/teacher/mark-entry-progress', icon: '📊', permission: 'academics.exams' },
       ],
+    },
+    {
+      title: 'Account',
+      links: [{ ...changePasswordDashboardLink('teacher'), permission: undefined }],
     },
   ];
 

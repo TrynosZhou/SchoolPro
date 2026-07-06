@@ -1,4 +1,5 @@
 import { NavItem, NavSection } from '../../shared/portal-layout/portal-layout.component';
+import { CHANGE_PASSWORD_ICON, CHANGE_PASSWORD_LABEL, CHANGE_PASSWORD_PATHS } from '../utils/change-password-route.util';
 
 /** Full teacher sidebar catalog — filtered at runtime by user permissions. */
 export const TEACHER_NAV_SECTIONS: NavSection[] = [
@@ -29,6 +30,7 @@ export const TEACHER_NAV_SECTIONS: NavSection[] = [
       { label: 'Mark Sheet', path: '/teacher/mark-sheet', icon: '📑', permission: 'academics.mark_sheet' },
       { label: 'Results Analysis', path: '/teacher/results-analysis', icon: '📈', permission: 'academics.results' },
       { label: 'Ranking', path: '/teacher/ranking', icon: '🏆', permission: 'academics.ranking' },
+      { label: 'Mark Entry Progress', path: '/teacher/mark-entry-progress', icon: '📊', permission: 'academics.exams' },
     ],
   },
   {
@@ -37,6 +39,10 @@ export const TEACHER_NAV_SECTIONS: NavSection[] = [
       { label: 'Messages', path: '/teacher/messages', icon: '💬', permission: ['communication.inbox', 'communication.send'] },
       { label: 'Notifications', path: '/teacher/notifications', icon: '🔔' },
     ],
+  },
+  {
+    heading: 'Account',
+    items: [{ label: CHANGE_PASSWORD_LABEL, path: CHANGE_PASSWORD_PATHS.teacher, icon: CHANGE_PASSWORD_ICON }],
   },
 ];
 

@@ -14,12 +14,28 @@
           <a routerLink="/admin/user-permissions">User Permissions</a>.
         </p>
         <div class="hero-actions">
-          <button type="button" class="primary-action" (click)="openCreate()">
+          <button type="button" class="primary-action" (click)="openCreate()" [disabled]="pageTab() !== 'users'">
             <span>+</span>
             Add user
           </button>
+          <button
+            type="button"
+            class="secondary-action tab-action"
+            [class.active]="pageTab() === 'users'"
+            (click)="setPageTab('users')"
+          >
+            Users
+          </button>
+          <button
+            type="button"
+            class="secondary-action tab-action"
+            [class.active]="pageTab() === 'change-password'"
+            (click)="setPageTab('change-password')"
+          >
+            Change Password
+          </button>
           <a routerLink="/admin/user-permissions" class="secondary-action">User permissions</a>
-          <button type="button" class="refresh-action" (click)="loadUsers()" [disabled]="loading()">
+          <button type="button" class="refresh-action" (click)="loadUsers()" [disabled]="loading() || pageTab() !== 'users'">
             {{ loading() ? 'Refreshing…' : 'Refresh list' }}
           </button>
         </div>
@@ -70,13 +86,22 @@
       </div>
     </header>
 
-    @if (stats().locked > 0) {
+    @if (stats().locked > 0 && pageTab() === 'users') {
       <div class="alert-banner">
         <span>{{ stats().locked }} account{{ stats().locked === 1 ? '' : 's' }} locked due to failed login attempts.</span>
         <button type="button" class="link-btn" (click)="viewLockedOnly()">View locked only</button>
       </div>
     }
 
+    @if (pageTab() === 'change-password') {
+      <section class="list-shell change-password-shell">
+        <div class="change-password-panel">
+          <h3>Change your password</h3>
+          <p>Update the password for your admin account. Other user passwords can still be reset from the Users list.</p>
+          <app-change-password-form />
+        </div>
+      </section>
+    } @else {
     <section class="list-shell">
       <div class="list-toolbar">
         <div class="search-wrap">
@@ -280,6 +305,7 @@
         </div>
       }
     </section>
+    }
 
     @if (drawerOpen()) {
       <div class="drawer-backdrop" (click)="closeDrawer()"></div>

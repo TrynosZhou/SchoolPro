@@ -77,6 +77,15 @@ export class TimetablePeriodsService {
     return this.load().filter((p) => p.slotType === 'break');
   }
 
+  /** Start time of the first lesson period (Period 1) in HH:mm. */
+  periodOneStartTime(): string {
+    const lessons = this.loadLessons();
+    if (!lessons.length) {
+      return DEFAULT_PERIODS.find((p) => p.slotType === 'lesson')?.startTime ?? '08:00';
+    }
+    return [...lessons].sort((a, b) => a.startTime.localeCompare(b.startTime))[0].startTime;
+  }
+
   save(periods: TimetablePeriod[]): void {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(periods));
   }

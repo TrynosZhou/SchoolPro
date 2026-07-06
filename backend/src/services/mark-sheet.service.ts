@@ -52,7 +52,7 @@ export interface MarkSheetData {
   logoUrl?: string;
   examType: { id: string; name: string; maxMarks: number };
   term: { id: string; name: string };
-  class: { id: string; name: string };
+  class: { id: string; name: string; classTeacherName?: string | null };
   subjects: MarkSheetSubject[];
   students: MarkSheetStudentRow[];
 }
@@ -81,6 +81,12 @@ function isPassingMark(marks: number): boolean {
   return marks > 49;
 }
 
+function formatClassTeacherFullName(user?: { firstName?: string; lastName?: string } | null): string | null {
+  if (!user) return null;
+  const name = `${(user.firstName || '').trim()} ${(user.lastName || '').trim()}`.trim();
+  return name || null;
+}
+
 export async function buildMarkSheet(params: MarkSheetParams): Promise<MarkSheetData> {
   const { examTypeId, termId, classId, skipGradeCounts = false } = params;
 
@@ -92,7 +98,7 @@ export async function buildMarkSheet(params: MarkSheetParams): Promise<MarkSheet
 
   const schoolClass = await AppDataSource.getRepository(SchoolClass).findOne({
     where: { id: classId },
-    relations: relations('form'),
+    relations: relations('form', 'classTeacher', 'classTeacher.user'),
   });
   if (!schoolClass) throw new Error('Class not found');
 
@@ -239,7 +245,11 @@ export async function buildMarkSheet(params: MarkSheetParams): Promise<MarkSheet
     logoUrl: settings?.logoUrl || undefined,
     examType: { id: examType.id, name: examType.name, maxMarks },
     term: { id: term.id, name: term.name },
-    class: { id: schoolClass.id, name: schoolClass.name },
+    class: {
+      id: schoolClass.id,
+      name: schoolClass.name,
+      classTeacherName: formatClassTeacherFullName(schoolClass.classTeacher?.user),
+    },
     subjects,
     students: studentsOut,
   };

@@ -50,7 +50,7 @@ interface MarkSheetData {
   tagline?: string;
   examType: { id: string; name: string; maxMarks: number };
   term: { id: string; name: string };
-  class: { id: string; name: string };
+  class: { id: string; name: string; classTeacherName?: string | null };
   subjects: MarkSheetSubject[];
   students: MarkSheetStudent[];
 }
@@ -186,7 +186,9 @@ export class AdminMarkSheetComponent implements OnInit, OnDestroy {
       if (!blob) return;
       this.revokePdfUrl();
       this.pdfObjectUrl = URL.createObjectURL(blob);
-      this.pdfPreviewUrl.set(this.sanitizer.bypassSecurityTrustResourceUrl(this.pdfObjectUrl));
+      this.pdfPreviewUrl.set(
+        this.sanitizer.bypassSecurityTrustResourceUrl(`${this.pdfObjectUrl}#zoom=113`),
+      );
       this.pdfPreviewOpen.set(true);
     });
   }

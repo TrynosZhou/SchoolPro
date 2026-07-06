@@ -6,6 +6,7 @@ import { STUDENT_NAV_ITEMS } from '../../core/config/student-nav';
 import { ApiService } from '../../core/services/api.service';
 import { AuthService } from '../../core/services/auth.service';
 import { formatStudentClassLabel } from '../../core/utils/class-display';
+import { changePasswordDashboardLink } from '../../core/utils/change-password-route.util';
 
 interface StudentDashboardData {
   student: {
@@ -132,11 +133,20 @@ export class StudentDashboardComponent implements OnInit {
     ];
   });
 
+  readonly studentNav = STUDENT_NAV_ITEMS;
+  readonly changePasswordLink = changePasswordDashboardLink('student');
+
   readonly quickLinks = [
     { title: 'Report cards', text: 'View term results and exam reports', icon: '📄', path: '/student/report-cards' },
     { title: 'Fees & invoices', text: 'Statement of account and receipts', icon: '💳', path: '/student/finance' },
     { title: 'Homework', text: 'Weekly tasks and learning schedules', icon: '📝', path: '/student/homework' },
     { title: 'Attendance', text: 'Your term attendance record', icon: '📋', path: '/student/attendance' },
+    {
+      title: this.changePasswordLink.label,
+      text: 'Update your portal login password',
+      icon: this.changePasswordLink.icon,
+      path: this.changePasswordLink.path,
+    },
   ];
 
   ngOnInit() {

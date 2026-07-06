@@ -17,6 +17,7 @@
         </button>
         <a routerLink="/apply" [queryParams]="{ prefill: 1 }" class="btn-outline">🎓 Apply for another child</a>
         <a routerLink="/parent/send-email" class="btn-outline">✉ Send Email</a>
+        <a [routerLink]="changePasswordLink.path" class="btn-outline">{{ changePasswordLink.icon }} {{ changePasswordLink.label }}</a>
       </div>
     }
   </header>

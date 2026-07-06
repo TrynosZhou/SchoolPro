@@ -65,6 +65,10 @@ export class User {
   @Column({ nullable: true })
   avatarUrl?: string;
 
+  /** When false, student portal sign-in uses date of birth; when true, uses passwordHash only. */
+  @Column({ default: false })
+  portalPasswordCustomized!: boolean;
+
   @OneToOne(() => Student, (s) => s.user)
   studentProfile?: Student;
 

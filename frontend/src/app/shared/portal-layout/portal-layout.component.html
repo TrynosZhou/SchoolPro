@@ -122,6 +122,16 @@
                 <span class="user-menu-email">{{ accountEmail }}</span>
               </div>
             </div>
+            @if (changePasswordPath; as pwdPath) {
+              <a
+                class="user-menu-item"
+                [routerLink]="pwdPath"
+                [queryParams]="changePasswordQueryParams"
+                (click)="closeUserMenu()"
+              >
+                <span>Change password</span>
+              </a>
+            }
             <button type="button" class="user-menu-item user-menu-signout" (click)="requestLogout()">
               <span>Sign out</span>
               <svg class="sign-out-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">

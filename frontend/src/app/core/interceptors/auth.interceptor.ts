@@ -3,7 +3,7 @@ import { inject } from '@angular/core';
 import { catchError, throwError } from 'rxjs';
 import { AuthService } from '../services/auth.service';
 
-const AUTH_PUBLIC_PATHS = /\/auth\/(login|register|forgot-password|reset-password)(\/|$|\?)/;
+const AUTH_PUBLIC_PATHS = /\/auth\/(login|student-login|register|forgot-password|reset-password|password-policy)(\/|$|\?)/;
 
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
   const auth = inject(AuthService);
