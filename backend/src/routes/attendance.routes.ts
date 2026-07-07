@@ -126,10 +126,11 @@ router.get(
 
 router.get(
   '/unmarked-classes',
-  authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL),
+  authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.TEACHER),
   async (req: AuthRequest, res: Response) => {
     const date = (req.query.date as string) || today();
-    res.json(await getUnmarkedClassesForDate(date));
+    const staffId = req.user!.role === UserRole.TEACHER ? req.user!.staffId : undefined;
+    res.json(await getUnmarkedClassesForDate(date, staffId ? { staffId } : {}));
   },
 );
 

@@ -5,6 +5,8 @@ export interface UnmarkedClassRow {
   classId: string;
   className: string;
   formName?: string | null;
+  classTeacherName?: string | null;
+  classTeacherPhone?: string | null;
   studentCount: number;
   markedCount: number;
 }
@@ -35,7 +37,10 @@ async function resolvePeriodOneStartTime(): Promise<string> {
 }
 
 /** Classes with active students whose register is missing or incomplete for the given date. */
-export async function getUnmarkedClassesForDate(dateStr = today()): Promise<{
+export async function getUnmarkedClassesForDate(
+  dateStr = today(),
+  options: { staffId?: string } = {},
+): Promise<{
   date: string;
   isSchoolDay: boolean;
   lessonsStarted: boolean;
@@ -65,26 +70,42 @@ export async function getUnmarkedClassesForDate(dateStr = today()): Promise<{
     };
   }
 
+  const { staffId } = options;
+  const sqlParams: unknown[] = [dateStr];
+  const filters: string[] = [];
+
+  if (staffId) {
+    sqlParams.push(staffId);
+    filters.push(`c."classTeacherId" = $${sqlParams.length}`);
+  }
+
+  const whereExtra = filters.length ? `AND ${filters.join(' AND ')}` : '';
+
   const rows = await AppDataSource.query(
     `
     SELECT
       c.id AS "classId",
       c.name AS "className",
       f.name AS "formName",
+      NULLIF(TRIM(COALESCE(u."firstName", '') || ' ' || COALESCE(u."lastName", '')), '') AS "classTeacherName",
+      NULLIF(TRIM(u.phone), '') AS "classTeacherPhone",
       COUNT(DISTINCT s.id)::int AS "studentCount",
       COUNT(DISTINCT a."studentId")::int AS "markedCount"
     FROM classes c
     LEFT JOIN forms f ON f.id = c."formId"
+    LEFT JOIN staff ct ON ct.id = c."classTeacherId"
+    LEFT JOIN users u ON u.id = ct."userId"
     INNER JOIN students s ON s."classId" = c.id AND s."isActive" = true
     LEFT JOIN student_attendance a
       ON a."studentId" = s.id
       AND a.date::date = $1::date
-    GROUP BY c.id, c.name, f.name
+    WHERE 1=1 ${whereExtra}
+    GROUP BY c.id, c.name, f.name, u."firstName", u."lastName", u.phone
     HAVING COUNT(DISTINCT s.id) > 0
       AND COUNT(DISTINCT a."studentId") < COUNT(DISTINCT s.id)
     ORDER BY f.name NULLS LAST, c.name ASC
     `,
-    [dateStr],
+    sqlParams,
   );
 
   return {
@@ -96,6 +117,8 @@ export async function getUnmarkedClassesForDate(dateStr = today()): Promise<{
       classId: String(r.classId),
       className: String(r.className),
       formName: r.formName != null ? String(r.formName) : null,
+      classTeacherName: r.classTeacherName != null ? String(r.classTeacherName) : null,
+      classTeacherPhone: r.classTeacherPhone != null ? String(r.classTeacherPhone) : null,
       studentCount: Number(r.studentCount) || 0,
       markedCount: Number(r.markedCount) || 0,
     })),

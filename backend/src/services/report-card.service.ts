@@ -602,7 +602,28 @@ export async function syncReportCardForStudent(studentId: string, termId: string
   report.subjectsPassed = subjectsPassed;
   report.totalSubjects = subjectResults.length;
   report.isPublished = false;
-  await reportRepo.save(report);
+  try {
+    await reportRepo.save(report);
+  } catch (err) {
+    const code = (err as { code?: string })?.code;
+    if (code === '23505' && primaryExamTypeId) {
+      const existing = await reportRepo.findOne({
+        where: { studentId, termId, examTypeId: primaryExamTypeId },
+      });
+      if (!existing) throw err;
+      existing.subjectResults = report.subjectResults;
+      existing.averageMark = report.averageMark;
+      existing.overallGrade = report.overallGrade;
+      existing.classTotal = report.classTotal;
+      existing.formTotal = report.formTotal;
+      existing.subjectsPassed = report.subjectsPassed;
+      existing.totalSubjects = report.totalSubjects;
+      existing.isPublished = false;
+      await reportRepo.save(existing);
+      return existing;
+    }
+    throw err;
+  }
   return report;
 }
 

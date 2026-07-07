@@ -40,6 +40,7 @@ import { AdminMarkSheetComponent } from './pages/admin/admin-mark-sheet.componen
 import { AdminResultsAnalysisComponent } from './pages/admin/admin-results-analysis.component';
 import { AdminRankingComponent } from './pages/admin/admin-ranking.component';
 import { AdminMarkEntryProgressComponent } from './pages/admin/admin-mark-entry-progress.component';
+import { RecordBookComponent } from './pages/exams/record-book.component';
 import { AdminManageFeesComponent } from './pages/admin/admin-manage-fees.component';
 import { AdminStudentBalanceComponent } from './pages/admin/admin-student-balance.component';
 import { AdminExemptionsComponent } from './pages/admin/admin-exemptions.component';
@@ -194,6 +195,7 @@ export const routes: Routes = [
       { path: 'results-analysis', component: AdminResultsAnalysisComponent },
       { path: 'ranking', component: AdminRankingComponent },
       { path: 'mark-entry-progress', component: AdminMarkEntryProgressComponent },
+      { path: 'record-book', component: RecordBookComponent },
       { path: 'attendance', redirectTo: 'attendance/mark-register', pathMatch: 'full' },
       { path: 'attendance/mark-register', component: AttendanceMarkRegisterComponent },
       { path: 'attendance/report', component: AttendanceReportComponent },

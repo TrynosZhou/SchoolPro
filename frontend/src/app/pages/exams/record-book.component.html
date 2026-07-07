@@ -1,0 +1,254 @@
+<app-portal-layout
+  [portalTitle]="portalLayout.portalTitle"
+  pageTitle="Record Book"
+  [navSections]="portalLayout.navSections || []"
+  [navItems]="portalLayout.navItems || []"
+>
+
+  @if (toast(); as t) {
+    <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>
+  }
+
+  <header class="page-hero">
+    <div>
+      <p class="eyebrow">Academics · Mark entry</p>
+      <h1>Record Book</h1>
+      <p class="hero-sub">
+        Select term, class, and subject to load enrolled students. Add test columns and enter marks — they auto-save when you move to the next student.
+      </p>
+    </div>
+  </header>
+
+  <section class="filters-card card">
+    <div class="filters-row">
+      <label class="field">
+        <span>Term <span class="req">*</span></span>
+        <select [(ngModel)]="filters.termId" name="term" (ngModelChange)="onTermChange()">
+          <option value="">— Select —</option>
+          @for (t of terms(); track t.id) {
+            <option [value]="t.id">{{ t.name }}</option>
+          }
+        </select>
+      </label>
+      <label class="field">
+        <span>Class <span class="req">*</span></span>
+        <select [(ngModel)]="filters.classId" name="class" (ngModelChange)="onClassChange()">
+          <option value="">— Select —</option>
+          @for (c of classes(); track c.id) {
+            <option [value]="c.id">{{ c.name }}</option>
+          }
+        </select>
+      </label>
+      @if (filters.classId) {
+        <label class="field">
+          <span>Subject <span class="req">*</span></span>
+          @if (loadingSubjects()) {
+            <select disabled><option>Loading subjects…</option></select>
+          } @else if (!subjects().length) {
+            <select disabled><option>— No subjects —</option></select>
+          } @else if (showSubjectPicker()) {
+            <select [(ngModel)]="filters.subjectId" name="subject" (ngModelChange)="onSubjectChange()">
+              <option value="">— Select subject —</option>
+              @for (s of subjects(); track s.id) {
+                <option [value]="s.id">{{ s.name }}</option>
+              }
+            </select>
+          } @else {
+            <select [(ngModel)]="filters.subjectId" name="subject" disabled>
+              <option [value]="subjects()[0].id">{{ subjects()[0].name }}</option>
+            </select>
+          }
+        </label>
+      }
+      <button type="button" class="btn-load" (click)="loadClass()" [disabled]="loading() || loadingSubjects() || !filtersReady()">
+        {{ loading() ? 'Loading…' : 'Load Class' }}
+      </button>
+    </div>
+    @if (teacherName() && filters.classId && !hasLoaded()) {
+      <p class="filter-hint">
+        <strong>{{ teacherName() }}</strong>
+        @if (subjects().length) {
+          · Subjects: {{ assignedSubjectsLabel() }}
+        }
+      </p>
+    }
+  </section>
+
+  @if (hasLoaded()) {
+    <section class="teacher-meta card">
+      <div class="teacher-meta-grid">
+        <div>
+          <span class="meta-label">Teacher</span>
+          <strong>{{ teacherName() }}</strong>
+        </div>
+        <div>
+          <span class="meta-label">Subject (marks being captured)</span>
+          <strong>{{ activeSubject()?.name || '—' }}</strong>
+        </div>
+        @if (subjects().length > 1) {
+          <div class="meta-wide">
+            <span class="meta-label">All subjects assigned in this class</span>
+            <span>{{ assignedSubjectsLabel() }}</span>
+          </div>
+        }
+      </div>
+    </section>
+
+    <section class="toolbar card">
+      <div>
+        <strong>{{ sessionLabel() }}</strong>
+        <span class="toolbar-meta">Drag column edges to resize · Click + to add test columns · Auto-save on row change</span>
+      </div>
+    </section>
+
+    @if (!students().length) {
+      <section class="empty card"><p>No enrolled students in this class.</p></section>
+    } @else {
+      <div class="grid-wrap">
+        <div class="grid-toolbar">
+          <span class="grid-toolbar-hint">Max {{ maxMarks() }} marks per test</span>
+          <button
+            type="button"
+            class="btn-add-column"
+            (click)="addMarkColumn()"
+            [disabled]="addingColumn()"
+            title="Add test column"
+            aria-label="Add test column"
+          >
+            @if (addingColumn()) {
+              <span class="spinner" aria-hidden="true"></span>
+            } @else {
+              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                <path fill="currentColor" d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+              </svg>
+            }
+          </button>
+        </div>
+
+        <section class="grid-card">
+          <div class="grid-scroll">
+            <table class="record-grid">
+              <thead>
+                <tr>
+                  <th
+                    class="sticky col-fixed"
+                    [style.width.px]="colWidth('studentId')"
+                    [style.minWidth.px]="colWidth('studentId')"
+                    [style.left.px]="stickyLeft('studentId')"
+                  >
+                    <span class="th-label">Student ID</span>
+                    <span class="col-resizer" (mousedown)="startColumnResize($event, 'studentId')" title="Resize column"></span>
+                  </th>
+                  <th
+                    class="sticky col-fixed"
+                    [style.width.px]="colWidth('lastName')"
+                    [style.minWidth.px]="colWidth('lastName')"
+                    [style.left.px]="stickyLeft('lastName')"
+                  >
+                    <span class="th-label">LastName</span>
+                    <span class="col-resizer" (mousedown)="startColumnResize($event, 'lastName')" title="Resize column"></span>
+                  </th>
+                  <th
+                    class="sticky col-fixed"
+                    [style.width.px]="colWidth('firstName')"
+                    [style.minWidth.px]="colWidth('firstName')"
+                    [style.left.px]="stickyLeft('firstName')"
+                  >
+                    <span class="th-label">FirstName</span>
+                    <span class="col-resizer" (mousedown)="startColumnResize($event, 'firstName')" title="Resize column"></span>
+                  </th>
+                  <th
+                    class="sticky col-fixed"
+                    [style.width.px]="colWidth('gender')"
+                    [style.minWidth.px]="colWidth('gender')"
+                    [style.left.px]="stickyLeft('gender')"
+                  >
+                    <span class="th-label">Gender</span>
+                    <span class="col-resizer" (mousedown)="startColumnResize($event, 'gender')" title="Resize column"></span>
+                  </th>
+                  @for (col of markColumns(); track col.columnKey) {
+                    <th
+                      class="mark-col"
+                      [style.width.px]="colWidth(col.columnKey)"
+                      [style.minWidth.px]="colWidth(col.columnKey)"
+                    >
+                      <span class="th-label">{{ col.label }}</span>
+                      <span
+                        class="col-resizer"
+                        (mousedown)="startColumnResize($event, col.columnKey)"
+                        title="Resize column"
+                      ></span>
+                    </th>
+                  }
+                </tr>
+              </thead>
+              <tbody>
+                @for (row of students(); track row.studentId) {
+                  <tr
+                    [attr.data-student-id]="row.studentId"
+                    [class.row-saving]="row.saveStatus === 'saving'"
+                    [class.row-error]="row.saveStatus === 'error'"
+                  >
+                    <td
+                      class="sticky col-fixed student-cell"
+                      [style.width.px]="colWidth('studentId')"
+                      [style.minWidth.px]="colWidth('studentId')"
+                      [style.left.px]="stickyLeft('studentId')"
+                      [title]="row.admissionNumber"
+                    >{{ row.admissionNumber }}</td>
+                    <td
+                      class="sticky col-fixed student-cell"
+                      [style.width.px]="colWidth('lastName')"
+                      [style.minWidth.px]="colWidth('lastName')"
+                      [style.left.px]="stickyLeft('lastName')"
+                      [title]="row.lastName"
+                    >{{ row.lastName }}</td>
+                    <td
+                      class="sticky col-fixed student-cell"
+                      [style.width.px]="colWidth('firstName')"
+                      [style.minWidth.px]="colWidth('firstName')"
+                      [style.left.px]="stickyLeft('firstName')"
+                      [title]="row.firstName"
+                    >{{ row.firstName }}</td>
+                    <td
+                      class="sticky col-fixed student-cell"
+                      [style.width.px]="colWidth('gender')"
+                      [style.minWidth.px]="colWidth('gender')"
+                      [style.left.px]="stickyLeft('gender')"
+                    >{{ row.gender }}</td>
+                    @for (col of markColumns(); track col.columnKey) {
+                      <td
+                        class="mark-cell"
+                        [style.width.px]="colWidth(col.columnKey)"
+                        [style.minWidth.px]="colWidth(col.columnKey)"
+                      >
+                        <input
+                          type="number"
+                          class="mark-input"
+                          [min]="0"
+                          [max]="maxMarks()"
+                          [ngModel]="row.marksByColumn[col.columnKey]?.marks"
+                          (ngModelChange)="onMarkInput(row.studentId, col.columnKey, $event)"
+                          (focus)="onCellFocus(row.studentId)"
+                          (blur)="onCellBlur(row.studentId)"
+                          [name]="row.studentId + '-' + col.columnKey"
+                        />
+                      </td>
+                    }
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+          @if (!markColumns().length) {
+            <p class="grid-hint">No test columns yet. Click the <strong>+</strong> button above the table to add Test 1, Test 2, and more.</p>
+          }
+        </section>
+      </div>
+    }
+  } @else {
+    <section class="empty card">
+      <p>Select term, class, and subject, then click <strong>Load Class</strong>.</p>
+    </section>
+  }
+</app-portal-layout>

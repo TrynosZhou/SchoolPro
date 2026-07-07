@@ -56,6 +56,8 @@ import { BulkMessageRecipient } from './BulkMessageRecipient';
 import { StudentEnrollment } from './StudentEnrollment';
 import { ReportTemplate } from './ReportTemplate';
 import { AuditLog } from './AuditLog';
+import { RecordBookColumn } from './RecordBookColumn';
+import { RecordBookMark } from './RecordBookMark';
 
 export const entities = [
   User,
@@ -116,6 +118,8 @@ export const entities = [
   StudentEnrollment,
   ReportTemplate,
   AuditLog,
+  RecordBookColumn,
+  RecordBookMark,
 ];
 
 export * from './enums';
@@ -178,5 +182,7 @@ export {
   StudentEnrollment,
   ReportTemplate,
   AuditLog,
+  RecordBookColumn,
+  RecordBookMark,
 };
 

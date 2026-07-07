@@ -180,6 +180,7 @@ export class TeacherDashboardComponent implements OnInit {
         { label: 'Results Analysis', path: '/teacher/results-analysis', icon: '📈', permission: 'academics.results' },
         { label: 'Ranking', path: '/teacher/ranking', icon: '🏆', permission: 'academics.ranking' },
         { label: 'Mark Entry Progress', path: '/teacher/mark-entry-progress', icon: '📊', permission: 'academics.exams' },
+        { label: 'Record Book', path: '/teacher/record-book', icon: '📒', permission: 'academics.exams' },
       ],
     },
     {

@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { Router, Response } from 'express';
 import { AppDataSource } from '../config/data-source';
-import { ExamType, ExamMark, ReportCard, Student, HonourRoll, SchoolYear, SchoolSettings, SchoolClass, Guardian } from '../entities';
+import { ExamType, ExamMark, ReportCard, Student, HonourRoll, SchoolYear, SchoolSettings, SchoolClass, Guardian, Term } from '../entities';
 import { UserRole } from '../entities/enums';
 import { fetchStudentInvoiceBalance } from '../services/fin-reports.service';
 import { authenticate, authorize, AuthRequest } from '../middleware/auth';
@@ -29,6 +29,7 @@ import {
 } from '../services/results-analysis.service';
 import { buildRankings, RankingType } from '../services/ranking.service';
 import { buildMarkEntryProgress } from '../services/mark-entry-progress.service';
+import { buildRecordBook, saveRecordBookRow, addRecordBookColumn, listRecordBookSubjects } from '../services/record-book.service';
 import {
   buildClassTeacherRemarks,
   isValidConductRating,
@@ -803,6 +804,119 @@ router.get(
     } catch (err) {
       return res.status(400).json({
         message: err instanceof Error ? err.message : 'Failed to load mark entry progress',
+      });
+    }
+  },
+);
+
+router.get(
+  '/record-book/subjects',
+  authorize(UserRole.TEACHER, UserRole.ADMIN, UserRole.PRINCIPAL, UserRole.DIRECTOR),
+  acadView,
+  async (req: AuthRequest, res: Response) => {
+    const { classId } = req.query;
+    if (!classId) {
+      return res.status(400).json({ message: 'classId is required' });
+    }
+    if (!(await assertTeacherClassAccess(req, classId as string))) {
+      return res.status(403).json({ message: 'You are not assigned to this class' });
+    }
+    try {
+      const data = await listRecordBookSubjects(req, classId as string);
+      res.json(data);
+    } catch (err) {
+      return res.status(400).json({
+        message: err instanceof Error ? err.message : 'Failed to load subjects',
+      });
+    }
+  },
+);
+
+router.get(
+  '/record-book',
+  authorize(UserRole.TEACHER, UserRole.ADMIN, UserRole.PRINCIPAL, UserRole.DIRECTOR),
+  acadView,
+  async (req: AuthRequest, res: Response) => {
+    const { classId, termId, subjectId } = req.query;
+    if (!classId || !termId || !subjectId) {
+      return res.status(400).json({ message: 'classId, termId, and subjectId are required' });
+    }
+    if (!(await assertTeacherClassAccess(req, classId as string))) {
+      return res.status(403).json({ message: 'You are not assigned to this class' });
+    }
+    try {
+      const data = await buildRecordBook(req, {
+        classId: classId as string,
+        termId: termId as string,
+        subjectId: subjectId as string,
+      });
+      const term = await AppDataSource.getRepository(Term).findOne({ where: { id: termId as string } });
+      data.term.name = term?.name || '';
+      res.json(data);
+    } catch (err) {
+      return res.status(400).json({
+        message: err instanceof Error ? err.message : 'Failed to load record book',
+      });
+    }
+  },
+);
+
+router.post(
+  '/record-book/add-column',
+  authorize(UserRole.TEACHER, UserRole.ADMIN, UserRole.PRINCIPAL, UserRole.DIRECTOR),
+  acadCreate,
+  async (req: AuthRequest, res: Response) => {
+    const { classId, termId, subjectId, label } = req.body || {};
+    if (!classId || !termId || !subjectId) {
+      return res.status(400).json({ message: 'classId, termId, and subjectId are required' });
+    }
+    if (!(await assertTeacherClassAccess(req, classId))) {
+      return res.status(403).json({ message: 'You are not assigned to this class' });
+    }
+    try {
+      const column = await addRecordBookColumn(req, { classId, termId, subjectId, label });
+      res.json(column);
+    } catch (err) {
+      return res.status(400).json({
+        message: err instanceof Error ? err.message : 'Failed to add column',
+      });
+    }
+  },
+);
+
+router.post(
+  '/record-book/save-row',
+  authorize(UserRole.TEACHER, UserRole.ADMIN, UserRole.PRINCIPAL, UserRole.DIRECTOR),
+  acadCreate,
+  async (req: AuthRequest, res: Response) => {
+    const { classId, termId, subjectId, studentId, marks } = req.body || {};
+    if (!classId || !termId || !subjectId || !studentId || !Array.isArray(marks)) {
+      return res.status(400).json({ message: 'classId, termId, subjectId, studentId, and marks are required' });
+    }
+    if (!(await assertTeacherClassAccess(req, classId))) {
+      return res.status(403).json({ message: 'You are not assigned to this class' });
+    }
+    try {
+      const result = await saveRecordBookRow(req, {
+        classId,
+        termId,
+        subjectId,
+        studentId,
+        marks: marks
+          .filter(
+            (m: { columnKey?: string; marks?: unknown }) =>
+              m?.columnKey && m.marks !== null && m.marks !== undefined && m.marks !== '',
+          )
+          .map((m: { columnKey: string; marks: number }) => ({
+            columnKey: m.columnKey,
+            marks: Number(m.marks),
+          }))
+          .filter((m: { columnKey: string; marks: number }) => Number.isFinite(m.marks)),
+      });
+      res.json(result);
+    } catch (err) {
+      return res.status(400).json({
+        message: err instanceof Error ? err.message : 'Failed to save marks',
       });
     }
   },

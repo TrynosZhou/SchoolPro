@@ -13,6 +13,8 @@ export interface UnmarkedClassRow {
   classId: string;
   className: string;
   formName?: string | null;
+  classTeacherName?: string | null;
+  classTeacherPhone?: string | null;
   studentCount: number;
   markedCount: number;
 }
@@ -24,6 +26,7 @@ export interface AttendanceRegisterReminderState {
 
 const REMINDER_INTERVAL_MS = 10 * 60 * 1000;
 const ADMIN_ROLES: UserRole[] = ['admin', 'director', 'principal'];
+const REMINDER_ROLES: UserRole[] = [...ADMIN_ROLES, 'teacher'];
 
 @Injectable({ providedIn: 'root' })
 export class AttendanceRegisterReminderService {
@@ -66,6 +69,11 @@ export class AttendanceRegisterReminderService {
   }
 
   private isEligibleUser(): boolean {
+    const role = this.auth.user()?.role;
+    return !!role && REMINDER_ROLES.includes(role);
+  }
+
+  isAdminView(): boolean {
     const role = this.auth.user()?.role;
     return !!role && ADMIN_ROLES.includes(role);
   }

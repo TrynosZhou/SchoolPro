@@ -19,7 +19,9 @@ export const AppDataSource = new DataSource({
   username: env.db.username,
   password: env.db.password,
   database: env.db.database,
-  synchronize: env.nodeEnv === 'development',
+  /** Migrations own schema changes; sync would race them and break on NOT NULL backfills. */
+  synchronize: false,
+  migrationsRun: true,
   logging: env.nodeEnv === 'development',
   entities,
   migrations: [migrationsGlob],
