@@ -6,11 +6,12 @@ import { UserRole } from '../entities/enums';
 import { authenticate, authorize, AuthRequest } from '../middleware/auth';
 import { findLatest } from '../utils/typeorm-helpers';
 import { postCashbookExpenseToGl, postCashbookReceiptToGl } from '../services/gl-posting.service';
+import { FINANCE_ROLES, FINANCE_WRITE_ROLES } from '../config/portal-roles';
 
 const router = Router();
 router.use(authenticate);
 
-router.get('/cashbook', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (req, res: Response) => {
+router.get('/cashbook', authorize(...FINANCE_ROLES), async (req, res: Response) => {
   const repo = AppDataSource.getRepository(CashbookEntry);
   const { from, to } = req.query;
   const qb = repo.createQueryBuilder('c').orderBy('c.entryDate', 'DESC').addOrderBy('c.createdAt', 'DESC');
@@ -18,7 +19,7 @@ router.get('/cashbook', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PR
   res.json(await qb.getMany());
 });
 
-router.post('/cashbook', authorize(UserRole.ADMIN), async (req: AuthRequest, res: Response) => {
+router.post('/cashbook', authorize(...FINANCE_WRITE_ROLES), async (req: AuthRequest, res: Response) => {
   const repo = AppDataSource.getRepository(CashbookEntry);
   const last = await findLatest(repo);
   const prevBalance = last ? Number(last.balance) : 0;
@@ -43,7 +44,7 @@ router.post('/cashbook', authorize(UserRole.ADMIN), async (req: AuthRequest, res
   res.status(201).json(saved);
 });
 
-router.get('/balance-sheet', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (_req, res: Response) => {
+router.get('/balance-sheet', authorize(...FINANCE_ROLES), async (_req, res: Response) => {
   const cashbook = await findLatest(AppDataSource.getRepository(CashbookEntry));
   const debtors = await AppDataSource.query(`
     SELECT COALESCE(SUM("totalAmount" - "amountPaid"), 0) as total
@@ -62,7 +63,7 @@ router.get('/balance-sheet', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRo
   });
 });
 
-router.get('/recent-payments', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (req, res: Response) => {
+router.get('/recent-payments', authorize(...FINANCE_ROLES), async (req, res: Response) => {
   const limit = Math.min(parseInt(req.query.limit as string) || 15, 50);
   const payments = await AppDataSource.query(`
     SELECT p.id, p."paymentReference", p.amount, p.method, p.label, p."feeType", p."paidAt",
@@ -76,7 +77,7 @@ router.get('/recent-payments', authorize(UserRole.ADMIN, UserRole.DIRECTOR, User
   res.json(payments);
 });
 
-router.get('/class-debt-summary', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (_req, res: Response) => {
+router.get('/class-debt-summary', authorize(...FINANCE_ROLES), async (_req, res: Response) => {
   const result = await AppDataSource.query(`
     SELECT c.id, c.name, f.name as "formName",
       COALESCE(SUM(i."totalAmount" - i."amountPaid"), 0) as owed,
@@ -91,7 +92,7 @@ router.get('/class-debt-summary', authorize(UserRole.ADMIN, UserRole.DIRECTOR, U
   res.json(result);
 });
 
-router.get('/cashbook/summary', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (req, res: Response) => {
+router.get('/cashbook/summary', authorize(...FINANCE_ROLES), async (req, res: Response) => {
   const { from, to } = req.query;
   let dateFilter = '';
   const params: string[] = [];
@@ -109,7 +110,7 @@ router.get('/cashbook/summary', authorize(UserRole.ADMIN, UserRole.DIRECTOR, Use
   res.json(totals);
 });
 
-router.get('/debtors-aging', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (_req, res: Response) => {
+router.get('/debtors-aging', authorize(...FINANCE_ROLES), async (_req, res: Response) => {
   const result = await AppDataSource.query(`
     SELECT
       CASE

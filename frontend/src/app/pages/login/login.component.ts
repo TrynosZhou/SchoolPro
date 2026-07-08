@@ -59,6 +59,7 @@ export class LoginComponent implements OnInit {
     firstName: '',
     lastName: '',
     phone: '',
+    gender: '',
     confirmPassword: '',
     admissionNumber: '',
     dateOfBirth: '',
@@ -336,6 +337,7 @@ export class LoginComponent implements OnInit {
       lastName: this.signup.lastName.trim(),
       role: 'parent',
       phone: this.signup.phone.trim() || undefined,
+      gender: this.signup.gender.trim() || undefined,
       linkAdmissionNumber: this.signup.linkAdmissionNumber.trim()
         ? this.signup.linkAdmissionNumber.trim().toUpperCase()
         : undefined,

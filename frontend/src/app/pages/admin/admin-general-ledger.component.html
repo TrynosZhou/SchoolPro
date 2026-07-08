@@ -1,4 +1,4 @@
-<app-portal-layout portalTitle="Admin Portal" pageTitle="General Ledger" [navSections]="adminNav">
+<app-portal-layout [portalTitle]="portalTitle" pageTitle="General Ledger" [navSections]="navSections">
   <div class="gl-page">
     @if (toast(); as t) {
       <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>

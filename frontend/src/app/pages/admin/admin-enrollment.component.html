@@ -9,6 +9,12 @@
     }
 
     <header class="hero">
+      @if (portalTitle === 'Teacher Portal' && !isClassTeacher()) {
+        <div class="empty-state">
+          <h3>Class teacher access required</h3>
+          <p>Only class teachers can enroll students into their homeroom classes. Contact an administrator if you need a class assignment.</p>
+        </div>
+      } @else {
       <div class="hero-copy">
         <p class="eyebrow">Enrollment</p>
         <h2>Class enrollment</h2>
@@ -59,8 +65,10 @@
           </div>
         </article>
       </div>
+      }
     </header>
 
+    @if (portalTitle !== 'Teacher Portal' || isClassTeacher()) {
     @if (stats().fullClasses) {
       <div class="alert-banner">
         {{ stats().fullClasses }} class{{ stats().fullClasses === 1 ? '' : 'es' }} at full capacity.
@@ -349,6 +357,7 @@
           }
         </div>
       </section>
+    }
     }
   </div>
 </app-portal-layout>

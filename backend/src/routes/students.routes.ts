@@ -10,7 +10,8 @@ import { relations, param } from '../utils/typeorm-helpers';
 import { generateStudentId, today } from '../utils/helpers';
 import { generateClassListPdf, generateStudentIdCardPdf } from '../utils/pdf';
 import { loadSchoolBranding } from '../services/school-branding.service';
-import { assertTeacherClassAccess } from '../utils/teacher-class-access';
+import { FINANCE_ROLES, FINANCE_WRITE_ROLES, STUDENT_REGISTRATION_ROLES, ENROLLMENT_ROLES } from '../config/portal-roles';
+import { assertTeacherClassAccess, assertTeacherClassTeacherAccess, isAnyClassTeacher } from '../utils/teacher-class-access';
 import { createRegistrationInvoiceForStudent } from '../services/registration-invoice.service';
 import {
   recordStudentExit,
@@ -32,7 +33,15 @@ const stuDelete = requireModuleAccess('students', 'delete');
 const enrollEdit = requireModuleAccess('enrollment', 'edit');
 const enrollCreate = requireModuleAccess('enrollment', 'create');
 
-async function filterAccessibleStudents(req: AuthRequest, qb: ReturnType<ReturnType<typeof AppDataSource.getRepository<Student>>['createQueryBuilder']>) {
+async function filterAccessibleStudents(req: AuthRequest, qb: ReturnType<ReturnType<typeof AppDataSource.getRepository<Student>>['createQueryBuilder']>, options?: { unenrolled?: boolean }) {
+  if (
+    options?.unenrolled &&
+    req.user!.role === UserRole.TEACHER &&
+    req.user!.staffId &&
+    (await isAnyClassTeacher(req.user!.staffId))
+  ) {
+    return;
+  }
   const accessible = await AccessControlService.getAccessibleStudentIds(req.user!);
   if (accessible === 'all') return;
   if (!accessible.length) {
@@ -42,7 +51,7 @@ async function filterAccessibleStudents(req: AuthRequest, qb: ReturnType<ReturnT
   qb.andWhere('s.id IN (:...accessibleIds)', { accessibleIds: accessible });
 }
 
-router.get('/', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.TEACHER), stuView, async (req: AuthRequest, res: Response) => {
+router.get('/', authorize(...STUDENT_REGISTRATION_ROLES, UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.TEACHER), stuView, async (req: AuthRequest, res: Response) => {
   const repo = AppDataSource.getRepository(Student);
   const { classId, search, unenrolled, enrolled } = req.query;
 
@@ -63,7 +72,7 @@ router.get('/', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL,
   if (search) {
     qb.andWhere('(s.firstName ILIKE :s OR s.lastName ILIKE :s OR s.admissionNumber ILIKE :s)', { s: `%${search}%` });
   }
-  await filterAccessibleStudents(req, qb);
+  await filterAccessibleStudents(req, qb, { unenrolled: unenrolled === 'true' });
   const students = await qb.orderBy('s.lastName', 'ASC').getMany();
   res.json(students);
 });
@@ -126,7 +135,7 @@ router.get(
   },
 );
 
-router.get('/next-student-id', authorize(UserRole.ADMIN), stuCreate, async (_req, res: Response) => {
+router.get('/next-student-id', authorize(...STUDENT_REGISTRATION_ROLES), stuCreate, async (_req, res: Response) => {
   const studentId = await generateStudentId();
   res.json({ studentId });
 });
@@ -349,7 +358,18 @@ router.get(
   },
 );
 
-router.get('/:id', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.TEACHER, UserRole.PARENT, UserRole.STUDENT), stuView, async (req: AuthRequest, res: Response) => {
+router.get(
+  '/:id',
+  authorize(
+    ...STUDENT_REGISTRATION_ROLES,
+    UserRole.DIRECTOR,
+    UserRole.PRINCIPAL,
+    UserRole.TEACHER,
+    UserRole.PARENT,
+    UserRole.STUDENT,
+  ),
+  stuView,
+  async (req: AuthRequest, res: Response) => {
   const repo = AppDataSource.getRepository(Student);
   const student = await repo.findOne({
     where: { id: param(req.params.id) },
@@ -364,7 +384,7 @@ router.get('/:id', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIP
   res.json(student);
 });
 
-router.post('/', authorize(UserRole.ADMIN), stuCreate, async (req: AuthRequest, res: Response) => {
+router.post('/', authorize(...STUDENT_REGISTRATION_ROLES), stuCreate, async (req: AuthRequest, res: Response) => {
   const repo = AppDataSource.getRepository(Student);
   const guardianRepo = AppDataSource.getRepository(Guardian);
   const formRepo = AppDataSource.getRepository(Form);
@@ -470,7 +490,7 @@ router.post('/', authorize(UserRole.ADMIN), stuCreate, async (req: AuthRequest, 
   });
 });
 
-router.patch('/:id/enroll', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.TEACHER), enrollCreate, async (req: AuthRequest, res: Response) => {
+router.patch('/:id/enroll', authorize(...ENROLLMENT_ROLES), enrollCreate, async (req: AuthRequest, res: Response) => {
   const repo = AppDataSource.getRepository(Student);
   const { classId } = req.body;
   if (!classId) return res.status(400).json({ message: 'Class is required' });
@@ -478,11 +498,17 @@ router.patch('/:id/enroll', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRol
   const student = await repo.findOne({ where: { id: req.params.id } });
   if (!student) return res.status(404).json({ message: 'Student not found' });
 
-  if (!(await AccessControlService.userCanAccessStudent(req.user!, student.id))) {
+  if (req.user!.role === UserRole.TEACHER) {
+    if (!student.classId) {
+      // Class teachers may enrol registered students not yet assigned to a class.
+    } else if (!(await AccessControlService.userCanAccessStudent(req.user!, student.id))) {
+      return res.status(403).json({ message: 'You do not have access to this student record' });
+    }
+  } else if (!(await AccessControlService.userCanAccessStudent(req.user!, student.id))) {
     return res.status(403).json({ message: 'You do not have access to this student record' });
   }
-  if (!(await assertTeacherClassAccess(req, classId))) {
-    return res.status(403).json({ message: 'You are not assigned to this class' });
+  if (!(await assertTeacherClassTeacherAccess(req, classId))) {
+    return res.status(403).json({ message: 'Only the class teacher may enrol students into this class' });
   }
 
   const beforeClassId = student.classId;
@@ -516,12 +542,19 @@ router.patch('/:id/enroll', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRol
   res.json(full);
 });
 
-router.patch('/:id/unenroll', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.TEACHER), enrollEdit, async (req: AuthRequest, res: Response) => {
+router.patch('/:id/unenroll', authorize(...ENROLLMENT_ROLES), enrollEdit, async (req: AuthRequest, res: Response) => {
   const repo = AppDataSource.getRepository(Student);
   const student = await repo.findOne({ where: { id: req.params.id } });
   if (!student) return res.status(404).json({ message: 'Student not found' });
 
-  if (!(await AccessControlService.userCanAccessStudent(req.user!, student.id))) {
+  if (req.user!.role === UserRole.TEACHER) {
+    if (!student.classId) {
+      return res.status(403).json({ message: 'Student is not enrolled in a class' });
+    }
+    if (!(await assertTeacherClassTeacherAccess(req, student.classId))) {
+      return res.status(403).json({ message: 'Only the class teacher may unenrol students from this class' });
+    }
+  } else if (!(await AccessControlService.userCanAccessStudent(req.user!, student.id))) {
     return res.status(403).json({ message: 'You do not have access to this student record' });
   }
 

@@ -2,6 +2,22 @@ import { AppDataSource } from '../config/data-source';
 import { UserRole } from '../entities/enums';
 import type { AuthRequest } from '../middleware/auth';
 
+export async function isAnyClassTeacher(staffId: string): Promise<boolean> {
+  const rows = await AppDataSource.query(
+    `SELECT 1 FROM classes c WHERE c."classTeacherId" = $1 LIMIT 1`,
+    [staffId],
+  );
+  return rows.length > 0;
+}
+
+export async function getClassTeacherClassIds(staffId: string): Promise<string[]> {
+  const rows: { id: string }[] = await AppDataSource.query(
+    `SELECT c.id FROM classes c WHERE c."classTeacherId" = $1`,
+    [staffId],
+  );
+  return rows.map((r) => r.id);
+}
+
 export async function assertTeacherClassAccess(req: AuthRequest, classId: string): Promise<boolean> {
   if (req.user!.role !== UserRole.TEACHER) return true;
   if (!req.user!.staffId) return false;

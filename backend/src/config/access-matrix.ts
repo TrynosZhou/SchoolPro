@@ -10,7 +10,7 @@ export type AccessScope = 'all' | 'assigned' | 'linked' | 'self' | 'none';
  * The four portal roles this access-control rollout targets.
  * Director and Principal inherit the Admin profile (see mapUserRoleToAccessRole).
  */
-export type AccessRole = 'admin' | 'teacher' | 'parent' | 'student';
+export type AccessRole = 'admin' | 'accountant' | 'teacher' | 'parent' | 'student';
 
 export interface ModuleDefinition {
   id: string;
@@ -150,6 +150,25 @@ export const DEFAULT_ACCESS_MATRIX: Record<AccessRole, RoleModuleMatrix> = {
     description: 'Full access to all modules and records.',
     modules: Object.fromEntries(ACCESS_MODULES.map((m) => [m.id, { ...ALL }])),
   },
+  accountant: {
+    role: 'accountant',
+    label: 'Accountant',
+    description: 'Finance operations and student registration; no class enrolment.',
+    modules: {
+      communication: grants('none', 'none', 'none', 'none'),
+      students: grants('all', 'all', 'all', 'none'),
+      enrollment: grants('none', 'none', 'none', 'none'),
+      admissions: grants('none', 'none', 'none', 'none'),
+      attendance: grants('none', 'none', 'none', 'none'),
+      academics: grants('none', 'none', 'none', 'none'),
+      finance: grants('all', 'all', 'all', 'none'),
+      staff: grants('none', 'none', 'none', 'none'),
+      timetable: grants('none', 'none', 'none', 'none'),
+      analytics: grants('none', 'none', 'none', 'none'),
+      system: grants('none', 'none', 'none', 'none'),
+      audit: grants('none', 'none', 'none', 'none'),
+    },
+  },
   teacher: {
     role: 'teacher',
     label: 'Teacher',
@@ -212,6 +231,8 @@ export const DEFAULT_ACCESS_MATRIX: Record<AccessRole, RoleModuleMatrix> = {
 /** Map a stored UserRole to the four access-control profiles. */
 export function mapUserRoleToAccessRole(role: UserRole): AccessRole {
   switch (role) {
+    case UserRole.ACCOUNTANT:
+      return 'accountant';
     case UserRole.TEACHER:
       return 'teacher';
     case UserRole.PARENT:

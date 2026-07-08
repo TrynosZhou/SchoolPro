@@ -1,9 +1,12 @@
-import { Component, inject, signal, computed, viewChild, ElementRef, AfterViewInit } from '@angular/core';
+import { Component, inject, OnInit, signal, computed, viewChild, ElementRef, AfterViewInit } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
+import { AuthService } from '../../core/services/auth.service';
+import { NavSection } from '../../shared/portal-layout/portal-layout.component';
+import { resolveStaffPortalContext, portalLink } from '../../core/utils/staff-portal.util';
 import { ApiService } from '../../core/services/api.service';
 import { formatGenderLabel, formatStudentClassLabel } from '../../core/utils/class-display';
 
@@ -31,12 +34,22 @@ type SortOrder = 'name-asc' | 'name-desc' | 'balance-desc' | 'balance-asc';
   templateUrl: './admin-student-balance.component.html',
   styleUrl: './admin-student-balance.component.scss',
 })
-export class AdminStudentBalanceComponent implements AfterViewInit {
+export class AdminStudentBalanceComponent implements AfterViewInit, OnInit {
   private api = inject(ApiService);
   private router = inject(Router);
+  private auth = inject(AuthService);
 
-  readonly adminNav = ADMIN_NAV_SECTIONS;
+  portalTitle = 'Admin Portal';
+  navSections: NavSection[] = ADMIN_NAV_SECTIONS;
+  basePath = '/admin';
   readonly balanceSearchInput = viewChild<ElementRef<HTMLInputElement>>('balanceSearchInput');
+
+  ngOnInit() {
+    const ctx = resolveStaffPortalContext(this.router.url, this.auth.user()?.role);
+    this.portalTitle = ctx.portalTitle;
+    this.navSections = ctx.navSections;
+    this.basePath = ctx.basePath;
+  }
 
   query = '';
   loading = signal(false);
@@ -206,7 +219,7 @@ export class AdminStudentBalanceComponent implements AfterViewInit {
       this.showToast('error', 'This student has no outstanding balance to pay.');
       return;
     }
-    this.router.navigate(['/admin/payment'], {
+    this.router.navigate([portalLink(this.basePath, 'payment')], {
       queryParams: {
         studentId: row.id,
         amount: Number(row.balance).toFixed(2),

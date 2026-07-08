@@ -2,11 +2,12 @@ import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { DecimalPipe } from '@angular/common';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
-import { STUDENT_NAV_ITEMS } from '../../core/config/student-nav';
+import { STUDENT_NAV_SECTIONS } from '../../core/config/student-nav';
 import { ApiService } from '../../core/services/api.service';
 import { AuthService } from '../../core/services/auth.service';
 import { formatStudentClassLabel } from '../../core/utils/class-display';
 import { changePasswordDashboardLink } from '../../core/utils/change-password-route.util';
+import { environment } from '../../../environments/environment';
 
 interface StudentDashboardData {
   student: {
@@ -27,6 +28,18 @@ interface StudentDashboardData {
     maxScore?: number;
     weekStart: string;
     subjectName?: string;
+  }[];
+  recentClassAssignments: {
+    id: string;
+    title: string;
+    instructions?: string;
+    originalFileName: string;
+    fileUrl: string;
+    fileSize: number;
+    dueDate?: string;
+    createdAt: string;
+    subjectName?: string;
+    teacherName?: string;
   }[];
   recentSchedules: {
     id: string;
@@ -50,7 +63,7 @@ export class StudentDashboardComponent implements OnInit {
   private api = inject(ApiService);
   private auth = inject(AuthService);
 
-  readonly nav = STUDENT_NAV_ITEMS;
+  readonly navSections = STUDENT_NAV_SECTIONS;
 
   data = signal<StudentDashboardData | null>(null);
   loading = signal(true);
@@ -115,8 +128,8 @@ export class StudentDashboardComponent implements OnInit {
       {
         key: 'homework',
         title: 'Assignments',
-        value: String(d?.recentAssessments?.length ?? 0),
-        caption: 'Recent weekly assessments',
+        value: String((d?.recentClassAssignments?.length ?? 0) + (d?.recentAssessments?.length ?? 0)),
+        caption: 'Class work and assessments',
         icon: '📝',
         tone: 'indigo',
         link: '/student/homework',
@@ -133,7 +146,7 @@ export class StudentDashboardComponent implements OnInit {
     ];
   });
 
-  readonly studentNav = STUDENT_NAV_ITEMS;
+  readonly studentNav = STUDENT_NAV_SECTIONS;
   readonly changePasswordLink = changePasswordDashboardLink('student');
 
   readonly quickLinks = [
@@ -164,5 +177,10 @@ export class StudentDashboardComponent implements OnInit {
     const d = new Date(dateStr);
     if (Number.isNaN(d.getTime())) return dateStr;
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+
+  fileDownloadUrl(fileUrl: string): string {
+    const origin = environment.apiUrl.replace(/\/api$/, '');
+    return `${origin}${fileUrl}`;
   }
 }

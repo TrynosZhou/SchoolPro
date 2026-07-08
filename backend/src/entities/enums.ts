@@ -2,6 +2,7 @@ export enum UserRole {
   DIRECTOR = 'director',
   PRINCIPAL = 'principal',
   ADMIN = 'admin',
+  ACCOUNTANT = 'accountant',
   TEACHER = 'teacher',
   PARENT = 'parent',
   STUDENT = 'student',

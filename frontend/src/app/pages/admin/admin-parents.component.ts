@@ -30,6 +30,7 @@ interface ParentRow {
   phone: string | null;
   isActive: boolean;
   occupation: string | null;
+  gender: string | null;
   address: string | null;
   receivesWhatsApp: boolean;
   linkedStudents: LinkedStudent[];
@@ -47,6 +48,11 @@ export class AdminParentsComponent implements OnInit {
   private api = inject(ApiService);
   private router = inject(Router);
   readonly adminNav = ADMIN_NAV_SECTIONS;
+  readonly genderOptions: { value: string; label: string }[] = [
+    { value: '', label: 'Not set' },
+    { value: 'male', label: 'Male' },
+    { value: 'female', label: 'Female' },
+  ];
 
   parents = signal<ParentRow[]>([]);
   loading = signal(true);
@@ -73,6 +79,7 @@ export class AdminParentsComponent implements OnInit {
     phone: '',
     password: '',
     occupation: '',
+    gender: '',
     address: '',
     receivesWhatsApp: true,
     isActive: true,
@@ -180,6 +187,7 @@ export class AdminParentsComponent implements OnInit {
       phone: '',
       password: '',
       occupation: '',
+      gender: '',
       address: '',
       receivesWhatsApp: true,
       isActive: true,
@@ -205,11 +213,12 @@ export class AdminParentsComponent implements OnInit {
       phone: parent.phone ?? '',
       password: '',
       occupation: parent.occupation ?? '',
+      gender: parent.gender ?? '',
       address: parent.address ?? '',
       receivesWhatsApp: parent.receivesWhatsApp,
       isActive: parent.isActive,
       linkAdmissionNumber: '',
-      relationship: 'Parent',
+      relationship: parent.linkedStudents[0]?.relationship ?? 'Parent',
     };
     this.showPassword.set(false);
     this.drawerOpen.set(true);
@@ -234,6 +243,7 @@ export class AdminParentsComponent implements OnInit {
       email: this.form.email.trim(),
       phone: this.form.phone.trim() || undefined,
       occupation: this.form.occupation.trim() || undefined,
+      gender: this.form.gender.trim() || undefined,
       address: this.form.address.trim() || undefined,
       receivesWhatsApp: this.form.receivesWhatsApp,
       linkAdmissionNumber: this.form.linkAdmissionNumber.trim() || undefined,

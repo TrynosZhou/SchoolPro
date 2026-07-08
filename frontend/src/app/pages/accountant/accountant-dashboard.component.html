@@ -1,0 +1,42 @@
+<app-portal-layout portalTitle="Accountant Portal" pageTitle="Dashboard" [navSections]="nav">
+  <header class="hero">
+    <div class="hero-copy">
+      <p class="eyebrow">Finance &amp; registration</p>
+      <h1>Good day, {{ greetingName() }}</h1>
+      <p>Register new students, manage billing, record payments, and run financial reports.</p>
+    </div>
+  </header>
+
+  <section class="quick-grid">
+    <a routerLink="/accountant/students" class="quick-card">
+      <span class="icon">👥</span>
+      <strong>Register students</strong>
+      <span>Add new learners to the school registry</span>
+    </a>
+    <a routerLink="/accountant/payment" class="quick-card">
+      <span class="icon">💳</span>
+      <strong>Record payment</strong>
+      <span>Capture fees and issue receipts</span>
+    </a>
+    <a routerLink="/accountant/billing" class="quick-card">
+      <span class="icon">🧾</span>
+      <strong>Billing</strong>
+      <span>Invoices and tuition billing</span>
+    </a>
+    <a routerLink="/accountant/fin-reports/outstanding-invoices" class="quick-card">
+      <span class="icon">📊</span>
+      <strong>Outstanding invoices</strong>
+      <span>Debtors and follow-up</span>
+    </a>
+    <a routerLink="/accountant/manage-fees" class="quick-card">
+      <span class="icon">💵</span>
+      <strong>Manage fees</strong>
+      <span>Fee catalog and tuition rates</span>
+    </a>
+    <a routerLink="/accountant/finance" class="quick-card">
+      <span class="icon">📚</span>
+      <strong>Financial books</strong>
+      <span>Cashbook, debtors, statements</span>
+    </a>
+  </section>
+</app-portal-layout>

@@ -24,6 +24,9 @@ export class Parent {
   @Column({ nullable: true })
   occupation?: string;
 
+  @Column({ type: 'varchar', length: 16, nullable: true })
+  gender?: string | null;
+
   @Column({ nullable: true })
   address?: string;
 

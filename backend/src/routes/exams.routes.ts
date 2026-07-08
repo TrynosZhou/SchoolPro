@@ -44,8 +44,9 @@ import {
   unpublishResults,
 } from '../services/publish-results.service';
 import { ResultsPublication } from '../entities/ResultsPublication';
-import { requireModuleAccess } from '../middleware/access-control';
+import { requireModuleAccess, requireFinanceOrModuleAccess } from '../middleware/access-control';
 import { AccessControlService } from '../services/access-control.service';
+import { SCHOOL_READ_ROLES } from '../config/portal-roles';
 import { assertTeacherClassAccess, assertTeacherSubjectAccess } from '../utils/teacher-class-access';
 
 const PUBLISH_ROLES = [UserRole.ADMIN, UserRole.PRINCIPAL, UserRole.DIRECTOR];
@@ -213,7 +214,7 @@ router.get(
   },
 );
 
-router.get('/terms', authorize(UserRole.TEACHER, UserRole.ADMIN, UserRole.PRINCIPAL, UserRole.DIRECTOR, UserRole.PARENT, UserRole.STUDENT), acadView, async (_req, res: Response) => {
+router.get('/terms', authorize(...SCHOOL_READ_ROLES, UserRole.TEACHER, UserRole.PARENT, UserRole.STUDENT), requireFinanceOrModuleAccess('academics', 'view'), async (_req, res: Response) => {
   const years = await AppDataSource.getRepository(SchoolYear).find({
     relations: relations('terms'),
     order: { startDate: 'DESC' },

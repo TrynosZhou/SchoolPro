@@ -44,7 +44,7 @@ export class AccessControlService {
   /** Student IDs the user may access for a given module scope. */
   static async getAccessibleStudentIds(user: AuthPayload): Promise<string[] | 'all'> {
     const role = mapUserRoleToAccessRole(user.role);
-    if (role === 'admin') return 'all';
+    if (role === 'admin' || role === 'accountant') return 'all';
     if (role === 'teacher' && user.staffId) {
       const rows: { id: string }[] = await AppDataSource.query(
         `

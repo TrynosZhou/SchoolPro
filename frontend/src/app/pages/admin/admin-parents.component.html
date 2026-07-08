@@ -337,6 +337,14 @@
             <span>Occupation</span>
             <input [(ngModel)]="form.occupation" name="occupation" />
           </label>
+          <label class="field">
+            <span>Gender</span>
+            <select [(ngModel)]="form.gender" name="gender">
+              @for (opt of genderOptions; track opt.value) {
+                <option [value]="opt.value">{{ opt.label }}</option>
+              }
+            </select>
+          </label>
           <label class="field span-2">
             <span>Address</span>
             <input [(ngModel)]="form.address" name="address" />
@@ -385,6 +393,8 @@
             <span>Relationship</span>
             <select [(ngModel)]="form.relationship" name="relationship">
               <option value="Parent">Parent</option>
+              <option value="Mother">Mother</option>
+              <option value="Father">Father</option>
               <option value="Guardian">Guardian</option>
             </select>
           </label>

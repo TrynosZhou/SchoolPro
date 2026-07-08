@@ -5,6 +5,9 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { forkJoin } from 'rxjs';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
+import { AuthService } from '../../core/services/auth.service';
+import { NavSection } from '../../shared/portal-layout/portal-layout.component';
+import { resolveStaffPortalContext, portalLink } from '../../core/utils/staff-portal.util';
 import { ApiService } from '../../core/services/api.service';
 import { Student } from '../../core/models';
 import { formatGenderLabel, formatStudentClassLabel } from '../../core/utils/class-display';
@@ -56,8 +59,11 @@ export class AdminRecordPaymentComponent implements OnInit {
   private api = inject(ApiService);
   private route = inject(ActivatedRoute);
   private router = inject(Router);
+  private auth = inject(AuthService);
 
-  readonly adminNav = ADMIN_NAV_SECTIONS;
+  portalTitle = 'Admin Portal';
+  navSections: NavSection[] = ADMIN_NAV_SECTIONS;
+  basePath = '/admin';
 
   loading = signal(true);
   submitting = signal(false);
@@ -105,14 +111,19 @@ export class AdminRecordPaymentComponent implements OnInit {
   genderLabel = computed(() => formatGenderLabel(this.student()?.gender));
 
   ngOnInit(): void {
+    const ctx = resolveStaffPortalContext(this.router.url, this.auth.user()?.role);
+    this.portalTitle = ctx.portalTitle;
+    this.navSections = ctx.navSections;
+    this.basePath = ctx.basePath;
     const studentId = this.route.snapshot.paramMap.get('studentId')?.trim();
     if (!studentId) {
-      void this.router.navigate(['/admin/fin-reports/outstanding-invoices']);
+      void this.router.navigate([portalLink(this.basePath, 'fin-reports/outstanding-invoices')]);
       return;
     }
 
     const invoiceId = this.route.snapshot.queryParamMap.get('invoiceId')?.trim() || '';
-    this.loadStudentContext(studentId, invoiceId);
+    const invoiceNumber = this.route.snapshot.queryParamMap.get('invoiceNumber')?.trim() || '';
+    this.loadStudentContext(studentId, invoiceId, invoiceNumber);
   }
 
   selectInvoice(inv: InvoiceRow): void {
@@ -181,7 +192,11 @@ export class AdminRecordPaymentComponent implements OnInit {
     });
   }
 
-  private loadStudentContext(studentId: string, preselectInvoiceId: string): void {
+  private loadStudentContext(
+    studentId: string,
+    preselectInvoiceId: string,
+    preselectInvoiceNumber = '',
+  ): void {
     this.loading.set(true);
     forkJoin({
       student: this.api.get<Student>(`/students/${studentId}`),
@@ -216,6 +231,10 @@ export class AdminRecordPaymentComponent implements OnInit {
           const inv = unpaid.find((i) => i.id === preselectInvoiceId);
           if (inv) this.selectInvoice(inv);
           else this.payFullBalance();
+        } else if (preselectInvoiceNumber) {
+          const inv = unpaid.find((i) => i.invoiceNumber === preselectInvoiceNumber);
+          if (inv) this.selectInvoice(inv);
+          else this.payFullBalance();
         } else {
           this.payFullBalance();
         }
@@ -225,7 +244,7 @@ export class AdminRecordPaymentComponent implements OnInit {
       error: (e) => {
         this.loading.set(false);
         this.showToast('error', e.error?.message || 'Could not load student billing details');
-        setTimeout(() => void this.router.navigate(['/admin/fin-reports/outstanding-invoices']), 1500);
+        setTimeout(() => void this.router.navigate([portalLink(this.basePath, 'fin-reports/outstanding-invoices')]), 1500);
       },
     });
   }

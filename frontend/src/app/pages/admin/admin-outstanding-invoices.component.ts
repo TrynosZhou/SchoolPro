@@ -4,6 +4,9 @@ import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
+import { AuthService } from '../../core/services/auth.service';
+import { NavSection } from '../../shared/portal-layout/portal-layout.component';
+import { resolveStaffPortalContext, portalLink } from '../../core/utils/staff-portal.util';
 import { ApiService } from '../../core/services/api.service';
 import { formatGenderLabel, formatStudentClassLabel } from '../../core/utils/class-display';
 
@@ -87,8 +90,11 @@ type ViewMode = 'grouped' | 'flat' | 'cards';
 export class AdminOutstandingInvoicesComponent implements OnInit {
   private api = inject(ApiService);
   private router = inject(Router);
+  private auth = inject(AuthService);
 
-  readonly adminNav = ADMIN_NAV_SECTIONS;
+  portalTitle = 'Admin Portal';
+  navSections: NavSection[] = ADMIN_NAV_SECTIONS;
+  basePath = '/admin';
 
   loading = signal(true);
   pdfLoading = signal(false);
@@ -303,6 +309,10 @@ export class AdminOutstandingInvoicesComponent implements OnInit {
   );
 
   ngOnInit() {
+    const ctx = resolveStaffPortalContext(this.router.url, this.auth.user()?.role);
+    this.portalTitle = ctx.portalTitle;
+    this.navSections = ctx.navSections;
+    this.basePath = ctx.basePath;
     this.loadReport();
   }
 
@@ -450,7 +460,7 @@ export class AdminOutstandingInvoicesComponent implements OnInit {
   }
 
   recordPaymentForBalance(row: StudentBalanceRow): void {
-    void this.router.navigate(['/admin/fin-reports/record-payment', row.id]);
+    void this.router.navigate([portalLink(this.basePath, `fin-reports/record-payment/${row.id}`)]);
   }
 
   selectClassChip(classId: string) {
@@ -466,7 +476,7 @@ export class AdminOutstandingInvoicesComponent implements OnInit {
   }
 
   recordPayment(studentId: string, invoiceId?: string): void {
-    void this.router.navigate(['/admin/fin-reports/record-payment', studentId], {
+    void this.router.navigate([portalLink(this.basePath, `fin-reports/record-payment/${studentId}`)], {
       queryParams: invoiceId ? { invoiceId } : {},
     });
   }

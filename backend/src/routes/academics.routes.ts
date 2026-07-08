@@ -24,6 +24,13 @@ import {
 import { notifyNewMessage } from '../services/message-notify.service';
 import { requireModuleAccess, denyUnlessModuleAccess } from '../middleware/access-control';
 import { logAudit } from '../services/audit-log.service';
+import { homeworkAssignmentUpload } from '../utils/homework-assignments';
+import {
+  createHomeworkAssignment,
+  listStudentHomeworkAssignments,
+  listTeacherHomeworkAssignments,
+  listTeacherSubjectsForClass,
+} from '../services/homework-assignment.service';
 
 const router = Router();
 router.use(authenticate);
@@ -125,6 +132,89 @@ router.post('/weekly-assessments/bulk', authorize(UserRole.TEACHER, UserRole.ADM
   }
   res.json(saved);
 });
+
+router.get(
+  '/homework-assignments/subjects',
+  authorize(UserRole.TEACHER, UserRole.ADMIN),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const classId = String(req.query.classId || '');
+      if (!classId) return res.status(400).json({ message: 'classId is required.' });
+      const staffId = req.user!.staffId;
+      if (!staffId) return res.status(403).json({ message: 'Teacher profile not linked.' });
+      const subjects = await listTeacherSubjectsForClass(staffId, classId);
+      res.json(subjects);
+    } catch (err) {
+      const e = err as Error & { statusCode?: number };
+      res.status(e.statusCode || 400).json({ message: e.message || 'Failed to load subjects.' });
+    }
+  },
+);
+
+router.get(
+  '/homework-assignments',
+  authorize(UserRole.TEACHER, UserRole.ADMIN, UserRole.STUDENT, UserRole.PARENT, UserRole.PRINCIPAL),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const termId = req.query.termId ? String(req.query.termId) : undefined;
+      if (req.user!.role === UserRole.STUDENT) {
+        if (!req.user!.studentId) return res.json([]);
+        const rows = await listStudentHomeworkAssignments(req.user!.studentId, termId);
+        return res.json(rows);
+      }
+      const classId = req.query.classId ? String(req.query.classId) : undefined;
+      const rows = await listTeacherHomeworkAssignments(req, classId, termId);
+      res.json(rows);
+    } catch (err) {
+      const e = err as Error & { statusCode?: number };
+      res.status(e.statusCode || 400).json({ message: e.message || 'Failed to load assignments.' });
+    }
+  },
+);
+
+router.post(
+  '/homework-assignments',
+  authorize(UserRole.TEACHER, UserRole.ADMIN),
+  (req, res, next) => {
+    homeworkAssignmentUpload.single('file')(req, res, (err: unknown) => {
+      if (err) {
+        const message = err instanceof Error ? err.message : 'File upload failed.';
+        return res.status(400).json({ message });
+      }
+      next();
+    });
+  },
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const file = req.file;
+      if (!file) return res.status(400).json({ message: 'Assignment file is required.' });
+
+      const classId = String(req.body.classId || '');
+      const termId = String(req.body.termId || '');
+      const title = String(req.body.title || '').trim();
+      if (!classId || !termId || !title) {
+        return res.status(400).json({ message: 'classId, termId, and title are required.' });
+      }
+
+      const created = await createHomeworkAssignment(req, {
+        classId,
+        termId,
+        subjectId: req.body.subjectId ? String(req.body.subjectId) : undefined,
+        title,
+        instructions: req.body.instructions ? String(req.body.instructions) : undefined,
+        dueDate: req.body.dueDate ? String(req.body.dueDate) : undefined,
+        originalFileName: file.originalname,
+        storedFileName: file.filename,
+        mimeType: file.mimetype,
+        fileSize: file.size,
+      });
+      res.status(201).json(created);
+    } catch (err) {
+      const e = err as Error & { statusCode?: number };
+      res.status(e.statusCode || 400).json({ message: e.message || 'Failed to post assignment.' });
+    }
+  },
+);
 
 router.get('/messages/recipients', authorize(UserRole.TEACHER, UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), msgView, async (req: AuthRequest, res: Response) => {
   const userRepo = AppDataSource.getRepository(User);

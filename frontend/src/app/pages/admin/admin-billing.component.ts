@@ -5,6 +5,8 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { forkJoin } from 'rxjs';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
+import { resolveStaffPortalContext, portalLink } from '../../core/utils/staff-portal.util';
+import { NavSection } from '../../shared/portal-layout/portal-layout.component';
 import { ApiService } from '../../core/services/api.service';
 import { AuthService } from '../../core/services/auth.service';
 import { environment } from '../../../environments/environment';
@@ -126,6 +128,10 @@ export class AdminBillingComponent implements OnInit {
   private auth = inject(AuthService);
   private route = inject(ActivatedRoute);
   private router = inject(Router);
+
+  portalTitle = 'Admin Portal';
+  navSections: NavSection[] = ADMIN_NAV_SECTIONS;
+  basePath = '/admin';
 
   readonly adminNav = ADMIN_NAV_SECTIONS;
 
@@ -314,6 +320,11 @@ export class AdminBillingComponent implements OnInit {
   );
 
   ngOnInit() {
+    const ctx = resolveStaffPortalContext(this.router.url, this.auth.user()?.role);
+    this.portalTitle = ctx.portalTitle;
+    this.navSections = ctx.navSections;
+    this.basePath = ctx.basePath;
+
     this.applyPageMode((this.route.snapshot.data['financeMode'] as FinanceMode) || 'billing');
 
     this.route.data.subscribe((data) => {
@@ -327,7 +338,7 @@ export class AdminBillingComponent implements OnInit {
       const invoiceId = params.get('invoiceId') || '';
 
       if (studentId && this.pageMode() === 'billing') {
-        this.router.navigate(['/admin/payment'], {
+        this.router.navigate([portalLink(this.basePath, 'payment')], {
           queryParams: {
             studentId,
             ...(amountParam ? { amount: amountParam } : {}),
@@ -885,7 +896,7 @@ export class AdminBillingComponent implements OnInit {
       return;
     }
     const balance = Number(inv.totalAmount) - Number(inv.amountPaid);
-    this.router.navigate(['/admin/payment'], {
+    this.router.navigate([portalLink(this.basePath, 'payment')], {
       queryParams: {
         studentId,
         invoiceId: inv.id,

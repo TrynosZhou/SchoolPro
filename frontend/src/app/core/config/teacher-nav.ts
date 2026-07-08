@@ -23,7 +23,7 @@ export const TEACHER_NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
-    heading: 'Academics',
+    heading: 'Examinations',
     items: [
       { label: 'Input Marks', path: '/teacher/exams', icon: '📝', permission: 'academics.exams' },
       { label: 'Report Cards', path: '/teacher/report-cards', icon: '📄', permission: 'academics.report_cards' },
@@ -31,7 +31,13 @@ export const TEACHER_NAV_SECTIONS: NavSection[] = [
       { label: 'Results Analysis', path: '/teacher/results-analysis', icon: '📈', permission: 'academics.results' },
       { label: 'Ranking', path: '/teacher/ranking', icon: '🏆', permission: 'academics.ranking' },
       { label: 'Mark Entry Progress', path: '/teacher/mark-entry-progress', icon: '📊', permission: 'academics.exams' },
+    ],
+  },
+  {
+    heading: 'Academics',
+    items: [
       { label: 'Record Book', path: '/teacher/record-book', icon: '📒', permission: 'academics.exams' },
+      { label: 'Assignments', path: '/teacher/assignments', icon: '📤', permission: 'academics.exams' },
     ],
   },
   {
@@ -55,10 +61,16 @@ function itemAllowed(granted: Set<string>, item: NavItem): boolean {
 }
 
 /** Build teacher sidebar sections visible for the signed-in user's permissions. */
-export function buildTeacherNavSections(userPermissions: string[] | undefined): NavSection[] {
+export function buildTeacherNavSections(
+  userPermissions: string[] | undefined,
+  options?: { classTeacher?: boolean },
+): NavSection[] {
   const granted = new Set(userPermissions ?? []);
   return TEACHER_NAV_SECTIONS.map((section) => ({
     ...section,
-    items: section.items.filter((item) => itemAllowed(granted, item)),
+    items: section.items.filter((item) => {
+      if (item.path === '/teacher/enrollment' && options?.classTeacher === false) return false;
+      return itemAllowed(granted, item);
+    }),
   })).filter((section) => section.path || section.items.length > 0);
 }

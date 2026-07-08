@@ -220,6 +220,17 @@
                 </select>
               </div>
             </div>
+            <div class="field">
+              <label for="gender">Gender (optional)</label>
+              <div class="input-wrap">
+                <select id="gender" [(ngModel)]="signup.gender" name="gender">
+                  <option value="">Prefer not to say</option>
+                  <option value="male">Male</option>
+                  <option value="female">Female</option>
+                </select>
+              </div>
+              <small class="field-hint">If left blank, Father/Mother relationship may be used for your dashboard greeting.</small>
+            </div>
           }
 
           @if (mode() === 'signin' && isStudentRole()) {

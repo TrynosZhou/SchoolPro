@@ -44,6 +44,8 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { ensureUploadDirs } from '../utils/pdf';
+import { resolveParentGender } from '../utils/gender';
+import { SCHOOL_READ_ROLES } from '../config/portal-roles';
 
 const router = Router();
 router.use(authenticate);
@@ -262,7 +264,7 @@ router.post('/integrations/test/:provider', authorize(UserRole.ADMIN), async (re
   return res.status(404).json({ message: 'Unknown integration provider' });
 });
 
-router.get('/school-years', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (_req, res: Response) => {
+router.get('/school-years', authorize(...SCHOOL_READ_ROLES), async (_req, res: Response) => {
   const repo = AppDataSource.getRepository(SchoolYear);
   res.json(await repo.find({ relations: relations('terms'), order: { startDate: 'DESC' } }));
 });
@@ -1074,7 +1076,7 @@ router.post('/staff', authorize(UserRole.ADMIN), async (req, res: Response) => {
   const existing = await userRepo.findOne({ where: { email: email?.toLowerCase() } });
   if (existing) return res.status(400).json({ message: 'Email already registered' });
 
-  const allowedRoles = [UserRole.TEACHER, UserRole.ADMIN, UserRole.PRINCIPAL];
+  const allowedRoles = [UserRole.TEACHER, UserRole.ADMIN, UserRole.PRINCIPAL, UserRole.ACCOUNTANT];
   const staffRole = allowedRoles.includes(role) ? role : UserRole.TEACHER;
 
   const plainPassword = password || 'Teacher123!';
@@ -1237,7 +1239,7 @@ router.post('/uniform/sales', authorize(UserRole.ADMIN), async (req, res: Respon
   res.status(201).json(sale);
 });
 
-const STAFF_PORTAL_ROLES = [UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.ADMIN, UserRole.TEACHER];
+const STAFF_PORTAL_ROLES = [UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.ADMIN, UserRole.ACCOUNTANT, UserRole.TEACHER];
 
 function serializeManagedUser(user: User) {
   return {
@@ -1335,6 +1337,7 @@ router.post('/users', authorize(UserRole.ADMIN), async (req: AuthRequest, res: R
     admissionNumber,
     linkAdmissionNumber,
     relationship,
+    gender,
   } = req.body || {};
 
   const trimmedEmail = String(email || '').trim().toLowerCase();
@@ -1413,7 +1416,11 @@ router.post('/users', authorize(UserRole.ADMIN), async (req: AuthRequest, res: R
     }
   } else if (portalRole === UserRole.PARENT) {
     const parentRepo = AppDataSource.getRepository(Parent);
-    const parent = await parentRepo.save(parentRepo.create({ userId: user.id }));
+    const parentGender = resolveParentGender(gender, relationship);
+    const parent = await parentRepo.save(parentRepo.create({
+      userId: user.id,
+      gender: parentGender ?? undefined,
+    }));
 
     const linkAdmission = String(linkAdmissionNumber || '').trim().toUpperCase();
     if (linkAdmission) {
@@ -1593,6 +1600,7 @@ function serializeParent(parent: Parent) {
     phone: user.phone ?? null,
     isActive: user.isActive,
     occupation: parent.occupation ?? null,
+    gender: parent.gender ?? null,
     address: parent.address ?? null,
     receivesWhatsApp: parent.receivesWhatsApp,
     linkedStudents,
@@ -1755,6 +1763,7 @@ router.post('/parents', authorize(UserRole.ADMIN), async (req: AuthRequest, res:
     receivesWhatsApp,
     linkAdmissionNumber,
     relationship,
+    gender,
   } = req.body || {};
 
   const trimmedEmail = String(email || '').trim().toLowerCase();
@@ -1786,11 +1795,13 @@ router.post('/parents', authorize(UserRole.ADMIN), async (req: AuthRequest, res:
   }));
 
   const parentRepo = AppDataSource.getRepository(Parent);
+  const parentGender = resolveParentGender(gender, relationship);
   const parent = await parentRepo.save(parentRepo.create({
     userId: user.id,
     occupation: occupation?.trim() || undefined,
     address: address?.trim() || undefined,
     receivesWhatsApp: receivesWhatsApp !== false,
+    gender: parentGender ?? undefined,
   }));
 
   const linkAdmission = String(linkAdmissionNumber || '').trim().toUpperCase();
@@ -1840,6 +1851,7 @@ router.patch('/parents/:id', authorize(UserRole.ADMIN), async (req: AuthRequest,
     isActive,
     linkAdmissionNumber,
     relationship,
+    gender,
   } = req.body || {};
 
   const userRepo = AppDataSource.getRepository(User);
@@ -1870,6 +1882,13 @@ router.patch('/parents/:id', authorize(UserRole.ADMIN), async (req: AuthRequest,
   if (occupation !== undefined) parent.occupation = occupation?.trim() || undefined;
   if (address !== undefined) parent.address = address?.trim() || undefined;
   if (receivesWhatsApp !== undefined) parent.receivesWhatsApp = Boolean(receivesWhatsApp);
+  if (gender !== undefined || relationship !== undefined) {
+    const rel = relationship !== undefined ? relationship : parent.guardians?.[0]?.relationship;
+    parent.gender = resolveParentGender(
+      gender !== undefined ? gender : parent.gender,
+      rel,
+    ) ?? undefined;
+  }
 
   await userRepo.save(user);
   await parentRepo.save(parent);

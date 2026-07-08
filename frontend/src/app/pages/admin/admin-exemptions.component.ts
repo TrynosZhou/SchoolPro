@@ -1,7 +1,11 @@
+import { Router } from '@angular/router';
 import { Component, inject, signal, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
+import { AuthService } from '../../core/services/auth.service';
+import { NavSection } from '../../shared/portal-layout/portal-layout.component';
+import { resolveStaffPortalContext } from '../../core/utils/staff-portal.util';
 import { ApiService } from '../../core/services/api.service';
 import { formatGenderLabel, formatStudentClassLabel } from '../../core/utils/class-display';
 
@@ -40,7 +44,11 @@ interface TuitionExemptionRow {
 })
 export class AdminExemptionsComponent implements OnInit {
   private api = inject(ApiService);
+  private router = inject(Router);
+  private auth = inject(AuthService);
 
+  portalTitle = 'Admin Portal';
+  navSections: NavSection[] = ADMIN_NAV_SECTIONS;
   readonly adminNav = ADMIN_NAV_SECTIONS;
 
   query = '';
@@ -60,6 +68,9 @@ export class AdminExemptionsComponent implements OnInit {
   formReason = '';
 
   ngOnInit(): void {
+    const ctx = resolveStaffPortalContext(this.router.url, this.auth.user()?.role);
+    this.portalTitle = ctx.portalTitle;
+    this.navSections = ctx.navSections;
     this.loadExemptions();
   }
 

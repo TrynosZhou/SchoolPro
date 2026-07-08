@@ -1,6 +1,6 @@
-<app-portal-layout portalTitle="Student Portal" pageTitle="Homework & Assignments" [navItems]="nav">
+<app-portal-layout portalTitle="Student Portal" pageTitle="Homework & Assignments" homePath="/student" [navSections]="navSections">
   <header class="page-intro">
-    <p>View weekly assessments and class learning schedules posted by your teachers.</p>
+    <p>Download class assignments posted by your teachers, and review weekly assessments and learning schedules.</p>
   </header>
 
   <section class="toolbar card">
@@ -18,8 +18,11 @@
     </div>
 
     <nav class="tab-bar" aria-label="Homework views">
-      <button type="button" class="tab-btn" [class.active]="activeTab === 'assignments'" (click)="setTab('assignments')">
-        My assignments
+      <button type="button" class="tab-btn" [class.active]="activeTab === 'class'" (click)="setTab('class')">
+        Class assignments
+      </button>
+      <button type="button" class="tab-btn" [class.active]="activeTab === 'assessments'" (click)="setTab('assessments')">
+        My assessments
       </button>
       <button type="button" class="tab-btn" [class.active]="activeTab === 'schedules'" (click)="setTab('schedules')">
         Class schedules
@@ -29,11 +32,46 @@
 
   @if (loading() || loadingData()) {
     <div class="empty card"><p>Loading…</p></div>
-  } @else if (activeTab === 'assignments') {
+  } @else if (activeTab === 'class') {
+    @if (!classAssignments().length) {
+      <div class="empty card">
+        <span class="empty-icon">📤</span>
+        <p>No class assignments posted for this term yet.</p>
+      </div>
+    } @else {
+      <div class="item-grid">
+        @for (a of classAssignments(); track a.id) {
+          <article class="item-card">
+            <header>
+              @if (a.subjectName) {
+                <span class="subject-pill">{{ a.subjectName }}</span>
+              } @else {
+                <span class="subject-pill">Class work</span>
+              }
+              <time>{{ formatWeek(a.createdAt) }}</time>
+            </header>
+            <h3>{{ a.title }}</h3>
+            @if (a.teacherName) {
+              <p class="teacher-line">Posted by {{ a.teacherName }}</p>
+            }
+            @if (a.instructions) {
+              <p class="remarks">{{ a.instructions }}</p>
+            }
+            @if (a.dueDate) {
+              <p class="due-line">Due: <strong>{{ formatWeek(a.dueDate) }}</strong></p>
+            }
+            <a class="download-btn" [href]="fileDownloadUrl(a.fileUrl)" target="_blank" rel="noopener">
+              Download {{ a.originalFileName }} ({{ formatFileSize(a.fileSize) }})
+            </a>
+          </article>
+        }
+      </div>
+    }
+  } @else if (activeTab === 'assessments') {
     @if (!assessments().length) {
       <div class="empty card">
         <span class="empty-icon">📝</span>
-        <p>No assignments recorded for this term yet.</p>
+        <p>No assessments recorded for this term yet.</p>
       </div>
     } @else {
       <div class="item-grid">

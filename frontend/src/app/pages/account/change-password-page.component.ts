@@ -4,7 +4,7 @@ import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.
 import { ChangePasswordFormComponent } from '../../shared/change-password/change-password-form.component';
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
 import { PARENT_NAV_ITEMS } from '../../core/config/parent-nav';
-import { STUDENT_NAV_ITEMS } from '../../core/config/student-nav';
+import { STUDENT_NAV_SECTIONS } from '../../core/config/student-nav';
 import { buildTeacherNavSections } from '../../core/config/teacher-nav';
 import { DIRECTOR_NAV_ITEMS } from '../../core/config/director-nav';
 import { PRINCIPAL_NAV_ITEMS } from '../../core/config/principal-nav';
@@ -90,13 +90,16 @@ export class ChangePasswordPageComponent {
     if (url.startsWith('/admin')) {
       return ADMIN_NAV_SECTIONS;
     }
+    if (url.startsWith('/student')) {
+      return STUDENT_NAV_SECTIONS;
+    }
     return [];
   }
 
   private resolveNavItems(): NavItem[] {
     const url = this.router.url;
     if (url.startsWith('/parent')) return PARENT_NAV_ITEMS;
-    if (url.startsWith('/student')) return STUDENT_NAV_ITEMS;
+    if (url.startsWith('/student')) return [];
     if (url.startsWith('/director')) return DIRECTOR_NAV_ITEMS;
     if (url.startsWith('/principal')) return PRINCIPAL_NAV_ITEMS;
     return [];

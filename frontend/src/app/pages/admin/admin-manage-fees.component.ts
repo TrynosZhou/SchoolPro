@@ -1,10 +1,13 @@
 import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { DecimalPipe } from '@angular/common';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
 import { ApiService } from '../../core/services/api.service';
+import { AuthService } from '../../core/services/auth.service';
+import { NavSection } from '../../shared/portal-layout/portal-layout.component';
+import { resolveStaffPortalContext } from '../../core/utils/staff-portal.util';
 
 export interface SchoolFeeRow {
   id: string;
@@ -26,6 +29,12 @@ export interface SchoolFeeRow {
 })
 export class AdminManageFeesComponent implements OnInit {
   private api = inject(ApiService);
+  private router = inject(Router);
+  private auth = inject(AuthService);
+
+  portalTitle = 'Admin Portal';
+  navSections: NavSection[] = ADMIN_NAV_SECTIONS;
+  basePath = '/admin';
 
   readonly adminNav = ADMIN_NAV_SECTIONS;
   fees = signal<SchoolFeeRow[]>([]);
@@ -57,6 +66,10 @@ export class AdminManageFeesComponent implements OnInit {
   activeCount = computed(() => this.fees().filter((f) => f.isActive).length);
 
   ngOnInit() {
+    const ctx = resolveStaffPortalContext(this.router.url, this.auth.user()?.role);
+    this.portalTitle = ctx.portalTitle;
+    this.navSections = ctx.navSections;
+    this.basePath = ctx.basePath;
     this.loadFees();
   }
 

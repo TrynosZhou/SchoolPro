@@ -1,12 +1,14 @@
 import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { DecimalPipe, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
+import { AuthService } from '../../core/services/auth.service';
+import { NavSection } from '../../shared/portal-layout/portal-layout.component';
+import { resolveStaffPortalContext } from '../../core/utils/staff-portal.util';
 import { ApiService } from '../../core/services/api.service';
 import { formatGenderLabel, formatStudentClassLabel } from '../../core/utils/class-display';
-import { AuthService } from '../../core/services/auth.service';
 
 interface TermRow { id: string; name: string; startDate: string; endDate: string; isCurrent: boolean; }
 interface SchoolYearRow { id: string; name: string; terms?: TermRow[]; }
@@ -109,7 +111,10 @@ const ALL_TABS: { id: ReportTab; label: string; summaryOnly?: boolean }[] = [
 })
 export class AdminFeeCollectionRevenueComponent implements OnInit {
   private api = inject(ApiService);
+  private router = inject(Router);
   readonly auth = inject(AuthService);
+  portalTitle = 'Admin Portal';
+  navSections: NavSection[] = ADMIN_NAV_SECTIONS;
   readonly adminNav = ADMIN_NAV_SECTIONS;
   readonly feeTypes = FEE_TYPES;
   readonly paymentMethods = PAYMENT_METHODS;
@@ -197,6 +202,9 @@ export class AdminFeeCollectionRevenueComponent implements OnInit {
   });
 
   ngOnInit() {
+    const ctx = resolveStaffPortalContext(this.router.url, this.auth.user()?.role);
+    this.portalTitle = ctx.portalTitle;
+    this.navSections = ctx.navSections;
     this.api.get<SchoolYearRow[]>('/admin/school-years').subscribe({
       next: (years) => {
         const list: TermRow[] = [];

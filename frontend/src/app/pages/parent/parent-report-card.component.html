@@ -1,4 +1,10 @@
-<app-portal-layout [portalTitle]="portalTitle()" pageTitle="Report Card" [navItems]="nav()">
+<app-portal-layout
+  [portalTitle]="portalTitle()"
+  pageTitle="Report Card"
+  [homePath]="isStudent() ? '/student' : '/parent'"
+  [navSections]="navSections()"
+  [navItems]="navItems()"
+>
 
   <a [routerLink]="homeLink()" class="back-link">← Back to {{ isStudent() ? 'Report Cards' : 'My Children' }}</a>
 

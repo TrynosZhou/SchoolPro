@@ -4,7 +4,7 @@ import { DecimalPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { ApiService } from '../../core/services/api.service';
-import { formatStudentClassLabel } from '../../core/utils/class-display';
+import { formatStudentClassLabel, formatTitledFullName } from '../../core/utils/class-display';
 import { AuthService } from '../../core/services/auth.service';
 import { PARENT_NAV_ITEMS } from '../../core/config/parent-nav';
 import { changePasswordDashboardLink } from '../../core/utils/change-password-route.util';
@@ -66,11 +66,33 @@ export class ParentDashboardComponent implements OnInit {
   readonly nav = PARENT_NAV_ITEMS;
   readonly changePasswordLink = changePasswordDashboardLink('parent');
 
+  readonly todayLabel = new Intl.DateTimeFormat('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(new Date());
+
+  readonly greetingName = computed(() => {
+    const u = this.auth.user();
+    if (!u) return 'Parent';
+    const titled = formatTitledFullName(u.firstName, u.lastName, u.gender);
+    return titled || 'Parent';
+  });
+
   childCount = computed(() => this.children().length);
 
   isParent = computed(() => this.auth.user()?.role === 'parent');
 
   ngOnInit() {
+    this.api.get<{ gender?: string | null }>('/auth/me').subscribe({
+      next: (profile) => {
+        if (profile.gender != null) {
+          this.auth.patchUser({ gender: profile.gender });
+        }
+      },
+    });
+
     this.loadChildren();
   }
 

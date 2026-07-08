@@ -1,0 +1,45 @@
+.hero {
+  margin-bottom: 1.5rem;
+}
+
+.hero-copy h1 {
+  margin: 0.25rem 0 0.5rem;
+}
+
+.hero-copy p {
+  margin: 0;
+  color: var(--text-muted, #64748b);
+}
+
+.quick-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 1rem;
+}
+
+.quick-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 12px;
+  background: #fff;
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.quick-card:hover {
+  border-color: rgba(37, 99, 235, 0.35);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+}
+
+.quick-card .icon {
+  font-size: 1.4rem;
+}
+
+.quick-card span:last-child {
+  color: var(--text-muted, #64748b);
+  font-size: 0.92rem;
+}

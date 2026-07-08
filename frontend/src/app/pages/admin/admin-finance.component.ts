@@ -2,10 +2,13 @@ import { Component, inject, OnDestroy, OnInit, signal, computed } from '@angular
 import { FormsModule } from '@angular/forms';
 import { DecimalPipe, DatePipe } from '@angular/common';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { forkJoin } from 'rxjs';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
+import { AuthService } from '../../core/services/auth.service';
+import { NavSection } from '../../shared/portal-layout/portal-layout.component';
+import { resolveStaffPortalContext } from '../../core/utils/staff-portal.util';
 import { ApiService } from '../../core/services/api.service';
 import { formatStudentClassLabel } from '../../core/utils/class-display';
 import { Student } from '../../core/models';
@@ -71,8 +74,12 @@ interface StatementData {
 })
 export class AdminFinanceComponent implements OnInit, OnDestroy {
   private api = inject(ApiService);
+  private router = inject(Router);
+  private auth = inject(AuthService);
   private sanitizer = inject(DomSanitizer);
 
+  portalTitle = 'Admin Portal';
+  navSections: NavSection[] = ADMIN_NAV_SECTIONS;
   readonly adminNav = ADMIN_NAV_SECTIONS;
 
   activeTab = signal<Tab>('overview');
@@ -159,6 +166,9 @@ export class AdminFinanceComponent implements OnInit, OnDestroy {
   );
 
   ngOnInit() {
+    const ctx = resolveStaffPortalContext(this.router.url, this.auth.user()?.role);
+    this.portalTitle = ctx.portalTitle;
+    this.navSections = ctx.navSections;
     this.loadAll();
     this.api.get<Student[]>('/students').subscribe((s) => this.students.set(s));
   }

@@ -406,3 +406,13 @@
   font-weight: 700;
   color: #2563eb;
 }
+
+.file-link {
+  color: #4f46e5;
+  font-weight: 600;
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}

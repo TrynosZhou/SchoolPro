@@ -1,4 +1,4 @@
-<app-portal-layout portalTitle="Admin Portal" [pageTitle]="pageTitle()" [navSections]="adminNav">
+<app-portal-layout [portalTitle]="portalTitle" [pageTitle]="pageTitle()" [navSections]="navSections">
   <div
     class="billing-page"
     [class.billing-mode]="isBillingMode()"
@@ -17,20 +17,20 @@
           <p class="hero-sub">
             Record fee payments, view receipts, and collect outstanding balances from students.
             Issue new charges on
-            <a routerLink="/admin/billing">Billing</a>,
+            <a [routerLink]="basePath + '/billing'">Billing</a>,
             or open
-            <a routerLink="/admin/finance">Finance books</a>.
+            <a [routerLink]="basePath + '/finance'">Finance books</a>.
           </p>
         } @else {
           <h2>Student billing</h2>
           <p class="hero-sub">
             Create invoices, run bulk tuition billing, and track pending student charges.
             Collect payments on
-            <a routerLink="/admin/payment">Payment</a>,
+            <a [routerLink]="basePath + '/payment'">Payment</a>,
             view
-            <a routerLink="/admin/fin-reports/outstanding-invoices">Outstanding Invoices</a>,
+            <a [routerLink]="basePath + '/fin-reports/outstanding-invoices'">Outstanding Invoices</a>,
             or open
-            <a routerLink="/admin/manage-fees">Manage Fees</a>.
+            <a [routerLink]="basePath + '/manage-fees'">Manage Fees</a>.
           </p>
         }
       </div>
@@ -120,10 +120,10 @@
             <button type="button" class="btn-primary btn-sm" (click)="previewPdf()" [disabled]="loading() || pdfLoading()">
               {{ pdfLoading() ? 'Generating…' : 'Preview PDF' }}
             </button>
-            <a routerLink="/admin/billing" class="btn-primary btn-sm">Go to Billing</a>
+            <a [routerLink]="basePath + '/billing'" class="btn-primary btn-sm">Go to Billing</a>
           } @else {
-            <a routerLink="/admin/payment" class="btn-primary btn-sm">Go to Payment</a>
-            <a routerLink="/admin/manage-fees" class="btn-primary btn-sm">Manage fees</a>
+            <a [routerLink]="basePath + '/payment'" class="btn-primary btn-sm">Go to Payment</a>
+            <a [routerLink]="basePath + '/manage-fees'" class="btn-primary btn-sm">Manage fees</a>
           }
         </div>
       </div>
@@ -442,7 +442,7 @@
               <h3>Bulk invoice</h3>
               <p class="subtitle">
                 Invoice tuition for all registered students. Adds next-term tuition to each student's invoice balance
-                for the current term. Amounts come from <a routerLink="/admin/manage-fees">Manage Fees</a> (O-Level vs A-Level tuition).
+                for the current term. Amounts come from <a [routerLink]="basePath + '/manage-fees'">Manage Fees</a> (O-Level vs A-Level tuition).
               </p>
             </div>
             <button type="button" class="btn-outline btn-sm" (click)="refreshBulkPreview()" [disabled]="bulkPreviewLoading()">

@@ -1,4 +1,4 @@
-<app-portal-layout portalTitle="Student Portal" pageTitle="Dashboard" [navItems]="nav">
+<app-portal-layout portalTitle="Student Portal" pageTitle="Dashboard" homePath="/student" [navSections]="navSections">
   <div class="student-dashboard">
     <section class="hero">
       <div class="hero-glow" aria-hidden="true"></div>
@@ -68,19 +68,36 @@
         <div class="panel-head">
           <div>
             <h3>Recent assignments</h3>
-            <p class="panel-sub">Weekly assessments recorded for you</p>
+            <p class="panel-sub">Class work posted by your teachers</p>
           </div>
           <a routerLink="/student/homework" class="chip link-chip">View all →</a>
         </div>
         @if (loading()) {
           <p class="muted">Loading…</p>
-        } @else if (!data()?.recentAssessments?.length) {
+        } @else if (!data()?.recentClassAssignments?.length && !data()?.recentAssessments?.length) {
           <div class="empty-state">
             <span class="empty-icon">📝</span>
-            <p>No assignments recorded yet. Check back after your teachers post weekly work.</p>
+            <p>No assignments posted yet. Check back after your teachers share class work.</p>
           </div>
         } @else {
           <ul class="activity-list">
+            @for (a of data()!.recentClassAssignments; track a.id) {
+              <li>
+                <div class="activity-main">
+                  <strong>{{ a.title }}</strong>
+                  @if (a.subjectName) {
+                    <span class="tag">{{ a.subjectName }}</span>
+                  }
+                </div>
+                <div class="activity-meta">
+                  <span>{{ formatWeek(a.createdAt) }}</span>
+                  @if (a.teacherName) {
+                    <span>{{ a.teacherName }}</span>
+                  }
+                  <a class="file-link" [href]="fileDownloadUrl(a.fileUrl)" target="_blank" rel="noopener">Download</a>
+                </div>
+              </li>
+            }
             @for (a of data()!.recentAssessments; track a.id) {
               <li>
                 <div class="activity-main">

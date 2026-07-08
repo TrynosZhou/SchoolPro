@@ -6,8 +6,9 @@
 
   <header class="page-hero">
     <div class="hero-text">
-      <p class="hero-eyebrow">Parent Portal</p>
-      <h1>My Children</h1>
+      <p class="hero-eyebrow">{{ todayLabel }}</p>
+      <h1>Good day, {{ greetingName() }}</h1>
+      <h2 class="hero-section-title">My Children</h2>
       <p>One parent account can be linked to multiple children. Search by Student ID or last name to add each child.</p>
     </div>
     @if (isParent()) {

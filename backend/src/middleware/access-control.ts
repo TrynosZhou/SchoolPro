@@ -56,3 +56,21 @@ export async function denyUnlessStudentRecordAccess(
   }
   return true;
 }
+
+/** Allow finance staff or users with module-level access (e.g. terms for billing). */
+export function requireFinanceOrModuleAccess(moduleId: string, action: CrudAction) {
+  return (req: AuthRequest, res: Response, next: NextFunction) => {
+    if (!req.user) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+    if (AccessControlService.can(req.user, 'finance', 'view')) {
+      return next();
+    }
+    if (!AccessControlService.can(req.user, moduleId, action)) {
+      return res.status(403).json({
+        message: `You do not have permission to ${action} ${moduleId.replace(/_/g, ' ')} records.`,
+      });
+    }
+    next();
+  };
+}

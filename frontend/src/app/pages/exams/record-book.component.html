@@ -227,7 +227,7 @@
                           class="mark-input"
                           [min]="0"
                           [max]="maxMarks()"
-                          [ngModel]="row.marksByColumn[col.columnKey]?.marks"
+                          [ngModel]="row.marksByColumn[col.columnKey].marks"
                           (ngModelChange)="onMarkInput(row.studentId, col.columnKey, $event)"
                           (focus)="onCellFocus(row.studentId)"
                           (blur)="onCellBlur(row.studentId)"

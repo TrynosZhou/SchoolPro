@@ -462,6 +462,7 @@ router.get('/student', authorize(UserRole.STUDENT), async (req: AuthRequest, res
       balanceOwed: 0,
       attendance: [],
       recentAssessments: [],
+      recentClassAssignments: [],
       recentSchedules: [],
       unreadMessages: 0,
     });
@@ -480,7 +481,7 @@ router.get('/student', authorize(UserRole.STUDENT), async (req: AuthRequest, res
   );
   const student = studentRows[0] || null;
 
-  const [attendance, balance, recentAssessment, unreadRow, termRow, recentSchedules] = await Promise.all([
+  const [attendance, balance, recentAssessment, unreadRow, termRow, recentSchedules, recentClassAssignments] = await Promise.all([
     AppDataSource.query(
       `
       SELECT status, COUNT(*)::text AS count FROM student_attendance
@@ -525,6 +526,24 @@ router.get('/student', authorize(UserRole.STUDENT), async (req: AuthRequest, res
           [student.classId],
         )
       : Promise.resolve([]),
+    student?.classId
+      ? AppDataSource.query(
+          `
+          SELECT ha.id, ha.title, ha.instructions, ha."originalFileName", ha."storedFileName",
+                 ha."mimeType", ha."fileSize", ha."dueDate", ha."createdAt",
+                 sub.name AS "subjectName",
+                 TRIM(CONCAT(u."firstName", ' ', u."lastName")) AS "teacherName"
+          FROM homework_assignments ha
+          LEFT JOIN subjects sub ON sub.id = ha."subjectId"
+          LEFT JOIN staff st ON st.id = ha."teacherId"
+          LEFT JOIN users u ON u.id = st."userId"
+          WHERE ha."classId" = $1
+          ORDER BY ha."createdAt" DESC
+          LIMIT 8
+          `,
+          [student.classId],
+        )
+      : Promise.resolve([]),
   ]);
 
   res.json({
@@ -533,6 +552,13 @@ router.get('/student', authorize(UserRole.STUDENT), async (req: AuthRequest, res
     balanceOwed: Number(balance[0]?.owed || 0),
     attendance,
     recentAssessments: recentAssessment,
+    recentClassAssignments: recentClassAssignments.map((row: {
+      storedFileName: string;
+      [key: string]: unknown;
+    }) => ({
+      ...row,
+      fileUrl: `/uploads/homework-assignments/${row.storedFileName}`,
+    })),
     recentSchedules,
     unreadMessages: Number(unreadRow[0]?.count || 0),
   });

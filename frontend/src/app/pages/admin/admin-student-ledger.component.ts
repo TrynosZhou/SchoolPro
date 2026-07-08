@@ -1,9 +1,12 @@
 import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
+import { AuthService } from '../../core/services/auth.service';
+import { NavSection } from '../../shared/portal-layout/portal-layout.component';
+import { resolveStaffPortalContext, portalLink } from '../../core/utils/staff-portal.util';
 import { ApiService } from '../../core/services/api.service';
 import { formatGenderLabel, formatStudentClassLabel } from '../../core/utils/class-display';
 
@@ -47,6 +50,7 @@ interface StudentLedgerReport {
   term: { id: string; name: string; startDate: string; endDate: string };
   lines: LedgerLine[];
   invoiceBalance: number;
+  termInvoiceBalance: number;
   balanceTermId?: string;
   balanceTermName?: string;
   summary: {
@@ -78,7 +82,13 @@ type LineTypeFilter = 'all' | LedgerLine['type'];
 })
 export class AdminStudentLedgerComponent implements OnInit {
   private api = inject(ApiService);
+  private router = inject(Router);
+  private auth = inject(AuthService);
 
+  portalTitle = 'Admin Portal';
+  navSections: NavSection[] = ADMIN_NAV_SECTIONS;
+  basePath = '/admin';
+  reconciliationPath = '/admin/fin-reports/student-reconciliation';
   readonly adminNav = ADMIN_NAV_SECTIONS;
   readonly formatStudentClassLabel = formatStudentClassLabel;
   readonly formatGenderLabel = formatGenderLabel;
@@ -118,15 +128,15 @@ export class AdminStudentLedgerComponent implements OnInit {
 
   balanceStatus = computed(() => {
     const r = this.report();
-    const amount = r ? r.invoiceBalance : 0;
-    if (amount > 0) return { label: 'Invoice balance', tone: 'owed' as const };
+    const amount = r ? Math.max(0, r.summary.closingBalance) : 0;
+    if (amount > 0) return { label: 'Amount owed', tone: 'owed' as const };
     return { label: 'Settled', tone: 'clear' as const };
   });
 
   displayBalance = computed(() => {
     const r = this.report();
     if (!r) return 0;
-    return r.invoiceBalance;
+    return Math.max(0, r.summary.closingBalance);
   });
 
   private allowAutoTermSwitch = true;
@@ -136,6 +146,11 @@ export class AdminStudentLedgerComponent implements OnInit {
   );
 
   ngOnInit() {
+    const ctx = resolveStaffPortalContext(this.router.url, this.auth.user()?.role);
+    this.portalTitle = ctx.portalTitle;
+    this.navSections = ctx.navSections;
+    this.basePath = ctx.basePath;
+    this.reconciliationPath = portalLink(this.basePath, 'fin-reports/student-reconciliation');
     this.api.get<SchoolYearRow[]>('/admin/school-years').subscribe({
       next: (years) => {
         const list: TermRow[] = [];
@@ -231,6 +246,19 @@ export class AdminStudentLedgerComponent implements OnInit {
   clearLineFilters() {
     this.lineSearch.set('');
     this.typeFilter.set('all');
+  }
+
+  canPayBalance(): boolean {
+    const role = this.auth.user()?.role;
+    if (role !== 'admin' && role !== 'accountant') return false;
+    const owed = this.report()?.invoiceBalance ?? 0;
+    return owed > 0.005;
+  }
+
+  recordPayment(): void {
+    const studentId = this.report()?.student?.id || this.selectedStudentId;
+    if (!studentId) return;
+    void this.router.navigate([portalLink(this.basePath, `fin-reports/record-payment/${studentId}`)]);
   }
 
   previewPdf() {

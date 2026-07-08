@@ -65,6 +65,26 @@ export function formatGenderLabel(gender?: string | null): string {
   return raw.charAt(0).toUpperCase() + raw.slice(1);
 }
 
+/** Mr / Ms for male / female; otherwise no title. */
+export function genderHonorific(gender?: string | null): string | null {
+  const v = String(gender || '').trim().toLowerCase();
+  if (v === 'm' || v === 'male') return 'Mr';
+  if (v === 'f' || v === 'female') return 'Ms';
+  return null;
+}
+
+/** Full name with optional Mr/Ms prefix when gender is known. */
+export function formatTitledFullName(
+  firstName?: string | null,
+  lastName?: string | null,
+  gender?: string | null,
+): string {
+  const name = `${firstName || ''} ${lastName || ''}`.trim();
+  const title = genderHonorific(gender);
+  if (!name) return title ?? '';
+  return title ? `${title} ${name}` : name;
+}
+
 /** Resolved display name after a class is selected (headers, filenames, etc.). */
 export function classDisplayName(
   classes: ClassOptionLike[],

@@ -1,7 +1,7 @@
 import { Router, Response } from 'express';
 import { AppDataSource } from '../config/data-source';
 import { PayrollRun, StaffPayrollProfile } from '../entities';
-import { UserRole } from '../entities/enums';
+import { FINANCE_ROLES } from '../config/portal-roles';
 import { authenticate, authorize, AuthRequest } from '../middleware/auth';
 import { relations } from '../utils/typeorm-helpers';
 import {
@@ -20,7 +20,7 @@ import {
 } from '../services/payroll.service';
 
 const router = Router();
-const PAYROLL_ROLES = [UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL];
+const PAYROLL_ROLES = FINANCE_ROLES;
 
 router.use(authenticate);
 router.use(authorize(...PAYROLL_ROLES));

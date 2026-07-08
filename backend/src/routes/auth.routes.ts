@@ -19,8 +19,18 @@ import { requestPasswordReset, resetPasswordWithToken } from '../services/passwo
 import { findActiveUserByLoginIdentifier } from '../utils/user-auth';
 import { verifyUserPassword } from '../utils/user-password';
 import { authenticateStudentPortal } from '../services/student-portal-auth.service';
+import { resolveParentGender } from '../utils/gender';
 
 const router = Router();
+
+function resolveUserGender(user: User): string | null {
+  return (
+    user.staffProfile?.gender ??
+    user.studentProfile?.gender ??
+    user.parentProfile?.gender ??
+    null
+  );
+}
 
 async function issueAuthToken(fullUser: User, res: Response) {
   await ensureDefaultRoles();
@@ -51,6 +61,7 @@ async function issueAuthToken(fullUser: User, res: Response) {
       username: fullUser.username ?? null,
       firstName: fullUser.firstName,
       lastName: fullUser.lastName,
+      gender: resolveUserGender(fullUser),
       role: fullUser.role,
       schoolRoleId: fullUser.schoolRoleId ?? null,
       schoolRoleName: fullUser.schoolRole?.name ?? null,
@@ -166,6 +177,7 @@ router.get('/me', authenticate, async (req: AuthRequest, res: Response) => {
     email: user.email,
     firstName: user.firstName,
     lastName: user.lastName,
+    gender: resolveUserGender(user),
     role: user.role,
     phone: user.phone,
     schoolRoleId: user.schoolRoleId ?? null,
@@ -262,6 +274,7 @@ router.post('/register', async (req, res: Response) => {
       dateOfBirth,
       linkAdmissionNumber,
       relationship,
+      gender,
     } = req.body;
 
     const allowedRoles = [UserRole.PARENT];
@@ -293,7 +306,11 @@ router.post('/register', async (req, res: Response) => {
 
     if (role === UserRole.PARENT) {
       const parentRepo = AppDataSource.getRepository(Parent);
-      const parent = await parentRepo.save(parentRepo.create({ userId: user.id }));
+      const parentGender = resolveParentGender(gender, relationship);
+      const parent = await parentRepo.save(parentRepo.create({
+        userId: user.id,
+        gender: parentGender ?? undefined,
+      }));
 
       if (linkAdmissionNumber?.trim()) {
         const studentRepo = AppDataSource.getRepository(Student);
@@ -348,6 +365,7 @@ router.post('/register', async (req, res: Response) => {
         email: fullUser!.email,
         firstName: fullUser!.firstName,
         lastName: fullUser!.lastName,
+        gender: resolveUserGender(fullUser!),
         role: fullUser!.role,
         staffId: fullUser!.staffProfile?.id,
         parentId: fullUser!.parentProfile?.id,

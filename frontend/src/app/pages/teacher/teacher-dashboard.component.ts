@@ -4,7 +4,7 @@ import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.
 import { buildTeacherNavSections } from '../../core/config/teacher-nav';
 import { AuthService } from '../../core/services/auth.service';
 import { ApiService } from '../../core/services/api.service';
-import { formatStudentClassLabel } from '../../core/utils/class-display';
+import { formatStudentClassLabel, formatTitledFullName } from '../../core/utils/class-display';
 import { changePasswordDashboardLink } from '../../core/utils/change-password-route.util';
 
 interface TeacherAssignment {
@@ -86,7 +86,9 @@ export class TeacherDashboardComponent implements OnInit {
 
   readonly teacherName = computed(() => {
     const u = this.auth.user();
-    return u ? `${u.firstName} ${u.lastName}`.trim() : 'Teacher';
+    if (!u) return 'Teacher';
+    const titled = formatTitledFullName(u.firstName, u.lastName, u.gender);
+    return titled || 'Teacher';
   });
 
   readonly statCards = computed(() => {
@@ -172,7 +174,7 @@ export class TeacherDashboardComponent implements OnInit {
       ],
     },
     {
-      title: 'Academics',
+      title: 'Examinations',
       links: [
         { label: 'Input Marks', path: '/teacher/exams', icon: '📝', permission: 'academics.exams' },
         { label: 'Report Cards', path: '/teacher/report-cards', icon: '📄', permission: 'academics.report_cards' },
@@ -180,7 +182,13 @@ export class TeacherDashboardComponent implements OnInit {
         { label: 'Results Analysis', path: '/teacher/results-analysis', icon: '📈', permission: 'academics.results' },
         { label: 'Ranking', path: '/teacher/ranking', icon: '🏆', permission: 'academics.ranking' },
         { label: 'Mark Entry Progress', path: '/teacher/mark-entry-progress', icon: '📊', permission: 'academics.exams' },
+      ],
+    },
+    {
+      title: 'Academics',
+      links: [
         { label: 'Record Book', path: '/teacher/record-book', icon: '📒', permission: 'academics.exams' },
+        { label: 'Assignments', path: '/teacher/assignments', icon: '📤', permission: 'academics.exams' },
       ],
     },
     {
@@ -198,6 +206,7 @@ export class TeacherDashboardComponent implements OnInit {
         ...group,
         links: group.links.filter((link) => {
           if (link.path === '/teacher/attendance/mark-register' && !isClassTeacher) return false;
+          if (link.path === '/teacher/enrollment' && !isClassTeacher) return false;
           return allowed(link.permission);
         }),
       }))
@@ -205,6 +214,14 @@ export class TeacherDashboardComponent implements OnInit {
   });
 
   ngOnInit() {
+    this.api.get<{ gender?: string | null }>('/auth/me').subscribe({
+      next: (profile) => {
+        if (profile.gender != null) {
+          this.auth.patchUser({ gender: profile.gender });
+        }
+      },
+    });
+
     this.api.get<TeacherDashboardData>('/dashboard/teacher').subscribe({
       next: (d) => {
         this.data.set(d);

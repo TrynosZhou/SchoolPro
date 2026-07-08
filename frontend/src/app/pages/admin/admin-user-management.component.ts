@@ -8,7 +8,7 @@ import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
 import { ApiService } from '../../core/services/api.service';
 import { AuthService } from '../../core/services/auth.service';
 
-type PortalRole = 'director' | 'principal' | 'admin' | 'teacher' | 'parent' | 'student';
+type PortalRole = 'director' | 'principal' | 'admin' | 'accountant' | 'teacher' | 'parent' | 'student';
 type StatusFilter = 'active' | 'inactive' | 'all';
 type DrawerMode = 'create' | 'edit' | null;
 type SortOrder = 'name-asc' | 'name-desc' | 'role-asc' | 'newest';
@@ -115,6 +115,7 @@ export class AdminUserManagementComponent implements OnInit {
     { value: 'director', label: 'Director' },
     { value: 'principal', label: 'Principal' },
     { value: 'admin', label: 'Administrator' },
+    { value: 'accountant', label: 'Accountant' },
     { value: 'teacher', label: 'Teacher' },
     { value: 'parent', label: 'Parent' },
     { value: 'student', label: 'Student' },
@@ -126,7 +127,7 @@ export class AdminUserManagementComponent implements OnInit {
       total: list.length,
       active: list.filter((u) => u.isActive).length,
       locked: list.filter((u) => this.isLocked(u)).length,
-      staff: list.filter((u) => ['director', 'principal', 'admin', 'teacher'].includes(u.role)).length,
+      staff: list.filter((u) => ['director', 'principal', 'admin', 'accountant', 'teacher'].includes(u.role)).length,
       parents: list.filter((u) => u.role === 'parent').length,
       students: list.filter((u) => u.role === 'student').length,
     };
@@ -173,7 +174,7 @@ export class AdminUserManagementComponent implements OnInit {
       this.lockedOnly(),
   );
 
-  isStaffRole = computed(() => ['director', 'principal', 'admin', 'teacher'].includes(this.form.role));
+  isStaffRole = computed(() => ['director', 'principal', 'admin', 'accountant', 'teacher'].includes(this.form.role));
   isParentRole = computed(() => this.form.role === 'parent');
   isStudentRole = computed(() => this.form.role === 'student');
   isEditMode = computed(() => this.drawerMode() === 'edit');

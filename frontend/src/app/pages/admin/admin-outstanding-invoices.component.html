@@ -1,4 +1,4 @@
-<app-portal-layout portalTitle="Admin Portal" pageTitle="Outstanding Invoices" [navSections]="adminNav">
+<app-portal-layout [portalTitle]="portalTitle" pageTitle="Outstanding Invoices" [navSections]="navSections">
   <div class="outstanding-page">
     @if (toast(); as t) {
       <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>

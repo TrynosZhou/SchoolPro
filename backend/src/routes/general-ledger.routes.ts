@@ -1,6 +1,6 @@
 import { Router, Response } from 'express';
 import { AppDataSource } from '../config/data-source';
-import { UserRole } from '../entities/enums';
+import { FINANCE_ROLES } from '../config/portal-roles';
 import { GlAccountType, GlReferenceType } from '../entities/enums';
 import { authenticate, authorize, AuthRequest } from '../middleware/auth';
 import {
@@ -17,7 +17,7 @@ import {
 } from '../services/ledger.service';
 
 const router = Router();
-const GL_ROLES = [UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL];
+const GL_ROLES = FINANCE_ROLES;
 
 router.use(authenticate);
 router.use(authorize(...GL_ROLES));

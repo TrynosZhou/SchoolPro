@@ -442,7 +442,6 @@
 }
 
 .balance-badge {
-  margin-left: auto;
   padding: 0.45rem 0.85rem;
   border-radius: 999px;
   font-size: 0.82rem;
@@ -464,11 +463,72 @@
   }
 }
 
+.balance-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+
+.summary-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
 .summary-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.65rem;
-  margin-bottom: 1rem;
+  flex: 1 1 520px;
+
+  @media (max-width: 900px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  @media (max-width: 520px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.pay-balance-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  align-self: center;
+  min-height: 3rem;
+  padding: 0.75rem 1.1rem;
+  border: 1px solid #16a34a;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #22c55e 0%, #16a34a 100%);
+  color: #fff;
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow: 0 8px 20px rgba(22, 163, 74, 0.22);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+
+  svg {
+    width: 1.1rem;
+    height: 1.1rem;
+    flex-shrink: 0;
+  }
+
+  &:hover {
+    filter: brightness(1.03);
+    transform: translateY(-1px);
+    box-shadow: 0 10px 24px rgba(22, 163, 74, 0.28);
+  }
+
+  &:focus-visible {
+    outline: 2px solid #86efac;
+    outline-offset: 2px;
+  }
 }
 
 .summary-card {
@@ -489,6 +549,13 @@
   strong {
     color: #0f172a;
     font-size: 1.1rem;
+  }
+
+  .summary-value-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
   }
 
   &.debit {
@@ -637,23 +704,36 @@
 .ledger-table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 860px;
+  min-width: 880px;
   font-size: 0.88rem;
+  table-layout: fixed;
 
   th,
   td {
-    padding: 0.7rem 0.75rem;
+    padding: 0.75rem 0.65rem;
     text-align: left;
     border-bottom: 1px solid #e2e8f0;
+    vertical-align: middle;
   }
 
   th {
     background: #f8fafc;
-    font-size: 0.72rem;
+    font-size: 0.7rem;
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.03em;
+    letter-spacing: 0.04em;
     color: #64748b;
+  }
+
+  .date-col {
+    width: 6.5rem;
+    white-space: nowrap;
+    color: #334155;
+  }
+
+  .desc-col {
+    color: #1e293b;
+    line-height: 1.45;
   }
 
   tbody tr {
@@ -683,8 +763,30 @@
   text-align: right;
   white-space: nowrap;
 
-  &.debit { color: #b91c1c; }
-  &.credit { color: #047857; }
+  &.debit .money-val { color: #b91c1c; }
+  &.credit .money-val { color: #047857; font-weight: 600; }
+  &.owed .money-val { color: #0f172a; }
+}
+
+.money-col {
+  width: 6.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.money-val {
+  display: inline-block;
+  min-width: 4.75rem;
+  text-align: right;
+}
+
+.money-empty,
+.ref-empty {
+  color: #cbd5e1;
+  font-weight: 500;
+}
+
+.ref-empty {
+  font-size: 0.9rem;
 }
 
 .type-pill {

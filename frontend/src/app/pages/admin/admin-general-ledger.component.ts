@@ -1,9 +1,12 @@
 import { Component, inject, OnInit, signal } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { FormBuilder, ReactiveFormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
+import { AuthService } from '../../core/services/auth.service';
+import { NavSection } from '../../shared/portal-layout/portal-layout.component';
+import { resolveStaffPortalContext } from '../../core/utils/staff-portal.util';
 import {
   ChartOfAccountRow,
   GeneralLedgerService,
@@ -41,7 +44,11 @@ const REFERENCE_TYPES: { value: '' | GlReferenceType; label: string }[] = [
 export class AdminGeneralLedgerComponent implements OnInit {
   private gl = inject(GeneralLedgerService);
   private fb = inject(FormBuilder);
+  private router = inject(Router);
+  private auth = inject(AuthService);
 
+  portalTitle = 'Admin Portal';
+  navSections: NavSection[] = ADMIN_NAV_SECTIONS;
   readonly adminNav = ADMIN_NAV_SECTIONS;
   readonly accountTypes = ACCOUNT_TYPES;
   readonly referenceTypes = REFERENCE_TYPES;
@@ -65,6 +72,9 @@ export class AdminGeneralLedgerComponent implements OnInit {
   });
 
   ngOnInit() {
+    const ctx = resolveStaffPortalContext(this.router.url, this.auth.user()?.role);
+    this.portalTitle = ctx.portalTitle;
+    this.navSections = ctx.navSections;
     this.gl.listAccounts().subscribe({
       next: (rows) => this.accounts.set(rows),
       error: () => this.showToast('error', 'Failed to load chart of accounts'),

@@ -7,6 +7,7 @@ import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
 import { ApiService } from '../../core/services/api.service';
 import { AuthService } from '../../core/services/auth.service';
 import { CHANGE_PASSWORD_ICON, CHANGE_PASSWORD_LABEL, CHANGE_PASSWORD_PATHS } from '../../core/utils/change-password-route.util';
+import { formatTitledFullName } from '../../core/utils/class-display';
 import { DashboardOverview } from '../../core/models';
 
 interface MajorMenu {
@@ -42,8 +43,9 @@ export class AdminDashboardComponent implements OnInit {
 
   readonly greetingName = computed(() => {
     const u = this.auth.user();
-    const name = u ? `${u.firstName} ${u.lastName}`.trim() : '';
-    return name || 'Administrator';
+    if (!u) return 'Administrator';
+    const titled = formatTitledFullName(u.firstName, u.lastName, u.gender);
+    return titled || 'Administrator';
   });
 
   readonly attendanceRows = computed(() => this.overview()?.attendanceToday ?? []);
@@ -226,6 +228,14 @@ export class AdminDashboardComponent implements OnInit {
   });
 
   ngOnInit(): void {
+    this.api.get<{ gender?: string | null }>('/auth/me').subscribe({
+      next: (profile) => {
+        if (profile.gender != null) {
+          this.auth.patchUser({ gender: profile.gender });
+        }
+      },
+    });
+
     this.api.get<DashboardOverview>('/dashboard/overview').subscribe({
       next: (d) => {
         this.overview.set(d);

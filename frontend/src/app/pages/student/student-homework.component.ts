@@ -1,8 +1,9 @@
 import { Component, inject, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
-import { STUDENT_NAV_ITEMS } from '../../core/config/student-nav';
+import { STUDENT_NAV_SECTIONS } from '../../core/config/student-nav';
 import { ApiService } from '../../core/services/api.service';
+import { environment } from '../../../environments/environment';
 
 interface WeeklyAssessment {
   id: string;
@@ -23,6 +24,20 @@ interface LearningSchedule {
   subject?: { name?: string; code?: string };
 }
 
+interface ClassHomeworkAssignment {
+  id: string;
+  title: string;
+  instructions?: string | null;
+  originalFileName: string;
+  fileUrl: string;
+  mimeType: string;
+  fileSize: number;
+  dueDate?: string | null;
+  createdAt: string;
+  subjectName?: string | null;
+  teacherName?: string | null;
+}
+
 interface TermOption {
   id: string;
   name: string;
@@ -39,14 +54,15 @@ interface TermOption {
 export class StudentHomeworkComponent implements OnInit {
   private api = inject(ApiService);
 
-  readonly nav = STUDENT_NAV_ITEMS;
+  readonly navSections = STUDENT_NAV_SECTIONS;
 
+  classAssignments = signal<ClassHomeworkAssignment[]>([]);
   assessments = signal<WeeklyAssessment[]>([]);
   schedules = signal<LearningSchedule[]>([]);
   terms = signal<TermOption[]>([]);
 
   selectedTermId = '';
-  activeTab: 'assignments' | 'schedules' = 'assignments';
+  activeTab: 'class' | 'assessments' | 'schedules' = 'class';
 
   loading = signal(true);
   loadingData = signal(false);
@@ -73,7 +89,7 @@ export class StudentHomeworkComponent implements OnInit {
     this.loadData();
   }
 
-  setTab(tab: 'assignments' | 'schedules') {
+  setTab(tab: 'class' | 'assessments' | 'schedules') {
     this.activeTab = tab;
   }
 
@@ -82,11 +98,22 @@ export class StudentHomeworkComponent implements OnInit {
     const params: Record<string, string> = {};
     if (this.selectedTermId) params['termId'] = this.selectedTermId;
 
-    let pending = 2;
+    let pending = 3;
     const done = () => {
       pending -= 1;
       if (pending <= 0) this.loadingData.set(false);
     };
+
+    this.api.get<ClassHomeworkAssignment[]>('/academics/homework-assignments', params).subscribe({
+      next: (rows) => {
+        this.classAssignments.set(rows);
+        done();
+      },
+      error: () => {
+        this.classAssignments.set([]);
+        done();
+      },
+    });
 
     this.api.get<WeeklyAssessment[]>('/academics/weekly-assessments', params).subscribe({
       next: (rows) => {
@@ -120,5 +147,16 @@ export class StudentHomeworkComponent implements OnInit {
 
   subjectLabel(item: { subject?: { name?: string; code?: string } }): string {
     return item.subject?.name || item.subject?.code || 'Subject';
+  }
+
+  fileDownloadUrl(fileUrl: string): string {
+    const origin = environment.apiUrl.replace(/\/api$/, '');
+    return `${origin}${fileUrl}`;
+  }
+
+  formatFileSize(bytes: number): string {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   }
 }

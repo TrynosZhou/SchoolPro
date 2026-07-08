@@ -16,7 +16,7 @@ import { relations } from '../utils/typeorm-helpers';
 
 const router = Router();
 
-const STAFF_PORTAL_ROLES = [UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.ADMIN, UserRole.TEACHER];
+const STAFF_PORTAL_ROLES = [UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.ADMIN, UserRole.ACCOUNTANT, UserRole.TEACHER];
 const ALL_PORTAL_ROLES = Object.values(UserRole);
 
 router.use(authenticate, authorize(UserRole.ADMIN));

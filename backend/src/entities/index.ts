@@ -58,6 +58,7 @@ import { ReportTemplate } from './ReportTemplate';
 import { AuditLog } from './AuditLog';
 import { RecordBookColumn } from './RecordBookColumn';
 import { RecordBookMark } from './RecordBookMark';
+import { HomeworkAssignment } from './HomeworkAssignment';
 
 export const entities = [
   User,
@@ -120,6 +121,7 @@ export const entities = [
   AuditLog,
   RecordBookColumn,
   RecordBookMark,
+  HomeworkAssignment,
 ];
 
 export * from './enums';
@@ -184,5 +186,6 @@ export {
   AuditLog,
   RecordBookColumn,
   RecordBookMark,
+  HomeworkAssignment,
 };
 

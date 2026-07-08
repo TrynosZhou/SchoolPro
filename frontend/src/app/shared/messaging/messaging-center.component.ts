@@ -5,7 +5,7 @@ import { ActivatedRoute } from '@angular/router';
 import { forkJoin } from 'rxjs';
 import { PortalLayoutComponent, NavItem, NavSection } from '../portal-layout/portal-layout.component';
 import { PARENT_NAV_ITEMS } from '../../core/config/parent-nav';
-import { STUDENT_NAV_ITEMS } from '../../core/config/student-nav';
+import { STUDENT_NAV_SECTIONS } from '../../core/config/student-nav';
 import { buildTeacherNavSections } from '../../core/config/teacher-nav';
 import { ApiService } from '../../core/services/api.service';
 import { AuthService } from '../../core/services/auth.service';
@@ -104,13 +104,14 @@ export class MessagingCenterComponent implements OnInit {
   }
 
   get navItems(): NavItem[] {
-    if (this.isTeacher) return [];
-    if (this.role === 'student') return STUDENT_NAV_ITEMS;
+    if (this.isTeacher || this.role === 'student') return [];
     return PARENT_NAV_ITEMS;
   }
 
   get navSections(): NavSection[] {
-    return this.isTeacher ? buildTeacherNavSections(this.auth.user()?.permissions) : [];
+    if (this.isTeacher) return buildTeacherNavSections(this.auth.user()?.permissions);
+    if (this.role === 'student') return STUDENT_NAV_SECTIONS;
+    return [];
   }
 
   private get recipientsEndpoint(): string {

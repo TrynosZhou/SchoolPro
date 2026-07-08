@@ -55,6 +55,7 @@ export class AuthService {
     lastName: string;
     role: 'parent';
     phone?: string;
+    gender?: string;
     admissionNumber?: string;
     dateOfBirth?: string;
     linkAdmissionNumber?: string;
@@ -69,6 +70,15 @@ export class AuthService {
     localStorage.setItem(TOKEN_KEY, res.token);
     localStorage.setItem(USER_KEY, JSON.stringify(res.user));
     this.userSignal.set(res.user);
+  }
+
+  /** Merge fields from /auth/me (e.g. gender from linked staff/student profile). */
+  patchUser(partial: Partial<User>) {
+    const current = this.userSignal();
+    if (!current) return;
+    const next = { ...current, ...partial };
+    localStorage.setItem(USER_KEY, JSON.stringify(next));
+    this.userSignal.set(next);
   }
 
   logout() {
@@ -121,6 +131,7 @@ export class AuthService {
       director: '/director',
       principal: '/principal',
       admin: '/admin',
+      accountant: '/accountant',
       teacher: '/teacher',
       parent: '/parent',
       student: '/student',

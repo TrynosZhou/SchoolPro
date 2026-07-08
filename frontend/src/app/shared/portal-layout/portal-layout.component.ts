@@ -149,6 +149,11 @@ export class PortalLayoutComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   get groupedNav(): { label: string; sections: NavSection[] }[] {
+    // Student portal: keep sections in catalog order (Dashboard → Academics → Finance → Communication → Account).
+    if (this.portalTitle === 'Student Portal') {
+      return [{ label: 'Main', sections: this.navSections }];
+    }
+
     const order = ['Main', 'People', 'Learning', 'Finance', 'Administration'];
     const map = new Map<string, NavSection[]>();
     for (const section of this.navSections) {
@@ -476,12 +481,15 @@ export class PortalLayoutComponent implements OnInit, OnChanges, OnDestroy {
     if (path === '/teacher') {
       return url === '/teacher' || url === '/teacher/';
     }
+    if (path === '/student') {
+      return url === '/student' || url === '/student/';
+    }
     return url === path || url.startsWith(`${path}/`);
   }
 
   sectionGroup(heading: string): string {
     const h = heading.toLowerCase();
-    if (h === 'overview' || h === 'dashboard' || h === 'teacher dashboard') return 'Main';
+    if (h === 'overview' || h === 'dashboard' || h === 'teacher dashboard' || h === 'student dashboard') return 'Main';
     if (h === 'students' || h === 'all students' || h === 'parents' || h === 'all parents' || h === 'staff' || h === 'all teachers' || h === 'attendance' || h === 'communication') return 'People';
     if (h === 'academics' || h === 'examination' || h === 'examinations' || h === 'timetable') return 'Learning';
     if (h === 'finance' || h === 'fin.reports') return 'Finance';
@@ -494,7 +502,7 @@ export class PortalLayoutComponent implements OnInit, OnChanges, OnDestroy {
 
   sectionIconKey(heading: string): string {
     const h = heading.toLowerCase();
-    if (h === 'overview' || h === 'dashboard' || h === 'teacher dashboard') return 'dashboard';
+    if (h === 'overview' || h === 'dashboard' || h === 'teacher dashboard' || h === 'student dashboard') return 'dashboard';
     if (h === 'students' || h === 'all students') return 'students';
     if (h === 'parents' || h === 'all parents') return 'parents';
     if (h === 'payroll') return 'staff';

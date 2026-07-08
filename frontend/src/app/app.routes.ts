@@ -41,6 +41,7 @@ import { AdminResultsAnalysisComponent } from './pages/admin/admin-results-analy
 import { AdminRankingComponent } from './pages/admin/admin-ranking.component';
 import { AdminMarkEntryProgressComponent } from './pages/admin/admin-mark-entry-progress.component';
 import { RecordBookComponent } from './pages/exams/record-book.component';
+import { TeacherAssignmentsComponent } from './pages/teacher/teacher-assignments.component';
 import { AdminManageFeesComponent } from './pages/admin/admin-manage-fees.component';
 import { AdminStudentBalanceComponent } from './pages/admin/admin-student-balance.component';
 import { AdminExemptionsComponent } from './pages/admin/admin-exemptions.component';
@@ -70,6 +71,7 @@ import { AdminAnalyticsDemographicsComponent } from './pages/admin/admin-analyti
 import { AdminAnalyticsRetentionComponent } from './pages/admin/admin-analytics-retention.component';
 import { AdminReportBuilderComponent } from './pages/admin/admin-report-builder.component';
 import { AdminAuditTrailComponent } from './pages/admin/admin-audit-trail.component';
+import { AccountantDashboardComponent } from './pages/accountant/accountant-dashboard.component';
 
 export const routes: Routes = [
   { path: '', redirectTo: 'login', pathMatch: 'full' },
@@ -185,6 +187,28 @@ export const routes: Routes = [
     ],
   },
   {
+    path: 'accountant',
+    canActivate: [authGuard, roleGuard('accountant')],
+    children: [
+      { path: '', component: AccountantDashboardComponent },
+      { path: 'students', component: AdminStudentsComponent },
+      { path: 'billing', component: AdminBillingComponent, data: { financeMode: 'billing' } },
+      { path: 'payment', component: AdminBillingComponent, data: { financeMode: 'payment' } },
+      { path: 'manage-fees', component: AdminManageFeesComponent },
+      { path: 'student-balance', component: AdminStudentBalanceComponent },
+      { path: 'exemptions', component: AdminExemptionsComponent },
+      { path: 'finance', component: AdminFinanceComponent },
+      { path: 'fin-reports/student-ledger', component: AdminStudentLedgerComponent },
+      { path: 'fin-reports/outstanding-invoices', component: AdminOutstandingInvoicesComponent },
+      { path: 'fin-reports/record-payment/:studentId', component: AdminRecordPaymentComponent },
+      { path: 'fin-reports/student-reconciliation', component: AdminStudentReconciliationComponent },
+      { path: 'fin-reports/debtor-aging', component: AdminDebtorAgingComponent },
+      { path: 'fin-reports/fee-collection-revenue', component: AdminFeeCollectionRevenueComponent },
+      { path: 'fin-reports/general-ledger', component: AdminGeneralLedgerComponent },
+      { path: 'change-password', component: ChangePasswordPageComponent },
+    ],
+  },
+  {
     path: 'teacher',
     canActivate: [authGuard, roleGuard('teacher')],
     children: [
@@ -196,6 +220,7 @@ export const routes: Routes = [
       { path: 'ranking', component: AdminRankingComponent },
       { path: 'mark-entry-progress', component: AdminMarkEntryProgressComponent },
       { path: 'record-book', component: RecordBookComponent },
+      { path: 'assignments', component: TeacherAssignmentsComponent },
       { path: 'attendance', redirectTo: 'attendance/mark-register', pathMatch: 'full' },
       { path: 'attendance/mark-register', component: AttendanceMarkRegisterComponent },
       { path: 'attendance/report', component: AttendanceReportComponent },

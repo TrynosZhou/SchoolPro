@@ -12,6 +12,7 @@ import { formatGenderLabel, formatStudentClassLabel } from '../utils/class-displ
 import { generateInvoicePdf, generateReceiptPdf, SchoolBranding } from '../utils/pdf';
 import { ensureDefaultSchoolFees, countFeeCodeUsage, isFeeCodeInUse, normalizeFeeCode } from '../services/fee-catalog.service';
 import { ensureRegistrationSchoolFees } from '../services/registration-invoice.service';
+import { FINANCE_ROLES, FINANCE_WRITE_ROLES } from '../config/portal-roles';
 import { loadSchoolBranding } from '../services/school-branding.service';
 import { sendWhatsAppReminder } from '../services/whatsapp.service';
 import { postFeePaymentToGl } from '../services/gl-posting.service';
@@ -188,7 +189,7 @@ function renderGeneratedFooter(
   doc.text(`Generated: ${formatted}`, margin, y, { width: contentW, align: 'center' });
 }
 
-router.get('/fees', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.TEACHER), async (req, res: Response) => {
+router.get('/fees', authorize(...FINANCE_ROLES, UserRole.TEACHER), async (req, res: Response) => {
   await ensureRegistrationSchoolFees();
   const repo = AppDataSource.getRepository(SchoolFee);
   const activeOnly = req.query.active === 'true';
@@ -199,7 +200,7 @@ router.get('/fees', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCI
   res.json(fees);
 });
 
-router.post('/fees', authorize(UserRole.ADMIN), async (req, res: Response) => {
+router.post('/fees', authorize(...FINANCE_WRITE_ROLES), async (req, res: Response) => {
   await ensureRegistrationSchoolFees();
   const repo = AppDataSource.getRepository(SchoolFee);
   const { name, code, description, defaultAmount, icon, isActive, sortOrder } = req.body;
@@ -228,7 +229,7 @@ router.post('/fees', authorize(UserRole.ADMIN), async (req, res: Response) => {
   res.status(201).json(fee);
 });
 
-router.patch('/fees/:id', authorize(UserRole.ADMIN), async (req, res: Response) => {
+router.patch('/fees/:id', authorize(...FINANCE_WRITE_ROLES), async (req, res: Response) => {
   const repo = AppDataSource.getRepository(SchoolFee);
   const fee = await repo.findOne({ where: { id: req.params.id } });
   if (!fee) return res.status(404).json({ message: 'Fee not found' });
@@ -262,7 +263,7 @@ router.patch('/fees/:id', authorize(UserRole.ADMIN), async (req, res: Response) 
   res.json(await repo.save(fee));
 });
 
-router.delete('/fees/:id', authorize(UserRole.ADMIN), async (req, res: Response) => {
+router.delete('/fees/:id', authorize(...FINANCE_WRITE_ROLES), async (req, res: Response) => {
   const repo = AppDataSource.getRepository(SchoolFee);
   const fee = await repo.findOne({ where: { id: req.params.id } });
   if (!fee) return res.status(404).json({ message: 'Fee not found' });
@@ -288,7 +289,7 @@ router.delete('/fees/:id', authorize(UserRole.ADMIN), async (req, res: Response)
   });
 });
 
-router.get('/invoices', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.PARENT, UserRole.STUDENT), finView, async (req: AuthRequest, res: Response) => {
+router.get('/invoices', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.ACCOUNTANT, UserRole.PARENT, UserRole.STUDENT), finView, async (req: AuthRequest, res: Response) => {
   const repo = AppDataSource.getRepository(Invoice);
   const { studentId, status, termId } = req.query;
   const qb = repo.createQueryBuilder('i')
@@ -310,7 +311,7 @@ router.get('/invoices', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PR
   res.json(await qb.orderBy('i.createdAt', 'DESC').getMany());
 });
 
-router.get('/invoices/resolve', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.PARENT, UserRole.STUDENT), finView, async (req: AuthRequest, res: Response) => {
+router.get('/invoices/resolve', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.ACCOUNTANT, UserRole.PARENT, UserRole.STUDENT), finView, async (req: AuthRequest, res: Response) => {
   const studentId = String(req.query.studentId || '').trim();
   if (!studentId) {
     return res.status(400).json({ message: 'studentId is required' });
@@ -336,7 +337,7 @@ router.get('/invoices/resolve', authorize(UserRole.ADMIN, UserRole.DIRECTOR, Use
   });
 });
 
-router.get('/invoices/bulk-tuition/preview', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), finView, async (_req, res: Response) => {
+router.get('/invoices/bulk-tuition/preview', authorize(...FINANCE_ROLES), finView, async (_req, res: Response) => {
   try {
     res.json(await previewBulkTuitionInvoices());
   } catch (err) {
@@ -344,7 +345,7 @@ router.get('/invoices/bulk-tuition/preview', authorize(UserRole.ADMIN, UserRole.
   }
 });
 
-router.post('/invoices/bulk-tuition', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), finCreate, async (_req, res: Response) => {
+router.post('/invoices/bulk-tuition', authorize(...FINANCE_ROLES), finCreate, async (_req, res: Response) => {
   try {
     const result = await createBulkTuitionInvoices();
     res.status(201).json({
@@ -356,7 +357,7 @@ router.post('/invoices/bulk-tuition', authorize(UserRole.ADMIN, UserRole.DIRECTO
   }
 });
 
-router.post('/invoices/bulk-tuition/reverse', authorize(UserRole.ADMIN), finEdit, async (req, res: Response) => {
+router.post('/invoices/bulk-tuition/reverse', authorize(...FINANCE_WRITE_ROLES), finEdit, async (req, res: Response) => {
   try {
     const nextTermName = typeof req.body?.nextTermName === 'string' ? req.body.nextTermName.trim() : undefined;
     const result = await reverseBulkTuitionInvoices(nextTermName || undefined);
@@ -369,7 +370,7 @@ router.post('/invoices/bulk-tuition/reverse', authorize(UserRole.ADMIN), finEdit
   }
 });
 
-const financeStaff = [UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL];
+const financeStaff = FINANCE_ROLES;
 
 router.get('/tuition-exemptions', authorize(...financeStaff), async (_req, res: Response) => {
   res.json(await listTuitionExemptions());
@@ -563,7 +564,7 @@ router.post('/invoice-adjustments/debit-note', authorize(...financeStaff), async
   }
 });
 
-router.post('/invoices', authorize(UserRole.ADMIN), finCreate, async (req, res: Response) => {
+router.post('/invoices', authorize(...FINANCE_WRITE_ROLES), finCreate, async (req, res: Response) => {
   const repo = AppDataSource.getRepository(Invoice);
   const ledgerRepo = AppDataSource.getRepository(LedgerEntry);
   const studentRepo = AppDataSource.getRepository(Student);
@@ -658,7 +659,7 @@ router.post('/invoices', authorize(UserRole.ADMIN), finCreate, async (req, res: 
   res.status(201).json(invoice);
 });
 
-router.post('/payments', authorize(UserRole.ADMIN), finCreate, async (req: AuthRequest, res: Response) => {
+router.post('/payments', authorize(...FINANCE_WRITE_ROLES), finCreate, async (req: AuthRequest, res: Response) => {
   const { studentId, invoiceId, amount, method, feeType, label, notes } = req.body;
   const paymentAmount = Number(amount) || 0;
   if (paymentAmount <= 0) {
@@ -855,7 +856,7 @@ router.post('/payments', authorize(UserRole.ADMIN), finCreate, async (req: AuthR
   }
 });
 
-router.get('/receipts/:id/pdf', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.PARENT, UserRole.STUDENT), finView, async (req: AuthRequest, res: Response) => {
+router.get('/receipts/:id/pdf', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.ACCOUNTANT, UserRole.PARENT, UserRole.STUDENT), finView, async (req: AuthRequest, res: Response) => {
   const repo = AppDataSource.getRepository(Receipt);
   const receipt = await repo.findOne({
     where: { id: req.params.id },
@@ -898,7 +899,7 @@ router.get('/receipts/:id/pdf', authorize(UserRole.ADMIN, UserRole.DIRECTOR, Use
   res.sendFile(path.resolve(pdfPath));
 });
 
-router.get('/invoices/:id/pdf', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.PARENT, UserRole.STUDENT), finView, async (req: AuthRequest, res: Response) => {
+router.get('/invoices/:id/pdf', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.ACCOUNTANT, UserRole.PARENT, UserRole.STUDENT), finView, async (req: AuthRequest, res: Response) => {
   const repo = AppDataSource.getRepository(Invoice);
   const invoice = await repo.findOne({
     where: { id: req.params.id },
@@ -950,7 +951,7 @@ router.get('/invoices/:id/pdf', authorize(UserRole.ADMIN, UserRole.DIRECTOR, Use
   res.sendFile(path.resolve(pdfPath));
 });
 
-router.get('/receipts/student/:studentId', authorize(UserRole.ADMIN, UserRole.PARENT, UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.STUDENT), finView, async (req: AuthRequest, res: Response) => {
+router.get('/receipts/student/:studentId', authorize(UserRole.ADMIN, UserRole.PARENT, UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.ACCOUNTANT, UserRole.STUDENT), finView, async (req: AuthRequest, res: Response) => {
   const accessError = await assertFinanceStudentAccess(req, req.params.studentId);
   if (accessError && (req.user!.role === UserRole.PARENT || req.user!.role === UserRole.STUDENT)) {
     return res.status(403).json({ message: accessError });
@@ -988,7 +989,7 @@ function summarizeStudentInvoices(invoices: Invoice[]) {
   return { totalInvoiced, totalPaid, balance };
 }
 
-router.get('/statement/:studentId', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.PARENT, UserRole.STUDENT), finView, async (req: AuthRequest, res: Response) => {
+router.get('/statement/:studentId', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.ACCOUNTANT, UserRole.PARENT, UserRole.STUDENT), finView, async (req: AuthRequest, res: Response) => {
   const accessError = await assertFinanceStudentAccess(req, req.params.studentId);
   if (accessError && (req.user!.role === UserRole.PARENT || req.user!.role === UserRole.STUDENT)) {
     return res.status(403).json({ message: accessError });
@@ -1011,7 +1012,7 @@ router.get('/statement/:studentId', authorize(UserRole.ADMIN, UserRole.DIRECTOR,
   res.json({ ledger, invoices, payments, summary });
 });
 
-router.get('/statement/:studentId/pdf', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.PARENT, UserRole.STUDENT), finView, async (req: AuthRequest, res: Response) => {
+router.get('/statement/:studentId/pdf', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.ACCOUNTANT, UserRole.PARENT, UserRole.STUDENT), finView, async (req: AuthRequest, res: Response) => {
   const requestedStudentId = String(req.params.studentId || '').trim();
   const studentRepo = AppDataSource.getRepository(Student);
   let resolvedForAccess = requestedStudentId;
@@ -1221,11 +1222,11 @@ async function fetchBillingSummary() {
   };
 }
 
-router.get('/summary', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (_req, res: Response) => {
+router.get('/summary', authorize(...FINANCE_ROLES), async (_req, res: Response) => {
   res.json(await fetchBillingSummary());
 });
 
-router.get('/payments', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (req, res: Response) => {
+router.get('/payments', authorize(...FINANCE_ROLES), async (req, res: Response) => {
   const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
   const { studentId } = req.query;
   const paymentRepo = AppDataSource.getRepository(Payment);
@@ -1269,11 +1270,11 @@ async function fetchBillingDebtors() {
   return result.map((r: { owed: unknown }) => ({ ...r, owed: Number(r.owed || 0) }));
 }
 
-router.get('/debtors', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (_req, res: Response) => {
+router.get('/debtors', authorize(...FINANCE_ROLES), async (_req, res: Response) => {
   res.json(await fetchBillingDebtors());
 });
 
-router.get('/overview/export.pdf', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (req, res: Response) => {
+router.get('/overview/export.pdf', authorize(...FINANCE_ROLES), async (req, res: Response) => {
   const inline = String(req.query.preview || '') === 'true';
   const tab = String(req.query.tab || 'debtors').toLowerCase();
   const debtorQ = String(req.query.debtorQ || '').trim().toLowerCase();
@@ -1528,7 +1529,7 @@ router.get('/overview/export.pdf', authorize(UserRole.ADMIN, UserRole.DIRECTOR, 
   doc.end();
 });
 
-router.get('/reports/student-ledger', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (req, res: Response) => {
+router.get('/reports/student-ledger', authorize(...FINANCE_ROLES), async (req, res: Response) => {
   const termId = String(req.query.termId || '').trim();
   const q = String(req.query.q || '').trim();
   const studentId = String(req.query.studentId || '').trim();
@@ -1561,7 +1562,7 @@ router.get('/reports/student-ledger', authorize(UserRole.ADMIN, UserRole.DIRECTO
   return res.json({ needsSelection: false, report });
 });
 
-router.get('/reports/student-ledger/export.pdf', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (req, res: Response) => {
+router.get('/reports/student-ledger/export.pdf', authorize(...FINANCE_ROLES), async (req, res: Response) => {
   const termId = String(req.query.termId || '').trim();
   const q = String(req.query.q || '').trim();
   const studentId = String(req.query.studentId || '').trim();
@@ -1647,9 +1648,9 @@ router.get('/reports/student-ledger/export.pdf', authorize(UserRole.ADMIN, UserR
   drawSummaryCard(margin + (cardW + cardGap) * 2, 'Credits', fmtMoney(report.summary.totalCredits), 'positive');
   drawSummaryCard(
     margin + (cardW + cardGap) * 3,
-    'Invoice balance',
-    fmtMoney(report.invoiceBalance),
-    report.invoiceBalance > 0 ? 'warn' : 'positive',
+    'Amount owed',
+    fmtMoney(report.summary.closingBalance),
+    report.summary.closingBalance > 0 ? 'warn' : 'positive',
   );
   y += 52;
 
@@ -1661,11 +1662,11 @@ router.get('/reports/student-ledger/export.pdf', authorize(UserRole.ADMIN, UserR
   if (report.summary.termOverpayment > 0) {
     reconParts.push(`· term overpayment ${fmtMoney(report.summary.termOverpayment)}`);
   } else if (report.summary.termNetMovement > 0) {
-    reconParts.push(`· term balance ${fmtMoney(report.summary.termNetMovement)}`);
+    reconParts.push(`· amount owed ${fmtMoney(report.summary.closingBalance)}`);
   } else {
     reconParts.push('· term settled');
   }
-  reconParts.push(`· open invoices ${fmtMoney(report.invoiceBalance)}`);
+  reconParts.push(`· open invoices ${fmtMoney(report.termInvoiceBalance)}`);
   doc.save();
   doc.roundedRect(margin, y, contentW, 28, 6).fillAndStroke('#f8fafc', '#e2e8f0');
   doc.restore();
@@ -1787,12 +1788,12 @@ router.get('/reports/student-ledger/export.pdf', authorize(UserRole.ADMIN, UserR
   doc.end();
 });
 
-router.get('/reports/outstanding-invoices', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (_req, res: Response) => {
+router.get('/reports/outstanding-invoices', authorize(...FINANCE_ROLES), async (_req, res: Response) => {
   const data = await buildOutstandingInvoicesReport();
   res.json(data);
 });
 
-router.post('/terms/:termId/carry-forward-balances', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (req, res: Response) => {
+router.post('/terms/:termId/carry-forward-balances', authorize(...FINANCE_ROLES), async (req, res: Response) => {
   try {
     const result = await carryForwardBalancesForTerm(req.params.termId);
     res.json({
@@ -1804,7 +1805,7 @@ router.post('/terms/:termId/carry-forward-balances', authorize(UserRole.ADMIN, U
   }
 });
 
-router.get('/students/:studentId/term-balance/:termId', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (req, res: Response) => {
+router.get('/students/:studentId/term-balance/:termId', authorize(...FINANCE_ROLES), async (req, res: Response) => {
   try {
     const summary = await getTermBalanceSummary(req.params.studentId, req.params.termId);
     res.json(summary);
@@ -1813,7 +1814,7 @@ router.get('/students/:studentId/term-balance/:termId', authorize(UserRole.ADMIN
   }
 });
 
-router.get('/reports/outstanding-invoices/export.pdf', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (req, res: Response) => {
+router.get('/reports/outstanding-invoices/export.pdf', authorize(...FINANCE_ROLES), async (req, res: Response) => {
   const data = await buildOutstandingInvoicesReport();
   const inline = String(req.query.preview || '') === 'true';
 
@@ -1969,14 +1970,14 @@ function reconciliationQueryParams(req: { query: Record<string, unknown> }) {
   };
 }
 
-router.get('/reports/student-reconciliation', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (req, res: Response) => {
+router.get('/reports/student-reconciliation', authorize(...FINANCE_ROLES), async (req, res: Response) => {
   const result = await buildStudentReconciliationReport(reconciliationQueryParams(req));
   if ('error' in result) return res.status(400).json({ message: result.error });
   if ('needsSelection' in result) return res.json(result);
   res.json(result);
 });
 
-router.get('/reports/student-reconciliation/export.pdf', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (req, res: Response) => {
+router.get('/reports/student-reconciliation/export.pdf', authorize(...FINANCE_ROLES), async (req, res: Response) => {
   const detailed = req.query.mode !== 'summary';
   const inline = String(req.query.preview || '') === 'true';
   const result = await buildStudentReconciliationReport({
@@ -2023,7 +2024,7 @@ router.get('/reports/student-reconciliation/export.pdf', authorize(UserRole.ADMI
   res.send(pdf);
 });
 
-router.get('/reports/student-reconciliation/export.xlsx', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (req, res: Response) => {
+router.get('/reports/student-reconciliation/export.xlsx', authorize(...FINANCE_ROLES), async (req, res: Response) => {
   const detailed = req.query.mode !== 'summary';
   const result = await buildStudentReconciliationReport({
     ...reconciliationQueryParams(req),
@@ -2056,14 +2057,14 @@ function debtorAgingQueryParams(req: { query: Record<string, unknown> }) {
   };
 }
 
-router.get('/reports/debtor-aging', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (req, res: Response) => {
+router.get('/reports/debtor-aging', authorize(...FINANCE_ROLES), async (req, res: Response) => {
   const result = await buildDebtorAgingReport(debtorAgingQueryParams(req));
   if ('error' in result) return res.status(400).json({ message: result.error });
   if ('needsSelection' in result) return res.json(result);
   res.json(result);
 });
 
-router.get('/reports/debtor-aging/export.xlsx', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (req, res: Response) => {
+router.get('/reports/debtor-aging/export.xlsx', authorize(...FINANCE_ROLES), async (req, res: Response) => {
   const detailed = req.query.mode !== 'summary';
   const result = await buildDebtorAgingReport(debtorAgingQueryParams(req));
   if ('error' in result) return res.status(400).json({ message: result.error });
@@ -2074,7 +2075,7 @@ router.get('/reports/debtor-aging/export.xlsx', authorize(UserRole.ADMIN, UserRo
   res.send(csv);
 });
 
-router.get('/reports/debtor-aging/export.pdf', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (req, res: Response) => {
+router.get('/reports/debtor-aging/export.pdf', authorize(...FINANCE_ROLES), async (req, res: Response) => {
   const detailed = req.query.mode !== 'summary';
   const inline = String(req.query.preview || '') === 'true';
   const result = await buildDebtorAgingReport(debtorAgingQueryParams(req));
@@ -2232,7 +2233,7 @@ router.get('/reports/debtor-aging/export.pdf', authorize(UserRole.ADMIN, UserRol
   doc.end();
 });
 
-router.post('/reports/debtor-aging/notes', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (req: AuthRequest, res: Response) => {
+router.post('/reports/debtor-aging/notes', authorize(...FINANCE_ROLES), async (req: AuthRequest, res: Response) => {
   const { studentId, note } = req.body || {};
   if (!studentId || !String(note || '').trim()) return res.status(400).json({ message: 'studentId and note are required' });
   const notifRepo = AppDataSource.getRepository(Notification);
@@ -2246,7 +2247,7 @@ router.post('/reports/debtor-aging/notes', authorize(UserRole.ADMIN, UserRole.DI
   res.status(201).json(saved);
 });
 
-router.get('/reports/debtor-aging/notes/:studentId', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (req, res: Response) => {
+router.get('/reports/debtor-aging/notes/:studentId', authorize(...FINANCE_ROLES), async (req, res: Response) => {
   const rows = await AppDataSource.getRepository(Notification).find({
     where: { type: 'debtor_note' },
     order: { createdAt: 'DESC' },
@@ -2273,7 +2274,7 @@ function feeCollectionQueryParams(req: { query: Record<string, unknown> }, summa
   };
 }
 
-router.get('/reports/fee-collection-revenue', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (req: AuthRequest, res: Response) => {
+router.get('/reports/fee-collection-revenue', authorize(...FINANCE_ROLES), async (req: AuthRequest, res: Response) => {
   const summaryOnly = req.user!.role === UserRole.PRINCIPAL;
   const result = await buildFeeCollectionRevenueReport(feeCollectionQueryParams(req, summaryOnly));
   if ('error' in result) return res.status(400).json({ message: result.error });
@@ -2281,7 +2282,7 @@ router.get('/reports/fee-collection-revenue', authorize(UserRole.ADMIN, UserRole
   res.json({ ...result, accessLevel: summaryOnly ? 'summary' : 'full' });
 });
 
-router.get('/reports/fee-collection-revenue/export.xlsx', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (req: AuthRequest, res: Response) => {
+router.get('/reports/fee-collection-revenue/export.xlsx', authorize(...FINANCE_ROLES), async (req: AuthRequest, res: Response) => {
   const summaryOnly = req.user!.role === UserRole.PRINCIPAL;
   const detailed = !summaryOnly && req.query.mode !== 'summary';
   const result = await buildFeeCollectionRevenueReport(feeCollectionQueryParams(req, summaryOnly));
@@ -2293,7 +2294,7 @@ router.get('/reports/fee-collection-revenue/export.xlsx', authorize(UserRole.ADM
   res.send(csv);
 });
 
-router.get('/reports/fee-collection-revenue/export.pdf', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (req: AuthRequest, res: Response) => {
+router.get('/reports/fee-collection-revenue/export.pdf', authorize(...FINANCE_ROLES), async (req: AuthRequest, res: Response) => {
   const summaryOnly = req.user!.role === UserRole.PRINCIPAL;
   const detailed = !summaryOnly && req.query.mode !== 'summary';
   const inline = String(req.query.preview || '') === 'true';
@@ -2512,7 +2513,7 @@ router.post('/reports/debtor-aging/write-off', authorize(UserRole.ADMIN), async 
   res.json({ studentId, totalWrittenOff });
 });
 
-router.get('/reports/debtor-aging/reminder-letter.pdf', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (req, res: Response) => {
+router.get('/reports/debtor-aging/reminder-letter.pdf', authorize(...FINANCE_ROLES), async (req, res: Response) => {
   const studentId = String(req.query.studentId || '').trim();
   if (!studentId) return res.status(400).json({ message: 'studentId is required' });
   const report = await buildDebtorAgingReport({ studentId, dateTo: today(), excludeZeroBalances: false });
@@ -2599,7 +2600,7 @@ async function fetchStudentBalances(rawQ: string) {
   }));
 }
 
-router.get('/student-balance', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (req, res: Response) => {
+router.get('/student-balance', authorize(...FINANCE_ROLES), async (req, res: Response) => {
   const rawQ = String(req.query.q || '').trim();
   if (!rawQ) {
     return res.status(400).json({ message: 'Query is required' });
@@ -2607,7 +2608,7 @@ router.get('/student-balance', authorize(UserRole.ADMIN, UserRole.DIRECTOR, User
   res.json(await fetchStudentBalances(rawQ));
 });
 
-router.get('/student-balance/export.pdf', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (req, res: Response) => {
+router.get('/student-balance/export.pdf', authorize(...FINANCE_ROLES), async (req, res: Response) => {
   const rawQ = String(req.query.q || '').trim();
   if (!rawQ) return res.status(400).json({ message: 'Query is required' });
 
@@ -2732,7 +2733,7 @@ router.get('/student-balance/export.pdf', authorize(UserRole.ADMIN, UserRole.DIR
   doc.end();
 });
 
-router.get('/class-balances/:classId', authorize(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), async (req, res: Response) => {
+router.get('/class-balances/:classId', authorize(...FINANCE_ROLES), async (req, res: Response) => {
   const result = await AppDataSource.query(`
     SELECT COALESCE(SUM(i."totalAmount" - i."amountPaid"), 0) as "totalOwed",
       COUNT(DISTINCT s.id) as "studentsWithBalance"

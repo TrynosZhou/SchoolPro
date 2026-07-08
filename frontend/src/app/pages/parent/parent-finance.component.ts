@@ -5,7 +5,7 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { PARENT_NAV_ITEMS } from '../../core/config/parent-nav';
-import { STUDENT_NAV_ITEMS } from '../../core/config/student-nav';
+import { STUDENT_NAV_SECTIONS } from '../../core/config/student-nav';
 import { ApiService } from '../../core/services/api.service';
 import { AuthService } from '../../core/services/auth.service';
 
@@ -84,7 +84,8 @@ export class ParentFinanceComponent implements OnInit {
 
   readonly isStudent = computed(() => this.auth.user()?.role === 'student');
   readonly portalTitle = computed(() => (this.isStudent() ? 'Student Portal' : 'Parent Portal'));
-  readonly nav = computed(() => (this.isStudent() ? STUDENT_NAV_ITEMS : PARENT_NAV_ITEMS));
+  readonly navSections = computed(() => (this.isStudent() ? STUDENT_NAV_SECTIONS : []));
+  readonly navItems = computed(() => (this.isStudent() ? [] : PARENT_NAV_ITEMS));
   readonly homeLink = computed(() => (this.isStudent() ? '/student' : '/parent'));
 
   children = signal<LinkedChild[]>([]);

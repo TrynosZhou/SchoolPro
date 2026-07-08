@@ -4,7 +4,7 @@ import { PortalLayoutComponent, NavItem, NavSection } from '../portal-layout/por
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
 import { buildTeacherNavSections } from '../../core/config/teacher-nav';
 import { PARENT_NAV_ITEMS } from '../../core/config/parent-nav';
-import { STUDENT_NAV_ITEMS } from '../../core/config/student-nav';
+import { STUDENT_NAV_SECTIONS } from '../../core/config/student-nav';
 import { DIRECTOR_NAV_ITEMS } from '../../core/config/director-nav';
 import { PRINCIPAL_NAV_ITEMS } from '../../core/config/principal-nav';
 import { ApiService } from '../../core/services/api.service';
@@ -65,7 +65,7 @@ export class NotificationsComponent implements OnInit {
     switch (this.role) {
       case 'director': return DIRECTOR_NAV_ITEMS;
       case 'principal': return PRINCIPAL_NAV_ITEMS;
-      case 'student': return STUDENT_NAV_ITEMS;
+      case 'student': return [];
       case 'parent': return PARENT_NAV_ITEMS;
       default: return [];
     }
@@ -75,6 +75,7 @@ export class NotificationsComponent implements OnInit {
     switch (this.role) {
       case 'admin': return ADMIN_NAV_SECTIONS;
       case 'teacher': return buildTeacherNavSections(this.auth.user()?.permissions);
+      case 'student': return STUDENT_NAV_SECTIONS;
       default: return [];
     }
   }

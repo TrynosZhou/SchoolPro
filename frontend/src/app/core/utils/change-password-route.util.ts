@@ -5,6 +5,7 @@ export const CHANGE_PASSWORD_PATHS = {
   admin: '/admin/change-password',
   director: '/director/change-password',
   principal: '/principal/change-password',
+  accountant: '/accountant/change-password',
   teacher: '/teacher/change-password',
   parent: '/parent/change-password',
   student: '/student/change-password',

@@ -1,4 +1,4 @@
-<app-portal-layout portalTitle="Admin Portal" pageTitle="Exemptions" [navSections]="adminNav">
+<app-portal-layout [portalTitle]="portalTitle" pageTitle="Exemptions" [navSections]="navSections">
   <div class="exemptions-page">
     @if (toast(); as t) {
       <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>

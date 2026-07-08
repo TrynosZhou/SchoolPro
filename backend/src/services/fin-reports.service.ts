@@ -51,6 +51,8 @@ export interface StudentLedgerReport {
   lines: LedgerLine[];
   /** Total outstanding on all open invoices (school-wide, not term-scoped). */
   invoiceBalance: number;
+  /** Unpaid invoice total for invoices issued in this term. */
+  termInvoiceBalance: number;
   /** Term with the highest positive closing balance, if any. */
   balanceTermId?: string;
   balanceTermName?: string;
@@ -192,6 +194,16 @@ export async function fetchStudentInvoiceBalance(studentId: string): Promise<num
     [studentId],
   );
   return termRoundMoney(Number(result[0]?.owed || 0));
+}
+
+function sumOpenInvoiceBalance(invoices: Invoice[]): number {
+  return termRoundMoney(
+    invoices.reduce((sum, inv) => {
+      if (['cancelled', 'draft', 'paid'].includes(String(inv.status))) return sum;
+      const owed = Number(inv.totalAmount) - Number(inv.amountPaid);
+      return owed > 0.005 ? sum + owed : sum;
+    }, 0),
+  );
 }
 
 async function findBalanceTerm(
@@ -389,6 +401,36 @@ export async function buildStudentLedgerReport(
     });
   }
 
+  const creditedByInvoiceId = new Map<string, number>();
+  for (const pay of termPayments) {
+    if (!pay.invoiceId) continue;
+    creditedByInvoiceId.set(
+      pay.invoiceId,
+      roundMoney((creditedByInvoiceId.get(pay.invoiceId) || 0) + Number(pay.amount)),
+    );
+  }
+
+  for (const inv of termInvoices) {
+    if (inv.feeType === BALANCE_FORWARD_FEE_TYPE) continue;
+    const paidOnInvoice = roundMoney(Number(inv.amountPaid));
+    if (paidOnInvoice <= 0.005) continue;
+    const credited = creditedByInvoiceId.get(inv.id) || 0;
+    const remaining = roundMoney(paidOnInvoice - credited);
+    if (remaining <= 0.005) continue;
+
+    const appliedAt = inv.updatedAt || inv.issuedDate || term.endDate;
+    const appliedDate = toDateKey(appliedAt);
+    txns.push({
+      date: appliedDate,
+      sortAt: new Date(appliedAt).getTime() + 1,
+      type: 'payment',
+      reference: inv.invoiceNumber || '—',
+      description: `Payment applied — ${inv.description || inv.invoiceNumber}`,
+      debit: 0,
+      credit: remaining,
+    });
+  }
+
   txns.sort((a, b) => a.sortAt - b.sortAt || a.reference.localeCompare(b.reference));
 
   const lines: LedgerLine[] = [];
@@ -434,12 +476,9 @@ export async function buildStudentLedgerReport(
   const termCharges = roundMoney(openingBalance + totalDebits);
   const termNetMovement = roundMoney(termCharges - totalCredits);
   const termOverpayment = roundMoney(Math.max(0, totalCredits - termCharges));
+  const termInvoiceBalance = sumOpenInvoiceBalance(termInvoices);
   const invoiceBalance = await fetchStudentInvoiceBalance(studentId);
-  // Invoice balance is authoritative (matches Outstanding Invoices report).
-  const closingBalance = invoiceBalance;
-  if (lines.length && Math.abs(owedRunning - invoiceBalance) > 0.01) {
-    lines[lines.length - 1].balance = invoiceBalance;
-  }
+  const closingBalance = owedRunning;
   const balanceTerm = await findBalanceTerm(studentId);
 
   return {
@@ -461,6 +500,7 @@ export async function buildStudentLedgerReport(
     },
     lines,
     invoiceBalance,
+    termInvoiceBalance,
     balanceTermId: balanceTerm?.termId,
     balanceTermName: balanceTerm?.termName,
     summary: {

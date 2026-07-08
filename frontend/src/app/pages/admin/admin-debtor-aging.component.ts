@@ -1,9 +1,12 @@
 import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { DatePipe, DecimalPipe, NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
+import { AuthService } from '../../core/services/auth.service';
+import { NavSection } from '../../shared/portal-layout/portal-layout.component';
+import { resolveStaffPortalContext } from '../../core/utils/staff-portal.util';
 import { ApiService } from '../../core/services/api.service';
 import { formatGenderLabel, formatStudentClassLabel } from '../../core/utils/class-display';
 
@@ -97,7 +100,11 @@ const BUCKET_VISUAL: { key: AgingBucket; label: string; tone: string }[] = [
 })
 export class AdminDebtorAgingComponent implements OnInit {
   private api = inject(ApiService);
+  private router = inject(Router);
+  private auth = inject(AuthService);
 
+  portalTitle = 'Admin Portal';
+  navSections: NavSection[] = ADMIN_NAV_SECTIONS;
   readonly adminNav = ADMIN_NAV_SECTIONS;
   readonly feeTypes = FEE_TYPES;
   readonly buckets = BUCKETS;
@@ -243,6 +250,9 @@ export class AdminDebtorAgingComponent implements OnInit {
   });
 
   ngOnInit() {
+    const ctx = resolveStaffPortalContext(this.router.url, this.auth.user()?.role);
+    this.portalTitle = ctx.portalTitle;
+    this.navSections = ctx.navSections;
     this.api.get<SchoolYearRow[]>('/admin/school-years').subscribe({
       next: (years) => {
         const list: TermRow[] = [];

@@ -1,4 +1,4 @@
-<app-portal-layout portalTitle="Admin Portal" pageTitle="All Students" [navSections]="adminNav">
+<app-portal-layout [portalTitle]="portalTitle" pageTitle="All Students" [navSections]="navSections">
   <div class="students-page">
     @if (toast(); as t) {
       <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>
@@ -10,20 +10,22 @@
         <h2>Student registry</h2>
         <p class="hero-sub">
           Register learners, track enrollment status, and manage guardian contacts. Registration invoices are created
-          automatically from <a routerLink="/admin/manage-fees">Manage Fees</a>.
+          automatically from <a [routerLink]="basePath + '/manage-fees'">Manage Fees</a>.
         </p>
         <div class="hero-actions">
           <button type="button" class="primary-action" (click)="openRegister()">
             <span>+</span>
             Register student
           </button>
-          <a routerLink="/admin/enrollment" class="secondary-action">Class enrollment</a>
+          @if (!isAccountant) {
+            <a [routerLink]="basePath + '/enrollment'" class="secondary-action">Class enrollment</a>
+          }
           <button type="button" class="refresh-action" (click)="load(true)" [disabled]="refreshing() || loading()">
             {{ refreshing() ? 'Refreshing…' : 'Refresh list' }}
           </button>
         </div>
-        @if (stats().pending) {
-          <a routerLink="/admin/enrollment" class="pending-banner">
+        @if (!isAccountant && stats().pending) {
+          <a [routerLink]="basePath + '/enrollment'" class="pending-banner">
             {{ stats().pending }} student{{ stats().pending === 1 ? '' : 's' }} awaiting class enrollment →
           </a>
         }

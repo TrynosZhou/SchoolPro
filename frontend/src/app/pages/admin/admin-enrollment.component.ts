@@ -38,10 +38,14 @@ export class AdminEnrollmentComponent implements OnInit {
   portalTitle = 'Admin Portal';
   pageTitle = 'Class Enrollment';
   studentsLink = '/admin/students';
+  isClassTeacher = signal(true);
+  classTeacherClassIds = signal<string[]>([]);
 
   readonly adminNav = ADMIN_NAV_SECTIONS;
   get teacherNav() {
-    return buildTeacherNavSections(this.auth.user()?.permissions);
+    return buildTeacherNavSections(this.auth.user()?.permissions, {
+      classTeacher: this.isClassTeacher(),
+    });
   }
   readonly classSelectLabel = classSelectLabel;
 
@@ -82,7 +86,14 @@ export class AdminEnrollmentComponent implements OnInit {
   });
 
   visiblePending = computed(() => this.filterAndSortStudents(this.pendingStudents()));
-  visibleEnrolled = computed(() => this.filterAndSortStudents(this.enrolledStudents(), true));
+  visibleEnrolled = computed(() => {
+    let rows = this.filterAndSortStudents(this.enrolledStudents(), true);
+    if (this.portalTitle === 'Teacher Portal') {
+      const allowed = new Set(this.classTeacherClassIds());
+      rows = rows.filter((s) => s.classId && allowed.has(s.classId));
+    }
+    return rows;
+  });
 
   hasActiveFilters = computed(
     () => Boolean(this.search().trim()) || this.formFilter() !== 'all' || this.sortOrder() !== 'name-asc',
@@ -92,6 +103,17 @@ export class AdminEnrollmentComponent implements OnInit {
     if (this.router.url.startsWith('/teacher')) {
       this.portalTitle = 'Teacher Portal';
       this.studentsLink = '/teacher';
+      this.isClassTeacher.set(false);
+      this.api.get<{ classTeacherOf: { classId: string }[] }>('/dashboard/teacher').subscribe({
+        next: (d) => {
+          const ids = (d.classTeacherOf ?? []).map((c) => c.classId);
+          this.classTeacherClassIds.set(ids);
+          this.isClassTeacher.set(ids.length > 0);
+        },
+        error: () => {
+          this.isClassTeacher.set(false);
+        },
+      });
     }
     this.load();
     this.api.get<ClassOption[]>('/admin/classes').subscribe({
@@ -311,7 +333,10 @@ export class AdminEnrollmentComponent implements OnInit {
   }
 
   private classRows(): ClassOption[] {
-    return this.asClassArray(this.classes());
+    const all = this.asClassArray(this.classes());
+    if (this.portalTitle !== 'Teacher Portal') return all;
+    const allowed = new Set(this.classTeacherClassIds());
+    return all.filter((c) => allowed.has(c.id));
   }
 
   private asStudentArray(value: unknown): Student[] {

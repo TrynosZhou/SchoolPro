@@ -8,7 +8,7 @@ import { classHeaderLabel } from '../../core/utils/class-display';
 import { formatTeacherTimetableName, TEACHER_TITLE_OPTIONS } from '../../core/utils/teacher-display';
 
 type Tab = 'directory' | 'teacherLoad';
-type StaffRole = 'teacher' | 'admin' | 'principal';
+type StaffRole = 'teacher' | 'admin' | 'principal' | 'accountant';
 type LessonLength = 'single' | 'double' | 'triple';
 type ViewMode = 'table' | 'cards';
 type SortKey = 'name-asc' | 'name-desc' | 'hire-desc' | 'hire-asc' | 'id-asc';
@@ -741,6 +741,9 @@ export class AdminStaffComponent implements OnInit {
     if (this.newStaff.role === 'principal') {
       return 'Principal account selected. Use an institutional email for secure access.';
     }
+    if (this.newStaff.role === 'accountant') {
+      return 'Accountant account selected. This role manages finance and can register new students.';
+    }
     if (this.newStaff.role === 'admin') {
       return 'Administrator account selected. This role can manage operations and records.';
     }
@@ -914,6 +917,7 @@ export class AdminStaffComponent implements OnInit {
       teacher: 'Teacher',
       admin: 'Administrator',
       principal: 'Principal',
+      accountant: 'Accountant',
     };
     return map[role] || role;
   }
