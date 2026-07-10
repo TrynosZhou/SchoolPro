@@ -2,6 +2,7 @@ import { EntityManager, In } from 'typeorm';
 import { randomUUID } from 'crypto';
 import { AppDataSource } from '../config/data-source';
 import { DEFAULT_CHART_OF_ACCOUNTS, GL_ACCOUNT_CODES } from '../config/gl-accounts';
+import { tenantContext } from '../config/tenant-context';
 import { ChartOfAccount, GeneralLedgerEntry } from '../entities';
 import { GlAccountType, GlReferenceType } from '../entities/enums';
 import { today } from '../utils/helpers';
@@ -260,17 +261,25 @@ export async function ensureChartOfAccountsSeeded(): Promise<void> {
   }
 }
 
+// Account IDs are DB-generated and differ between the production and demo
+// databases, so the cache key must include the tenant to avoid resolving a
+// prod account ID while running against the demo DataSource (or vice versa).
 const accountIdByCodeCache = new Map<string, string>();
 
+function accountCacheKey(code: string): string {
+  return `${tenantContext.isDemo() ? 'demo' : 'prod'}:${code}`;
+}
+
 export async function resolveGlAccountIdByCode(code: string): Promise<string> {
-  const cached = accountIdByCodeCache.get(code);
+  const key = accountCacheKey(code);
+  const cached = accountIdByCodeCache.get(key);
   if (cached) return cached;
   await ensureChartOfAccountsSeeded();
   const account = await AppDataSource.getRepository(ChartOfAccount).findOne({
     where: { accountCode: code, isActive: true },
   });
   if (!account) throw new Error(`GL account ${code} is not configured.`);
-  accountIdByCodeCache.set(code, account.id);
+  accountIdByCodeCache.set(key, account.id);
   return account.id;
 }
 

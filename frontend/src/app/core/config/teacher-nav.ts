@@ -38,6 +38,8 @@ export const TEACHER_NAV_SECTIONS: NavSection[] = [
     items: [
       { label: 'Record Book', path: '/teacher/record-book', icon: '📒', permission: 'academics.exams' },
       { label: 'Assignments', path: '/teacher/assignments', icon: '📤', permission: 'academics.exams' },
+      { label: 'LMS', path: '/teacher/lms', icon: '💻', permission: 'academics.exams' },
+      { label: 'Library', path: '/teacher/library', icon: '📚', permission: 'academics.exams' },
     ],
   },
   {

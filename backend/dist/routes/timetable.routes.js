@@ -401,8 +401,8 @@ router.get('/generate/class/pdf', (0, auth_1.authorize)(...viewRoles), async (re
 });
 router.patch('/slots/:id/move', (0, auth_1.authorize)(...manageRoles), async (req, res) => {
     try {
-        const { dayOfWeek, startTime, endTime } = req.body || {};
-        const result = await (0, timetable_move_service_1.moveTimetableSlot)(req.params.id, { dayOfWeek, startTime, endTime });
+        const { dayOfWeek, startTime, endTime, ignoreConflicts } = req.body || {};
+        const result = await (0, timetable_move_service_1.moveTimetableSlot)(req.params.id, { dayOfWeek, startTime, endTime }, { ignoreConflicts: ignoreConflicts === true || ignoreConflicts === 'true' });
         res.json(result);
     }
     catch (err) {

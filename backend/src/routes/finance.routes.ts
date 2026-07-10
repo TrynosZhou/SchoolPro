@@ -7,6 +7,7 @@ import { authenticate, authorize, AuthRequest } from '../middleware/auth';
 import { findLatest } from '../utils/typeorm-helpers';
 import { postCashbookExpenseToGl, postCashbookReceiptToGl } from '../services/gl-posting.service';
 import { FINANCE_ROLES, FINANCE_WRITE_ROLES } from '../config/portal-roles';
+import { fetchSchoolOutstandingBalance } from '../services/fin-reports.service';
 
 const router = Router();
 router.use(authenticate);
@@ -46,18 +47,17 @@ router.post('/cashbook', authorize(...FINANCE_WRITE_ROLES), async (req: AuthRequ
 
 router.get('/balance-sheet', authorize(...FINANCE_ROLES), async (_req, res: Response) => {
   const cashbook = await findLatest(AppDataSource.getRepository(CashbookEntry));
-  const debtors = await AppDataSource.query(`
-    SELECT COALESCE(SUM("totalAmount" - "amountPaid"), 0) as total
-    FROM invoices WHERE status IN ('sent', 'partial', 'overdue')
-  `);
-  const payments = await AppDataSource.query(`
-    SELECT COALESCE(SUM(amount), 0) as total FROM payments
-    WHERE "paidAt" >= date_trunc('month', CURRENT_DATE)
-  `);
+  const [totalDebtors, payments] = await Promise.all([
+    fetchSchoolOutstandingBalance(),
+    AppDataSource.query(`
+      SELECT COALESCE(SUM(amount), 0) as total FROM payments
+      WHERE "paidAt" >= date_trunc('month', CURRENT_DATE)
+    `),
+  ]);
 
   res.json({
     cashBalance: cashbook ? Number(cashbook.balance) : 0,
-    totalDebtors: Number(debtors[0]?.total || 0),
+    totalDebtors: Number(totalDebtors || 0),
     monthlyCollections: Number(payments[0]?.total || 0),
     generatedAt: new Date(),
   });
@@ -122,8 +122,10 @@ router.get('/debtors-aging', authorize(...FINANCE_ROLES), async (_req, res: Resp
       COUNT(*) as count,
       SUM(i."totalAmount" - i."amountPaid") as amount
     FROM invoices i
-    WHERE i.status IN ('sent', 'partial', 'overdue')
-      AND i."totalAmount" > i."amountPaid"
+    INNER JOIN students s ON s.id = i."studentId"
+    WHERE s."isActive" = true
+      AND i.status IN ('sent', 'partial', 'overdue')
+      AND (i."totalAmount" - i."amountPaid") > 0.005
     GROUP BY bucket
     ORDER BY bucket
   `);

@@ -7,6 +7,7 @@ import { changePasswordPathForRole } from '../utils/change-password-route.util';
 
 const TOKEN_KEY = 'school_pro_token';
 const USER_KEY = 'school_pro_user';
+const DEMO_KEY = 'school_pro_demo';
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
@@ -14,7 +15,11 @@ export class AuthService {
   private router = inject(Router);
 
   private userSignal = signal<User | null>(this.loadUser());
+  private demoSignal = signal<boolean>(this.loadDemoFlag());
+
   user = this.userSignal.asReadonly();
+  isDemoSession = computed(() => this.demoSignal());
+
   isLoggedIn = computed(() => {
     const token = this.getToken();
     return !!this.userSignal() && !!token && !this.isTokenExpired(token);
@@ -22,6 +27,13 @@ export class AuthService {
 
   login(username: string, password: string) {
     return this.api.post<AuthResponse>('/auth/login', { username, password }).pipe(
+      tap((res) => this.persistSession(res))
+    );
+  }
+
+  /** One-click demo sign-in for a fixed role (POST /auth/demo-login). */
+  demoLogin(role: UserRole) {
+    return this.api.post<AuthResponse>('/auth/demo-login', { role }).pipe(
       tap((res) => this.persistSession(res))
     );
   }
@@ -67,9 +79,12 @@ export class AuthService {
   }
 
   private persistSession(res: AuthResponse) {
+    const demo = this.resolveDemoFlag(res);
     localStorage.setItem(TOKEN_KEY, res.token);
     localStorage.setItem(USER_KEY, JSON.stringify(res.user));
+    localStorage.setItem(DEMO_KEY, demo ? '1' : '0');
     this.userSignal.set(res.user);
+    this.demoSignal.set(demo);
   }
 
   /** Merge fields from /auth/me (e.g. gender from linked staff/student profile). */
@@ -82,10 +97,13 @@ export class AuthService {
   }
 
   logout() {
+    const wasDemo = this.demoSignal();
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
+    localStorage.removeItem(DEMO_KEY);
     this.userSignal.set(null);
-    this.router.navigate(['/login']);
+    this.demoSignal.set(false);
+    this.router.navigate([wasDemo ? '/demo' : '/login']);
   }
 
   getToken(): string | null {
@@ -98,7 +116,23 @@ export class AuthService {
     if (!token || this.isTokenExpired(token)) {
       localStorage.removeItem(TOKEN_KEY);
       localStorage.removeItem(USER_KEY);
+      localStorage.removeItem(DEMO_KEY);
       this.userSignal.set(null);
+      this.demoSignal.set(false);
+    }
+  }
+
+  private resolveDemoFlag(res: AuthResponse): boolean {
+    if (typeof res.demo === 'boolean') return res.demo;
+    const token = res.token;
+    try {
+      const segment = token.split('.')[1];
+      if (!segment) return false;
+      const base64 = segment.replace(/-/g, '+').replace(/_/g, '/');
+      const payload = JSON.parse(atob(base64)) as { demo?: boolean };
+      return payload.demo === true;
+    } catch {
+      return false;
     }
   }
 
@@ -148,5 +182,20 @@ export class AuthService {
   private loadUser(): User | null {
     const raw = localStorage.getItem(USER_KEY);
     return raw ? JSON.parse(raw) : null;
+  }
+
+  private loadDemoFlag(): boolean {
+    if (localStorage.getItem(DEMO_KEY) === '1') return true;
+    const token = localStorage.getItem(TOKEN_KEY);
+    if (!token) return false;
+    try {
+      const segment = token.split('.')[1];
+      if (!segment) return false;
+      const base64 = segment.replace(/-/g, '+').replace(/_/g, '/');
+      const payload = JSON.parse(atob(base64)) as { demo?: boolean };
+      return payload.demo === true;
+    } catch {
+      return false;
+    }
   }
 }

@@ -22,6 +22,11 @@ __decorate([
     __metadata("design:type", String)
 ], Message.prototype, "id", void 0);
 __decorate([
+    (0, typeorm_1.Index)(),
+    (0, typeorm_1.Column)({ type: 'varchar', length: 128, nullable: true }),
+    __metadata("design:type", String)
+], Message.prototype, "threadId", void 0);
+__decorate([
     (0, typeorm_1.ManyToOne)(() => User_1.User),
     (0, typeorm_1.JoinColumn)({ name: 'senderId' }),
     __metadata("design:type", User_1.User)

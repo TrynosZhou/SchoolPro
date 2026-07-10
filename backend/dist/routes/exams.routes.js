@@ -5,6 +5,7 @@ const express_1 = require("express");
 const data_source_1 = require("../config/data-source");
 const entities_1 = require("../entities");
 const enums_1 = require("../entities/enums");
+const fin_reports_service_1 = require("../services/fin-reports.service");
 const auth_1 = require("../middleware/auth");
 const grade_service_1 = require("../services/grade.service");
 const class_display_1 = require("../utils/class-display");
@@ -17,12 +18,22 @@ const pdf_1 = require("../utils/pdf");
 const mark_sheet_service_1 = require("../services/mark-sheet.service");
 const results_analysis_service_1 = require("../services/results-analysis.service");
 const ranking_service_1 = require("../services/ranking.service");
+const mark_entry_progress_service_1 = require("../services/mark-entry-progress.service");
+const record_book_service_1 = require("../services/record-book.service");
 const report_card_remarks_service_1 = require("../services/report-card-remarks.service");
 const helpers_1 = require("../utils/helpers");
 const typeorm_helpers_1 = require("../utils/typeorm-helpers");
 const publish_results_service_1 = require("../services/publish-results.service");
+const notification_log_service_1 = require("../services/notification-log.service");
 const ResultsPublication_1 = require("../entities/ResultsPublication");
+const access_control_1 = require("../middleware/access-control");
+const access_control_service_1 = require("../services/access-control.service");
+const portal_roles_1 = require("../config/portal-roles");
+const teacher_class_access_1 = require("../utils/teacher-class-access");
 const PUBLISH_ROLES = [enums_1.UserRole.ADMIN, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.DIRECTOR];
+const acadView = (0, access_control_1.requireModuleAccess)('academics', 'view');
+const acadCreate = (0, access_control_1.requireModuleAccess)('academics', 'create');
+const acadEdit = (0, access_control_1.requireModuleAccess)('academics', 'edit');
 function isPortalViewer(role) {
     return role === enums_1.UserRole.PARENT || role === enums_1.UserRole.STUDENT;
 }
@@ -41,9 +52,47 @@ async function assertReportVisibleToPortalUser(report, examTypeId) {
     }
     return null;
 }
+/**
+ * Gate report-card access for portal users (parents & students). Returns an error
+ * message string to block with a 403, or null to allow. Admin/teacher/etc. bypass.
+ * Enforces, in order:
+ *   1. the viewer is actually linked to the student (student = self, parent = guardian),
+ *   2. the results have been published,
+ *   3. the student has NO outstanding fees balance.
+ */
+async function assertPortalReportCardAccess(req, report, examTypeId) {
+    const role = req.user.role;
+    if (!isPortalViewer(role))
+        return null;
+    const studentId = report.studentId;
+    if (role === enums_1.UserRole.STUDENT) {
+        if (req.user.studentId !== studentId) {
+            return 'You can only view your own report card.';
+        }
+    }
+    else if (role === enums_1.UserRole.PARENT) {
+        if (!req.user.parentId) {
+            return 'Parent profile not linked. Please sign out and sign in again.';
+        }
+        const link = await data_source_1.AppDataSource.getRepository(entities_1.Guardian).findOne({
+            where: { parentId: req.user.parentId, studentId },
+        });
+        if (!link) {
+            return 'You can only view report cards for your linked children.';
+        }
+    }
+    const publishBlock = await assertReportVisibleToPortalUser(report, examTypeId);
+    if (publishBlock)
+        return publishBlock;
+    const owed = await (0, fin_reports_service_1.fetchStudentInvoiceBalance)(studentId);
+    if (owed > 0.005) {
+        return `This report card is locked because of an outstanding fees balance of $${owed.toFixed(2)}. Please settle the balance with the school finance office to view or download the report card.`;
+    }
+    return null;
+}
 const router = (0, express_1.Router)();
 router.use(auth_1.authenticate);
-router.get('/types', async (req, res) => {
+router.get('/types', acadView, async (req, res) => {
     const { termId } = req.query;
     if (termId && isPortalViewer(req.user.role)) {
         return res.json(await (0, publish_results_service_1.listPublishedExamTypesForTerm)(termId));
@@ -51,7 +100,7 @@ router.get('/types', async (req, res) => {
     const repo = data_source_1.AppDataSource.getRepository(entities_1.ExamType);
     res.json(await repo.find());
 });
-router.get('/grade-boundaries', (0, auth_1.authorize)(enums_1.UserRole.TEACHER, enums_1.UserRole.ADMIN, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PARENT, enums_1.UserRole.STUDENT), async (_req, res) => {
+router.get('/grade-boundaries', (0, auth_1.authorize)(enums_1.UserRole.TEACHER, enums_1.UserRole.ADMIN, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PARENT, enums_1.UserRole.STUDENT), acadView, async (_req, res) => {
     res.json(await (0, grade_service_1.getGradeBoundaries)());
 });
 router.get('/results-publications/status', (0, auth_1.authorize)(...PUBLISH_ROLES), async (req, res) => {
@@ -60,6 +109,20 @@ router.get('/results-publications/status', (0, auth_1.authorize)(...PUBLISH_ROLE
         return res.status(400).json({ message: 'termId and examTypeId are required' });
     }
     res.json(await (0, publish_results_service_1.getPublicationStatus)(termId, examTypeId));
+});
+router.get('/results-notifications', (0, auth_1.authorize)(...PUBLISH_ROLES), async (req, res) => {
+    const { termId, examTypeId } = req.query;
+    if (!termId || !examTypeId) {
+        return res.status(400).json({ message: 'termId and examTypeId are required' });
+    }
+    try {
+        res.json(await (0, notification_log_service_1.listResultNotificationLogsForExam)(termId, examTypeId));
+    }
+    catch (err) {
+        return res.status(400).json({
+            message: err instanceof Error ? err.message : 'Failed to load notification logs',
+        });
+    }
 });
 router.post('/results/publish', (0, auth_1.authorize)(...PUBLISH_ROLES), async (req, res) => {
     const { termId, examTypeId, notifyWhatsApp, notifySms } = req.body;
@@ -96,7 +159,7 @@ router.post('/results/unpublish', (0, auth_1.authorize)(...PUBLISH_ROLES), async
 router.get('/school-branding', (0, auth_1.authorize)(enums_1.UserRole.TEACHER, enums_1.UserRole.ADMIN, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PARENT, enums_1.UserRole.STUDENT), async (_req, res) => {
     res.json(await (0, school_branding_service_1.loadSchoolBranding)());
 });
-router.get('/terms', (0, auth_1.authorize)(enums_1.UserRole.TEACHER, enums_1.UserRole.ADMIN, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PARENT, enums_1.UserRole.STUDENT), async (_req, res) => {
+router.get('/terms', (0, auth_1.authorize)(...portal_roles_1.SCHOOL_READ_ROLES, enums_1.UserRole.TEACHER, enums_1.UserRole.PARENT, enums_1.UserRole.STUDENT), (0, access_control_1.requireFinanceOrModuleAccess)('academics', 'view'), async (_req, res) => {
     const years = await data_source_1.AppDataSource.getRepository(entities_1.SchoolYear).find({
         relations: (0, typeorm_helpers_1.relations)('terms'),
         order: { startDate: 'DESC' },
@@ -104,21 +167,36 @@ router.get('/terms', (0, auth_1.authorize)(enums_1.UserRole.TEACHER, enums_1.Use
     const terms = years.flatMap((y) => y.terms || []).sort((a, b) => a.name.localeCompare(b.name));
     res.json(terms);
 });
-router.get('/class-subjects', (0, auth_1.authorize)(enums_1.UserRole.TEACHER, enums_1.UserRole.ADMIN, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.DIRECTOR), async (req, res) => {
+router.get('/class-subjects', (0, auth_1.authorize)(enums_1.UserRole.TEACHER, enums_1.UserRole.ADMIN, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.DIRECTOR), acadView, async (req, res) => {
     const { classId } = req.query;
     if (!classId)
         return res.status(400).json({ message: 'classId is required' });
+    if (!(await (0, teacher_class_access_1.assertTeacherClassAccess)(req, classId))) {
+        return res.status(403).json({ message: 'You are not assigned to this class' });
+    }
+    const where = { classId: classId };
+    if (req.user.role === enums_1.UserRole.TEACHER) {
+        if (!req.user.staffId)
+            return res.json([]);
+        where.teacherId = req.user.staffId;
+    }
     const rows = await data_source_1.AppDataSource.getRepository(entities_2.ClassSubject).find({
-        where: { classId: classId },
+        where,
         relations: (0, typeorm_helpers_1.relations)('subject'),
         order: { subject: { name: 'ASC' } },
     });
     res.json(rows.map((r) => r.subject).filter(Boolean));
 });
-router.get('/marks/entry', (0, auth_1.authorize)(enums_1.UserRole.TEACHER, enums_1.UserRole.ADMIN, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.DIRECTOR), async (req, res) => {
+router.get('/marks/entry', (0, auth_1.authorize)(enums_1.UserRole.TEACHER, enums_1.UserRole.ADMIN, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.DIRECTOR), acadView, async (req, res) => {
     const { classId, subjectId, examTypeId, termId } = req.query;
     if (!classId || !subjectId || !examTypeId || !termId) {
         return res.status(400).json({ message: 'classId, subjectId, examTypeId, and termId are required' });
+    }
+    if (!(await (0, teacher_class_access_1.assertTeacherClassAccess)(req, classId))) {
+        return res.status(403).json({ message: 'You are not assigned to this class' });
+    }
+    if (!(await (0, teacher_class_access_1.assertTeacherSubjectAccess)(req, classId, subjectId))) {
+        return res.status(403).json({ message: 'You are not assigned to teach this subject' });
     }
     const examType = await data_source_1.AppDataSource.getRepository(entities_1.ExamType).findOne({ where: { id: examTypeId } });
     const schoolClass = await data_source_1.AppDataSource.getRepository(entities_1.SchoolClass).findOne({
@@ -160,7 +238,7 @@ router.get('/marks/entry', (0, auth_1.authorize)(enums_1.UserRole.TEACHER, enums
         }),
     });
 });
-router.get('/marks', (0, auth_1.authorize)(enums_1.UserRole.TEACHER, enums_1.UserRole.ADMIN, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PARENT, enums_1.UserRole.STUDENT), async (req, res) => {
+router.get('/marks', (0, auth_1.authorize)(enums_1.UserRole.TEACHER, enums_1.UserRole.ADMIN, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PARENT, enums_1.UserRole.STUDENT), acadView, async (req, res) => {
     const repo = data_source_1.AppDataSource.getRepository(entities_1.ExamMark);
     const { classId, subjectId, termId, examTypeId, studentId } = req.query;
     const where = {};
@@ -174,11 +252,28 @@ router.get('/marks', (0, auth_1.authorize)(enums_1.UserRole.TEACHER, enums_1.Use
         where.examTypeId = examTypeId;
     if (studentId)
         where.studentId = studentId;
+    if (isPortalViewer(req.user.role)) {
+        const accessible = await access_control_service_1.AccessControlService.getAccessibleStudentIds(req.user);
+        const ids = accessible === 'all' ? [] : accessible;
+        if (studentId && !ids.includes(studentId)) {
+            return res.status(403).json({ message: 'Access denied' });
+        }
+        if (!studentId && ids.length === 1) {
+            where.studentId = ids[0];
+        }
+    }
     const marks = await repo.find({
         where,
         relations: (0, typeorm_helpers_1.relations)('student', 'subject', 'examType', 'term', 'enteredBy', 'enteredBy.user'),
         order: { student: { lastName: 'ASC' } },
     });
+    if (isPortalViewer(req.user.role)) {
+        const accessible = await access_control_service_1.AccessControlService.getAccessibleStudentIds(req.user);
+        const ids = new Set(accessible === 'all' ? [] : accessible);
+        if (ids.size) {
+            return res.json(marks.filter((m) => ids.has(m.studentId)));
+        }
+    }
     res.json(marks);
 });
 async function upsertExamMark(repo, data) {
@@ -211,13 +306,22 @@ async function upsertExamMark(repo, data) {
     await (0, report_card_service_1.syncReportCardForStudent)(data.studentId, data.termId);
     return saved;
 }
-router.post('/marks/save-one', (0, auth_1.authorize)(enums_1.UserRole.TEACHER, enums_1.UserRole.ADMIN, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.DIRECTOR), async (req, res) => {
+router.post('/marks/save-one', (0, auth_1.authorize)(enums_1.UserRole.TEACHER, enums_1.UserRole.ADMIN, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.DIRECTOR), acadCreate, async (req, res) => {
     const { studentId, examTypeId, classId, subjectId, termId, marks, remarks } = req.body;
     if (!studentId || !examTypeId || !classId || !subjectId || !termId) {
         return res.status(400).json({ message: 'Missing required fields' });
     }
     if (marks === null || marks === undefined || marks === '') {
         return res.status(400).json({ message: 'Marks value required' });
+    }
+    if (!(await access_control_service_1.AccessControlService.userCanAccessStudent(req.user, studentId))) {
+        return res.status(403).json({ message: 'You do not have access to this student record' });
+    }
+    if (!(await (0, teacher_class_access_1.assertTeacherClassAccess)(req, classId))) {
+        return res.status(403).json({ message: 'You are not assigned to this class' });
+    }
+    if (!(await (0, teacher_class_access_1.assertTeacherSubjectAccess)(req, classId, subjectId))) {
+        return res.status(403).json({ message: 'You are not assigned to teach this subject' });
     }
     const repo = data_source_1.AppDataSource.getRepository(entities_1.ExamMark);
     const saved = await upsertExamMark(repo, {
@@ -232,14 +336,23 @@ router.post('/marks/save-one', (0, auth_1.authorize)(enums_1.UserRole.TEACHER, e
     });
     res.json(saved);
 });
-router.post('/marks/bulk', (0, auth_1.authorize)(enums_1.UserRole.TEACHER, enums_1.UserRole.ADMIN, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.DIRECTOR), async (req, res) => {
+router.post('/marks/bulk', (0, auth_1.authorize)(enums_1.UserRole.TEACHER, enums_1.UserRole.ADMIN, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.DIRECTOR), acadCreate, async (req, res) => {
     const repo = data_source_1.AppDataSource.getRepository(entities_1.ExamMark);
     const { examTypeId, classId, subjectId, termId, marks } = req.body;
+    if (classId && !(await (0, teacher_class_access_1.assertTeacherClassAccess)(req, classId))) {
+        return res.status(403).json({ message: 'You are not assigned to this class' });
+    }
+    if (classId && subjectId && !(await (0, teacher_class_access_1.assertTeacherSubjectAccess)(req, classId, subjectId))) {
+        return res.status(403).json({ message: 'You are not assigned to teach this subject' });
+    }
     const saved = [];
     const syncedStudents = new Set();
     for (const m of marks) {
         if (m.marks === null || m.marks === undefined || m.marks === '')
             continue;
+        if (!(await access_control_service_1.AccessControlService.userCanAccessStudent(req.user, m.studentId))) {
+            continue;
+        }
         const row = await upsertExamMark(repo, {
             studentId: m.studentId,
             examTypeId,
@@ -255,7 +368,7 @@ router.post('/marks/bulk', (0, auth_1.authorize)(enums_1.UserRole.TEACHER, enums
     }
     res.json({ saved: saved.length, students: syncedStudents.size });
 });
-router.post('/report-cards/generate', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.PRINCIPAL), async (req, res) => {
+router.post('/report-cards/generate', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.PRINCIPAL), acadCreate, async (req, res) => {
     const { termId, classId } = req.body;
     const markRepo = data_source_1.AppDataSource.getRepository(entities_1.ExamMark);
     const reportRepo = data_source_1.AppDataSource.getRepository(entities_1.ReportCard);
@@ -539,6 +652,121 @@ router.get('/rankings/pdf', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_
         });
     }
 });
+router.get('/mark-entry-progress', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.DIRECTOR, enums_1.UserRole.TEACHER), acadView, async (req, res) => {
+    const { examTypeId, termId, classId, formId } = req.query;
+    if (!examTypeId || !termId) {
+        return res.status(400).json({ message: 'examTypeId and termId are required' });
+    }
+    if (classId && !(await (0, teacher_class_access_1.assertTeacherClassAccess)(req, classId))) {
+        return res.status(403).json({ message: 'You are not assigned to this class' });
+    }
+    try {
+        const staffId = req.user.role === enums_1.UserRole.TEACHER ? req.user.staffId : undefined;
+        const data = await (0, mark_entry_progress_service_1.buildMarkEntryProgress)({
+            examTypeId: examTypeId,
+            termId: termId,
+            classId: classId,
+            formId: formId,
+            staffId,
+        });
+        res.json(data);
+    }
+    catch (err) {
+        return res.status(400).json({
+            message: err instanceof Error ? err.message : 'Failed to load mark entry progress',
+        });
+    }
+});
+router.get('/record-book/subjects', (0, auth_1.authorize)(enums_1.UserRole.TEACHER, enums_1.UserRole.ADMIN, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.DIRECTOR), acadView, async (req, res) => {
+    const { classId } = req.query;
+    if (!classId) {
+        return res.status(400).json({ message: 'classId is required' });
+    }
+    if (!(await (0, teacher_class_access_1.assertTeacherClassAccess)(req, classId))) {
+        return res.status(403).json({ message: 'You are not assigned to this class' });
+    }
+    try {
+        const data = await (0, record_book_service_1.listRecordBookSubjects)(req, classId);
+        res.json(data);
+    }
+    catch (err) {
+        return res.status(400).json({
+            message: err instanceof Error ? err.message : 'Failed to load subjects',
+        });
+    }
+});
+router.get('/record-book', (0, auth_1.authorize)(enums_1.UserRole.TEACHER, enums_1.UserRole.ADMIN, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.DIRECTOR), acadView, async (req, res) => {
+    const { classId, termId, subjectId } = req.query;
+    if (!classId || !termId || !subjectId) {
+        return res.status(400).json({ message: 'classId, termId, and subjectId are required' });
+    }
+    if (!(await (0, teacher_class_access_1.assertTeacherClassAccess)(req, classId))) {
+        return res.status(403).json({ message: 'You are not assigned to this class' });
+    }
+    try {
+        const data = await (0, record_book_service_1.buildRecordBook)(req, {
+            classId: classId,
+            termId: termId,
+            subjectId: subjectId,
+        });
+        const term = await data_source_1.AppDataSource.getRepository(entities_1.Term).findOne({ where: { id: termId } });
+        data.term.name = term?.name || '';
+        res.json(data);
+    }
+    catch (err) {
+        return res.status(400).json({
+            message: err instanceof Error ? err.message : 'Failed to load record book',
+        });
+    }
+});
+router.post('/record-book/add-column', (0, auth_1.authorize)(enums_1.UserRole.TEACHER, enums_1.UserRole.ADMIN, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.DIRECTOR), acadCreate, async (req, res) => {
+    const { classId, termId, subjectId, label } = req.body || {};
+    if (!classId || !termId || !subjectId) {
+        return res.status(400).json({ message: 'classId, termId, and subjectId are required' });
+    }
+    if (!(await (0, teacher_class_access_1.assertTeacherClassAccess)(req, classId))) {
+        return res.status(403).json({ message: 'You are not assigned to this class' });
+    }
+    try {
+        const column = await (0, record_book_service_1.addRecordBookColumn)(req, { classId, termId, subjectId, label });
+        res.json(column);
+    }
+    catch (err) {
+        return res.status(400).json({
+            message: err instanceof Error ? err.message : 'Failed to add column',
+        });
+    }
+});
+router.post('/record-book/save-row', (0, auth_1.authorize)(enums_1.UserRole.TEACHER, enums_1.UserRole.ADMIN, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.DIRECTOR), acadCreate, async (req, res) => {
+    const { classId, termId, subjectId, studentId, marks } = req.body || {};
+    if (!classId || !termId || !subjectId || !studentId || !Array.isArray(marks)) {
+        return res.status(400).json({ message: 'classId, termId, subjectId, studentId, and marks are required' });
+    }
+    if (!(await (0, teacher_class_access_1.assertTeacherClassAccess)(req, classId))) {
+        return res.status(403).json({ message: 'You are not assigned to this class' });
+    }
+    try {
+        const result = await (0, record_book_service_1.saveRecordBookRow)(req, {
+            classId,
+            termId,
+            subjectId,
+            studentId,
+            marks: marks
+                .filter((m) => m?.columnKey && m.marks !== null && m.marks !== undefined && m.marks !== '')
+                .map((m) => ({
+                columnKey: m.columnKey,
+                marks: Number(m.marks),
+            }))
+                .filter((m) => Number.isFinite(m.marks)),
+        });
+        res.json(result);
+    }
+    catch (err) {
+        return res.status(400).json({
+            message: err instanceof Error ? err.message : 'Failed to save marks',
+        });
+    }
+});
 router.get('/mark-sheet/pdf', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.DIRECTOR, enums_1.UserRole.TEACHER), async (req, res) => {
     const { examTypeId, termId, classId } = req.query;
     if (!examTypeId || !termId || !classId) {
@@ -560,6 +788,7 @@ router.get('/mark-sheet/pdf', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enum
             examTypeName: sheet.examType.name,
             termName: sheet.term.name,
             className: sheet.class.name,
+            classTeacherName: sheet.class.classTeacherName,
             maxMarks: sheet.examType.maxMarks,
             generatedAt: new Date(),
             subjects: sheet.subjects.map((s) => ({ code: s.code, name: s.name })),
@@ -630,7 +859,7 @@ router.get('/report-cards/by-class', (0, auth_1.authorize)(enums_1.UserRole.ADMI
         reports: (0, report_card_service_1.attachAttendanceToReports)(reports, attendanceMap),
     });
 });
-router.get('/report-cards/:studentId/:termId', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.DIRECTOR, enums_1.UserRole.TEACHER, enums_1.UserRole.PARENT, enums_1.UserRole.STUDENT), async (req, res) => {
+router.get('/report-cards/:studentId/:termId', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.DIRECTOR, enums_1.UserRole.TEACHER, enums_1.UserRole.PARENT, enums_1.UserRole.STUDENT), acadView, async (req, res) => {
     const repo = data_source_1.AppDataSource.getRepository(entities_1.ReportCard);
     const where = {
         studentId: req.params.studentId,
@@ -654,14 +883,30 @@ router.get('/report-cards/:studentId/:termId', (0, auth_1.authorize)(enums_1.Use
     }
     if (!report)
         return res.status(404).json({ message: 'Report card not found' });
-    if (isPortalViewer(req.user.role)) {
-        const block = await assertReportVisibleToPortalUser(report, req.query.examTypeId);
-        if (block)
-            return res.status(403).json({ message: block });
+    if (req.user.role === enums_1.UserRole.TEACHER) {
+        if (!(await access_control_service_1.AccessControlService.userCanAccessStudent(req.user, report.studentId))) {
+            return res.status(403).json({ message: 'You do not have access to this student record' });
+        }
     }
-    res.json(report);
+    const portalBlock = await assertPortalReportCardAccess(req, report, req.query.examTypeId);
+    if (portalBlock)
+        return res.status(403).json({ message: portalBlock });
+    // Recompute class & form position (and totals) so the rank always shows on the
+    // portal view, even for reports created via paths that didn't persist positions.
+    const maxMarks = Number(report.examType?.maxMarks) || 100;
+    const metrics = await (0, report_card_service_1.getReportCardPdfMetrics)(report, maxMarks);
+    res.json({
+        ...report,
+        subjectResults: metrics.subjectResults,
+        classPosition: metrics.classPosition ?? report.classPosition ?? null,
+        formPosition: metrics.formPosition ?? report.formPosition ?? null,
+        classTotal: metrics.classTotal ?? report.classTotal ?? null,
+        formTotal: metrics.formTotal ?? report.formTotal ?? null,
+        subjectsPassed: metrics.subjectsPassed ?? report.subjectsPassed ?? null,
+        totalSubjects: metrics.totalSubjects ?? report.totalSubjects ?? null,
+    });
 });
-router.get('/report-cards/:studentId/:termId/pdf', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.DIRECTOR, enums_1.UserRole.TEACHER, enums_1.UserRole.PARENT, enums_1.UserRole.STUDENT), async (req, res) => {
+router.get('/report-cards/:studentId/:termId/pdf', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.DIRECTOR, enums_1.UserRole.TEACHER, enums_1.UserRole.PARENT, enums_1.UserRole.STUDENT), acadView, async (req, res) => {
     try {
         const repo = data_source_1.AppDataSource.getRepository(entities_1.ReportCard);
         const where = {
@@ -677,11 +922,14 @@ router.get('/report-cards/:studentId/:termId/pdf', (0, auth_1.authorize)(enums_1
         });
         if (!report)
             return res.status(404).json({ message: 'Report card not found' });
-        if (isPortalViewer(req.user.role)) {
-            const block = await assertReportVisibleToPortalUser(report, req.query.examTypeId);
-            if (block)
-                return res.status(403).json({ message: block });
+        if (req.user.role === enums_1.UserRole.TEACHER) {
+            if (!(await access_control_service_1.AccessControlService.userCanAccessStudent(req.user, report.studentId))) {
+                return res.status(403).json({ message: 'You do not have access to this student record' });
+            }
         }
+        const portalBlock = await assertPortalReportCardAccess(req, report, req.query.examTypeId);
+        if (portalBlock)
+            return res.status(403).json({ message: portalBlock });
         const settings = await data_source_1.AppDataSource.getRepository(entities_1.SchoolSettings).findOne({ where: { id: 'default' } });
         const inline = req.query.preview === 'true';
         const maxMarks = Number(report.examType?.maxMarks) || 100;
@@ -713,6 +961,7 @@ router.get('/report-cards/:studentId/:termId/pdf', (0, auth_1.authorize)(enums_1
             attendance: metrics.attendance,
             classTeacherRemarks: report.classTeacherRemarks,
             principalRemarks: report.principalRemarks,
+            headmasterName: settings?.headmasterName || undefined,
             generatedAt: report.generatedAt ? new Date(report.generatedAt) : new Date(),
             gradeBoundaries: settings?.gradeBoundaries?.length
                 ? settings.gradeBoundaries
@@ -734,11 +983,11 @@ router.get('/report-cards/:studentId/:termId/pdf', (0, auth_1.authorize)(enums_1
     }
 });
 router.patch('/report-cards/:id/remarks', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.DIRECTOR, enums_1.UserRole.TEACHER), async (req, res) => {
-    const { classTeacherRemarks, principalRemarks } = req.body;
+    const { classTeacherRemarks, principalRemarks, behaviorRating, attitudeRating, regenerateClassTeacherRemarks, } = req.body;
     const repo = data_source_1.AppDataSource.getRepository(entities_1.ReportCard);
     const report = await repo.findOne({
         where: { id: req.params.id },
-        relations: (0, typeorm_helpers_1.relations)('student'),
+        relations: (0, typeorm_helpers_1.relations)('student', 'student.schoolClass', 'student.schoolClass.form', 'student.schoolClass.classTeacher', 'student.schoolClass.classTeacher.user'),
     });
     if (!report)
         return res.status(404).json({ message: 'Report card not found' });
@@ -752,9 +1001,46 @@ router.patch('/report-cards/:id/remarks', (0, auth_1.authorize)(enums_1.UserRole
             return res.status(403).json({ message: 'You are not assigned to this student class' });
         }
     }
+    let ratingsChanged = false;
+    if (behaviorRating !== undefined) {
+        if (behaviorRating && !(0, report_card_remarks_service_1.isValidConductRating)(behaviorRating)) {
+            return res.status(400).json({ message: 'Invalid behavior rating' });
+        }
+        report.behaviorRating = behaviorRating || null;
+        ratingsChanged = true;
+    }
+    if (attitudeRating !== undefined) {
+        if (attitudeRating && !(0, report_card_remarks_service_1.isValidConductRating)(attitudeRating)) {
+            return res.status(400).json({ message: 'Invalid attitude rating' });
+        }
+        report.attitudeRating = attitudeRating || null;
+        ratingsChanged = true;
+    }
     if (classTeacherRemarks !== undefined) {
         const cleaned = (0, report_card_remarks_service_1.sanitizeReportCardRemark)(String(classTeacherRemarks || ''), report.student.firstName, report.student.lastName);
         report.classTeacherRemarks = cleaned.trim() || null;
+    }
+    else if (ratingsChanged
+        || regenerateClassTeacherRemarks) {
+        if (!(0, report_card_remarks_service_1.isValidConductRating)(report.behaviorRating)
+            || !(0, report_card_remarks_service_1.isValidConductRating)(report.attitudeRating)) {
+            return res.status(400).json({
+                message: 'Set behaviour and attitude ratings before regenerating class teacher remarks',
+            });
+        }
+        const attendance = await (0, report_card_service_1.getStudentTermAttendance)(report.studentId, report.termId, report.student.classId);
+        const teacherUser = report.student.schoolClass?.classTeacher?.user;
+        const classTeacherName = teacherUser
+            ? `${(teacherUser.lastName || '').trim()} ${(teacherUser.firstName || '').charAt(0).toUpperCase()}.`.trim()
+            : null;
+        report.classTeacherRemarks = (0, report_card_remarks_service_1.buildClassTeacherRemarks)({
+            firstName: report.student.firstName,
+            lastName: report.student.lastName,
+            behaviorRating: report.behaviorRating,
+            attitudeRating: report.attitudeRating,
+            attendance,
+            classTeacherName,
+        });
     }
     if (principalRemarks !== undefined) {
         const cleaned = (0, report_card_remarks_service_1.sanitizeReportCardRemark)(String(principalRemarks || ''), report.student.firstName, report.student.lastName);

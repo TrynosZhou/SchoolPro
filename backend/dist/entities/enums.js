@@ -1,11 +1,12 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.TeacherAssignmentRole = exports.DayOfWeek = exports.LessonLength = exports.GlReferenceType = exports.GlAccountType = exports.PayslipStatus = exports.PayrollRunStatus = exports.PayrollPaymentMethod = exports.PayFrequency = exports.CashbookEntryType = exports.ExamTypeName = exports.InvoiceAdjustmentType = exports.TuitionExemptionType = exports.FeeType = exports.StudentType = exports.InvoiceStatus = exports.PaymentMethod = exports.AttendanceStatus = exports.UserRole = void 0;
+exports.ApplicationDocumentType = exports.ApplicationStatus = exports.TeacherAssignmentRole = exports.DayOfWeek = exports.LessonLength = exports.GlReferenceType = exports.GlAccountType = exports.PayslipStatus = exports.PayrollRunStatus = exports.PayrollPaymentMethod = exports.PayFrequency = exports.CashbookEntryType = exports.ExamTypeName = exports.InvoiceAdjustmentType = exports.TuitionExemptionType = exports.FeeType = exports.EnrollmentStatus = exports.StudentStatus = exports.StudentType = exports.InvoiceStatus = exports.PaymentMethod = exports.AttendanceStatus = exports.UserRole = void 0;
 var UserRole;
 (function (UserRole) {
     UserRole["DIRECTOR"] = "director";
     UserRole["PRINCIPAL"] = "principal";
     UserRole["ADMIN"] = "admin";
+    UserRole["ACCOUNTANT"] = "accountant";
     UserRole["TEACHER"] = "teacher";
     UserRole["PARENT"] = "parent";
     UserRole["STUDENT"] = "student";
@@ -40,6 +41,25 @@ var StudentType;
     StudentType["DAY_SCHOLAR"] = "day_scholar";
     StudentType["BOARDER"] = "boarder";
 })(StudentType || (exports.StudentType = StudentType = {}));
+/** Lifecycle status of a student on the roll (for retention / dropout analytics). */
+var StudentStatus;
+(function (StudentStatus) {
+    StudentStatus["ACTIVE"] = "active";
+    StudentStatus["GRADUATED"] = "graduated";
+    StudentStatus["TRANSFERRED"] = "transferred";
+    StudentStatus["WITHDRAWN"] = "withdrawn";
+    StudentStatus["SUSPENDED"] = "suspended";
+})(StudentStatus || (exports.StudentStatus = StudentStatus = {}));
+/** Status of a per-academic-year enrollment snapshot. */
+var EnrollmentStatus;
+(function (EnrollmentStatus) {
+    /** Currently enrolled / on the roll for that academic year. */
+    EnrollmentStatus["ENROLLED"] = "enrolled";
+    /** Completed the year and expected to continue (promoted). */
+    EnrollmentStatus["COMPLETED"] = "completed";
+    /** Left during or at the end of the year and did not continue. */
+    EnrollmentStatus["LEFT"] = "left";
+})(EnrollmentStatus || (exports.EnrollmentStatus = EnrollmentStatus = {}));
 var FeeType;
 (function (FeeType) {
     FeeType["TUITION"] = "tuition";
@@ -139,3 +159,20 @@ var TeacherAssignmentRole;
     TeacherAssignmentRole["CLASS_TEACHER"] = "class_teacher";
     TeacherAssignmentRole["SUBJECT_TEACHER"] = "subject_teacher";
 })(TeacherAssignmentRole || (exports.TeacherAssignmentRole = TeacherAssignmentRole = {}));
+/** Admission application pipeline stages. */
+var ApplicationStatus;
+(function (ApplicationStatus) {
+    ApplicationStatus["APPLIED"] = "applied";
+    ApplicationStatus["SHORTLISTED"] = "shortlisted";
+    ApplicationStatus["ADMITTED"] = "admitted";
+    ApplicationStatus["REJECTED"] = "rejected";
+})(ApplicationStatus || (exports.ApplicationStatus = ApplicationStatus = {}));
+/** Supporting document categories for an admission application. */
+var ApplicationDocumentType;
+(function (ApplicationDocumentType) {
+    ApplicationDocumentType["BIRTH_CERTIFICATE"] = "birth_certificate";
+    ApplicationDocumentType["REPORT_CARD"] = "report_card";
+    ApplicationDocumentType["PASSPORT_PHOTO"] = "passport_photo";
+    ApplicationDocumentType["ID_COPY"] = "id_copy";
+    ApplicationDocumentType["OTHER"] = "other";
+})(ApplicationDocumentType || (exports.ApplicationDocumentType = ApplicationDocumentType = {}));

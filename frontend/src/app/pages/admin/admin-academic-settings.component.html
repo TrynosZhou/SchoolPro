@@ -608,7 +608,8 @@
                 <h3>Publish results</h3>
                 <p>
                   Release report cards for a term and exam type to parents and students.
-                  Administrators and principals can publish; notifications are sent via WhatsApp and SMS.
+                  WhatsApp is sent to guardian phones by default. Disable it per parent under
+                  Parents → Receives WhatsApp to force SMS instead.
                 </p>
               </div>
               <a routerLink="/admin/report-cards" class="btn-outline btn-sm">Report cards →</a>
@@ -692,7 +693,7 @@
               <h4>Notify families</h4>
               <label class="toggle">
                 <input type="checkbox" [(ngModel)]="notifyWhatsApp" name="notifyWhatsApp" />
-                <span>Send WhatsApp message (Twilio)</span>
+                <span>Send WhatsApp to opted-in parents (Twilio)</span>
               </label>
               <label class="toggle">
                 <input type="checkbox" [(ngModel)]="notifySms" name="notifySms" />
@@ -735,6 +736,88 @@
               <p class="validation-note">
                 No report cards exist for this term and exam type. Generate them on the Report Cards page first.
               </p>
+            }
+
+            @if (publicationStatus()?.isPublished) {
+              <section class="notification-logs-panel">
+                <div class="panel-head">
+                  <div>
+                    <h4>Result notification delivery</h4>
+                    <p>Track WhatsApp and SMS notifications sent to guardians for this publication.</p>
+                  </div>
+                  <button
+                    type="button"
+                    class="btn-outline btn-sm"
+                    (click)="refreshNotificationLogs()"
+                    [disabled]="loadingNotificationLogs()"
+                  >
+                    {{ loadingNotificationLogs() ? 'Refreshing…' : 'Refresh logs' }}
+                  </button>
+                </div>
+
+                @if (loadingNotificationLogs()) {
+                  <p class="hint">Loading notification logs…</p>
+                } @else if (notificationLogs()) {
+                  <div class="notification-summary">
+                    <div><span>Total</span><strong>{{ notificationLogs()!.summary.total }}</strong></div>
+                    <div><span>Queued</span><strong>{{ notificationLogs()!.summary.queued }}</strong></div>
+                    <div><span>Sent</span><strong>{{ notificationLogs()!.summary.sent }}</strong></div>
+                    <div><span>Delivered</span><strong>{{ notificationLogs()!.summary.delivered }}</strong></div>
+                    <div><span>Failed</span><strong>{{ notificationLogs()!.summary.failed }}</strong></div>
+                    <div><span>Undelivered</span><strong>{{ notificationLogs()!.summary.undelivered }}</strong></div>
+                  </div>
+
+                  @if (!notificationLogs()!.logs.length) {
+                    <p class="hint">No notification logs yet for this publication.</p>
+                  } @else {
+                    <div class="table-wrap">
+                      <table class="notification-logs-table">
+                        <thead>
+                          <tr>
+                            <th>Student</th>
+                            <th>Guardian</th>
+                            <th>Phone</th>
+                            <th>Status</th>
+                            <th>Sent at</th>
+                            <th>Details</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          @for (row of notificationLogs()!.logs; track row.id) {
+                            <tr>
+                              <td>
+                                <strong>{{ row.studentName }}</strong>
+                                @if (row.admissionNumber) {
+                                  <span class="muted">{{ row.admissionNumber }}</span>
+                                }
+                              </td>
+                              <td>{{ row.guardianName || '—' }}</td>
+                              <td>{{ row.phone }}</td>
+                              <td>
+                                <span class="status-badge" [class]="'status-' + row.status">
+                                  {{ notificationStatusLabel(row.status) }}
+                                </span>
+                              </td>
+                              <td>{{ row.createdAt | date: 'short' }}</td>
+                              <td class="details-cell">
+                                @if (row.errorMessage) {
+                                  <span class="error-text">{{ row.errorMessage }}</span>
+                                } @else if (row.messageSid) {
+                                  <span class="muted">{{ row.messageSid }}</span>
+                                } @else {
+                                  <span class="muted">—</span>
+                                }
+                              </td>
+                            </tr>
+                          }
+                        </tbody>
+                      </table>
+                    </div>
+                  }
+                } @else {
+                  <p class="hint">No notification logs yet for this publication.</p>
+                }
+              </section>
             }
           </section>
         }

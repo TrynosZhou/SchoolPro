@@ -6,6 +6,7 @@ exports.attachAttendanceToReports = attachAttendanceToReports;
 exports.buildClassMeanMap = buildClassMeanMap;
 exports.buildFormSubjectPositionMap = buildFormSubjectPositionMap;
 exports.computeFormPositionMap = computeFormPositionMap;
+exports.computeClassPositionMap = computeClassPositionMap;
 exports.applyFormRankingsToReports = applyFormRankingsToReports;
 exports.countSubjectsPassed = countSubjectsPassed;
 exports.getEnrollmentTotals = getEnrollmentTotals;
@@ -205,6 +206,41 @@ async function computeFormPositionMap(examTypeId, termId, formId) {
     });
     return positionMap;
 }
+/** Rank students within a single class by overall average for an exam session. */
+async function computeClassPositionMap(examTypeId, termId, classId) {
+    const markRepo = data_source_1.AppDataSource.getRepository(entities_1.ExamMark);
+    const where = { termId, classId };
+    if (examTypeId)
+        where.examTypeId = examTypeId;
+    const classMarks = await markRepo.find({ where });
+    const marksByStudent = new Map();
+    for (const m of classMarks) {
+        const list = marksByStudent.get(m.studentId) || [];
+        list.push(Number(m.marks));
+        marksByStudent.set(m.studentId, list);
+    }
+    const averages = [];
+    marksByStudent.forEach((markList, studentId) => {
+        if (!markList.length)
+            return;
+        averages.push({
+            studentId,
+            average: markList.reduce((s, v) => s + v, 0) / markList.length,
+        });
+    });
+    averages.sort((a, b) => b.average - a.average);
+    const positionMap = new Map();
+    let rank = 0;
+    let lastAvg = null;
+    averages.forEach((row, idx) => {
+        if (idx === 0 || row.average !== lastAvg) {
+            rank = idx + 1;
+            lastAvg = row.average;
+        }
+        positionMap.set(row.studentId, rank);
+    });
+    return positionMap;
+}
 /** Apply form-wide rankings (by average mark across the stream) to loaded report cards. */
 async function applyFormRankingsToReports(reports, examTypeId, termId) {
     if (!reports.length || !examTypeId || !termId)
@@ -277,6 +313,10 @@ async function getReportCardPdfMetrics(report, maxMarks = 100) {
     if (report.examTypeId && formId) {
         const formPosMap = await computeFormPositionMap(report.examTypeId, report.termId, formId);
         formPosition = formPosMap.get(report.studentId) ?? formPosition;
+    }
+    if (report.examTypeId && classId) {
+        const classPosMap = await computeClassPositionMap(report.examTypeId, report.termId, classId);
+        classPosition = classPosMap.get(report.studentId) ?? classPosition;
     }
     const attendance = await getStudentTermAttendance(report.studentId, report.termId, student?.classId);
     return {
@@ -418,7 +458,30 @@ async function syncReportCardForStudent(studentId, termId) {
     report.subjectsPassed = subjectsPassed;
     report.totalSubjects = subjectResults.length;
     report.isPublished = false;
-    await reportRepo.save(report);
+    try {
+        await reportRepo.save(report);
+    }
+    catch (err) {
+        const code = err?.code;
+        if (code === '23505' && primaryExamTypeId) {
+            const existing = await reportRepo.findOne({
+                where: { studentId, termId, examTypeId: primaryExamTypeId },
+            });
+            if (!existing)
+                throw err;
+            existing.subjectResults = report.subjectResults;
+            existing.averageMark = report.averageMark;
+            existing.overallGrade = report.overallGrade;
+            existing.classTotal = report.classTotal;
+            existing.formTotal = report.formTotal;
+            existing.subjectsPassed = report.subjectsPassed;
+            existing.totalSubjects = report.totalSubjects;
+            existing.isPublished = false;
+            await reportRepo.save(existing);
+            return existing;
+        }
+        throw err;
+    }
     return report;
 }
 /** Generate report cards for all students in a class (filtered by exam type + term), ranked by class position. */
@@ -501,6 +564,7 @@ async function generateClassReportCards(params) {
     const formPositionMap = formId
         ? await computeFormPositionMap(examTypeId, termId, formId)
         : new Map();
+    const attendanceMap = await getClassTermAttendanceMap(classId, termId);
     const saved = [];
     for (const row of scoreRows) {
         const student = students.find((s) => s.id === row.studentId);
@@ -521,6 +585,9 @@ async function generateClassReportCards(params) {
         report.totalSubjects = row.subjectResults.length;
         report.isPublished = false;
         if (student) {
+            const attendance = attendanceMap.get(row.studentId) ?? parseAttendanceRow({});
+            const behaviorRating = (0, report_card_remarks_service_1.isValidConductRating)(report.behaviorRating) ? report.behaviorRating : null;
+            const attitudeRating = (0, report_card_remarks_service_1.isValidConductRating)(report.attitudeRating) ? report.attitudeRating : null;
             const remarks = (0, report_card_remarks_service_1.buildReportCardRemarks)({
                 firstName: student.firstName,
                 lastName: student.lastName,
@@ -530,7 +597,14 @@ async function generateClassReportCards(params) {
                 totalSubjects: report.totalSubjects,
                 subjectResults: row.subjectResults,
                 classTeacherName,
+                behaviorRating,
+                attitudeRating,
+                attendance,
             });
+            if (!behaviorRating)
+                report.behaviorRating = remarks.behaviorRating;
+            if (!attitudeRating)
+                report.attitudeRating = remarks.attitudeRating;
             if (!(report.classTeacherRemarks || '').trim()) {
                 report.classTeacherRemarks = remarks.classTeacherRemarks;
             }
@@ -553,7 +627,6 @@ async function generateClassReportCards(params) {
             saved.push(full);
     }
     saved.sort((a, b) => (a.classPosition ?? 999) - (b.classPosition ?? 999));
-    const attendanceMap = await getClassTermAttendanceMap(classId, termId);
     return {
         examType: { id: examType.id, name: examType.name },
         count: saved.length,

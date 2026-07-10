@@ -52,6 +52,13 @@ export const ADMIN_NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
+    heading: 'Learning',
+    items: [
+      { label: 'LMS', path: '/admin/lms', icon: '💻' },
+      { label: 'Digital Library', path: '/admin/library', icon: '📚' },
+    ],
+  },
+  {
     heading: 'Finance',
     items: [
       { label: 'Billing', path: '/admin/billing', icon: '🧾' },

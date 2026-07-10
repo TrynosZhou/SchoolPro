@@ -61,7 +61,6 @@ export class ClassListComponent implements OnInit, OnDestroy {
   loadingStudents = signal(false);
   hasFetched = signal(false);
   search = signal('');
-  classFormFilter = signal('all');
   genderFilter = signal<GenderFilter>('all');
   sortOrder = signal<SortOrder>('name-asc');
   viewMode = signal<ViewMode>('table');
@@ -80,19 +79,9 @@ export class ClassListComponent implements OnInit, OnDestroy {
 
   selectedClassMeta = computed(() => this.classes().find((c) => c.id === this.selectedClassId));
 
-  classFormOptions = computed(() => {
-    const names = new Set<string>();
-    for (const c of this.classes()) {
-      if (c.form?.name) names.add(c.form.name);
-    }
-    return [...names].sort();
-  });
-
-  visibleClasses = computed(() => {
-    const form = this.classFormFilter();
-    if (form === 'all') return this.classes();
-    return this.classes().filter((c) => c.form?.name === form);
-  });
+  visibleClasses = computed(() =>
+    [...this.classes()].sort((a, b) => a.name.localeCompare(b.name)),
+  );
 
   rosterStats = computed(() => {
     const rows = this.students();

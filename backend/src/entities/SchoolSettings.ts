@@ -43,8 +43,16 @@ export class SchoolSettings {
   @Column({ nullable: true })
   logoUrl?: string;
 
+  /** Passport-size photo of the system developer (Help → System Developer). */
+  @Column({ nullable: true })
+  developerPhotoUrl?: string;
+
   @Column({ default: 'USD' })
   currency!: string;
+
+  /** Prefix for auto-generated Student IDs (e.g. SP → SP1072026). */
+  @Column({ type: 'varchar', length: 8, default: 'SP' })
+  studentIdPrefix!: string;
 
   @Column({ nullable: true })
   bankAccountName?: string;

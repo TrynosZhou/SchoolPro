@@ -76,6 +76,7 @@
               <div class="field span-2">
                 <label>Twilio Account SID</label>
                 <input [(ngModel)]="form.whatsapp.accountSid" name="waSid" placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" />
+                <small>Must start with <code>AC</code> (from Twilio Console → Account Info). Do not use an email address.</small>
               </div>
               <div class="field span-2">
                 <label>Auth Token</label>
@@ -302,7 +303,7 @@
           <button type="button" class="btn-outline" (click)="testIntegration()" [disabled]="testing() || submitting()">
             {{ testing() ? 'Testing…' : 'Test connection' }}
           </button>
-          <button type="button" class="btn-primary" (click)="saveCurrent()" [disabled]="submitting()">
+          <button *appUnlessDemo type="button" class="btn-primary" (click)="saveCurrent()" [disabled]="submitting()">
             {{ submitting() ? 'Saving…' : 'Save ' + activeProviderMeta().label }}
           </button>
         </div>

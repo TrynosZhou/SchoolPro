@@ -24,6 +24,10 @@ import communicationRoutes from './routes/communication.routes';
 import analyticsRoutes from './routes/analytics.routes';
 import reportsRoutes from './routes/reports.routes';
 import accessControlRoutes from './routes/access-control.routes';
+import webhooksRoutes from './routes/webhooks.routes';
+import lmsRoutes from './routes/lms.routes';
+import { tenantContextMiddleware } from './middleware/tenant-context.middleware';
+import { demoGlobalWriteGuard, demoWriteRateLimiter } from './middleware/demo-guard.middleware';
 
 const app = express();
 
@@ -54,6 +58,17 @@ app.use(
 app.use(express.json());
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
+/**
+ * Demo tenant detection (peeks at the JWT's `demo` claim, doesn't enforce auth) +
+ * guardrails. Mounted globally, ahead of every router, so demo requests are routed
+ * to the demo database and destructive routes are blocked regardless of which
+ * router eventually handles them. See middleware/tenant-context.middleware.ts and
+ * middleware/demo-guard.middleware.ts for details.
+ */
+app.use(tenantContextMiddleware);
+app.use(demoWriteRateLimiter);
+app.use(demoGlobalWriteGuard);
+
 app.get('/api/health', (_req, res) => res.json({ status: 'ok', service: 'School Pro API' }));
 
 app.use('/api/auth', authRoutes);
@@ -76,6 +91,8 @@ app.use('/api/communication', communicationRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/reports', reportsRoutes);
 app.use('/api/access-control', accessControlRoutes);
+app.use('/api/lms', lmsRoutes);
+app.use('/webhooks', webhooksRoutes);
 
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error(err);

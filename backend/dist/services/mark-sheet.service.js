@@ -25,6 +25,12 @@ function normalizeGradeLetter(grade) {
 function isPassingMark(marks) {
     return marks > 49;
 }
+function formatClassTeacherFullName(user) {
+    if (!user)
+        return null;
+    const name = `${(user.firstName || '').trim()} ${(user.lastName || '').trim()}`.trim();
+    return name || null;
+}
 async function buildMarkSheet(params) {
     const { examTypeId, termId, classId, skipGradeCounts = false } = params;
     const examType = await data_source_1.AppDataSource.getRepository(entities_1.ExamType).findOne({ where: { id: examTypeId } });
@@ -35,7 +41,7 @@ async function buildMarkSheet(params) {
         throw new Error('Term not found');
     const schoolClass = await data_source_1.AppDataSource.getRepository(entities_1.SchoolClass).findOne({
         where: { id: classId },
-        relations: (0, typeorm_helpers_1.relations)('form'),
+        relations: (0, typeorm_helpers_1.relations)('form', 'classTeacher', 'classTeacher.user'),
     });
     if (!schoolClass)
         throw new Error('Class not found');
@@ -158,7 +164,11 @@ async function buildMarkSheet(params) {
         logoUrl: settings?.logoUrl || undefined,
         examType: { id: examType.id, name: examType.name, maxMarks },
         term: { id: term.id, name: term.name },
-        class: { id: schoolClass.id, name: schoolClass.name },
+        class: {
+            id: schoolClass.id,
+            name: schoolClass.name,
+            classTeacherName: formatClassTeacherFullName(schoolClass.classTeacher?.user),
+        },
         subjects,
         students: studentsOut,
     };

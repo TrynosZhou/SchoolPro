@@ -19,7 +19,8 @@
   // Text
   --color-text-primary: #18181b;   // headings, KPI numbers
   --color-text-secondary: #52525b; // body text
-  --color-text-muted: #a1a1aa;     // labels, metadata, placeholders
+  // #71717a ≈ 4.6:1 on white — meets WCAG AA for normal text (was #a1a1aa)
+  --color-text-muted: #71717a;
 
   // Accent — the ONE color used sparingly (active states, primary actions)
   --color-accent: #6366f1;         // indigo — swap for your brand color
@@ -66,7 +67,8 @@
 
   --color-text-primary: #fafafa;
   --color-text-secondary: #a1a1aa;
-  --color-text-muted: #71717a;
+  // #a1a1aa ≈ 7:1+ on near-black backgrounds
+  --color-text-muted: #a1a1aa;
 
   --color-accent: #818cf8;
   --color-accent-hover: #6366f1;

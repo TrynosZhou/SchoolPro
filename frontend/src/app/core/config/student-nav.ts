@@ -13,6 +13,8 @@ export const STUDENT_NAV_SECTIONS: NavSection[] = [
     items: [
       { label: 'Report Cards', path: '/student/report-cards', icon: '📄' },
       { label: 'Homework', path: '/student/homework', icon: '📝' },
+      { label: 'My Learning', path: '/student/lms', icon: '💻' },
+      { label: 'Library', path: '/student/library', icon: '📚' },
       { label: 'Attendance', path: '/student/attendance', icon: '📋' },
     ],
   },

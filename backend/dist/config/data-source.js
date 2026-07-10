@@ -18,7 +18,9 @@ exports.AppDataSource = new typeorm_1.DataSource({
     username: env_1.env.db.username,
     password: env_1.env.db.password,
     database: env_1.env.db.database,
-    synchronize: env_1.env.nodeEnv === 'development',
+    /** Migrations own schema changes; sync would race them and break on NOT NULL backfills. */
+    synchronize: false,
+    migrationsRun: true,
     logging: env_1.env.nodeEnv === 'development',
     entities: entities_1.entities,
     migrations: [migrationsGlob],

@@ -9,6 +9,8 @@ import { AuthService } from '../../core/services/auth.service';
 import { NavSection } from '../../shared/portal-layout/portal-layout.component';
 import { resolveStaffPortalContext } from '../../core/utils/staff-portal.util';
 import { formatGenderLabel, formatStudentClassLabel } from '../../core/utils/class-display';
+import { UnlessDemoDirective } from '../../core/directives/unless-demo.directive';
+import { TranslatePipe } from '../../core/pipes/translate.pipe';
 import { Student } from '../../core/models';
 
 interface FormOption {
@@ -46,7 +48,7 @@ interface RegisterStudentResponse extends Student {
 @Component({
   selector: 'app-admin-students',
   standalone: true,
-  imports: [PortalLayoutComponent, FormsModule, RouterLink, NgTemplateOutlet, DatePipe],
+  imports: [PortalLayoutComponent, FormsModule, RouterLink, NgTemplateOutlet, DatePipe, UnlessDemoDirective, TranslatePipe],
   templateUrl: './admin-students.component.html',
   styleUrl: './admin-students.component.scss',
 })
@@ -83,7 +85,13 @@ export class AdminStudentsComponent implements OnInit {
   viewMode = signal<ViewMode>('table');
 
   form: StudentForm = this.emptyForm();
-  guardian = { fullName: '', phone: '', relationship: 'Parent', isPrimary: true };
+  guardian = {
+    fullName: '',
+    phone: '',
+    relationship: 'Parent',
+    isPrimary: true,
+    guardianWhatsappConsent: false,
+  };
 
   readonly adminNav = ADMIN_NAV_SECTIONS;
 
@@ -212,9 +220,19 @@ export class AdminStudentsComponent implements OnInit {
     this.lastInvoiceInfo.set('');
     this.resetForm();
     this.registerDrawerOpen.set(true);
-    this.api.get<{ studentId: string }>('/students/next-student-id').subscribe({
+    this.refreshNextStudentId();
+  }
+
+  onDateOfBirthChange() {
+    if (this.registerDrawerOpen()) this.refreshNextStudentId();
+  }
+
+  private refreshNextStudentId() {
+    const params: Record<string, string> = {};
+    if (this.form.dateOfBirth) params['dateOfBirth'] = this.form.dateOfBirth;
+    this.api.get<{ studentId: string }>('/students/next-student-id', params).subscribe({
       next: (r) => this.nextStudentId.set(r.studentId),
-      error: () => this.nextStudentId.set('SP000001'),
+      error: () => this.nextStudentId.set(''),
     });
   }
 
@@ -267,9 +285,10 @@ export class AdminStudentsComponent implements OnInit {
     const g = student.guardians?.[0];
     this.guardian = {
       fullName: g?.fullName || '',
-      phone: g?.phone || '',
+      phone: g?.phone || g?.guardianPhone || '',
       relationship: g?.relationship || 'Parent',
       isPrimary: true,
+      guardianWhatsappConsent: g?.guardianWhatsappConsent === true,
     };
   }
 
@@ -279,6 +298,10 @@ export class AdminStudentsComponent implements OnInit {
   }
 
   confirmDelete(student: Student, event?: Event) {
+    if (this.auth.isDemoSession()) {
+      this.showToast('error', "This action isn't available in demo mode.");
+      return;
+    }
     event?.stopPropagation();
     this.deleteTarget.set(student);
   }
@@ -392,15 +415,23 @@ export class AdminStudentsComponent implements OnInit {
   }
 
   private buildPayload() {
+    const phone = this.guardian.phone?.trim() || '';
+    const guardianPayload = {
+      ...this.guardian,
+      phone,
+      guardianPhone: phone || undefined,
+      guardianWhatsappConsent: this.guardian.guardianWhatsappConsent === true,
+    };
+
     return {
       ...this.form,
       formId: this.form.formId,
       gender: this.form.gender,
       dateOfBirth: this.form.dateOfBirth || undefined,
-      guardians: this.guardian.fullName
-        ? [{ ...this.guardian }]
+      guardians: guardianPayload.fullName
+        ? [guardianPayload]
         : this.editingStudent()?.guardians?.length
-          ? [{ ...this.guardian }]
+          ? [guardianPayload]
           : [],
     };
   }
@@ -408,6 +439,10 @@ export class AdminStudentsComponent implements OnInit {
   private validateForm(): boolean {
     if (!this.form.firstName?.trim() || !this.form.lastName?.trim()) {
       this.showToast('error', 'First name and last name are required.');
+      return false;
+    }
+    if (!this.form.dateOfBirth) {
+      this.showToast('error', 'Date of birth is required to generate the Student ID.');
       return false;
     }
     if (!this.form.gender) {
@@ -427,7 +462,13 @@ export class AdminStudentsComponent implements OnInit {
 
   resetForm() {
     this.form = this.emptyForm();
-    this.guardian = { fullName: '', phone: '', relationship: 'Parent', isPrimary: true };
+    this.guardian = {
+      fullName: '',
+      phone: '',
+      relationship: 'Parent',
+      isPrimary: true,
+      guardianWhatsappConsent: false,
+    };
     this.nextStudentId.set('');
   }
 
@@ -435,6 +476,7 @@ export class AdminStudentsComponent implements OnInit {
     const requiredChecks = [
       Boolean(this.form.firstName?.trim()),
       Boolean(this.form.lastName?.trim()),
+      Boolean(this.form.dateOfBirth),
       Boolean(this.form.gender),
       Boolean(this.form.studentType),
       Boolean(this.form.formId),

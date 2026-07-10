@@ -85,6 +85,7 @@ export class AdminReportBuilderComponent implements OnInit {
   filterMeta = signal<FilterMeta[]>([]);
   filterOptions = signal<FilterOptions>({ schoolYears: [], terms: [], classes: [], forms: [] });
   templates = signal<ReportTemplate[]>([]);
+  metaLoading = signal(true);
 
   config: ReportConfig = {
     dataset: 'students',
@@ -94,6 +95,9 @@ export class AdminReportBuilderComponent implements OnInit {
     sortBy: null,
     sortDir: 'asc',
   };
+
+  /** Bumps when config changes so computed helpers re-evaluate. */
+  private configTick = signal(0);
 
   reportTitle = 'Custom Report';
   templateName = '';
@@ -106,9 +110,10 @@ export class AdminReportBuilderComponent implements OnInit {
   saving = signal(false);
   toast = signal<{ type: 'success' | 'error'; msg: string } | null>(null);
 
-  readonly activeDataset = computed(() =>
-    this.datasets().find((d) => d.key === this.config.dataset),
-  );
+  readonly activeDataset = computed(() => {
+    this.configTick();
+    return this.datasets().find((d) => d.key === this.config.dataset);
+  });
 
   readonly availableFilters = computed(() => {
     const ds = this.activeDataset();
@@ -116,12 +121,30 @@ export class AdminReportBuilderComponent implements OnInit {
     return ds ? all.filter((f) => ds.filters.includes(f.id)) : [];
   });
 
+  readonly selectedFieldCount = computed(() => {
+    this.configTick();
+    return this.config.fields.length;
+  });
+
+  readonly activeFilterCount = computed(() => {
+    this.configTick();
+    const filters = this.config.filters || {};
+    return Object.values(filters).filter((v) => v != null && String(v).trim() !== '').length;
+  });
+
+  readonly resultRows = computed(() => this.result()?.totalRows ?? 0);
+
   ngOnInit(): void {
     this.api.get<{ datasets: DatasetMeta[]; filters: FilterMeta[] }>('/reports/meta').subscribe({
       next: (meta) => {
         this.datasets.set(meta.datasets);
         this.filterMeta.set(meta.filters);
         this.applyDatasetDefaults('students');
+        this.metaLoading.set(false);
+      },
+      error: () => {
+        this.metaLoading.set(false);
+        this.showToast('error', 'Could not load report metadata.');
       },
     });
     this.api.get<FilterOptions>('/analytics/filters').subscribe({
@@ -139,6 +162,7 @@ export class AdminReportBuilderComponent implements OnInit {
   onDatasetChange(): void {
     this.applyDatasetDefaults(this.config.dataset);
     this.result.set(null);
+    this.bumpConfig();
   }
 
   private applyDatasetDefaults(datasetKey: string): void {
@@ -149,25 +173,68 @@ export class AdminReportBuilderComponent implements OnInit {
     this.config.groupBy = null;
     this.config.sortBy = null;
     this.config.sortDir = 'asc';
+    this.bumpConfig();
+  }
+
+  private bumpConfig(): void {
+    this.configTick.update((n) => n + 1);
   }
 
   toggleField(key: string): void {
     const idx = this.config.fields.indexOf(key);
     if (idx >= 0) this.config.fields.splice(idx, 1);
     else this.config.fields.push(key);
+    this.bumpConfig();
+  }
+
+  selectAllFields(): void {
+    const fields = this.activeDataset()?.fields ?? [];
+    this.config.fields = fields.map((f) => f.key);
+    this.bumpConfig();
+  }
+
+  clearFields(): void {
+    this.config.fields = [];
+    this.bumpConfig();
   }
 
   isFieldSelected(key: string): boolean {
     return this.config.fields.includes(key);
   }
 
+  onFilterChange(): void {
+    this.bumpConfig();
+  }
+
+  onGroupByChange(): void {
+    this.bumpConfig();
+  }
+
+  newReport(): void {
+    this.selectedTemplateId = '';
+    this.templateName = '';
+    this.templateDescription = '';
+    this.reportTitle = 'Custom Report';
+    this.applyDatasetDefaults(this.config.dataset || 'students');
+    this.result.set(null);
+  }
+
   loadTemplate(): void {
+    if (!this.selectedTemplateId) {
+      this.newReport();
+      return;
+    }
     const t = this.templates().find((x) => x.id === this.selectedTemplateId);
     if (!t) return;
-    this.config = { ...t.config, filters: { ...(t.config.filters || {}) } };
+    this.config = {
+      ...t.config,
+      filters: { ...(t.config.filters || {}) },
+      fields: [...(t.config.fields || [])],
+    };
     this.templateName = t.name;
     this.templateDescription = t.description || '';
     this.reportTitle = t.name;
+    this.bumpConfig();
     this.runReport();
   }
 
@@ -208,13 +275,17 @@ export class AdminReportBuilderComponent implements OnInit {
     this.exporting.set(true);
     const token = this.auth.getToken();
     this.http
-      .post(`${environment.apiUrl}/reports/export?format=${format}`, {
-        ...this.buildPayload(),
-        title: this.reportTitle,
-      }, {
-        responseType: 'blob',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      })
+      .post(
+        `${environment.apiUrl}/reports/export?format=${format}`,
+        {
+          ...this.buildPayload(),
+          title: this.reportTitle,
+        },
+        {
+          responseType: 'blob',
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        },
+      )
       .subscribe({
         next: (blob) => {
           const ext = format === 'xlsx' ? 'xlsx' : format;
@@ -279,7 +350,9 @@ export class AdminReportBuilderComponent implements OnInit {
 
   formatCell(value: unknown, type: string): string {
     if (value == null || value === '') return '—';
-    if (type === 'money') return Number(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    if (type === 'money') {
+      return Number(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
     if (type === 'percent') return `${value}%`;
     if (type === 'date') return String(value).slice(0, 10);
     return String(value);

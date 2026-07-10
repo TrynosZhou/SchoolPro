@@ -21,11 +21,18 @@ exports.env = {
         expiresIn: process.env.JWT_EXPIRES_IN || '7d',
     },
     frontendUrl: process.env.FRONTEND_URL || 'http://localhost:4200',
+    apiPublicUrl: process.env.API_PUBLIC_URL || '',
+    redis: {
+        url: process.env.REDIS_URL || 'redis://127.0.0.1:6379',
+    },
     whatsapp: {
         enabled: process.env.WHATSAPP_ENABLED === 'true',
         accountSid: process.env.TWILIO_ACCOUNT_SID || '',
         authToken: process.env.TWILIO_AUTH_TOKEN || '',
         from: process.env.TWILIO_WHATSAPP_FROM || '',
+        useTemplate: process.env.WHATSAPP_USE_TEMPLATE === 'true',
+        contentSid: process.env.TWILIO_CONTENT_SID || '',
+        statusCallbackUrl: process.env.TWILIO_STATUS_CALLBACK_URL || '',
     },
     sms: {
         from: process.env.TWILIO_SMS_FROM || '',

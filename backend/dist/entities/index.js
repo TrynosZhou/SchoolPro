@@ -15,7 +15,7 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.InvoiceAdjustment = exports.TuitionExemption = exports.StaffLeaveBalance = exports.Payslip = exports.PayrollRun = exports.StaffPayrollProfile = exports.StudentTermBalance = exports.ResultsPublication = exports.ClassPromotionRule = exports.SchoolFee = exports.SchoolSettings = exports.UniformSale = exports.TuckshopSale = exports.TuckshopItem = exports.Notification = exports.MessageAttachment = exports.Message = exports.WeeklyAssessment = exports.LearningSchedule = exports.TeacherAllocation = exports.Timetable = exports.CashbookEntry = exports.LedgerEntry = exports.Receipt = exports.Payment = exports.InvoiceLine = exports.Invoice = exports.HonourRoll = exports.ReportCard = exports.ExamMark = exports.ExamType = exports.StudentAttendance = exports.StaffAttendance = exports.Staff = exports.Guardian = exports.Student = exports.Parent = exports.TimetableSlot = exports.TeacherAssignment = exports.Section = exports.ClassSubject = exports.Department = exports.Subject = exports.SchoolClass = exports.Form = exports.Term = exports.SchoolYear = exports.SchoolRole = exports.User = exports.entities = void 0;
-exports.GeneralLedgerEntry = exports.ChartOfAccount = void 0;
+exports.NotificationLog = exports.HomeworkAssignment = exports.RecordBookMark = exports.RecordBookColumn = exports.AuditLog = exports.ReportTemplate = exports.StudentEnrollment = exports.BulkMessageRecipient = exports.BulkMessage = exports.ApplicationDocument = exports.Application = exports.GeneralLedgerEntry = exports.ChartOfAccount = void 0;
 const User_1 = require("./User");
 Object.defineProperty(exports, "User", { enumerable: true, get: function () { return User_1.User; } });
 const SchoolRole_1 = require("./SchoolRole");
@@ -118,6 +118,28 @@ const ChartOfAccount_1 = require("./ChartOfAccount");
 Object.defineProperty(exports, "ChartOfAccount", { enumerable: true, get: function () { return ChartOfAccount_1.ChartOfAccount; } });
 const GeneralLedgerEntry_1 = require("./GeneralLedgerEntry");
 Object.defineProperty(exports, "GeneralLedgerEntry", { enumerable: true, get: function () { return GeneralLedgerEntry_1.GeneralLedgerEntry; } });
+const Application_1 = require("./Application");
+Object.defineProperty(exports, "Application", { enumerable: true, get: function () { return Application_1.Application; } });
+const ApplicationDocument_1 = require("./ApplicationDocument");
+Object.defineProperty(exports, "ApplicationDocument", { enumerable: true, get: function () { return ApplicationDocument_1.ApplicationDocument; } });
+const BulkMessage_1 = require("./BulkMessage");
+Object.defineProperty(exports, "BulkMessage", { enumerable: true, get: function () { return BulkMessage_1.BulkMessage; } });
+const BulkMessageRecipient_1 = require("./BulkMessageRecipient");
+Object.defineProperty(exports, "BulkMessageRecipient", { enumerable: true, get: function () { return BulkMessageRecipient_1.BulkMessageRecipient; } });
+const StudentEnrollment_1 = require("./StudentEnrollment");
+Object.defineProperty(exports, "StudentEnrollment", { enumerable: true, get: function () { return StudentEnrollment_1.StudentEnrollment; } });
+const ReportTemplate_1 = require("./ReportTemplate");
+Object.defineProperty(exports, "ReportTemplate", { enumerable: true, get: function () { return ReportTemplate_1.ReportTemplate; } });
+const AuditLog_1 = require("./AuditLog");
+Object.defineProperty(exports, "AuditLog", { enumerable: true, get: function () { return AuditLog_1.AuditLog; } });
+const RecordBookColumn_1 = require("./RecordBookColumn");
+Object.defineProperty(exports, "RecordBookColumn", { enumerable: true, get: function () { return RecordBookColumn_1.RecordBookColumn; } });
+const RecordBookMark_1 = require("./RecordBookMark");
+Object.defineProperty(exports, "RecordBookMark", { enumerable: true, get: function () { return RecordBookMark_1.RecordBookMark; } });
+const HomeworkAssignment_1 = require("./HomeworkAssignment");
+Object.defineProperty(exports, "HomeworkAssignment", { enumerable: true, get: function () { return HomeworkAssignment_1.HomeworkAssignment; } });
+const NotificationLog_1 = require("./NotificationLog");
+Object.defineProperty(exports, "NotificationLog", { enumerable: true, get: function () { return NotificationLog_1.NotificationLog; } });
 exports.entities = [
     User_1.User,
     SchoolRole_1.SchoolRole,
@@ -170,5 +192,16 @@ exports.entities = [
     InvoiceAdjustment_1.InvoiceAdjustment,
     ChartOfAccount_1.ChartOfAccount,
     GeneralLedgerEntry_1.GeneralLedgerEntry,
+    Application_1.Application,
+    ApplicationDocument_1.ApplicationDocument,
+    BulkMessage_1.BulkMessage,
+    BulkMessageRecipient_1.BulkMessageRecipient,
+    StudentEnrollment_1.StudentEnrollment,
+    ReportTemplate_1.ReportTemplate,
+    AuditLog_1.AuditLog,
+    RecordBookColumn_1.RecordBookColumn,
+    RecordBookMark_1.RecordBookMark,
+    HomeworkAssignment_1.HomeworkAssignment,
+    NotificationLog_1.NotificationLog,
 ];
 __exportStar(require("./enums"), exports);

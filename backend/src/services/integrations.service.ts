@@ -1,6 +1,7 @@
 import { AppDataSource } from '../config/data-source';
 import { SchoolSettings } from '../entities';
 import { env } from '../config/env';
+import { tenantContext } from '../config/tenant-context';
 import {
   DEFAULT_INTEGRATIONS,
   IntegrationsConfig,
@@ -13,18 +14,23 @@ import {
 } from '../types/integrations-config';
 
 const SETTINGS_ID = 'default';
-let cachedConfig: IntegrationsConfig | null = null;
-let cacheTime = 0;
+/** Keyed by tenant so demo and production never share a cached copy. */
+const cache = new Map<string, { config: IntegrationsConfig; time: number }>();
 const CACHE_MS = 30_000;
 
+function cacheKey(): string {
+  return tenantContext.isDemo() ? 'demo' : 'prod';
+}
+
 export function invalidateIntegrationsCache(): void {
-  cachedConfig = null;
-  cacheTime = 0;
+  cache.clear();
 }
 
 export async function getIntegrationsConfig(): Promise<IntegrationsConfig> {
+  const key = cacheKey();
   const now = Date.now();
-  if (cachedConfig && now - cacheTime < CACHE_MS) return cachedConfig;
+  const cached = cache.get(key);
+  if (cached && now - cached.time < CACHE_MS) return cached.config;
 
   const repo = AppDataSource.getRepository(SchoolSettings);
   let settings = await repo.findOne({ where: { id: SETTINGS_ID } });
@@ -59,8 +65,7 @@ export async function getIntegrationsConfig(): Promise<IntegrationsConfig> {
     await repo.save(settings);
   }
 
-  cachedConfig = config;
-  cacheTime = now;
+  cache.set(key, { config, time: now });
   return config;
 }
 
@@ -94,22 +99,39 @@ export async function saveIntegrationsConfig(
   return maskIntegrations(settings.integrationsConfig);
 }
 
+/** Twilio Account SIDs always look like ACxxxxxxxx (34 chars). Reject emails / placeholders. */
+export function isValidTwilioAccountSid(sid: string | undefined | null): boolean {
+  return /^AC[a-f0-9]{32}$/i.test(String(sid || '').trim());
+}
+
 export async function getEffectiveWhatsApp(): Promise<WhatsAppIntegration & { useMock: boolean }> {
   const config = await getIntegrationsConfig();
   const w = config.whatsapp;
 
-  if (w.enabled && w.accountSid && w.authToken && w.from) {
-    return { ...w, useMock: false };
+  if (w.accountSid && w.authToken && w.from) {
+    if (isValidTwilioAccountSid(w.accountSid)) {
+      return { ...w, enabled: true, useMock: false };
+    }
+    console.warn(
+      `[whatsapp] Integrations Account SID is not a valid Twilio SID (got "${String(w.accountSid).slice(0, 24)}…"). ` +
+        'Expected format ACxxxxxxxx. Falling back to mock until Integrations is updated.',
+    );
   }
 
-  if (env.whatsapp.enabled && env.whatsapp.accountSid && env.whatsapp.authToken && env.whatsapp.from) {
-    return {
-      enabled: true,
-      accountSid: env.whatsapp.accountSid,
-      authToken: env.whatsapp.authToken,
-      from: env.whatsapp.from,
-      useMock: false,
-    };
+  const envFrom = env.whatsapp.from || process.env.TWILIO_WHATSAPP_NUMBER || '';
+  if (env.whatsapp.accountSid && env.whatsapp.authToken && envFrom) {
+    if (isValidTwilioAccountSid(env.whatsapp.accountSid)) {
+      return {
+        enabled: true,
+        accountSid: env.whatsapp.accountSid,
+        authToken: env.whatsapp.authToken,
+        from: envFrom,
+        useMock: false,
+      };
+    }
+    console.warn(
+      '[whatsapp] TWILIO_ACCOUNT_SID in .env is not a valid Twilio SID. Falling back to mock.',
+    );
   }
 
   return { ...w, enabled: w.enabled || env.whatsapp.enabled, useMock: true };

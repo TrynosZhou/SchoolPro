@@ -52,6 +52,7 @@ router.use(authenticate);
 
 const SETTINGS_ID = 'default';
 const logosDir = path.join(process.cwd(), 'uploads', 'logos');
+const developerPhotosDir = path.join(process.cwd(), 'uploads', 'developer-photos');
 
 /** Normalize an incoming staff gender value to 'male' | 'female' | null. */
 function normalizeGender(value: unknown): string | null {
@@ -77,6 +78,25 @@ const logoUpload = multer({
   fileFilter: (_req, file, cb) => {
     const ok = /^image\/(png|jpe?g|webp|gif)$/i.test(file.mimetype);
     cb(ok ? null : new Error('Only image files are allowed'), ok);
+  },
+});
+
+const developerPhotoUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => {
+      ensureUploadDirs();
+      cb(null, developerPhotosDir);
+    },
+    filename: (_req, file, cb) => {
+      const ext = path.extname(file.originalname).toLowerCase();
+      const safeExt = ['.png', '.jpg', '.jpeg', '.webp'].includes(ext) ? ext : '.jpg';
+      cb(null, `system-developer${safeExt}`);
+    },
+  }),
+  limits: { fileSize: 2 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const ok = /^image\/(png|jpe?g|webp)$/i.test(file.mimetype);
+    cb(ok ? null : new Error('Only JPG, PNG, or WebP images are allowed'), ok);
   },
 });
 
@@ -108,6 +128,10 @@ async function getOrCreateSettings() {
   }
   if (!settings.integrationsConfig) {
     settings.integrationsConfig = DEFAULT_INTEGRATIONS;
+    await repo.save(settings);
+  }
+  if (!settings.studentIdPrefix) {
+    settings.studentIdPrefix = 'SP';
     await repo.save(settings);
   }
   return settings;
@@ -158,6 +182,14 @@ router.patch('/settings', authorize(UserRole.ADMIN), async (req, res: Response) 
     invalidateSecurityPolicyCache();
   }
   const { gradeBoundaries: _gb, securityPolicy: _sp, logoUrl: _logo, ...rest } = req.body;
+  if (rest.studentIdPrefix !== undefined) {
+    const cleaned = String(rest.studentIdPrefix || '')
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, '')
+      .slice(0, 8);
+    rest.studentIdPrefix = cleaned || 'SP';
+  }
   Object.assign(settings, rest);
   const saved = await repo.save(settings);
   if (req.body.gradeBoundaries !== undefined) invalidateGradeBoundariesCache();
@@ -187,6 +219,40 @@ router.delete('/settings/logo', authorize(UserRole.ADMIN), async (_req, res: Res
     if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
     settings.logoUrl = null;
     await repo.save(settings);
+  }
+  res.json(settings);
+});
+
+router.post(
+  '/settings/developer-photo',
+  authorize(UserRole.ADMIN),
+  developerPhotoUpload.single('photo'),
+  async (req, res: Response) => {
+    if (!req.file) return res.status(400).json({ message: 'Passport photo image is required' });
+    const settings = await getOrCreateSettings();
+    if (settings.developerPhotoUrl) {
+      const prev = path.join(process.cwd(), settings.developerPhotoUrl.replace(/^\/+/, ''));
+      if (fs.existsSync(prev) && path.dirname(prev) === developerPhotosDir) {
+        try {
+          fs.unlinkSync(prev);
+        } catch {
+          // ignore stale file cleanup errors
+        }
+      }
+    }
+    settings.developerPhotoUrl = `/uploads/developer-photos/${req.file.filename}`;
+    const saved = await AppDataSource.getRepository(SchoolSettings).save(settings);
+    res.json(saved);
+  },
+);
+
+router.delete('/settings/developer-photo', authorize(UserRole.ADMIN), async (_req, res: Response) => {
+  const settings = await getOrCreateSettings();
+  if (settings.developerPhotoUrl) {
+    const filePath = path.join(process.cwd(), settings.developerPhotoUrl.replace(/^\/+/, ''));
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    settings.developerPhotoUrl = null;
+    await AppDataSource.getRepository(SchoolSettings).save(settings);
   }
   res.json(settings);
 });

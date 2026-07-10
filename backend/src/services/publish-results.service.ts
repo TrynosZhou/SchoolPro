@@ -5,7 +5,6 @@ import {
   ExamType,
   Guardian,
   Notification,
-  Parent,
   ReportCard,
   ResultsPublication,
   SchoolSettings,
@@ -14,9 +13,10 @@ import {
   User,
 } from '../entities';
 import { relations } from '../utils/typeorm-helpers';
-import { sendSmsMessage, sendWhatsAppReminder } from './whatsapp.service';
+import { sendSmsMessage } from './whatsapp.service';
 import { sendTransactionalEmail } from './email.service';
 import { getNotificationSettings } from './notification-settings.service';
+import { queueWhatsAppResultNotifications } from './result-notification.service';
 
 export interface PublishResultsParams {
   termId: string;
@@ -153,7 +153,6 @@ export async function publishResults(params: PublishResultsParams) {
     relations: relations('user'),
   });
 
-  const phonesWhatsApp = new Set<string>();
   const phonesSms = new Set<string>();
   const emails = new Set<string>();
   const notifyUserIds = new Set<string>();
@@ -164,12 +163,9 @@ export async function publishResults(params: PublishResultsParams) {
       if (email) emails.add(email);
     }
     const phone = g.phone || g.parent?.user?.phone;
-    if (phone) {
+    if (phone && notifySms) {
       const normalized = normalizePhone(phone);
-      if (normalized) {
-        if (g.parent?.receivesWhatsApp !== false && notifyWhatsApp) phonesWhatsApp.add(normalized);
-        if (notifySms) phonesSms.add(normalized);
-      }
+      if (normalized) phonesSms.add(normalized);
     }
     if (g.parent?.userId) {
       notifyUserIds.add(g.parent.userId);
@@ -188,16 +184,44 @@ export async function publishResults(params: PublishResultsParams) {
   let whatsappSent = 0;
   let smsSent = 0;
   let emailsSent = 0;
+  let notificationFailed = 0;
+  /** Phones already covered by the per-student result notification path. */
+  const resultNotifyPhones = new Set<string>();
 
   if (notifyWhatsApp) {
-    for (const phone of phonesWhatsApp) {
-      const ok = await sendWhatsAppReminder(phone, message);
-      if (ok) whatsappSent += 1;
+    try {
+      const whatsappSummary = await queueWhatsAppResultNotifications({
+        reports,
+        guardians,
+        examTypeId,
+        examName: examType.name,
+        termId,
+      });
+      whatsappSent = whatsappSummary.whatsappQueued;
+      smsSent += whatsappSummary.smsQueued;
+      notificationFailed += whatsappSummary.enqueueFailed;
+      console.log(
+        `[publish-results] Result notifications: whatsapp=${whatsappSummary.whatsappQueued}, sms=${whatsappSummary.smsQueued}, skipped=${whatsappSummary.skipped}, failed=${whatsappSummary.enqueueFailed}`,
+      );
+    } catch (err) {
+      console.error('[publish-results] WhatsApp result notifications failed (non-blocking):', err);
     }
+  }
+
+  // Collect phones already targeted by result notifications to avoid duplicate SMS blasts.
+  for (const g of guardians) {
+    const p =
+      g.guardianPhone?.trim() ||
+      g.phone?.trim() ||
+      g.parent?.user?.phone?.trim() ||
+      '';
+    const normalized = normalizePhone(p);
+    if (normalized) resultNotifyPhones.add(normalized);
   }
 
   if (notifySms) {
     for (const phone of phonesSms) {
+      if (resultNotifyPhones.has(phone)) continue;
       const ok = await sendSmsMessage(phone, message);
       if (ok) smsSent += 1;
     }
@@ -248,6 +272,7 @@ export async function publishResults(params: PublishResultsParams) {
     smsSent,
     emailsSent,
     notificationsCreated,
+    notificationFailed,
     publishedAt: publication.publishedAt.toISOString(),
   };
 }

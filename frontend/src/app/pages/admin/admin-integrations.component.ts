@@ -4,6 +4,8 @@ import { RouterLink } from '@angular/router';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
 import { ApiService } from '../../core/services/api.service';
+import { AuthService } from '../../core/services/auth.service';
+import { UnlessDemoDirective } from '../../core/directives/unless-demo.directive';
 
 const SECRET_MASK = '********';
 
@@ -77,12 +79,13 @@ interface WebhookEventOption {
 @Component({
   selector: 'app-admin-integrations',
   standalone: true,
-  imports: [PortalLayoutComponent, FormsModule, RouterLink],
+  imports: [PortalLayoutComponent, FormsModule, RouterLink, UnlessDemoDirective],
   templateUrl: './admin-integrations.component.html',
   styleUrl: './admin-integrations.component.scss',
 })
 export class AdminIntegrationsComponent implements OnInit {
   private api = inject(ApiService);
+  private auth = inject(AuthService);
 
   readonly adminNav = ADMIN_NAV_SECTIONS;
   readonly secretMask = SECRET_MASK;
@@ -220,6 +223,10 @@ export class AdminIntegrationsComponent implements OnInit {
   }
 
   saveCurrent() {
+    if (this.auth.isDemoSession()) {
+      this.showToast('error', "This action isn't available in demo mode.");
+      return;
+    }
     this.submitting.set(true);
     const section = this.activeProvider();
     this.api.patch<{ integrations: IntegrationsPayload; status: Record<string, IntegrationStatus> }>(

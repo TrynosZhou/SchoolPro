@@ -20,6 +20,8 @@ import { findActiveUserByLoginIdentifier } from '../utils/user-auth';
 import { verifyUserPassword } from '../utils/user-password';
 import { authenticateStudentPortal } from '../services/student-portal-auth.service';
 import { resolveParentGender } from '../utils/gender';
+import { tenantContext } from '../config/tenant-context';
+import { DEMO_ACCOUNTS, findDemoAccount } from '../config/demo-accounts';
 
 const router = Router();
 
@@ -32,7 +34,7 @@ function resolveUserGender(user: User): string | null {
   );
 }
 
-async function issueAuthToken(fullUser: User, res: Response) {
+async function issueAuthToken(fullUser: User, res: Response, opts: { demo?: boolean } = {}) {
   await ensureDefaultRoles();
   const permissions = resolvePermissionsForUser(fullUser);
 
@@ -48,13 +50,26 @@ async function issueAuthToken(fullUser: User, res: Response) {
   if (fullUser.parentProfile) payload.parentId = fullUser.parentProfile.id;
   if (fullUser.studentProfile) payload.studentId = fullUser.studentProfile.id;
 
-  const policy = await getSecurityPolicy();
-  const expiresIn = sessionTimeoutToJwtExpires(policy.sessionTimeoutMinutes);
+  let sessionTimeoutMinutes: number;
+  let expiresIn: string;
+  if (opts.demo) {
+    // Demo sessions always use a short, fixed TTL — never the school's own security
+    // policy — regardless of how long that policy's sessionTimeoutMinutes is set to.
+    payload.demo = true;
+    sessionTimeoutMinutes = env.demo.jwtTtlMinutes;
+    expiresIn = `${env.demo.jwtTtlMinutes}m`;
+  } else {
+    const policy = await getSecurityPolicy();
+    sessionTimeoutMinutes = policy.sessionTimeoutMinutes;
+    expiresIn = sessionTimeoutToJwtExpires(policy.sessionTimeoutMinutes);
+  }
+
   const token = jwt.sign(payload, env.jwt.secret, { expiresIn: expiresIn as jwt.SignOptions['expiresIn'] });
 
   res.json({
     token,
-    sessionTimeoutMinutes: policy.sessionTimeoutMinutes,
+    sessionTimeoutMinutes,
+    demo: !!opts.demo,
     user: {
       id: fullUser.id,
       email: fullUser.email,
@@ -142,6 +157,56 @@ router.post('/login', async (req, res: Response) => {
       message: 'Login failed',
       error: env.nodeEnv === 'development' && err instanceof Error ? err.message : undefined,
     });
+  }
+});
+
+/** Public: lists the fixed demo roles/credentials for the /demo landing page (no secrets beyond the documented demo passwords). */
+router.get('/demo-accounts', (_req, res: Response) => {
+  if (!env.demo.enabled) {
+    return res.status(404).json({ message: 'Demo mode is not available' });
+  }
+  res.json({
+    accounts: DEMO_ACCOUNTS.map((a) => ({
+      role: a.role,
+      username: a.username,
+      password: a.password,
+      label: a.label,
+      description: a.description,
+    })),
+  });
+});
+
+/**
+ * One-click demo login: validates against the fixed demo accounts in the isolated
+ * demo database and issues a JWT with `demo: true` + a short fixed TTL. The whole
+ * lookup runs inside a forced demo tenant context so it can never touch production
+ * user records even if a demo username collided with a real one.
+ */
+router.post('/demo-login', async (req, res: Response) => {
+  if (!env.demo.enabled) {
+    return res.status(404).json({ message: 'Demo mode is not available' });
+  }
+  try {
+    const { role } = req.body as { role?: string };
+    const account = findDemoAccount(role);
+    if (!account) {
+      return res.status(400).json({ message: 'Unknown demo role' });
+    }
+
+    await tenantContext.run({ isDemo: true }, async () => {
+      const user = await findActiveUserByLoginIdentifier(account.username, USER_PROFILES);
+      if (!user || !(await bcrypt.compare(account.password, user.passwordHash))) {
+        res.status(503).json({
+          message: 'The demo environment is still warming up — please try again in a moment.',
+        });
+        return;
+      }
+      const fullUser = (await loadUserWithRole(user.id)) ?? user;
+      await issueAuthToken(fullUser, res, { demo: true });
+    });
+  } catch (err) {
+    console.error('Demo login error:', err);
+    res.status(500).json({ message: 'Demo login failed' });
   }
 });
 

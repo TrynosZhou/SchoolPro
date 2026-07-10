@@ -99,8 +99,9 @@ function classStreamLabel(className) {
 function formatGeneratedDate(date) {
     return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'numeric', year: 'numeric' });
 }
-function slotAt(slots, day, period) {
-    return slots.find((s) => s.dayOfWeek === day && s.startTime === period.startTime && s.endTime === period.endTime);
+/** All lessons in a single cell — more than one means a clash (shown stacked). */
+function slotsAt(slots, day, period) {
+    return slots.filter((s) => s.dayOfWeek === day && s.startTime === period.startTime && s.endTime === period.endTime);
 }
 function sameLesson(a, b, mode) {
     if (a.subjectName !== b.subjectName)
@@ -118,20 +119,24 @@ function computeColSpans(day, periods, slots, mode) {
             i += 1;
             continue;
         }
-        const slot = slotAt(slots, day, periods[i]);
-        if (!slot) {
+        const cellSlots = slotsAt(slots, day, periods[i]);
+        if (cellSlots.length === 0) {
             i += 1;
             continue;
         }
         let span = 1;
-        while (i + span < periods.length) {
-            const next = periods[i + span];
-            if (isBreakPeriod(next))
-                break;
-            const nextSlot = slotAt(slots, day, next);
-            if (!nextSlot || !sameLesson(slot, nextSlot, mode))
-                break;
-            span += 1;
+        // Clashed cells (2+ lessons) are never merged across periods.
+        if (cellSlots.length === 1) {
+            const slot = cellSlots[0];
+            while (i + span < periods.length) {
+                const next = periods[i + span];
+                if (isBreakPeriod(next))
+                    break;
+                const nextSlots = slotsAt(slots, day, next);
+                if (nextSlots.length !== 1 || !sameLesson(slot, nextSlots[0], mode))
+                    break;
+                span += 1;
+            }
         }
         spans[i] = span;
         for (let k = 1; k < span; k += 1)
@@ -343,13 +348,23 @@ function renderClassicTimetablePage(doc, data, mode) {
             const cellW = spanColumnWidth(colWidths, pi, span);
             doc.fillColor('#ffffff').strokeColor(COLORS.border);
             doc.rect(cx, rowY, cellW, rowH).stroke();
-            const slot = slotAt(slots, day, period);
-            if (slot) {
-                if (mode === 'teacher') {
-                    drawTeacherCell(doc, slot, cx, rowY, cellW, rowH);
-                }
-                else {
-                    drawClassCell(doc, slot, cx, rowY, cellW, rowH);
+            const cellSlots = slotsAt(slots, day, period);
+            if (cellSlots.length) {
+                // Clashing lessons are stacked vertically, splitting the cell height so both show.
+                const subH = rowH / cellSlots.length;
+                for (let si = 0; si < cellSlots.length; si += 1) {
+                    const sy = rowY + si * subH;
+                    if (si > 0) {
+                        doc.strokeColor(COLORS.border).lineWidth(0.4);
+                        doc.moveTo(cx, sy).lineTo(cx + cellW, sy).stroke();
+                        doc.lineWidth(1);
+                    }
+                    if (mode === 'teacher') {
+                        drawTeacherCell(doc, cellSlots[si], cx, sy, cellW, subH);
+                    }
+                    else {
+                        drawClassCell(doc, cellSlots[si], cx, sy, cellW, subH);
+                    }
                 }
             }
             cx += cellW;

@@ -22,6 +22,13 @@ const payroll_routes_1 = __importDefault(require("./routes/payroll.routes"));
 const general_ledger_routes_1 = __importDefault(require("./routes/general-ledger.routes"));
 const chart_of_accounts_routes_1 = __importDefault(require("./routes/chart-of-accounts.routes"));
 const teacher_assignment_routes_1 = __importDefault(require("./routes/teacher-assignment.routes"));
+const admissions_routes_1 = __importDefault(require("./routes/admissions.routes"));
+const public_routes_1 = __importDefault(require("./routes/public.routes"));
+const communication_routes_1 = __importDefault(require("./routes/communication.routes"));
+const analytics_routes_1 = __importDefault(require("./routes/analytics.routes"));
+const reports_routes_1 = __importDefault(require("./routes/reports.routes"));
+const access_control_routes_1 = __importDefault(require("./routes/access-control.routes"));
+const webhooks_routes_1 = __importDefault(require("./routes/webhooks.routes"));
 const app = (0, express_1.default)();
 app.use((0, helmet_1.default)({
     // Allow frontend (different origin) to load /uploads images (school logo, etc.)
@@ -61,6 +68,13 @@ app.use('/api/payroll', payroll_routes_1.default);
 app.use('/api/general-ledger', general_ledger_routes_1.default);
 app.use('/api/chart-of-accounts', chart_of_accounts_routes_1.default);
 app.use('/api/admin/assignments', teacher_assignment_routes_1.default);
+app.use('/api/admissions', admissions_routes_1.default);
+app.use('/api/public', public_routes_1.default);
+app.use('/api/communication', communication_routes_1.default);
+app.use('/api/analytics', analytics_routes_1.default);
+app.use('/api/reports', reports_routes_1.default);
+app.use('/api/access-control', access_control_routes_1.default);
+app.use('/webhooks', webhooks_routes_1.default);
 app.use((err, _req, res, _next) => {
     console.error(err);
     res.status(500).json({ message: 'Internal server error', error: env_1.env.nodeEnv === 'development' ? err.message : undefined });

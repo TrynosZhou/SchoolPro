@@ -236,43 +236,9 @@
   }
 }
 
-.quick-class-wrap {
-  margin-top: 0.85rem;
-  padding-top: 0.85rem;
-  border-top: 1px solid #e2e8f0;
-}
-
-.quick-class-head {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.55rem;
-  font-size: 0.78rem;
-  font-weight: 700;
-  color: #64748b;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-}
-
-.form-filter {
-  border: 1px solid #cbd5e1;
-  border-radius: 10px;
-  padding: 0.3rem 0.55rem;
-  background: #fff;
-  font-size: 0.78rem;
-  text-transform: none;
-  letter-spacing: normal;
-}
-
 .search-wrap {
   position: relative;
   margin-bottom: 0.85rem;
-
-  &.compact {
-    margin-bottom: 0.55rem;
-  }
 }
 
 .search-icon {
@@ -314,40 +280,6 @@
   cursor: pointer;
   font-size: 1rem;
   line-height: 1;
-}
-
-.quick-class-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.45rem;
-}
-
-.class-chip {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.08rem;
-  border: 1px solid #cbd5e1;
-  border-radius: 12px;
-  padding: 0.45rem 0.7rem;
-  background: #fff;
-  cursor: pointer;
-  text-align: left;
-
-  strong {
-    color: #0f172a;
-    font-size: 0.86rem;
-  }
-
-  span {
-    color: #64748b;
-    font-size: 0.72rem;
-  }
-
-  &.active {
-    border-color: #059669;
-    background: #ecfdf5;
-  }
 }
 
 .loading-panel {
@@ -552,7 +484,7 @@
 .register-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.88rem;
+  font-size: 1.144rem;
   min-width: 760px;
 
   th,
@@ -565,7 +497,7 @@
 
   thead th {
     background: #f8fafc;
-    font-size: 0.72rem;
+    font-size: 0.936rem;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.03em;
@@ -588,7 +520,7 @@
 
 .col-id .sid,
 .sid {
-  font-size: 0.78rem;
+  font-size: 1.014rem;
   color: #3730a3;
   background: #eef2ff;
   padding: 0.15rem 0.45rem;
@@ -615,14 +547,14 @@
   place-items: center;
   background: linear-gradient(135deg, #d1fae5, #a7f3d0);
   color: #047857;
-  font-size: 0.72rem;
+  font-size: 0.936rem;
   font-weight: 700;
   flex-shrink: 0;
 
   &.sm {
-    width: 1.75rem;
-    height: 1.75rem;
-    font-size: 0.65rem;
+    width: 2.275rem;
+    height: 2.275rem;
+    font-size: 0.845rem;
   }
 }
 
@@ -637,7 +569,7 @@
   border-radius: 8px;
   border: 1px solid #e2e8f0;
   background: #fff;
-  font-size: 0.76rem;
+  font-size: 0.988rem;
   cursor: pointer;
   color: #64748b;
 

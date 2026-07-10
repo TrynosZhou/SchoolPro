@@ -39,6 +39,35 @@ interface PublicationStatus {
   smsSent?: number;
 }
 
+interface NotificationLogSummary {
+  total: number;
+  queued: number;
+  sent: number;
+  delivered: number;
+  failed: number;
+  undelivered: number;
+}
+
+interface ResultNotificationLogRow {
+  id: string;
+  studentId: string;
+  studentName: string;
+  admissionNumber?: string;
+  guardianName?: string | null;
+  phone: string;
+  messageSid?: string;
+  status: string;
+  errorMessage?: string;
+  createdAt: string;
+}
+
+interface ResultNotificationLogsResponse {
+  termId: string;
+  examTypeId: string;
+  summary: NotificationLogSummary;
+  logs: ResultNotificationLogRow[];
+}
+
 interface TermOption {
   id: string;
   name: string;
@@ -199,6 +228,8 @@ export class AdminAcademicSettingsComponent implements OnInit {
   notifySms = true;
   publicationStatus = signal<PublicationStatus | null>(null);
   loadingPublication = signal(false);
+  notificationLogs = signal<ResultNotificationLogsResponse | null>(null);
+  loadingNotificationLogs = signal(false);
 
   newYear = { name: '', startDate: '', endDate: '', isCurrent: false };
   editingYearId = signal<string | null>(null);
@@ -305,11 +336,13 @@ export class AdminAcademicSettingsComponent implements OnInit {
 
   onPublishFiltersChange() {
     this.refreshPublicationStatus();
+    this.refreshNotificationLogs();
   }
 
   refreshPublicationStatus() {
     if (!this.publishTermId || !this.publishExamTypeId) {
       this.publicationStatus.set(null);
+      this.notificationLogs.set(null);
       return;
     }
     this.loadingPublication.set(true);
@@ -322,12 +355,59 @@ export class AdminAcademicSettingsComponent implements OnInit {
         next: (status) => {
           this.publicationStatus.set(status);
           this.loadingPublication.set(false);
+          this.refreshNotificationLogs();
         },
         error: () => {
           this.publicationStatus.set(null);
           this.loadingPublication.set(false);
+          this.notificationLogs.set(null);
         },
       });
+  }
+
+  refreshNotificationLogs() {
+    if (!this.publishTermId || !this.publishExamTypeId) {
+      this.notificationLogs.set(null);
+      return;
+    }
+    if (!this.publicationStatus()?.isPublished) {
+      this.notificationLogs.set(null);
+      return;
+    }
+
+    this.loadingNotificationLogs.set(true);
+    this.api
+      .get<ResultNotificationLogsResponse>('/exams/results-notifications', {
+        termId: this.publishTermId,
+        examTypeId: this.publishExamTypeId,
+      })
+      .subscribe({
+        next: (data) => {
+          this.notificationLogs.set(data);
+          this.loadingNotificationLogs.set(false);
+        },
+        error: () => {
+          this.notificationLogs.set(null);
+          this.loadingNotificationLogs.set(false);
+        },
+      });
+  }
+
+  notificationStatusLabel(status: string): string {
+    switch (status) {
+      case 'queued':
+        return 'Queued';
+      case 'sent':
+        return 'Sent';
+      case 'delivered':
+        return 'Delivered';
+      case 'failed':
+        return 'Failed';
+      case 'undelivered':
+        return 'Undelivered';
+      default:
+        return status;
+    }
   }
 
   publishResults() {
@@ -352,6 +432,7 @@ export class AdminAcademicSettingsComponent implements OnInit {
         whatsappSent: number;
         smsSent: number;
         notificationsCreated: number;
+        notificationFailed?: number;
       }>('/exams/results/publish', {
         termId: this.publishTermId,
         examTypeId: this.publishExamTypeId,
@@ -361,9 +442,11 @@ export class AdminAcademicSettingsComponent implements OnInit {
       .subscribe({
         next: (r) => {
           this.submitting.set(false);
+          const failed = r.notificationFailed ?? 0;
+          const failedPart = failed > 0 ? ` Failed: ${failed}.` : '';
           this.showToast(
-            'success',
-            `${r.message} WhatsApp: ${r.whatsappSent}, SMS: ${r.smsSent}, in-app: ${r.notificationsCreated}.`,
+            failed > 0 && r.whatsappSent === 0 && r.smsSent === 0 ? 'error' : 'success',
+            `${r.message} WhatsApp: ${r.whatsappSent}, SMS: ${r.smsSent}, in-app: ${r.notificationsCreated}.${failedPart}`,
           );
           this.refreshPublicationStatus();
         },

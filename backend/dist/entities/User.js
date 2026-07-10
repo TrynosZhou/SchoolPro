@@ -85,6 +85,10 @@ __decorate([
     __metadata("design:type", String)
 ], User.prototype, "avatarUrl", void 0);
 __decorate([
+    (0, typeorm_1.Column)({ default: false }),
+    __metadata("design:type", Boolean)
+], User.prototype, "portalPasswordCustomized", void 0);
+__decorate([
     (0, typeorm_1.OneToOne)(() => Student_1.Student, (s) => s.user),
     __metadata("design:type", Student_1.Student)
 ], User.prototype, "studentProfile", void 0);

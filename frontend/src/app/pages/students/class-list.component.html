@@ -121,34 +121,6 @@
           </div>
         }
 
-        @if (classes().length > 1) {
-          <div class="quick-class-wrap">
-            <div class="quick-class-head">
-              <span>Quick select class</span>
-              @if (classFormOptions().length) {
-                <select class="form-filter" [ngModel]="classFormFilter()" (ngModelChange)="classFormFilter.set($event)" name="classFormFilter">
-                  <option value="all">All forms</option>
-                  @for (f of classFormOptions(); track f) {
-                    <option [value]="f">{{ f }}</option>
-                  }
-                </select>
-              }
-            </div>
-            <div class="quick-class-grid">
-              @for (c of visibleClasses(); track c.id) {
-                <button
-                  type="button"
-                  class="class-chip"
-                  [class.active]="selectedClassId === c.id"
-                  (click)="selectClass(c.id)"
-                >
-                  <strong>{{ c.name }}</strong>
-                  <span>{{ classEnrollmentCount(c) }} enrolled</span>
-                </button>
-              }
-            </div>
-          </div>
-        }
       </div>
 
       @if (loadingStudents()) {

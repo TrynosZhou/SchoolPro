@@ -12,6 +12,8 @@ export interface AuthPayload {
   staffId?: string;
   parentId?: string;
   studentId?: string;
+  /** True only for tokens issued by POST /auth/demo-login. Drives tenant routing + guardrails. */
+  demo?: boolean;
 }
 
 export interface AuthRequest extends Request {

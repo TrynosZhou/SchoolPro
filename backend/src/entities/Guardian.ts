@@ -38,6 +38,14 @@ export class Guardian {
   @Column({ nullable: true })
   phone?: string;
 
+  /** Guardian phone in E.164 format for WhatsApp/SMS notifications. */
+  @Column({ nullable: true })
+  guardianPhone?: string;
+
+  /** Explicit opt-in for WhatsApp result notifications. */
+  @Column({ default: false })
+  guardianWhatsappConsent!: boolean;
+
   @Column({ nullable: true })
   email?: string;
 

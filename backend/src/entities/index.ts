@@ -59,6 +59,14 @@ import { AuditLog } from './AuditLog';
 import { RecordBookColumn } from './RecordBookColumn';
 import { RecordBookMark } from './RecordBookMark';
 import { HomeworkAssignment } from './HomeworkAssignment';
+import { NotificationLog } from './NotificationLog';
+import { LmsAssignment } from './LmsAssignment';
+import { LmsSubmission } from './LmsSubmission';
+import { LessonContent } from './LessonContent';
+import { VirtualClass } from './VirtualClass';
+import { ClassRecording } from './ClassRecording';
+import { LibraryResource } from './LibraryResource';
+import { LibraryBookmark } from './LibraryBookmark';
 
 export const entities = [
   User,
@@ -122,6 +130,14 @@ export const entities = [
   RecordBookColumn,
   RecordBookMark,
   HomeworkAssignment,
+  NotificationLog,
+  LmsAssignment,
+  LmsSubmission,
+  LessonContent,
+  VirtualClass,
+  ClassRecording,
+  LibraryResource,
+  LibraryBookmark,
 ];
 
 export * from './enums';
@@ -187,5 +203,13 @@ export {
   RecordBookColumn,
   RecordBookMark,
   HomeworkAssignment,
+  NotificationLog,
+  LmsAssignment,
+  LmsSubmission,
+  LessonContent,
+  VirtualClass,
+  ClassRecording,
+  LibraryResource,
+  LibraryBookmark,
 };
 

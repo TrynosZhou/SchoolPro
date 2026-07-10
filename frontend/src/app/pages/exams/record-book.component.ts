@@ -404,7 +404,7 @@ export class RecordBookComponent implements OnInit, OnDestroy {
 
     return new Promise((resolve) => {
       this.api
-        .post<{ saved: number }>('/exams/record-book/save-row', {
+        .post<{ saved?: number; queued?: boolean; message?: string }>('/exams/record-book/save-row', {
           classId,
           termId,
           subjectId,
@@ -412,7 +412,7 @@ export class RecordBookComponent implements OnInit, OnDestroy {
           marks,
         })
         .subscribe({
-          next: () => {
+          next: (res) => {
             this.students.update((rows) =>
               rows.map((r) => {
                 if (r.studentId !== studentId) return r;
@@ -432,6 +432,9 @@ export class RecordBookComponent implements OnInit, OnDestroy {
             );
             this.dirtyStudents.delete(studentId);
             this.savingStudents.delete(studentId);
+            if (res?.queued) {
+              this.showToast('success', res.message || 'Marks saved offline — will sync when you reconnect.');
+            }
             resolve();
           },
           error: (e) => {

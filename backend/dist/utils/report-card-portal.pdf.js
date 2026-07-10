@@ -9,6 +9,7 @@ const path_1 = __importDefault(require("path"));
 const pdfkit_1 = __importDefault(require("pdfkit"));
 const class_display_1 = require("./class-display");
 const grade_boundaries_1 = require("../types/grade-boundaries");
+const principal_remarks_util_1 = require("./principal-remarks.util");
 /** Report card body text scale (+20%). */
 const RC_TEXT = 1.2;
 const rcPt = (pt) => Math.round(pt * RC_TEXT * 10) / 10;
@@ -264,7 +265,7 @@ async function generateReportCardPortalPdf(data) {
         const className = data.className || '—';
         const studentId = data.admissionNumber || '—';
         const teacherRemarks = (data.classTeacherRemarks || '').trim();
-        const principalRemarks = (data.principalRemarks || '').trim();
+        const principalRemarks = (0, principal_remarks_util_1.appendHeadmasterToPrincipalRemarks)(data.principalRemarks, data.headmasterName).trim();
         const showPoints = (0, class_display_1.isALevelForm)({ name: data.formName, level: data.formLevel });
         const boundaries = data.gradeBoundaries?.length ? data.gradeBoundaries : grade_boundaries_1.DEFAULT_GRADE_BOUNDARIES;
         const rows = data.subjectResults?.length
@@ -333,10 +334,9 @@ async function generateReportCardPortalPdf(data) {
         const footerH = rcSp(20);
         const tableStartY = y + attendanceH + (attendance ? rcSp(8) : 0);
         const availableForRows = pageBottom - tableStartY - tableHeaderH - footerH - remarksBlockH - rcSp(8);
-        const rowH = rows.length > 0
-            ? Math.min(rcSp(22), Math.max(rcSp(14), Math.floor(availableForRows / rows.length)))
-            : rcSp(18);
-        const rowFontSize = rowH < rcSp(18) ? rcPt(8) : rcPt(9);
+        const minRowH = rcSp(20);
+        const maxRowH = rcSp(24);
+        const baseRowFontSize = rcPt(9);
         const gradePillH = rcSp(12);
         if (attendance) {
             doc.roundedRect(innerX, y, innerW, attendanceH, 8).fill('#f8fafc');
@@ -382,8 +382,8 @@ async function generateReportCardPortalPdf(data) {
         const tableX = innerX;
         const tableW = innerW;
         const colWeights = showPoints
-            ? [0.20, 0.065, 0.065, 0.075, 0.08, 0.065, 0.075, 0.355]
-            : [0.23, 0.065, 0.075, 0.08, 0.065, 0.075, 0.39];
+            ? [0.28, 0.085, 0.075, 0.075, 0.075, 0.065, 0.075, 0.28]
+            : [0.30, 0.085, 0.075, 0.075, 0.065, 0.075, 0.325];
         const cols = colWeights.map((w) => tableW * w);
         const colSpanUsed = cols.reduce((sum, w) => sum + w, 0);
         cols[cols.length - 1] += tableW - colSpanUsed;
@@ -393,13 +393,41 @@ async function generateReportCardPortalPdf(data) {
         const gradeColIndex = 3;
         const markColIndex = 2;
         const remarksColIndex = headers.length - 1;
+        const subjectColWidth = cols[0] - rcSp(10);
+        const layoutRows = () => {
+            if (!rows.length)
+                return [];
+            const layouts = rows.map((row) => {
+                let subjectFontSize = baseRowFontSize;
+                doc.font('Helvetica-Bold').fontSize(subjectFontSize);
+                while (subjectFontSize > rcPt(7) && doc.widthOfString(row.subject) > subjectColWidth) {
+                    subjectFontSize -= 0.5;
+                    doc.font('Helvetica-Bold').fontSize(subjectFontSize);
+                }
+                const subjectLineH = doc.currentLineHeight(true);
+                const rowH = Math.max(minRowH, Math.min(maxRowH, subjectLineH + rcSp(8)));
+                const rowFontSize = rowH < rcSp(22) ? rcPt(8.5) : baseRowFontSize;
+                return { rowH, subjectFontSize, rowFontSize };
+            });
+            let totalH = layouts.reduce((sum, row) => sum + row.rowH, 0);
+            if (totalH <= availableForRows)
+                return layouts;
+            const scale = Math.max(minRowH / maxRowH, availableForRows / totalH);
+            return layouts.map((layout) => ({
+                ...layout,
+                rowH: Math.max(minRowH, layout.rowH * scale),
+                subjectFontSize: Math.max(rcPt(7), layout.subjectFontSize * Math.min(1, scale + 0.05)),
+                rowFontSize: layout.rowFontSize,
+            }));
+        };
+        const rowLayouts = layoutRows();
         const drawTableHeader = (atY) => {
             doc.rect(tableX, atY, tableW, tableHeaderH).fill('#f1f5f9');
             let hx = tableX;
             doc.fillColor('#000000').font('Helvetica-Bold').fontSize(rcPt(7));
             headers.forEach((h, i) => {
                 const align = i === 0 || i === remarksColIndex ? 'left' : 'center';
-                const px = i === 0 || i === remarksColIndex ? 5 : 2;
+                const px = i === 0 || i === remarksColIndex ? 5 : 4;
                 doc.text(h, hx + px, atY + rcSp(6), { width: cols[i] - px * 2, align, lineBreak: false });
                 hx += cols[i];
             });
@@ -410,30 +438,43 @@ async function generateReportCardPortalPdf(data) {
         drawTableHeader(y);
         y += tableHeaderH;
         rows.forEach((row, i) => {
+            const { rowH, subjectFontSize, rowFontSize } = rowLayouts[i] ?? {
+                rowH: minRowH,
+                subjectFontSize: baseRowFontSize,
+                rowFontSize: baseRowFontSize,
+            };
             doc.rect(tableX, y, tableW, rowH).fill('#ffffff');
             const cells = showPoints
                 ? [row.subject, row.code, row.marks, row.grade, row.points ?? '—', row.rank, row.mean, row.remarks]
                 : [row.subject, row.code, row.marks, row.grade, row.rank, row.mean, row.remarks];
             let cx = tableX;
             cells.forEach((cell, j) => {
-                const px = j === 0 || j === remarksColIndex ? 5 : 2;
+                const px = j === 0 || j === remarksColIndex ? 5 : 4;
                 const align = j === 0 || j === remarksColIndex ? 'left' : 'center';
+                const cellFontSize = j === 0 ? subjectFontSize : rowFontSize;
+                const textY = y + Math.max(rcSp(3), (rowH - cellFontSize) / 2);
                 if (j === gradeColIndex) {
                     const gc = gradeChipColors(cell);
                     const pillW = Math.max(rcSp(14), doc.widthOfString(cell) + rcSp(10));
                     const pillX = cx + (cols[j] - pillW) / 2;
                     doc.roundedRect(pillX, y + (rowH - gradePillH) / 2, pillW, gradePillH, 3).fill(gc.bg);
-                    doc.fillColor(gc.fg).font('Helvetica-Bold').fontSize(rowFontSize).text(cell, pillX, y + (rowH - gradePillH) / 2 + 2, {
+                    doc.fillColor(gc.fg).font('Helvetica-Bold').fontSize(cellFontSize).text(cell, pillX, y + (rowH - gradePillH) / 2 + 2, {
                         width: pillW,
                         align: 'center',
                         lineBreak: false,
                     });
                 }
                 else {
+                    const useEllipsis = j === remarksColIndex;
                     doc.fillColor(j === remarksColIndex ? '#64748b' : j === 0 || j === 2 ? '#000000' : '#0f172a')
                         .font(j === 0 || j === 2 ? 'Helvetica-Bold' : 'Helvetica')
-                        .fontSize(rowFontSize)
-                        .text(cell, cx + px, y + (rowH - rowFontSize) / 2, { width: cols[j] - px * 2, align, lineBreak: false });
+                        .fontSize(cellFontSize)
+                        .text(cell, cx + px, textY, {
+                        width: cols[j] - px * 2,
+                        align,
+                        lineBreak: false,
+                        ...(useEllipsis ? { ellipsis: true } : {}),
+                    });
                 }
                 cx += cols[j];
             });
@@ -509,9 +550,9 @@ async function generateReportCardPortalPdf(data) {
             });
             return commentBoxH;
         };
-        y += drawCommentBox(innerX, y, 'Class teacher — performance & behaviour', teacherRemarks);
+        y += drawCommentBox(innerX, y, 'Class teacher — behaviour & attitude', teacherRemarks);
         y += commentGap;
-        y += drawCommentBox(innerX, y, 'Principal / head — performance & behaviour', principalRemarks);
+        y += drawCommentBox(innerX, y, 'Principal / head — academic performance', principalRemarks);
         doc.save();
         doc.lineWidth(borderW).strokeColor(borderColor);
         doc.rect(borderW / 2, borderW / 2, pageW - borderW, pageH - borderW).stroke();

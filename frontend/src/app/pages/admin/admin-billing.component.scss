@@ -3,12 +3,12 @@
 }
 
 // ── Variables ──
-$blue: #1e40af;
-$blue-light: #eff6ff;
-$border: #e2e8f0;
+$blue: var(--color-accent-hover);
+$blue-light: color-mix(in srgb, var(--color-accent) 12%, transparent);
+$border: var(--color-border);
 $radius: 12px;
-$text: #0f172a;
-$muted: #64748b;
+$text: var(--color-text-primary);
+$muted: var(--color-text-muted);
 $card-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
 
 // ── Toast ──
@@ -25,15 +25,15 @@ $card-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
   animation: slideIn 0.25s ease;
 
   &.success {
-    background: #ecfdf5;
-    color: #047857;
-    border: 1px solid #a7f3d0;
+    background: color-mix(in srgb, var(--color-positive) 12%, transparent);
+    color: var(--color-positive);
+    border: 1px solid color-mix(in srgb, var(--color-positive) 35%, transparent);
   }
 
   &.error {
-    background: #fef2f2;
-    color: #b91c1c;
-    border: 1px solid #fecaca;
+    background: color-mix(in srgb, var(--color-negative) 12%, transparent);
+    color: var(--color-negative);
+    border: 1px solid color-mix(in srgb, var(--color-negative) 35%, transparent);
   }
 }
 
@@ -71,7 +71,7 @@ $card-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
   gap: 1.25rem;
   padding: 1.35rem 1.5rem;
   border-radius: $radius;
-  background: #ffffff;
+  background: var(--color-bg);
   border: 1px solid $border;
   box-shadow: $card-shadow;
 }
@@ -134,7 +134,7 @@ $card-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
   cursor: pointer;
   transition: background 0.15s ease;
 
-  &:hover { background: #1e3a8a; }
+  &:hover { background: var(--color-accent-hover); }
 }
 
 .secondary-action,
@@ -144,12 +144,12 @@ $card-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
   padding: 0.5rem 0.9rem;
   font-size: 0.875rem;
   font-weight: 500;
-  background: #f8fafc;
-  color: #334155;
+  background: var(--color-bg-subtle);
+  color: var(--color-text-secondary);
   cursor: pointer;
   transition: background 0.15s ease, border-color 0.15s ease;
 
-  &:hover { background: #f1f5f9; border-color: #cbd5e1; }
+  &:hover { background: var(--color-bg-muted); border-color: var(--color-border-strong); }
   &:disabled { opacity: 0.55; cursor: not-allowed; }
 }
 
@@ -174,7 +174,7 @@ $card-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
   gap: 0.65rem;
   padding: 0.75rem 0.9rem;
   border-radius: 10px;
-  background: #f8fafc;
+  background: var(--color-bg-subtle);
   border: 1px solid $border;
 
   .kpi-icon {
@@ -184,7 +184,7 @@ $card-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
     display: grid;
     place-items: center;
     border-radius: 8px;
-    background: #e0e7ff;
+    background: var(--color-accent-subtle);
     color: $blue;
 
     svg {
@@ -193,9 +193,9 @@ $card-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
     }
   }
 
-  &.ok .kpi-icon { background: #dcfce7; color: #059669; }
-  &.accent .kpi-icon { background: #dbeafe; color: $blue; }
-  &.warn .kpi-icon { background: #fff7ed; color: #d97706; }
+  &.ok .kpi-icon { background: color-mix(in srgb, var(--color-positive) 18%, transparent); color: var(--color-positive); }
+  &.accent .kpi-icon { background: color-mix(in srgb, var(--color-accent) 22%, transparent); color: $blue; }
+  &.warn .kpi-icon { background: color-mix(in srgb, var(--color-warning) 14%, transparent); color: var(--color-warning); }
 
   strong {
     display: block;
@@ -207,11 +207,11 @@ $card-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
   }
 
   span { font-size: 0.72rem; color: $muted; font-weight: 500; display: block; margin-top: 0.1rem; }
-  small { font-size: 0.68rem; color: #94a3b8; display: block; }
+  small { font-size: 0.68rem; color: var(--color-text-muted); display: block; }
 
-  &.ok { border-left: 3px solid #059669; }
+  &.ok { border-left: 3px solid var(--color-positive); }
   &.accent { border-left: 3px solid $blue; }
-  &.warn { border-left: 3px solid #d97706; }
+  &.warn { border-left: 3px solid var(--color-warning); }
 }
 
 // ── Alert banner ──
@@ -223,9 +223,9 @@ $card-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
   flex-wrap: wrap;
   padding: 0.75rem 1rem;
   border-radius: 10px;
-  background: #fffbeb;
-  border: 1px solid #fde68a;
-  color: #92400e;
+  background: color-mix(in srgb, var(--color-warning) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-warning) 40%, transparent);
+  color: var(--color-warning);
   font-size: 0.875rem;
   font-weight: 500;
 }
@@ -281,7 +281,7 @@ $card-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
   min-width: 960px;
 
   thead th {
-    color: #2563eb;
+    color: var(--color-accent);
   }
 
   .col-inv {
@@ -304,7 +304,7 @@ $card-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
     white-space: normal;
     word-break: break-word;
     line-height: 1.45;
-    color: #334155;
+    color: var(--color-text-secondary);
   }
 
   .col-total,
@@ -338,7 +338,7 @@ $card-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
 .list-shell {
   display: flex;
   flex-direction: column;
-  background: #ffffff;
+  background: var(--color-bg);
   border: 1px solid $border;
   border-radius: $radius;
   box-shadow: $card-shadow;
@@ -353,7 +353,7 @@ $card-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
   gap: 0.75rem;
   padding: 0 1rem 0 1.25rem;
   border-bottom: 1px solid $border;
-  background: #fafbfc;
+  background: var(--color-bg-subtle);
   flex-wrap: wrap;
   overflow-x: auto;
 }
@@ -371,7 +371,7 @@ $card-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
     padding: 0.85rem 1rem;
     font-size: 0.875rem;
     font-weight: 700;
-    color: #000000;
+    color: var(--color-text-primary);
     cursor: pointer;
     white-space: nowrap;
     transition: color 0.15s ease;
@@ -389,10 +389,10 @@ $card-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
       border-radius: 2px 2px 0 0;
     }
 
-    &:hover { color: #000000; }
+    &:hover { color: var(--color-text-primary); }
 
     &.active {
-      color: #000000;
+      color: var(--color-text-primary);
       font-weight: 700;
 
       &::after { transform: scaleX(1); }
@@ -407,7 +407,7 @@ $card-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
   width: 1.3rem;
   height: 1.3rem;
   border-radius: 999px;
-  background: #dc2626;
+  background: var(--color-negative);
   color: #fff;
   font-size: 0.65rem;
   font-weight: 700;
@@ -429,7 +429,7 @@ $card-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
     font-weight: 700;
 
     &:hover {
-      background: #1e3a8a;
+      background: var(--color-accent-hover);
       color: #fff;
     }
 
@@ -505,7 +505,7 @@ $card-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
 .side-panel {
   border-left: 1px solid $border;
   padding: 1.25rem 1.25rem;
-  background: #fafbfc;
+  background: var(--color-bg-subtle);
 
   @media (max-width: 900px) {
     border-left: 0;
@@ -547,12 +547,12 @@ $card-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
     width: 2.5rem;
     height: 2.5rem;
     border-radius: 50%;
-    background: #ecfdf5;
-    border: 2px solid #a7f3d0;
+    background: color-mix(in srgb, var(--color-positive) 12%, transparent);
+    border: 2px solid color-mix(in srgb, var(--color-positive) 35%, transparent);
     display: grid;
     place-items: center;
     font-size: 1.1rem;
-    color: #047857;
+    color: var(--color-positive);
     font-weight: 700;
   }
 
@@ -573,7 +573,7 @@ $card-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
   .rcpt-amt {
     font-size: 1.55rem;
     font-weight: 700;
-    color: #047857;
+    color: var(--color-positive);
     margin: 0;
     letter-spacing: -0.02em;
   }
@@ -599,7 +599,7 @@ $card-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
   padding: 0.35rem 0.75rem;
   border-radius: 999px;
   border: 1px solid $border;
-  background: #f8fafc;
+  background: var(--color-bg-subtle);
   color: $muted;
   font-size: 0.8rem;
   font-weight: 500;
@@ -616,7 +616,7 @@ $card-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
   }
 
   .current-dot {
-    background: #22c55e;
+    background: var(--color-positive);
     color: #fff;
     font-size: 0.65rem;
     padding: 0.1rem 0.4rem;
@@ -629,7 +629,7 @@ $card-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
   padding: 0.35rem 0.75rem;
   border-radius: 999px;
   border: 1px solid $border;
-  background: #f8fafc;
+  background: var(--color-bg-subtle);
   color: $muted;
   font-size: 0.8rem;
   font-weight: 500;
@@ -642,9 +642,9 @@ $card-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
     color: #fff;
   }
 
-  &.ok.active { background: #059669; border-color: #059669; color: #fff; }
-  &.warn.active { background: #d97706; border-color: #d97706; color: #fff; }
-  &.bad.active { background: #dc2626; border-color: #dc2626; color: #fff; }
+  &.ok.active { background: var(--color-positive); border-color: var(--color-positive); color: #fff; }
+  &.warn.active { background: var(--color-warning); border-color: var(--color-warning); color: #fff; }
+  &.bad.active { background: var(--color-negative); border-color: var(--color-negative); color: #fff; }
 }
 
 // ── Forms ──
@@ -660,7 +660,7 @@ $card-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
   padding: 1.15rem 1.25rem;
   border: 1.5px solid $blue;
   border-radius: 12px;
-  background: #fff;
+  background: var(--color-bg);
 }
 
 .get-invoice-action {
@@ -686,7 +686,7 @@ $card-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
   label {
     font-size: 0.8rem;
     font-weight: 600;
-    color: #334155;
+    color: var(--color-text-secondary);
   }
 
   input,
@@ -697,12 +697,12 @@ $card-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
     border-radius: 8px;
     font-size: 0.875rem;
     color: $text;
-    background: #fff;
+    background: var(--color-bg);
     transition: border-color 0.15s ease, box-shadow 0.15s ease;
     outline: none;
 
     &:focus {
-      border-color: #2563eb;
+      border-color: var(--color-accent);
       box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
     }
   }
@@ -729,21 +729,21 @@ $card-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
 .search-input {
   width: 100%;
   padding: 0.6rem 2.25rem 0.6rem 2.25rem;
-  border: 1.5px solid #94a3b8;
+  border: 1.5px solid var(--color-text-muted);
   border-radius: 8px;
   font-size: 0.875rem;
   color: $text;
-  background: #fff;
+  background: var(--color-bg);
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
   outline: none;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 
   &::placeholder {
-    color: #94a3b8;
+    color: var(--color-text-muted);
   }
 
   &:focus {
-    border-color: #2563eb;
+    border-color: var(--color-accent);
     box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
   }
 }
@@ -760,7 +760,7 @@ $card-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
   padding: 0.15rem 0.35rem;
   border-radius: 4px;
 
-  &:hover { background: #f1f5f9; }
+  &:hover { background: var(--color-bg-muted); }
 }
 
 // ── Student search field ──
@@ -771,15 +771,15 @@ $card-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
   padding: 1rem;
   border: 1px solid $border;
   border-radius: 10px;
-  background: #fafbfc;
+  background: var(--color-bg-subtle);
 
   .field-label {
     font-size: 0.82rem;
     font-weight: 700;
-    color: #334155;
+    color: var(--color-text-secondary);
   }
 
-  .required-star { color: #dc2626; }
+  .required-star { color: var(--color-negative); }
 
   .field-hint {
     margin: 0;
@@ -793,7 +793,7 @@ $card-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
   align-items: center;
   gap: 0.7rem;
   padding: 0.65rem 0.85rem;
-  border: 1px solid #bfdbfe;
+  border: 1px solid color-mix(in srgb, var(--color-accent) 35%, transparent);
   border-radius: 8px;
   background: $blue-light;
 
@@ -808,9 +808,9 @@ $card-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
 
 // ── Student profile card (after selection) ──
 .stu-profile-card {
-  border: 1px solid #bfdbfe;
+  border: 1px solid color-mix(in srgb, var(--color-accent) 35%, transparent);
   border-radius: 10px;
-  background: #ffffff;
+  background: var(--color-bg);
   overflow: hidden;
   box-shadow: 0 2px 8px rgba(37, 99, 235, 0.08);
 }
@@ -822,8 +822,8 @@ $card-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
   justify-content: space-between;
   gap: 0.75rem;
   padding: 0.75rem 1rem;
-  background: #eff6ff;
-  border-bottom: 1px solid #bfdbfe;
+  background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--color-accent) 35%, transparent);
 }
 
 .stu-card-header-left {
@@ -844,7 +844,7 @@ $card-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
   font-weight: 700;
   flex-shrink: 0;
   letter-spacing: 0.05em;
-  border: 2px solid #fff;
+  border: 2px solid var(--color-bg);
   box-shadow: 0 2px 6px rgba(30, 64, 175, 0.25);
 }
 
@@ -861,11 +861,11 @@ $card-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
   font-family: ui-monospace, monospace;
   font-size: 0.8rem;
   font-weight: 600;
-  color: #334155;
-  background: #dbeafe;
+  color: var(--color-text-secondary);
+  background: color-mix(in srgb, var(--color-accent) 22%, transparent);
   padding: 0.1rem 0.45rem;
   border-radius: 4px;
-  border: 1px solid #bfdbfe;
+  border: 1px solid color-mix(in srgb, var(--color-accent) 35%, transparent);
 }
 
 // Detail fields grid
@@ -873,7 +873,7 @@ $card-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 0;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid var(--color-border);
 
   @media (max-width: 540px) {
     grid-template-columns: 1fr 1fr;
@@ -885,13 +885,13 @@ $card-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
   flex-direction: column;
   gap: 0.2rem;
   padding: 0.75rem 1rem;
-  border-right: 1px solid #e2e8f0;
+  border-right: 1px solid var(--color-border);
 
   &:last-child { border-right: 0; }
 
   @media (max-width: 540px) {
     &:nth-child(2n) { border-right: 0; }
-    &:nth-child(n+3) { border-top: 1px solid #e2e8f0; }
+    &:nth-child(n+3) { border-top: 1px solid var(--color-border); }
   }
 }
 
@@ -908,14 +908,14 @@ $card-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
   font-weight: 600;
   color: $text;
 
-  &.gender-value[data-gender="male"]   { color: #1d4ed8; }
-  &.gender-value[data-gender="female"] { color: #be185d; }
+  &.gender-value[data-gender="male"]   { color: var(--color-accent-hover); }
+  &.gender-value[data-gender="female"] { color: var(--color-negative); }
 }
 
 // Balance panel
 .stu-balance-row {
   padding: 0.85rem 1rem;
-  background: #f8fafc;
+  background: var(--color-bg-subtle);
 }
 
 .balance-loading {
@@ -969,16 +969,16 @@ $card-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
   line-height: 1;
   flex-shrink: 0;
 
-  &.owed  { color: #dc2626; }
-  &.zero  { color: #059669; }
+  &.owed  { color: var(--color-negative); }
+  &.zero  { color: var(--color-positive); }
 }
 
 .remove-student-btn {
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
-  border: 1px solid #bfdbfe;
-  background: #fff;
+  border: 1px solid color-mix(in srgb, var(--color-accent) 35%, transparent);
+  background: var(--color-bg);
   color: $blue;
   cursor: pointer;
   padding: 0.3rem 0.65rem;
@@ -988,7 +988,7 @@ $card-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
   flex-shrink: 0;
   transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 
-  &:hover { background: #fee2e2; border-color: #fecaca; color: #dc2626; }
+  &:hover { background: color-mix(in srgb, var(--color-negative) 18%, transparent); border-color: color-mix(in srgb, var(--color-negative) 35%, transparent); color: var(--color-negative); }
 }
 
 .no-results-hint {
@@ -1026,7 +1026,7 @@ $card-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
   white-space: nowrap;
   transition: background 0.15s ease, opacity 0.15s ease;
 
-  &:hover:not(:disabled) { background: #1e3a8a; }
+  &:hover:not(:disabled) { background: var(--color-accent-hover); }
   &:disabled { opacity: 0.45; cursor: not-allowed; }
 }
 
@@ -1038,13 +1038,13 @@ $card-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
   margin-top: 0.55rem;
   padding: 0.65rem 0.85rem;
   border-radius: 8px;
-  background: #fff7ed;
-  border: 1px solid #fed7aa;
-  color: #92400e;
+  background: color-mix(in srgb, var(--color-warning) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-warning) 35%, transparent);
+  color: var(--color-warning);
   font-size: 0.82rem;
   line-height: 1.45;
 
-  svg { flex-shrink: 0; color: #d97706; }
+  svg { flex-shrink: 0; color: var(--color-warning); }
   strong { font-weight: 700; }
 }
 
@@ -1052,8 +1052,8 @@ $card-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
   margin-top: 0.55rem;
   padding: 0.4rem 0.65rem;
   border-radius: 6px;
-  background: #eff6ff;
-  border: 1px solid #bfdbfe;
+  background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-accent) 35%, transparent);
   font-size: 0.8rem;
   color: $blue;
 
@@ -1070,7 +1070,7 @@ $card-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
 .match-balance {
   display: block;
   font-size: 0.68rem;
-  color: #b45309;
+  color: var(--color-warning);
   font-weight: 600;
   margin-top: 0.15rem;
 }
@@ -1078,7 +1078,7 @@ $card-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
 .field-warn {
   display: block;
   margin-top: 0.35rem;
-  color: #b45309;
+  color: var(--color-warning);
   font-size: 0.82rem;
 }
 
@@ -1101,12 +1101,12 @@ $card-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
   padding: 0.55rem 0.7rem;
   border: 1px solid $border;
   border-radius: 8px;
-  background: #fff;
+  background: var(--color-bg);
   cursor: pointer;
   text-align: left;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 
-  &:hover { border-color: #93c5fd; box-shadow: 0 2px 8px rgba(37, 99, 235, 0.1); }
+  &:hover { border-color: color-mix(in srgb, var(--color-accent) 40%, transparent); box-shadow: 0 2px 8px rgba(37, 99, 235, 0.1); }
 
   &.selected {
     border-color: $blue;
@@ -1117,7 +1117,7 @@ $card-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
     width: 2rem;
     height: 2rem;
     border-radius: 50%;
-    background: #e0e7ff;
+    background: var(--color-accent-subtle);
     color: $blue;
     display: grid;
     place-items: center;
@@ -1136,7 +1136,7 @@ $card-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
     display: block;
     font-size: 0.8rem;
     font-weight: 600;
-    color: #334155;
+    color: var(--color-text-secondary);
     margin-bottom: 0.4rem;
   }
 }
@@ -1152,14 +1152,14 @@ $card-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
   padding: 0.6rem 0.85rem;
   border: 1px solid $border;
   border-radius: 8px;
-  background: #fff;
+  background: var(--color-bg);
   font-size: 0.82rem;
   color: $text;
   cursor: pointer;
   text-align: left;
   transition: border-color 0.15s ease, background 0.15s ease;
 
-  &:hover { border-color: #93c5fd; background: $blue-light; }
+  &:hover { border-color: color-mix(in srgb, var(--color-accent) 40%, transparent); background: $blue-light; }
 
   &.selected {
     border-color: $blue;
@@ -1168,7 +1168,7 @@ $card-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
 
   .owed {
     font-weight: 700;
-    color: #dc2626;
+    color: var(--color-negative);
     white-space: nowrap;
   }
 }
@@ -1190,7 +1190,7 @@ $card-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
   align-items: center;
   justify-content: center;
 
-  &:hover { background: #1e3a8a; color: #fff; }
+  &:hover { background: var(--color-accent-hover); color: #fff; }
   &:disabled { opacity: 0.55; cursor: not-allowed; }
 
   &.btn-lg {
@@ -1204,7 +1204,7 @@ $card-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
   padding: 0.5rem 0.9rem;
   background: transparent;
   color: $blue;
-  border: 1px solid #bfdbfe;
+  border: 1px solid color-mix(in srgb, var(--color-accent) 35%, transparent);
   border-radius: 8px;
   font-size: 0.875rem;
   font-weight: 600;
@@ -1212,7 +1212,7 @@ $card-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
   transition: background 0.15s ease, border-color 0.15s ease;
   white-space: nowrap;
 
-  &:hover { background: $blue-light; border-color: #93c5fd; }
+  &:hover { background: $blue-light; border-color: color-mix(in srgb, var(--color-accent) 40%, transparent); }
   &:disabled { opacity: 0.55; cursor: not-allowed; }
 }
 
@@ -1231,7 +1231,7 @@ $card-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
   transition: background 0.15s ease;
   white-space: nowrap;
 
-  &:hover { background: #f1f5f9; color: $text; }
+  &:hover { background: var(--color-bg-muted); color: $text; }
   &:disabled { opacity: 0.55; cursor: not-allowed; }
 }
 
@@ -1301,7 +1301,7 @@ $card-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
   font-weight: 500;
   color: $text;
 
-  strong { color: #dc2626; }
+  strong { color: var(--color-negative); }
 }
 
 .clear-filters {
@@ -1339,7 +1339,7 @@ $card-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
     color: #fff;
   }
 
-  &:not(.active):hover { background: #f1f5f9; }
+  &:not(.active):hover { background: var(--color-bg-muted); }
 }
 
 // ── Table ──
@@ -1354,7 +1354,7 @@ $card-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
   font-size: 0.85rem;
 
   thead {
-    background: #f8fafc;
+    background: var(--color-bg-subtle);
     border-bottom: 2px solid $border;
 
     th {
@@ -1376,7 +1376,7 @@ $card-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
       border-bottom: 1px solid $border;
       transition: background 0.12s ease;
 
-      &:hover { background: #f8fafc; }
+      &:hover { background: var(--color-bg-subtle); }
       &:last-child { border-bottom: 0; }
     }
 
@@ -1401,7 +1401,7 @@ $card-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
     width: 1.85rem;
     height: 1.85rem;
     border-radius: 50%;
-    background: #e0e7ff;
+    background: var(--color-accent-subtle);
     color: $blue;
     display: grid;
     place-items: center;
@@ -1409,7 +1409,7 @@ $card-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
     font-weight: 700;
     flex-shrink: 0;
 
-    &.warn { background: #fff7ed; color: #c2410c; }
+    &.warn { background: color-mix(in srgb, var(--color-warning) 14%, transparent); color: var(--color-warning); }
   }
 
   strong { font-size: 0.875rem; color: $text; }
@@ -1419,7 +1419,7 @@ $card-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
   font-family: ui-monospace, monospace;
   font-size: 0.75rem;
   color: $muted;
-  background: #f1f5f9;
+  background: var(--color-bg-muted);
   padding: 0.15rem 0.45rem;
   border-radius: 5px;
 }
@@ -1433,8 +1433,8 @@ $card-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
 .pill {
   padding: 0.2rem 0.55rem;
   border-radius: 999px;
-  background: #f1f5f9;
-  color: #475569;
+  background: var(--color-bg-muted);
+  color: var(--color-text-secondary);
   font-size: 0.72rem;
   font-weight: 600;
   white-space: nowrap;
@@ -1446,27 +1446,27 @@ $card-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
   font-size: 0.72rem;
   font-weight: 700;
 
-  &[data-s="paid"] { background: #ecfdf5; color: #047857; }
-  &[data-s="partial"] { background: #eff6ff; color: #1d4ed8; }
-  &[data-s="sent"] { background: #fff7ed; color: #c2410c; }
-  &[data-s="overdue"] { background: #fef2f2; color: #b91c1c; }
+  &[data-s="paid"] { background: color-mix(in srgb, var(--color-positive) 12%, transparent); color: var(--color-positive); }
+  &[data-s="partial"] { background: color-mix(in srgb, var(--color-accent) 12%, transparent); color: var(--color-accent-hover); }
+  &[data-s="sent"] { background: color-mix(in srgb, var(--color-warning) 14%, transparent); color: var(--color-warning); }
+  &[data-s="overdue"] { background: color-mix(in srgb, var(--color-negative) 12%, transparent); color: var(--color-negative); }
 }
 
 .method {
   padding: 0.2rem 0.5rem;
   border-radius: 6px;
-  background: #f8fafc;
+  background: var(--color-bg-subtle);
   border: 1px solid $border;
   font-size: 0.75rem;
   color: $muted;
   font-weight: 500;
 }
 
-.paid { color: #047857; }
-.owed { color: #dc2626; }
+.paid { color: var(--color-positive); }
+.owed { color: var(--color-negative); }
 
-td.paid strong { color: #047857; }
-td.owed strong { color: #dc2626; }
+td.paid strong { color: var(--color-positive); }
+td.owed strong { color: var(--color-negative); }
 
 .actions {
   display: flex;
@@ -1489,7 +1489,7 @@ td.owed strong { color: #dc2626; }
   padding: 1rem 1.1rem;
   border: 1px solid $border;
   border-radius: 10px;
-  background: #fff;
+  background: var(--color-bg);
   display: flex;
   flex-direction: column;
   gap: 0.55rem;
@@ -1498,7 +1498,7 @@ td.owed strong { color: #dc2626; }
 
   &:hover {
     box-shadow: 0 6px 20px rgba(15, 23, 42, 0.08);
-    border-color: #cbd5e1;
+    border-color: var(--color-border-strong);
   }
 }
 
@@ -1522,7 +1522,7 @@ td.owed strong { color: #dc2626; }
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 0.25rem;
-  background: #f8fafc;
+  background: var(--color-bg-subtle);
   border-radius: 8px;
   padding: 0.55rem 0.65rem;
 
@@ -1574,8 +1574,8 @@ td.owed strong { color: #dc2626; }
     display: grid;
     place-items: center;
     border-radius: 50%;
-    background: #f1f5f9;
-    color: #94a3b8;
+    background: var(--color-bg-muted);
+    color: var(--color-text-muted);
   }
 
   h3 { margin: 0; font-size: 1rem; font-weight: 700; color: $text; }
@@ -1596,7 +1596,7 @@ td.owed strong { color: #dc2626; }
 
 .modal {
   width: min(94vw, 600px);
-  background: #fff;
+  background: var(--color-bg);
   border-radius: 14px;
   border: 1px solid $border;
   box-shadow: 0 24px 52px rgba(15, 23, 42, 0.2);
@@ -1610,7 +1610,7 @@ td.owed strong { color: #dc2626; }
   gap: 1rem;
   padding: 1.25rem 1.5rem;
   border-bottom: 1px solid $border;
-  background: #fafbfc;
+  background: var(--color-bg-subtle);
 
   .modal-eyebrow {
     margin: 0 0 0.2rem;
@@ -1636,7 +1636,7 @@ td.owed strong { color: #dc2626; }
   padding: 0.15rem 0.35rem;
   border-radius: 6px;
 
-  &:hover { background: #f1f5f9; color: $text; }
+  &:hover { background: var(--color-bg-muted); color: $text; }
 }
 
 .modal-actions {
@@ -1645,7 +1645,7 @@ td.owed strong { color: #dc2626; }
   gap: 0.5rem;
   padding: 1rem 1.5rem;
   border-top: 1px solid $border;
-  background: #fafbfc;
+  background: var(--color-bg-subtle);
 }
 
 .bulk-loading {
@@ -1674,23 +1674,23 @@ td.owed strong { color: #dc2626; }
   gap: 0.2rem;
   padding: 0.65rem 0.8rem;
   border-radius: 8px;
-  background: #f8fafc;
+  background: var(--color-bg-subtle);
   border: 1px solid $border;
 
   span { font-size: 0.7rem; color: $muted; font-weight: 500; }
   strong { font-size: 1rem; font-weight: 700; color: $text; }
 
   &.accent { border-left: 3px solid $blue; }
-  &.warn strong { color: #d97706; }
+  &.warn strong { color: var(--color-warning); }
 }
 
 .bulk-result {
   margin: 0 1.5rem 1rem;
   padding: 0.85rem 1rem;
   border-radius: 8px;
-  background: #ecfdf5;
-  border: 1px solid #a7f3d0;
-  color: #065f46;
+  background: color-mix(in srgb, var(--color-positive) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-positive) 35%, transparent);
+  color: var(--color-positive);
   font-size: 0.875rem;
   line-height: 1.5;
 }

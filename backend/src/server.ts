@@ -1,8 +1,29 @@
 import 'reflect-metadata';
 import app from './app';
 import { AppDataSource } from './config/data-source';
+import { DemoDataSource } from './config/demo-data-source';
+import { ensureDemoSchemaBootstrapped } from './config/bootstrap-demo-schema';
 import { env } from './config/env';
 import { ensureUploadDirs } from './utils/pdf';
+
+async function startDemoTenant(): Promise<void> {
+  if (!env.demo.enabled) {
+    console.log('[demo] Feature disabled (DEMO_FEATURE_ENABLED=false) — skipping demo DB & reset job.');
+    return;
+  }
+  try {
+    await ensureDemoSchemaBootstrapped();
+    await DemoDataSource.initialize();
+    console.log('[demo] Demo database connected.');
+    const { startDemoResetJob } = await import('./jobs/demo-reset.job');
+    startDemoResetJob();
+  } catch (err) {
+    console.error(
+      '[demo] Failed to initialize the demo database — demo login will be unavailable:',
+      err,
+    );
+  }
+}
 
 async function runDeferredStartup(): Promise<void> {
   try {
@@ -67,7 +88,26 @@ async function bootstrap() {
     const { startScheduler } = await import('./services/scheduler.service');
     startScheduler();
 
+    try {
+      const { probeRedis } = await import('./config/redis');
+      if (!env.redis.enabled) {
+        console.log('[result-notification-queue] Redis disabled (REDIS_ENABLED=false) — background notifications off.');
+      } else if (await probeRedis()) {
+        const { startResultNotificationWorker } = await import('./queues/result-notification.queue');
+        const { processResultNotificationJob } = await import('./services/result-notification.service');
+        startResultNotificationWorker(processResultNotificationJob);
+      } else {
+        console.warn(
+          `[result-notification-queue] Redis not reachable at ${env.redis.url} — ` +
+            'background WhatsApp/SMS notifications disabled. Start Redis or set REDIS_ENABLED=false.',
+        );
+      }
+    } catch (err) {
+      console.error('[startup] Result notification worker failed to start:', err);
+    }
+
     void runDeferredStartup();
+    void startDemoTenant();
   } catch (err) {
     console.error('Failed to start server:', err);
     process.exit(1);

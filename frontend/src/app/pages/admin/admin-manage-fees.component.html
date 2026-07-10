@@ -1,131 +1,565 @@
-<app-portal-layout [portalTitle]="portalTitle" pageTitle="Manage Fees" [navSections]="navSections">
+<app-portal-layout [portalTitle]="portalTitle" pageTitle="Fee Management" [navSections]="navSections">
 
   @if (toast(); as t) {
     <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>
   }
 
-  <header class="page-hero">
-    <div>
-      <p class="eyebrow">Finance</p>
-      <h1>Manage Fees</h1>
-      <p class="sub">
-        Configure fee amounts for billing. New student registrations auto-invoice
-        <strong>Desk Fee</strong>, <strong>Registration Fee</strong>, and
-        <strong>Ordinary Level Tuition</strong> (Forms 1–4) or <strong>Advanced Level Tuition</strong> (Forms 5–6).
-      </p>
-    </div>
-    <a [routerLink]="basePath + '/billing'" class="hero-link">Billing →</a>
-    <a [routerLink]="basePath + '/payment'" class="hero-link">Payment →</a>
-  </header>
-
-  <div class="stats-row">
-    <div class="stat"><span class="val">{{ fees().length }}</span><span class="lbl">Total fees</span></div>
-    <div class="stat"><span class="val">{{ activeCount() }}</span><span class="lbl">Active</span></div>
-  </div>
-
-  <section class="card add-card">
-    <h2>Add new fee</h2>
-    <form class="add-form" (ngSubmit)="addFee()">
-      <div class="field">
-        <label>Fee name *</label>
-        <input [(ngModel)]="newFee.name" name="newName" placeholder="e.g. Tuition Fees" required />
+  <div class="fee-mgmt">
+    <header class="fee-header">
+      <div class="fee-header-copy">
+        <h1>Fee Management</h1>
+        <p>Track, collect, and manage student fees</p>
       </div>
-      <div class="field">
-        <label>Code</label>
-        <input [(ngModel)]="newFee.code" name="newCode" placeholder="Auto from name if empty" />
-        <small>Lowercase key used on invoices (e.g. tuition)</small>
-      </div>
-      <div class="field">
-        <label>Default amount</label>
-        <input type="number" [(ngModel)]="newFee.defaultAmount" name="newAmt" min="0" step="0.01" />
-      </div>
-      <div class="field">
-        <label>Icon</label>
-        <input [(ngModel)]="newFee.icon" name="newIcon" maxlength="4" class="icon-input" />
-      </div>
-      <div class="field grow">
-        <label>Description</label>
-        <input [(ngModel)]="newFee.description" name="newDesc" placeholder="Optional" />
-      </div>
-      <div class="field narrow">
-        <label>Sort order</label>
-        <input type="number" [(ngModel)]="newFee.sortOrder" name="newSort" min="0" />
-      </div>
-      <div class="btn-wrap">
-        <button type="submit" class="btn-primary" [disabled]="submitting()">
-          {{ submitting() ? 'Saving…' : 'Add fee' }}
+      <div class="fee-header-actions">
+        <button *appUnlessDemo type="button" class="btn-secondary" (click)="exportFees()">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0l4-4m-4 4L8 11M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Export
+        </button>
+        <a [routerLink]="basePath + '/payment'" class="btn-secondary">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10h18M7 15h1m4 0h1m4 0h1M6 6h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Add Payment
+        </a>
+        <a [routerLink]="basePath + '/billing'" [queryParams]="{ tab: 'single-invoice' }" class="btn-secondary">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 12h6m-6 4h6M8 4h8l2 4H6l2-4zm10 6v10a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V10h12z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Edit Invoice
+        </a>
+        <a [routerLink]="basePath + '/billing'" [queryParams]="{ tab: 'bulk-invoice' }" class="btn-secondary">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm12 10v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Bulk charges
+        </a>
+        <button type="button" class="btn-primary" (click)="openAddCategory()">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          New Fee Entry
         </button>
       </div>
-    </form>
-  </section>
+    </header>
 
-  <section class="card">
-    <h2>Fee catalogue</h2>
-    @if (loading()) {
-      <p class="muted">Loading fees…</p>
-    } @else {
-      <div class="table-wrap">
-        <table class="fees-table">
-          <thead>
-            <tr>
-              <th></th>
-              <th>Name</th>
-              <th>Code</th>
-              <th class="num">Default</th>
-              <th>Status</th>
-              <th class="num">Order</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            @for (fee of fees(); track fee.id) {
-              @if (editingId() === fee.id) {
-                <tr class="edit-row">
-                  <td><input [(ngModel)]="editFee.icon" name="editIcon" class="icon-input" maxlength="4" /></td>
-                  <td><input [(ngModel)]="editFee.name" name="editName" /></td>
-                  <td><input [(ngModel)]="editFee.code" name="editCode" /></td>
-                  <td class="num"><input type="number" [(ngModel)]="editFee.defaultAmount" name="editAmt" min="0" step="0.01" /></td>
-                  <td>
-                    <label class="toggle">
-                      <input type="checkbox" [(ngModel)]="editFee.isActive" name="editActive" />
-                      Active
-                    </label>
-                  </td>
-                  <td class="num"><input type="number" [(ngModel)]="editFee.sortOrder" name="editSort" min="0" /></td>
-                  <td class="actions">
-                    <button type="button" class="btn-primary btn-sm" (click)="saveEdit()" [disabled]="submitting()">Save</button>
-                    <button type="button" class="btn-ghost btn-sm" (click)="cancelEdit()">Cancel</button>
-                  </td>
-                </tr>
-              } @else {
-                <tr [class.inactive]="!fee.isActive">
-                  <td class="icon-cell">{{ fee.icon || '📋' }}</td>
-                  <td>
-                    <strong>{{ fee.name }}</strong>
-                    @if (fee.description) {
-                      <small>{{ fee.description }}</small>
-                    }
-                  </td>
-                  <td><code>{{ fee.code }}</code></td>
-                  <td class="num">{{ '$' + (fee.defaultAmount | number:'1.2-2') }}</td>
-                  <td>
-                    <button type="button" class="status-pill" [class.off]="!fee.isActive" (click)="toggleActive(fee)">
-                      {{ fee.isActive ? 'Active' : 'Inactive' }}
+    <nav class="fee-tabs" aria-label="Fee management sections">
+      @for (tab of tabs; track tab.id) {
+        <button
+          type="button"
+          class="fee-tab"
+          [class.active]="activeTab() === tab.id"
+          (click)="setTab(tab.id)"
+        >
+          {{ tab.label }}
+        </button>
+      }
+    </nav>
+
+    @if (activeTab() === 'overview') {
+      <section class="overview-panel">
+        @if (overviewLoading()) {
+          <p class="muted">Loading overview…</p>
+        } @else {
+          <div class="overview-kpi-row">
+            <article class="kpi-card">
+              <div class="kpi-card-top">
+                <span class="kpi-label">Total Collectable</span>
+                <span class="kpi-icon neutral" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </span>
+              </div>
+              <strong class="kpi-value">{{ overviewStats().totalCollectable | currency:'USD':'symbol':'1.0-0' }}</strong>
+              <span class="kpi-sub">All charges</span>
+            </article>
+
+            <article class="kpi-card collected">
+              <div class="kpi-card-top">
+                <span class="kpi-label">Collected</span>
+                <span class="kpi-icon ok" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><polyline points="22 4 12 14.01 9 11.01" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </span>
+              </div>
+              <strong class="kpi-value">{{ overviewStats().collected | currency:'USD':'symbol':'1.0-0' }}</strong>
+              <span class="kpi-sub">{{ overviewStats().collectionRate }}% collection rate</span>
+            </article>
+
+            <article class="kpi-card unpaid">
+              <div class="kpi-card-top">
+                <span class="kpi-label">Unpaid</span>
+                <span class="kpi-icon warn" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><polyline points="12 6 12 12 16 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </span>
+              </div>
+              <strong class="kpi-value">{{ overviewStats().unpaid | currency:'USD':'symbol':'1.0-0' }}</strong>
+              <span class="kpi-sub">{{ overviewStats().unpaidCharges }} charges · {{ overviewStats().unpaidStudents }} students</span>
+            </article>
+          </div>
+
+          <div class="overview-columns">
+            <article class="overview-card">
+              <h3>Collection by category</h3>
+              <div class="category-progress-list">
+                @for (cat of categoryCollections(); track cat.label) {
+                  <div class="category-progress-item">
+                    <div class="category-progress-head">
+                      <span>{{ cat.label }}</span>
+                      <span class="category-ratio">
+                        {{ cat.collected | currency:'USD':'symbol':'1.0-0' }} / {{ cat.total | currency:'USD':'symbol':'1.0-0' }}
+                      </span>
+                    </div>
+                    <div class="progress-track">
+                      <div class="progress-fill" [style.width.%]="cat.pct"></div>
+                    </div>
+                  </div>
+                } @empty {
+                  <p class="empty-inline">No fee categories or charges yet.</p>
+                }
+              </div>
+            </article>
+
+            <article class="overview-card">
+              <h3>Recent payments</h3>
+              <ul class="recent-payments-list">
+                @for (p of recentPayments(); track p.id) {
+                  <li class="recent-payment-item">
+                    <span class="payment-avatar">{{ initials(p.firstName, p.lastName) }}</span>
+                    <div class="payment-copy">
+                      <strong>{{ p.firstName }} {{ p.lastName }}</strong>
+                      <span>{{ paymentLabel(p) }}</span>
+                    </div>
+                    <span class="payment-amount">+{{ p.amount | currency:'USD':'symbol':'1.0-0' }}</span>
+                  </li>
+                } @empty {
+                  <li class="empty-inline">No payments recorded yet.</li>
+                }
+              </ul>
+            </article>
+          </div>
+
+          <article class="overview-card unpaid-fees-card">
+            <div class="unpaid-fees-head">
+              <h3>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><line x1="12" y1="9" x2="12" y2="13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><line x1="12" y1="17" x2="12.01" y2="17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                Unpaid fees
+              </h3>
+              <button
+                type="button"
+                class="link-action"
+                (click)="sendBulkReminders()"
+                [disabled]="sendingReminders() || !unpaidFeeRows().length"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                {{ sendingReminders() ? 'Sending…' : 'Send reminders' }}
+              </button>
+            </div>
+
+            <div class="unpaid-fees-list">
+              @for (inv of unpaidFeeRows(); track inv.id) {
+                <div class="unpaid-fee-item">
+                  <span class="payment-avatar">{{ initials(inv.student?.firstName || '', inv.student?.lastName || '') }}</span>
+                  <div class="payment-copy">
+                    <strong>{{ inv.student?.firstName }} {{ inv.student?.lastName }}</strong>
+                    <span>{{ inv.description }} · Due: {{ inv.dueDate }}</span>
+                  </div>
+                  <div class="unpaid-fee-right">
+                    <strong class="unpaid-amount">{{ inv.balance | currency:'USD':'symbol':'1.0-0' }}</strong>
+                    <button type="button" class="icon-btn" title="Record payment" (click)="payFromInvoice(inv)">
+                      <svg viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="2" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
                     </button>
+                  </div>
+                </div>
+              } @empty {
+                <p class="empty-inline">No unpaid fees — all caught up.</p>
+              }
+            </div>
+          </article>
+        }
+      </section>
+    }
+
+    <section class="records-panel" *ngIf="activeTab() === 'records'">
+      <p class="muted" *ngIf="loading()">Loading fee records…</p>
+      <ng-container *ngIf="!loading()">
+        <div class="records-toolbar">
+          <div class="search-wrap">
+            <span class="search-icon" aria-hidden="true">🔍</span>
+            <input
+              type="search"
+              class="search-input"
+              placeholder="Search by name or invoice…"
+              [ngModel]="recordSearch()"
+              (ngModelChange)="recordSearch.set($event)"
+              name="feeRecQ"
+            />
+          </div>
+          <div class="status-filters" role="group" aria-label="Invoice status filter">
+            <button
+              type="button"
+              class="status-pill"
+              [class.active]="recordStatus() === 'all'"
+              (click)="recordStatus.set('all')"
+            >
+              All Status
+            </button>
+            <button
+              type="button"
+              class="status-pill"
+              [class.active]="recordStatus() === 'paid'"
+              (click)="recordStatus.set('paid')"
+            >
+              Paid
+            </button>
+            <button
+              type="button"
+              class="status-pill"
+              [class.active]="recordStatus() === 'unpaid'"
+              (click)="recordStatus.set('unpaid')"
+            >
+              Unpaid
+            </button>
+            <button
+              type="button"
+              class="status-pill"
+              [class.active]="recordStatus() === 'partial'"
+              (click)="recordStatus.set('partial')"
+            >
+              Partial
+            </button>
+            <button
+              type="button"
+              class="status-pill"
+              [class.active]="recordStatus() === 'cancelled'"
+              (click)="recordStatus.set('cancelled')"
+            >
+              Cancelled
+            </button>
+          </div>
+          <div class="category-filters">
+            <svg class="filter-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h18l-7 9v6l-4 2v-8L3 4z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span class="category-label">Category:</span>
+            <div class="category-chips">
+              <button
+                type="button"
+                class="chip"
+                [class.active]="recordCategory() === 'all'"
+                (click)="recordCategory.set('all')"
+              >
+                All
+              </button>
+              @for (fee of fees(); track fee.id) {
+                <button
+                  type="button"
+                  class="chip"
+                  [class.active]="recordCategory() === fee.code"
+                  (click)="recordCategory.set(fee.code)"
+                >
+                  {{ categoryMeta(fee).label }}
+                </button>
+              }
+              <button
+                type="button"
+                class="chip"
+                [class.active]="recordCategory() === 'uncategorized'"
+                (click)="recordCategory.set('uncategorized')"
+              >
+                Uncategorized
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="table-wrap" (click)="closeInvoiceMenu()">
+          <table class="records-table">
+            <thead>
+              <tr>
+                <th>Student</th>
+                <th>Invoice</th>
+                <th>Category</th>
+                <th class="num">Amount</th>
+                <th class="num">Paid</th>
+                <th class="num">Balance</th>
+                <th>Due date</th>
+                <th>Status</th>
+                <th class="num"></th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (inv of feeRecordRows(); track inv.id) {
+                <tr>
+                  <td>
+                    <strong>{{ inv.student?.firstName }} {{ inv.student?.lastName }}</strong>
+                    <small>{{ studentSubLabel(inv.student) }}</small>
                   </td>
-                  <td class="num">{{ fee.sortOrder }}</td>
+                  <td><code>{{ inv.invoiceNumber }}</code></td>
+                  <td>
+                    <span class="category-pill" [class.uncategorized]="inv.categoryCode === 'uncategorized'">
+                      {{ inv.categoryLabel }}
+                    </span>
+                  </td>
+                  <td class="num">{{ inv.totalAmount | currency:'USD':'symbol':'1.0-0' }}</td>
+                  <td class="num text-ok">{{ inv.amountPaid | currency:'USD':'symbol':'1.0-0' }}</td>
+                  <td class="num" [class.text-warn]="inv.balance > 0.005" [class.text-ok]="inv.balance <= 0.005">
+                    {{ inv.balance | currency:'USD':'symbol':'1.0-0' }}
+                  </td>
+                  <td>{{ inv.dueDate }}</td>
+                  <td>
+                    <span class="status-pill" [class]="'status-' + invoiceDisplayStatus(inv.status)">
+                      @if (invoiceDisplayStatus(inv.status) === 'paid') {
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><polyline points="22 4 12 14.01 9 11.01" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                      } @else if (invoiceDisplayStatus(inv.status) === 'partial') {
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><polyline points="17 6 23 6 23 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                      } @else {
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><polyline points="12 6 12 12 16 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                      }
+                      {{ invoiceStatusLabel(inv.status) }}
+                    </span>
+                  </td>
                   <td class="actions">
-                    <button type="button" class="btn-outline btn-sm" (click)="startEdit(fee)">Edit</button>
-                    <button type="button" class="btn-danger btn-sm" (click)="deleteFee(fee)">Delete</button>
+                    <div class="row-actions" (click)="$event.stopPropagation()">
+                      <button
+                        type="button"
+                        class="icon-btn"
+                        title="View invoice"
+                        (click)="previewInvoice(inv.id)"
+                        [disabled]="previewingInvoiceId() === inv.id"
+                      >
+                        <svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
+                      </button>
+                      <button
+                        type="button"
+                        class="icon-btn"
+                        title="Download invoice"
+                        (click)="downloadInvoice(inv)"
+                      >
+                        <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M12 18v-6M9 15h6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                      </button>
+                      <div class="menu-wrap">
+                        <button type="button" class="icon-btn" title="More options" (click)="toggleInvoiceMenu(inv.id)">
+                          <svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.5" fill="currentColor"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/><circle cx="12" cy="19" r="1.5" fill="currentColor"/></svg>
+                        </button>
+                        @if (openInvoiceMenuId() === inv.id) {
+                          <div class="action-menu">
+                            <button type="button" (click)="previewInvoice(inv.id)">View PDF</button>
+                            <button type="button" (click)="downloadInvoice(inv)">Download PDF</button>
+                            @if (invoiceDisplayStatus(inv.status) !== 'paid') {
+                              <button type="button" (click)="payFromInvoice(inv)">Record payment</button>
+                            }
+                          </div>
+                        }
+                      </div>
+                    </div>
                   </td>
                 </tr>
+              } @empty {
+                <tr><td colspan="9" class="empty">No fee records yet.</td></tr>
               }
-            } @empty {
-              <tr><td colspan="7" class="empty">No fees configured yet.</td></tr>
-            }
-          </tbody>
-        </table>
-      </div>
+            </tbody>
+          </table>
+        </div>
+      </ng-container>
+    </section>
+
+    @if (activeTab() === 'invoices') {
+      <section class="invoices-panel" (click)="closeInvoiceMenu()">
+        <div class="invoices-toolbar">
+          <p>Invoices are generated from fee charges in your ledger.</p>
+          <div class="invoices-toolbar-actions">
+            <button
+              type="button"
+              class="btn-secondary"
+              (click)="sendBulkReminders(); $event.stopPropagation()"
+              [disabled]="sendingReminders()"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              {{ sendingReminders() ? 'Sending…' : 'Bulk send' }}
+            </button>
+            <a [routerLink]="basePath + '/billing'" [queryParams]="{ tab: 'bulk-invoice' }" class="btn-secondary" (click)="$event.stopPropagation()">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm12 10v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Bulk charges
+            </a>
+            <a [routerLink]="basePath + '/billing'" [queryParams]="{ tab: 'single-invoice' }" class="btn-primary" (click)="$event.stopPropagation()">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M12 18v-6M9 15h6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              New charge
+            </a>
+          </div>
+        </div>
+
+        @if (invoicesLoading()) {
+          <p class="muted">Loading invoices…</p>
+        } @else if (!invoices().length) {
+          <div class="empty-state">
+            <p>No invoices yet. Create charges from Billing to generate invoices.</p>
+            <a [routerLink]="basePath + '/billing'" [queryParams]="{ tab: 'single-invoice' }" class="btn-primary">New charge</a>
+          </div>
+        } @else {
+          <div class="table-wrap">
+            <table class="invoices-table">
+              <thead>
+                <tr>
+                  <th>Invoice #</th>
+                  <th>Student</th>
+                  <th>Description</th>
+                  <th class="num">Amount</th>
+                  <th>Status</th>
+                  <th class="actions-col">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (inv of invoices(); track inv.id) {
+                  <tr>
+                    <td>
+                      <button
+                        type="button"
+                        class="inv-link"
+                        (click)="previewInvoice(inv.id); $event.stopPropagation()"
+                        [disabled]="previewingInvoiceId() === inv.id"
+                      >
+                        {{ inv.invoiceNumber }}
+                      </button>
+                    </td>
+                    <td>
+                      <div class="student-cell">
+                        <strong>{{ inv.student?.firstName }} {{ inv.student?.lastName }}</strong>
+                        <span>{{ inv.student?.admissionNumber }}</span>
+                      </div>
+                    </td>
+                    <td class="desc-cell">{{ inv.description }}</td>
+                    <td class="num amount-cell"><strong>{{ inv.totalAmount | currency:'USD':'symbol':'1.0-0' }}</strong></td>
+                    <td>
+                      <span class="inv-status" [class]="'status-' + invoiceDisplayStatus(inv.status)">
+                        @if (invoiceDisplayStatus(inv.status) === 'paid') {
+                          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><polyline points="22 4 12 14.01 9 11.01" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        } @else if (invoiceDisplayStatus(inv.status) === 'partial') {
+                          <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><polyline points="17 6 23 6 23 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        } @else {
+                          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><polyline points="12 6 12 12 16 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        }
+                        {{ invoiceStatusLabel(inv.status) }}
+                      </span>
+                    </td>
+                    <td class="actions-col">
+                      <div class="row-actions" (click)="$event.stopPropagation()">
+                        <button
+                          type="button"
+                          class="icon-btn"
+                          title="View invoice"
+                          (click)="previewInvoice(inv.id)"
+                          [disabled]="previewingInvoiceId() === inv.id"
+                        >
+                          <svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
+                        </button>
+                        @if (invoiceDisplayStatus(inv.status) !== 'paid') {
+                          <button type="button" class="icon-btn" title="Record payment" (click)="payFromInvoice(inv)">
+                            <svg viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M6 12h.01M18 12h.01" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+                          </button>
+                        }
+                        <div class="menu-wrap">
+                          <button type="button" class="icon-btn" title="More options" (click)="toggleInvoiceMenu(inv.id)">
+                            <svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.5" fill="currentColor"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/><circle cx="12" cy="19" r="1.5" fill="currentColor"/></svg>
+                          </button>
+                          @if (openInvoiceMenuId() === inv.id) {
+                            <div class="action-menu">
+                              <button type="button" (click)="previewInvoice(inv.id)">View PDF</button>
+                              <button type="button" (click)="downloadInvoice(inv)">Download PDF</button>
+                              @if (invoiceDisplayStatus(inv.status) !== 'paid') {
+                                <button type="button" (click)="payFromInvoice(inv)">Record payment</button>
+                              }
+                            </div>
+                          }
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </section>
     }
-  </section>
+
+    @if (activeTab() === 'structure') {
+      <section class="structure-panel">
+        <div class="structure-toolbar">
+          <p>Custom fee categories for your school. Used when creating charges and bulk invoices.</p>
+          <button type="button" class="btn-primary btn-sm" (click)="openAddCategory()">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            Add category
+          </button>
+        </div>
+
+        @if (loading()) {
+          <p class="muted">Loading fee categories…</p>
+        } @else if (!fees().length) {
+          <div class="empty-state">
+            <p>No fee categories yet.</p>
+            <button type="button" class="btn-primary" (click)="openAddCategory()">Add your first category</button>
+          </div>
+        } @else {
+          <div class="category-grid">
+            @for (fee of fees(); track fee.id) {
+              <article class="category-card" [class.inactive]="!fee.isActive">
+                <div class="category-card-top">
+                  <span class="category-badge" [class]="'tone-' + categoryMeta(fee).tone">
+                    {{ categoryMeta(fee).label }}
+                  </span>
+                  <div class="category-card-actions">
+                    <button type="button" class="icon-btn" (click)="openEditCategory(fee)" title="Edit category">
+                      <svg viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </button>
+                    <button *appUnlessDemo type="button" class="icon-btn danger" (click)="deleteFee(fee)" title="Delete category">
+                      <svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2m-1 0v14H9V6h6z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </button>
+                  </div>
+                </div>
+                <h3>{{ fee.name }}</h3>
+                <p class="category-amount">{{ displayAmount(fee) }}</p>
+                <p class="category-frequency">Per term</p>
+                <p class="category-charges">{{ chargeLabel(fee.chargeCount) }}</p>
+              </article>
+            }
+          </div>
+        }
+      </section>
+    }
+  </div>
+
+  @if (showCategoryModal()) {
+    <div class="modal-backdrop" (click)="closeCategoryModal()">
+      <div class="modal" role="dialog" aria-labelledby="categoryModalTitle" (click)="$event.stopPropagation()">
+        <div class="modal-head">
+          <h2 id="categoryModalTitle">{{ editingId() ? 'Edit category' : 'Add category' }}</h2>
+          <button type="button" class="icon-btn" (click)="closeCategoryModal()" aria-label="Close">×</button>
+        </div>
+        <form class="modal-form" (ngSubmit)="saveCategory()">
+          <div class="field">
+            <label>Category name *</label>
+            <input [(ngModel)]="categoryForm.name" name="catName" placeholder="e.g. Tuition" required />
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label>Code</label>
+              <input [(ngModel)]="categoryForm.code" name="catCode" placeholder="Auto from name" />
+            </div>
+            <div class="field">
+              <label>Default amount</label>
+              <input type="number" [(ngModel)]="categoryForm.defaultAmount" name="catAmt" min="0" step="0.01" />
+            </div>
+          </div>
+          <div class="field">
+            <label>Description</label>
+            <input [(ngModel)]="categoryForm.description" name="catDesc" placeholder="Optional" />
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label>Sort order</label>
+              <input type="number" [(ngModel)]="categoryForm.sortOrder" name="catSort" min="0" />
+            </div>
+            <label class="checkbox-field">
+              <input type="checkbox" [(ngModel)]="categoryForm.isActive" name="catActive" />
+              Active category
+            </label>
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="btn-secondary" (click)="closeCategoryModal()">Cancel</button>
+            <button type="submit" class="btn-primary" [disabled]="submitting()">
+              {{ submitting() ? 'Saving…' : (editingId() ? 'Save changes' : 'Add category') }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  }
 </app-portal-layout>

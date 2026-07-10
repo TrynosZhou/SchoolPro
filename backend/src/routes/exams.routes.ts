@@ -43,6 +43,7 @@ import {
   publishResults,
   unpublishResults,
 } from '../services/publish-results.service';
+import { listResultNotificationLogsForExam } from '../services/notification-log.service';
 import { ResultsPublication } from '../entities/ResultsPublication';
 import { requireModuleAccess, requireFinanceOrModuleAccess } from '../middleware/access-control';
 import { AccessControlService } from '../services/access-control.service';
@@ -159,6 +160,24 @@ router.get(
       return res.status(400).json({ message: 'termId and examTypeId are required' });
     }
     res.json(await getPublicationStatus(termId as string, examTypeId as string));
+  },
+);
+
+router.get(
+  '/results-notifications',
+  authorize(...PUBLISH_ROLES),
+  async (req, res: Response) => {
+    const { termId, examTypeId } = req.query;
+    if (!termId || !examTypeId) {
+      return res.status(400).json({ message: 'termId and examTypeId are required' });
+    }
+    try {
+      res.json(await listResultNotificationLogsForExam(termId as string, examTypeId as string));
+    } catch (err) {
+      return res.status(400).json({
+        message: err instanceof Error ? err.message : 'Failed to load notification logs',
+      });
+    }
   },
 );
 

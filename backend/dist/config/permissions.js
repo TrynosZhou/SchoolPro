@@ -97,6 +97,7 @@ exports.PERMISSION_GROUPS = [
             { key: 'portal.student.dashboard', label: 'Student dashboard' },
             { key: 'portal.student.report_cards', label: 'Own report cards' },
             { key: 'portal.student.attendance', label: 'Own attendance' },
+            { key: 'portal.student.messages', label: 'Messages' },
         ],
     },
 ];
@@ -106,6 +107,15 @@ exports.DEFAULT_ROLE_PERMISSIONS = {
     [enums_1.UserRole.DIRECTOR]: ALL,
     [enums_1.UserRole.ADMIN]: ALL,
     [enums_1.UserRole.PRINCIPAL]: ALL.filter((k) => k !== 'system.permissions' && k !== 'system.integrations'),
+    [enums_1.UserRole.ACCOUNTANT]: [
+        'students.view',
+        'students.manage',
+        'finance.billing',
+        'finance.fees',
+        'finance.books',
+        'finance.reports',
+        'finance.student_balance',
+    ],
     [enums_1.UserRole.TEACHER]: [
         'students.view',
         'enrollment.manage',
@@ -131,6 +141,7 @@ exports.DEFAULT_ROLE_PERMISSIONS = {
         'portal.student.dashboard',
         'portal.student.report_cards',
         'portal.student.attendance',
+        'portal.student.messages',
     ],
 };
 /** Human-readable portal access labels for all built-in roles */
@@ -138,6 +149,7 @@ exports.PORTAL_ROLE_LABELS = {
     [enums_1.UserRole.DIRECTOR]: 'Director',
     [enums_1.UserRole.PRINCIPAL]: 'Principal',
     [enums_1.UserRole.ADMIN]: 'Administrator',
+    [enums_1.UserRole.ACCOUNTANT]: 'Accountant',
     [enums_1.UserRole.TEACHER]: 'Teacher',
     [enums_1.UserRole.PARENT]: 'Parent',
     [enums_1.UserRole.STUDENT]: 'Student',
@@ -146,6 +158,7 @@ exports.SYSTEM_ROLE_NAMES = {
     [enums_1.UserRole.DIRECTOR]: 'Director',
     [enums_1.UserRole.PRINCIPAL]: 'Principal',
     [enums_1.UserRole.ADMIN]: 'Administrator',
+    [enums_1.UserRole.ACCOUNTANT]: 'Accountant',
     [enums_1.UserRole.TEACHER]: 'Teacher',
     [enums_1.UserRole.PARENT]: 'Parent',
     [enums_1.UserRole.STUDENT]: 'Student',

@@ -1,15 +1,17 @@
 <div class="layout" [class.sidebar-open]="sidebarOpen()" [class.sidebar-collapsed]="sidebarCollapsed()">
+  <a class="skip-link" href="#main-content">{{ 'shell.skipToMain' | t }}</a>
   @if (sidebarOpen()) {
-    <button type="button" class="sidebar-backdrop no-print" (click)="closeSidebar()" aria-label="Close navigation menu"></button>
+    <button type="button" class="sidebar-backdrop no-print" (click)="closeSidebar()" [attr.aria-label]="'shell.closeNav' | t"></button>
   }
 
-  <header class="topbar">
+  <header class="topbar" role="banner">
     <button
       type="button"
       class="topbar-nav-toggle"
       (click)="toggleSidebar()"
       [attr.aria-expanded]="sidebarOpen()"
-      aria-label="Open navigation menu"
+      aria-controls="portal-sidebar"
+      [attr.aria-label]="(sidebarOpen() ? 'shell.closeNav' : 'shell.openNav') | t"
     >
       <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
         <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
@@ -27,34 +29,34 @@
       </div>
     </div>
 
-    <nav class="topbar-actions" aria-label="Quick actions">
+    <nav class="topbar-actions" [attr.aria-label]="'shell.quickActions' | t">
       @if (schoolFacebookUrl(); as fbUrl) {
-        <a class="topbar-action" [href]="fbUrl" target="_blank" rel="noopener noreferrer" aria-label="Facebook page">
+        <a class="topbar-action" [href]="fbUrl" target="_blank" rel="noopener noreferrer" [attr.aria-label]="'shell.facebook' | t">
           <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <path d="M14 8.5V7.2c0-.7.6-1.2 1.3-1.2H17V4h-2.2C12.7 4 11 5.7 11 7.8V8.5H9v3h2V20h3v-8.5h2.6l.4-3H14z" fill="currentColor" />
           </svg>
-          <span>Facebook</span>
+          <span>{{ 'shell.facebook' | t }}</span>
         </a>
       }
 
       @if (schoolWebsiteUrl(); as siteUrl) {
-        <a class="topbar-action" [href]="siteUrl" target="_blank" rel="noopener noreferrer" aria-label="School website">
+        <a class="topbar-action" [href]="siteUrl" target="_blank" rel="noopener noreferrer" [attr.aria-label]="'shell.website' | t">
           <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8" />
             <path d="M3 12h18M12 3c2.5 2.8 4 6.2 4 9s-1.5 6.2-4 9M12 3c-2.5 2.8-4 6.2-4 9s1.5 6.2 4 9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
           </svg>
-          <span>Website</span>
+          <span>{{ 'shell.website' | t }}</span>
         </a>
       }
 
       @if (showBalanceEnquiry) {
-        <button type="button" class="topbar-action" aria-label="Balance enquiry" (click)="openBalanceEnquiry()">
+        <button type="button" class="topbar-action" [attr.aria-label]="'shell.balanceEnquiry' | t" (click)="openBalanceEnquiry()">
           <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <rect x="3" y="6" width="18" height="12" rx="2" stroke="currentColor" stroke-width="1.8" />
             <path d="M3 10h18" stroke="currentColor" stroke-width="1.8" />
             <path d="M7 15h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
           </svg>
-          <span>Balance enquiry</span>
+          <span>{{ 'shell.balanceEnquiry' | t }}</span>
         </button>
       }
 
@@ -63,7 +65,7 @@
           class="topbar-action topbar-messages"
           [routerLink]="effectiveMessagesPath"
           routerLinkActive="active"
-          aria-label="Messages"
+          [attr.aria-label]="'shell.messages' | t"
         >
           <span class="topbar-icon-wrap">
             <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -75,17 +77,51 @@
               </span>
             }
           </span>
-          <span>Messages</span>
+          <span>{{ 'shell.messages' | t }}</span>
         </a>
       }
 
-      <button type="button" class="topbar-action" aria-label="Help" (click)="openHelp()">
+      <button type="button" class="topbar-action" [attr.aria-label]="'shell.help' | t" (click)="openHelp()">
         <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
           <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8" />
           <path d="M9.6 9.4a2.4 2.4 0 0 1 4.4 1.3c0 1.5-1.9 1.9-1.9 3.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
           <circle cx="12" cy="17" r="0.7" fill="currentColor" />
         </svg>
-        <span>Help</span>
+        <span>{{ 'shell.help' | t }}</span>
+      </button>
+
+      <button
+        type="button"
+        class="topbar-action offline-status"
+        [class.is-offline]="!offline.online()"
+        [class.has-pending]="offline.pendingCount() > 0"
+        [attr.aria-label]="offline.statusLabel()"
+        [title]="offline.lastSyncError() || offline.statusLabel()"
+        (click)="syncNow()"
+        [disabled]="offline.syncing() || (offline.online() && offline.pendingCount() === 0)"
+      >
+        <span class="offline-dot" aria-hidden="true"></span>
+        <span>{{ offline.statusLabel() }}</span>
+      </button>
+
+      <button
+        type="button"
+        class="topbar-action"
+        (click)="cycleTheme()"
+        [attr.aria-label]="'Theme: ' + (('shell.theme' + (theme.themeMode() === 'dark' ? 'Dark' : theme.themeMode() === 'system' ? 'System' : 'Light')) | t)"
+        [title]="('shell.theme' + (theme.themeMode() === 'dark' ? 'Dark' : theme.themeMode() === 'system' ? 'System' : 'Light')) | t"
+      >
+        @if (theme.isDark()) {
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M12 3v2M12 19v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M3 12h2M19 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+            <circle cx="12" cy="12" r="4" stroke="currentColor" stroke-width="1.8"/>
+          </svg>
+        } @else {
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M21 14.5A8.5 8.5 0 1 1 9.5 3 7 7 0 0 0 21 14.5z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+          </svg>
+        }
+        <span>{{ ('shell.theme' + (theme.themeMode() === 'dark' ? 'Dark' : theme.themeMode() === 'system' ? 'System' : 'Light')) | t }}</span>
       </button>
 
       <div class="user-menu">
@@ -93,8 +129,10 @@
           type="button"
           class="user-icon-btn"
           (click)="toggleUserMenu()"
-          [attr.aria-label]="'Account menu for ' + fullName"
+          [attr.aria-label]="('shell.accountMenu' | t) + ' — ' + fullName"
           [attr.aria-expanded]="userMenuOpen()"
+          aria-haspopup="menu"
+          aria-controls="user-account-menu"
         >
           <span class="user-avatar-ring" aria-hidden="true">
             @if (avatarUrl) {
@@ -111,29 +149,56 @@
           </svg>
         </button>
         @if (userMenuOpen()) {
-          <div class="user-menu-dropdown">
+          <div class="user-menu-dropdown" id="user-account-menu" role="menu" [attr.aria-label]="'shell.accountMenu' | t">
             <div class="user-menu-account">
               <div class="user-menu-field">
-                <span class="user-menu-label">Account name</span>
+                <span class="user-menu-label">{{ 'shell.accountName' | t }}</span>
                 <strong>{{ fullName }}</strong>
               </div>
               <div class="user-menu-field">
-                <span class="user-menu-label">Email address</span>
+                <span class="user-menu-label">{{ 'shell.email' | t }}</span>
                 <span class="user-menu-email">{{ accountEmail }}</span>
               </div>
             </div>
             @if (changePasswordPath; as pwdPath) {
               <a
                 class="user-menu-item"
+                role="menuitem"
                 [routerLink]="pwdPath"
                 [queryParams]="changePasswordQueryParams"
                 (click)="closeUserMenu()"
               >
-                <span>Change password</span>
+                <span>{{ 'shell.changePassword' | t }}</span>
               </a>
             }
-            <button type="button" class="user-menu-item user-menu-signout" (click)="requestLogout()">
-              <span>Sign out</span>
+            <div class="user-menu-prefs" role="group" [attr.aria-label]="'shell.displayPrefs' | t">
+              <span class="user-menu-label" id="pref-theme-label">{{ 'shell.theme' | t }}</span>
+              <div class="pref-chips" role="group" aria-labelledby="pref-theme-label">
+                <button type="button" class="pref-chip" [class.active]="theme.themeMode() === 'light'" [attr.aria-pressed]="theme.themeMode() === 'light'" (click)="setTheme('light')">{{ 'shell.themeLight' | t }}</button>
+                <button type="button" class="pref-chip" [class.active]="theme.themeMode() === 'dark'" [attr.aria-pressed]="theme.themeMode() === 'dark'" (click)="setTheme('dark')">{{ 'shell.themeDark' | t }}</button>
+                <button type="button" class="pref-chip" [class.active]="theme.themeMode() === 'system'" [attr.aria-pressed]="theme.themeMode() === 'system'" (click)="setTheme('system')">{{ 'shell.themeSystem' | t }}</button>
+              </div>
+              <span class="user-menu-label" id="pref-font-label">{{ 'shell.textSize' | t }}</span>
+              <div class="pref-chips" role="group" aria-labelledby="pref-font-label">
+                <button type="button" class="pref-chip" [class.active]="theme.fontScale() === 'normal'" [attr.aria-pressed]="theme.fontScale() === 'normal'" (click)="setFontScale('normal')" [attr.aria-label]="'shell.textNormal' | t">A</button>
+                <button type="button" class="pref-chip" [class.active]="theme.fontScale() === 'large'" [attr.aria-pressed]="theme.fontScale() === 'large'" (click)="setFontScale('large')" [attr.aria-label]="'shell.textLarge' | t">A+</button>
+                <button type="button" class="pref-chip" [class.active]="theme.fontScale() === 'xlarge'" [attr.aria-pressed]="theme.fontScale() === 'xlarge'" (click)="setFontScale('xlarge')" [attr.aria-label]="'shell.textXLarge' | t">A++</button>
+              </div>
+              <span class="user-menu-label" id="pref-lang-label">{{ 'shell.language' | t }}</span>
+              <div class="pref-chips" role="group" aria-labelledby="pref-lang-label">
+                @for (loc of i18n.locales; track loc.code) {
+                  <button
+                    type="button"
+                    class="pref-chip"
+                    [class.active]="i18n.locale() === loc.code"
+                    [attr.aria-pressed]="i18n.locale() === loc.code"
+                    (click)="setLocale(loc.code)"
+                  >{{ loc.nativeLabel }}</button>
+                }
+              </div>
+            </div>
+            <button type="button" class="user-menu-item user-menu-signout" role="menuitem" (click)="requestLogout()">
+              <span>{{ 'shell.signOut' | t }}</span>
               <svg class="sign-out-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                 <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                 <path d="M16 17l5-5-5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -146,9 +211,9 @@
     </nav>
   </header>
 
-  <aside class="sidebar" [class.open]="sidebarOpen()" aria-label="Main navigation">
+  <aside class="sidebar" id="portal-sidebar" [class.open]="sidebarOpen()" aria-label="Main navigation">
     <div class="sidebar-mobile-bar">
-      <button type="button" class="sidebar-close" (click)="closeSidebar()" aria-label="Close navigation menu">
+      <button type="button" class="sidebar-close" (click)="closeSidebar()" [attr.aria-label]="'shell.closeNav' | t">
         <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
           <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
         </svg>
@@ -181,7 +246,7 @@
                   <span class="nav-item-icon" aria-hidden="true">
                     <ng-container *ngTemplateOutlet="navIcon; context: { $implicit: sectionIconKey(section.heading) }" />
                   </span>
-                  <span class="nav-item-label">{{ section.heading }}</span>
+                  <span class="nav-item-label">{{ navLabel(section.heading) }}</span>
                 </a>
               } @else {
                 <button
@@ -194,7 +259,7 @@
                   <span class="nav-item-icon" aria-hidden="true">
                     <ng-container *ngTemplateOutlet="navIcon; context: { $implicit: sectionIconKey(section.heading) }" />
                   </span>
-                  <span class="nav-item-label">{{ section.heading }}</span>
+                  <span class="nav-item-label">{{ navLabel(section.heading) }}</span>
                   <span class="nav-menu-chevron" [class.open]="isExpanded(section.heading)" aria-hidden="true">
                     <svg viewBox="0 0 24 24" fill="none">
                       <path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
@@ -211,7 +276,7 @@
                         [routerLinkActiveOptions]="{ exact: true }"
                       >
                         <span class="nav-subitem-dot" aria-hidden="true"></span>
-                        <span class="nav-subitem-label">{{ item.label }}</span>
+                        <span class="nav-subitem-label">{{ navLabel(item.label) }}</span>
                       </a>
                     }
                   </div>
@@ -227,7 +292,7 @@
             @if (item.icon) {
               <span class="nav-item-icon nav-item-icon--emoji" aria-hidden="true">{{ item.icon }}</span>
             }
-            <span class="nav-item-label">{{ item.label }}</span>
+            <span class="nav-item-label">{{ navLabel(item.label) }}</span>
           </a>
         }
       }
@@ -238,19 +303,19 @@
         type="button"
         class="sidebar-collapse-btn"
         (click)="toggleSidebarCollapsed()"
-        [attr.aria-label]="sidebarCollapsed() ? 'Expand sidebar' : 'Collapse sidebar'"
+        [attr.aria-label]="(sidebarCollapsed() ? 'shell.expandSidebar' : 'shell.collapseSidebar') | t"
       >
         <span class="sidebar-collapse-chevron" [class.collapsed]="sidebarCollapsed()" aria-hidden="true">
           <svg viewBox="0 0 24 24" fill="none">
             <path d="M15 18l-6-6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
           </svg>
         </span>
-        <span class="sidebar-collapse-label">Collapse</span>
+        <span class="sidebar-collapse-label">{{ 'shell.collapse' | t }}</span>
       </button>
     </div>
   </aside>
 
-  <main class="content">
+  <main class="content" id="main-content" tabindex="-1" role="main" [attr.aria-label]="pageTitle">
     <div class="page-body">
       <ng-content />
     </div>
@@ -341,20 +406,22 @@
 
 @if (balanceOpen()) {
   <div class="help-modal-backdrop" (click)="closeBalanceEnquiry()">
-    <section class="balance-modal" (click)="$event.stopPropagation()" role="dialog" aria-labelledby="balanceModalTitle" aria-modal="true">
+    <section class="balance-modal" (click)="$event.stopPropagation()" role="dialog" aria-labelledby="balanceModalTitle" aria-modal="true" tabindex="-1">
       <header class="help-modal-head">
         <div>
-          <h3 id="balanceModalTitle">Balance Enquiry</h3>
-          <p>Enter Student ID, first name, or last name to view the current invoice balance.</p>
+          <h3 id="balanceModalTitle">{{ 'shell.balanceTitle' | t }}</h3>
+          <p>{{ 'shell.balanceHint' | t }}</p>
         </div>
-        <button type="button" class="help-close-btn" (click)="closeBalanceEnquiry()" aria-label="Close">×</button>
+        <button type="button" class="help-close-btn" (click)="closeBalanceEnquiry()" [attr.aria-label]="'shell.close' | t">×</button>
       </header>
 
       <div class="help-search-row">
+        <label class="sr-only" for="balanceEnquirySearch">{{ 'shell.balanceSearch' | t }}</label>
         <input
+          id="balanceEnquirySearch"
           type="text"
           class="help-search-input"
-          placeholder="Student ID, First Name, or Last Name…"
+          [placeholder]="'shell.balancePlaceholder' | t"
           [(ngModel)]="balanceQuery"
           (keydown.enter)="getBalanceEnquiry()"
           name="balanceEnquirySearch"
@@ -366,11 +433,11 @@
           (click)="getBalanceEnquiry()"
           [disabled]="balanceLoading() || !balanceQuery.trim()"
         >
-          {{ balanceLoading() ? 'Loading…' : 'Get Balance' }}
+          {{ balanceLoading() ? ('shell.loading' | t) : ('shell.getBalance' | t) }}
         </button>
       </div>
 
-      <div class="balance-modal-body">
+      <div class="balance-modal-body" aria-live="polite">
         @if (balanceLoading()) {
           <p class="balance-status">Searching student balance…</p>
         } @else if (balanceSearched() && !balanceResults().length) {
@@ -437,78 +504,219 @@
 
 @if (helpOpen()) {
   <div class="help-modal-backdrop" (click)="closeHelp()">
-    <section class="help-modal" (click)="$event.stopPropagation()" role="dialog" aria-labelledby="helpModalTitle" aria-modal="true">
+    <section class="help-modal" (click)="$event.stopPropagation()" role="dialog" aria-labelledby="helpModalTitle" aria-modal="true" tabindex="-1">
       <header class="help-modal-head">
         <div>
-          <h3 id="helpModalTitle">Procedure Manual</h3>
-          <p>Type a task or page name, then press Enter or click Go to open that page.</p>
+          <h3 id="helpModalTitle">{{ 'shell.helpTitle' | t }}</h3>
+          <p>{{ helpTab() === 'manual' ? ('shell.helpHint' | t) : ('shell.developerHint' | t) }}</p>
         </div>
         <div class="help-modal-actions">
-          <button
-            type="button"
-            class="help-download-btn"
-            (click)="downloadHelpManual()"
-            [disabled]="helpPdfLoading()"
-          >
-            {{ helpPdfLoading() ? 'Generating…' : 'Download PDF' }}
-          </button>
-          <button type="button" class="help-close-btn" (click)="closeHelp()" aria-label="Close help">×</button>
+          @if (helpTab() === 'manual') {
+            <button
+              type="button"
+              class="help-download-btn"
+              (click)="downloadHelpManual()"
+              [disabled]="helpPdfLoading()"
+            >
+              {{ helpPdfLoading() ? ('shell.helpGenerating' | t) : ('shell.helpDownload' | t) }}
+            </button>
+          }
+          <button type="button" class="help-close-btn" (click)="closeHelp()" [attr.aria-label]="'shell.close' | t">×</button>
         </div>
       </header>
 
-      <div class="help-search-row">
-        <input
-          type="search"
-          class="help-search-input"
-          placeholder="e.g. record payment, report cards, student balance…"
-          [ngModel]="helpQuery()"
-          (ngModelChange)="onHelpQueryChange($event)"
-          (keydown.enter)="submitHelpSearch()"
-          name="helpSearch"
-          autocomplete="off"
-        />
-        <button type="button" class="help-go-btn" (click)="submitHelpSearch()">Go</button>
+      <div class="help-tabs" role="tablist" [attr.aria-label]="'shell.helpTabs' | t">
+        <button
+          type="button"
+          role="tab"
+          class="help-tab"
+          [class.active]="helpTab() === 'manual'"
+          [attr.aria-selected]="helpTab() === 'manual'"
+          id="help-tab-manual"
+          (click)="setHelpTab('manual')"
+        >
+          {{ 'shell.helpTabManual' | t }}
+        </button>
+        <button
+          type="button"
+          role="tab"
+          class="help-tab"
+          [class.active]="helpTab() === 'developer'"
+          [attr.aria-selected]="helpTab() === 'developer'"
+          id="help-tab-developer"
+          (click)="setHelpTab('developer')"
+        >
+          {{ 'shell.helpTabDeveloper' | t }}
+        </button>
       </div>
 
-      @if (helpNoMatch()) {
-        <p class="help-no-match">No matching page found. Try another keyword such as billing, marks, or attendance.</p>
-      }
+      @if (helpTab() === 'manual') {
+        <div class="help-tab-panel" role="tabpanel" aria-labelledby="help-tab-manual">
+          <div class="help-search-row">
+            <label class="sr-only" for="helpSearch">{{ 'shell.helpSearch' | t }}</label>
+            <input
+              id="helpSearch"
+              type="search"
+              class="help-search-input"
+              [placeholder]="'shell.helpPlaceholder' | t"
+              [ngModel]="helpQuery()"
+              (ngModelChange)="onHelpQueryChange($event)"
+              (keydown.enter)="submitHelpSearch()"
+              name="helpSearch"
+              autocomplete="off"
+            />
+            <button type="button" class="help-go-btn" (click)="submitHelpSearch()">{{ 'shell.helpGo' | t }}</button>
+          </div>
 
-      <div class="help-manual-body">
-        @for (group of helpSections(); track group.section) {
-          <section class="help-section">
-            <h4>{{ group.section }}</h4>
-            @for (topic of group.items; track topic.id) {
-              <article class="help-topic">
-                <div class="help-topic-head">
-                  <div>
-                    <strong>{{ topic.title }}</strong>
-                    <p>{{ topic.summary }}</p>
-                  </div>
-                  <button type="button" class="help-open-btn" (click)="goToHelpTopic(topic)">Open page</button>
-                </div>
-                <ol>
-                  @for (step of topic.steps; track $index) {
-                    <li>{{ step }}</li>
-                  }
-                </ol>
-              </article>
+          @if (helpNoMatch()) {
+            <p class="help-no-match" role="status">{{ 'shell.helpNoMatch' | t }}</p>
+          }
+
+          <div class="help-manual-body">
+            @for (group of helpSections(); track group.section) {
+              <section class="help-section">
+                <h4>{{ group.section }}</h4>
+                @for (topic of group.items; track topic.id) {
+                  <article class="help-topic">
+                    <div class="help-topic-head">
+                      <div>
+                        <strong>{{ topic.title }}</strong>
+                        <p>{{ topic.summary }}</p>
+                      </div>
+                      <button type="button" class="help-open-btn" (click)="goToHelpTopic(topic)">{{ 'shell.openPage' | t }}</button>
+                    </div>
+                    <ol>
+                      @for (step of topic.steps; track $index) {
+                        <li>{{ step }}</li>
+                      }
+                    </ol>
+                  </article>
+                }
+              </section>
             }
-          </section>
-        }
-      </div>
+          </div>
+        </div>
+      } @else {
+        <div class="help-tab-panel developer-panel" role="tabpanel" aria-labelledby="help-tab-developer">
+          <article class="developer-about">
+            <header class="developer-hero">
+              <div class="developer-photo-wrap">
+                @if (developerPhotoUrl(); as photo) {
+                  <img
+                    class="developer-photo"
+                    [src]="photo"
+                    [alt]="systemDeveloper.name + ' passport photo'"
+                  />
+                } @else {
+                  <div class="developer-avatar" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none">
+                      <circle cx="12" cy="8" r="3.5" stroke="currentColor" stroke-width="1.75" />
+                      <path d="M6 20a6 6 0 0 1 12 0" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" />
+                    </svg>
+                  </div>
+                }
+              </div>
+              <div class="developer-intro">
+                <p class="developer-role">{{ 'shell.developerRole' | t }}</p>
+                <h4>{{ systemDeveloper.name }}</h4>
+                <p class="developer-tagline">{{ 'shell.developerTagline' | t }}</p>
+              </div>
+            </header>
+
+            @if (canManageDeveloperPhoto()) {
+              <section class="developer-section developer-photo-admin" aria-labelledby="dev-photo-heading">
+                <h5 id="dev-photo-heading">{{ 'shell.developerPhotoHeading' | t }}</h5>
+                <p class="developer-photo-hint">{{ 'shell.developerPhotoHint' | t }}</p>
+                @if (developerPhotoToast(); as t) {
+                  <p class="developer-photo-toast" [class.error]="t.type === 'error'" [class.success]="t.type === 'success'" role="status">
+                    {{ t.msg }}
+                  </p>
+                }
+                <div class="developer-photo-actions">
+                  <label class="developer-upload-btn" [class.disabled]="developerPhotoUploading()">
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
+                      [disabled]="developerPhotoUploading()"
+                      (change)="onDeveloperPhotoSelected($event)"
+                    />
+                    {{ developerPhotoUploading() ? ('shell.developerPhotoUploading' | t) : ('shell.developerPhotoUpload' | t) }}
+                  </label>
+                  @if (developerPhotoUrl()) {
+                    <button
+                      type="button"
+                      class="developer-remove-btn"
+                      [disabled]="developerPhotoUploading()"
+                      (click)="removeDeveloperPhoto()"
+                    >
+                      {{ 'shell.developerPhotoRemove' | t }}
+                    </button>
+                  }
+                </div>
+              </section>
+            }
+
+            <section class="developer-section" aria-labelledby="dev-quals-heading">
+              <h5 id="dev-quals-heading">{{ 'shell.developerQualifications' | t }}</h5>
+              <ul class="developer-quals">
+                @for (q of systemDeveloper.qualifications; track q) {
+                  <li>{{ q }}</li>
+                }
+              </ul>
+            </section>
+
+            <section class="developer-section" aria-labelledby="dev-contact-heading">
+              <h5 id="dev-contact-heading">{{ 'shell.developerContactHeading' | t }}</h5>
+              <div class="developer-contacts">
+                @for (c of systemDeveloper.contacts; track c.display) {
+                  <div class="developer-contact-row">
+                    <span class="developer-contact-label">{{ 'shell.developerWhatsAppNumber' | t }}</span>
+                    <div class="developer-contact-actions">
+                      <a class="developer-phone" [href]="c.telHref">{{ c.display }}</a>
+                      <a
+                        class="developer-whatsapp"
+                        [href]="c.whatsappHref"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        [attr.aria-label]="('shell.developerWhatsAppAria' | t) + ' (' + c.display + ')'"
+                        [attr.title]="'shell.developerWhatsApp' | t"
+                      >
+                        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                          <path
+                            fill="currentColor"
+                            d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.76.46 3.45 1.32 4.95L2 22l5.28-1.38a9.86 9.86 0 0 0 4.76 1.21h.01c5.46 0 9.91-4.45 9.91-9.91C21.96 6.45 17.5 2 12.04 2zm5.78 14.05c-.24.68-1.42 1.3-1.96 1.38-.5.08-1.14.11-1.84-.12-.42-.13-.97-.32-1.67-.62-2.94-1.27-4.85-4.24-5-4.44-.14-.2-1.18-1.57-1.18-3 0-1.42.74-2.12 1.01-2.41.26-.28.58-.35.77-.35h.56c.18 0 .42-.07.66.5.24.58.82 2 .89 2.15.07.15.12.32.02.52-.1.2-.15.32-.3.5-.14.17-.3.38-.43.51-.14.14-.29.29-.12.56.16.28.72 1.19 1.55 1.93 1.06.95 1.96 1.24 2.24 1.38.28.14.44.12.6-.07.17-.2.7-.81.88-1.09.19-.28.37-.23.63-.14.26.1 1.66.78 1.95.92.28.14.47.21.54.33.07.12.07.68-.17 1.36z"
+                          />
+                        </svg>
+                        <span>{{ 'shell.developerWhatsApp' | t }}</span>
+                      </a>
+                    </div>
+                  </div>
+                }
+              </div>
+            </section>
+          </article>
+        </div>
+      }
     </section>
   </div>
 }
 
 @if (logoutConfirmOpen()) {
   <div class="logout-modal-backdrop" (click)="cancelLogout()">
-    <section class="logout-modal" (click)="$event.stopPropagation()">
-      <h3>Sign out of {{ schoolName() }}?</h3>
-      <p>Your current session will end and you will return to the login page.</p>
+    <section
+      class="logout-modal"
+      (click)="$event.stopPropagation()"
+      role="alertdialog"
+      aria-labelledby="logoutModalTitle"
+      aria-describedby="logoutModalDesc"
+      aria-modal="true"
+      tabindex="-1"
+    >
+      <h3 id="logoutModalTitle">{{ 'shell.signOutTitle' | t:{ school: schoolName() } }}</h3>
+      <p id="logoutModalDesc">{{ 'shell.signOutBody' | t }}</p>
       <div class="logout-modal-actions">
-        <button type="button" class="btn-outline" (click)="cancelLogout()">No</button>
-        <button type="button" class="btn-primary" (click)="confirmLogout()">Yes, sign out</button>
+        <button type="button" class="btn-outline" (click)="cancelLogout()">{{ 'shell.signOutNo' | t }}</button>
+        <button type="button" class="btn-primary" (click)="confirmLogout()">{{ 'shell.signOutYes' | t }}</button>
       </div>
     </section>
   </div>

@@ -4,16 +4,16 @@
     [class.billing-mode]="isBillingMode()"
     [class.invoices-expanded]="isInvoicesTab()"
   >
-    @if (toast(); as t) {
-      <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>
+    @if (toast(); as toastMsg) {
+      <div class="toast" role="status" aria-live="polite" [class.success]="toastMsg.type === 'success'" [class.error]="toastMsg.type === 'error'">{{ toastMsg.msg }}</div>
     }
 
     @if (!isInvoicesTab()) {
     <header class="hero">
       <div class="hero-copy">
-        <p class="eyebrow">Finance</p>
+        <p class="eyebrow">{{ 'billing.eyebrow' | t }}</p>
         @if (isPaymentMode()) {
-          <h2>Student payments</h2>
+          <h2>{{ 'billing.paymentTitle' | t }}</h2>
           <p class="hero-sub">
             Record fee payments, view receipts, and collect outstanding balances from students.
             Issue new charges on
@@ -22,7 +22,7 @@
             <a [routerLink]="basePath + '/finance'">Finance books</a>.
           </p>
         } @else {
-          <h2>Student billing</h2>
+          <h2>{{ 'billing.billingTitle' | t }}</h2>
           <p class="hero-sub">
             Create invoices, run bulk tuition billing, and track pending student charges.
             Collect payments on
@@ -92,27 +92,27 @@
 
     <section class="list-shell">
       <div class="tab-bar">
-        <nav class="tab-nav">
+        <nav class="tab-nav" role="tablist" [attr.aria-label]="isPaymentMode() ? 'Payment sections' : 'Billing sections'">
           @if (isPaymentMode()) {
-            <button type="button" [class.active]="activeTab() === 'payment'" (click)="setTab('payment')">Record payment</button>
-            <button type="button" [class.active]="activeTab() === 'receipts'" (click)="setTab('receipts')">
-              Receipts ({{ payments().length }})
+            <button type="button" role="tab" [attr.aria-selected]="activeTab() === 'payment'" [class.active]="activeTab() === 'payment'" (click)="setTab('payment')">{{ 'billing.tabPayment' | t }}</button>
+            <button type="button" role="tab" [attr.aria-selected]="activeTab() === 'receipts'" [class.active]="activeTab() === 'receipts'" (click)="setTab('receipts')">
+              {{ 'billing.tabReceipts' | t }} ({{ payments().length }})
             </button>
-            <button type="button" [class.active]="activeTab() === 'debtors'" (click)="setTab('debtors')">
-              Debtors
+            <button type="button" role="tab" [attr.aria-selected]="activeTab() === 'debtors'" [class.active]="activeTab() === 'debtors'" (click)="setTab('debtors')">
+              {{ 'billing.tabDebtors' | t }}
               @if (debtors().length) {
                 <span class="tab-badge">{{ debtors().length }}</span>
               }
             </button>
           } @else {
-            <button type="button" [class.active]="activeTab() === 'single-invoice'" (click)="setTab('single-invoice')">Create Invoice</button>
-            <button type="button" [class.active]="activeTab() === 'bulk-invoice'" (click)="setTab('bulk-invoice')">Bulk Invoice</button>
-            <button type="button" [class.active]="activeTab() === 'invoices'" (click)="setTab('invoices')">
-              Invoices ({{ invoices().length }})
+            <button type="button" role="tab" [attr.aria-selected]="activeTab() === 'single-invoice'" [class.active]="activeTab() === 'single-invoice'" (click)="setTab('single-invoice')">{{ 'billing.tabCreateInvoice' | t }}</button>
+            <button type="button" role="tab" [attr.aria-selected]="activeTab() === 'bulk-invoice'" [class.active]="activeTab() === 'bulk-invoice'" (click)="setTab('bulk-invoice')">{{ 'billing.tabBulkInvoice' | t }}</button>
+            <button type="button" role="tab" [attr.aria-selected]="activeTab() === 'invoices'" [class.active]="activeTab() === 'invoices'" (click)="setTab('invoices')">
+              {{ 'billing.tabInvoices' | t }} ({{ invoices().length }})
             </button>
-            <button type="button" [class.active]="activeTab() === 'get-invoice'" (click)="setTab('get-invoice')">Single Invoice</button>
-            <button type="button" [class.active]="activeTab() === 'credit-note'" (click)="setTab('credit-note')">Credit Note</button>
-            <button type="button" [class.active]="activeTab() === 'debit-note'" (click)="setTab('debit-note')">Debit Note</button>
+            <button type="button" role="tab" [attr.aria-selected]="activeTab() === 'get-invoice'" [class.active]="activeTab() === 'get-invoice'" (click)="setTab('get-invoice')">Single Invoice</button>
+            <button type="button" role="tab" [attr.aria-selected]="activeTab() === 'credit-note'" [class.active]="activeTab() === 'credit-note'" (click)="setTab('credit-note')">Credit Note</button>
+            <button type="button" role="tab" [attr.aria-selected]="activeTab() === 'debit-note'" [class.active]="activeTab() === 'debit-note'" (click)="setTab('debit-note')">Debit Note</button>
           }
         </nav>
         <div class="tab-actions">
@@ -542,7 +542,9 @@
         <div class="list-toolbar">
           <div class="search-wrap">
             <span class="search-icon" aria-hidden="true">🔍</span>
+            <label class="sr-only" for="invoiceSearch">Search invoices</label>
             <input
+              id="invoiceSearch"
               type="search"
               class="search-input"
               placeholder="Search invoices…"
@@ -551,24 +553,24 @@
               name="invQ"
             />
             @if (invoiceSearch()) {
-              <button type="button" class="clear-search" (click)="invoiceSearch.set('')" aria-label="Clear">×</button>
+              <button type="button" class="clear-search" (click)="invoiceSearch.set('')" aria-label="Clear invoice search">×</button>
             }
           </div>
           <div class="toolbar-row">
-            <div class="filter-chips">
-              <button type="button" class="chip" [class.active]="invoiceFilter() === 'all'" (click)="invoiceFilter.set('all')">
+            <div class="filter-chips" role="group" aria-label="Filter invoices by status">
+              <button type="button" class="chip" [class.active]="invoiceFilter() === 'all'" [attr.aria-pressed]="invoiceFilter() === 'all'" (click)="invoiceFilter.set('all')">
                 All ({{ invoiceStatusCounts().all }})
               </button>
-              <button type="button" class="chip warn" [class.active]="invoiceFilter() === 'sent'" (click)="invoiceFilter.set('sent')">
+              <button type="button" class="chip warn" [class.active]="invoiceFilter() === 'sent'" [attr.aria-pressed]="invoiceFilter() === 'sent'" (click)="invoiceFilter.set('sent')">
                 Sent ({{ invoiceStatusCounts().sent }})
               </button>
-              <button type="button" class="chip" [class.active]="invoiceFilter() === 'partial'" (click)="invoiceFilter.set('partial')">
+              <button type="button" class="chip" [class.active]="invoiceFilter() === 'partial'" [attr.aria-pressed]="invoiceFilter() === 'partial'" (click)="invoiceFilter.set('partial')">
                 Partial ({{ invoiceStatusCounts().partial }})
               </button>
-              <button type="button" class="chip ok" [class.active]="invoiceFilter() === 'paid'" (click)="invoiceFilter.set('paid')">
+              <button type="button" class="chip ok" [class.active]="invoiceFilter() === 'paid'" [attr.aria-pressed]="invoiceFilter() === 'paid'" (click)="invoiceFilter.set('paid')">
                 Paid ({{ invoiceStatusCounts().paid }})
               </button>
-              <button type="button" class="chip bad" [class.active]="invoiceFilter() === 'overdue'" (click)="invoiceFilter.set('overdue')">
+              <button type="button" class="chip bad" [class.active]="invoiceFilter() === 'overdue'" [attr.aria-pressed]="invoiceFilter() === 'overdue'" (click)="invoiceFilter.set('overdue')">
                 Overdue ({{ invoiceStatusCounts().overdue }})
               </button>
             </div>
@@ -916,7 +918,9 @@
         <div class="list-toolbar">
           <div class="search-wrap">
             <span class="search-icon" aria-hidden="true">🔍</span>
+            <label class="sr-only" for="receiptSearch">Search receipts</label>
             <input
+              id="receiptSearch"
               type="search"
               class="search-input"
               placeholder="Search receipts, students, labels…"
@@ -925,14 +929,14 @@
               name="rcptQ"
             />
             @if (receiptSearch()) {
-              <button type="button" class="clear-search" (click)="receiptSearch.set('')" aria-label="Clear">×</button>
+              <button type="button" class="clear-search" (click)="receiptSearch.set('')" aria-label="Clear receipt search">×</button>
             }
           </div>
-          <div class="results-meta standalone">
+          <div class="results-meta standalone" aria-live="polite">
             <span>Showing <strong>{{ filteredPayments().length }}</strong> of <strong>{{ payments().length }}</strong> receipts</span>
             <div class="view-toggle" role="group" aria-label="View mode">
-              <button type="button" class="view-btn" [class.active]="viewMode() === 'table'" (click)="viewMode.set('table')">☰</button>
-              <button type="button" class="view-btn" [class.active]="viewMode() === 'cards'" (click)="viewMode.set('cards')">▦</button>
+              <button type="button" class="view-btn" [class.active]="viewMode() === 'table'" [attr.aria-pressed]="viewMode() === 'table'" (click)="viewMode.set('table')" aria-label="Table view">☰</button>
+              <button type="button" class="view-btn" [class.active]="viewMode() === 'cards'" [attr.aria-pressed]="viewMode() === 'cards'" (click)="viewMode.set('cards')" aria-label="Card view">▦</button>
             </div>
           </div>
         </div>
@@ -1011,7 +1015,9 @@
         <div class="list-toolbar">
           <div class="search-wrap">
             <span class="search-icon" aria-hidden="true">🔍</span>
+            <label class="sr-only" for="debtorSearch">Search debtors</label>
             <input
+              id="debtorSearch"
               type="search"
               class="search-input"
               placeholder="Search debtors…"
@@ -1020,7 +1026,7 @@
               name="debtQ"
             />
             @if (debtorSearch()) {
-              <button type="button" class="clear-search" (click)="debtorSearch.set('')" aria-label="Clear">×</button>
+              <button type="button" class="clear-search" (click)="debtorSearch.set('')" aria-label="Clear debtor search">×</button>
             }
           </div>
           <div class="toolbar-row">
@@ -1028,12 +1034,12 @@
             <div class="toolbar-actions">
               <button type="button" class="btn-outline btn-sm" (click)="sendReminders()">Send WhatsApp reminders</button>
               <div class="view-toggle" role="group" aria-label="View mode">
-                <button type="button" class="view-btn" [class.active]="viewMode() === 'table'" (click)="viewMode.set('table')">☰</button>
-                <button type="button" class="view-btn" [class.active]="viewMode() === 'cards'" (click)="viewMode.set('cards')">▦</button>
+                <button type="button" class="view-btn" [class.active]="viewMode() === 'table'" [attr.aria-pressed]="viewMode() === 'table'" (click)="viewMode.set('table')" aria-label="Table view">☰</button>
+                <button type="button" class="view-btn" [class.active]="viewMode() === 'cards'" [attr.aria-pressed]="viewMode() === 'cards'" (click)="viewMode.set('cards')" aria-label="Card view">▦</button>
               </div>
             </div>
           </div>
-          <div class="results-meta">
+          <div class="results-meta" aria-live="polite">
             <span>Showing <strong>{{ filteredDebtors().length }}</strong> debtors</span>
           </div>
         </div>

@@ -1,25 +1,33 @@
 import { AppDataSource } from '../config/data-source';
 import { SchoolSettings } from '../entities';
+import { tenantContext } from '../config/tenant-context';
 import {
   NotificationSettings,
   normalizeNotificationSettings,
 } from '../types/notification-settings';
 
-let cache: { value: NotificationSettings; at: number } | null = null;
+/** Keyed by tenant so demo and production never share a cached copy. */
+const cache = new Map<string, { value: NotificationSettings; at: number }>();
 const CACHE_MS = 30_000;
 
+function cacheKey(): string {
+  return tenantContext.isDemo() ? 'demo' : 'prod';
+}
+
 export async function getNotificationSettings(): Promise<NotificationSettings> {
-  if (cache && Date.now() - cache.at < CACHE_MS) return cache.value;
+  const key = cacheKey();
+  const cached = cache.get(key);
+  if (cached && Date.now() - cached.at < CACHE_MS) return cached.value;
   const settings = await AppDataSource.getRepository(SchoolSettings).findOne({
     where: { id: 'default' },
   });
   const value = normalizeNotificationSettings(settings?.notificationSettings);
-  cache = { value, at: Date.now() };
+  cache.set(key, { value, at: Date.now() });
   return value;
 }
 
 export function invalidateNotificationSettingsCache(): void {
-  cache = null;
+  cache.clear();
 }
 
 export async function saveNotificationSettings(

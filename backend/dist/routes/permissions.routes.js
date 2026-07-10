@@ -11,7 +11,7 @@ const auth_1 = require("../middleware/auth");
 const role_permissions_service_1 = require("../services/role-permissions.service");
 const typeorm_helpers_1 = require("../utils/typeorm-helpers");
 const router = (0, express_1.Router)();
-const STAFF_PORTAL_ROLES = [enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.ADMIN, enums_1.UserRole.TEACHER];
+const STAFF_PORTAL_ROLES = [enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.ADMIN, enums_1.UserRole.ACCOUNTANT, enums_1.UserRole.TEACHER];
 const ALL_PORTAL_ROLES = Object.values(enums_1.UserRole);
 router.use(auth_1.authenticate, (0, auth_1.authorize)(enums_1.UserRole.ADMIN));
 router.get('/catalog', async (_req, res) => {

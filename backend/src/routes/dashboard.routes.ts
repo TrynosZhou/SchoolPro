@@ -4,6 +4,7 @@ import { AppDataSource } from '../config/data-source';
 import { SchoolSettings } from '../entities';
 import { UserRole } from '../entities/enums';
 import { authenticate, authorize, AuthRequest } from '../middleware/auth';
+import { fetchSchoolOutstandingBalance } from '../services/fin-reports.service';
 
 const router = Router();
 router.use(authenticate);
@@ -17,6 +18,7 @@ router.get('/school-links', async (_req, res: Response) => {
     logoUrl: settings?.logoUrl?.trim() || null,
     website: settings?.website?.trim() || null,
     facebookPageUrl: settings?.facebookPageUrl?.trim() || null,
+    developerPhotoUrl: settings?.developerPhotoUrl?.trim() || null,
   });
 });
 
@@ -50,10 +52,7 @@ router.get('/overview', authorize(UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRol
       SELECT COALESCE(SUM(amount), 0) as total FROM payments
       WHERE "paidAt" >= date_trunc('month', CURRENT_DATE)
     `),
-    AppDataSource.query(`
-      SELECT COALESCE(SUM("totalAmount" - "amountPaid"), 0) as total
-      FROM invoices WHERE status IN ('sent', 'partial', 'overdue')
-    `),
+    fetchSchoolOutstandingBalance(),
     AppDataSource.query(`
       SELECT COUNT(*) as count FROM tuckshop_items
       WHERE "stockQuantity" <= "reorderLevel" AND "isActive" = true
@@ -69,7 +68,7 @@ router.get('/overview', authorize(UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRol
     femaleStaff: Number(staff[0]?.femaleStaff || 0),
     attendanceToday,
     monthlyCollections: Number(collections[0]?.total || 0),
-    totalDebtors: Number(debtors[0]?.total || 0),
+    totalDebtors: Number(debtors || 0),
     lowStockItems: Number(lowStock[0]?.count || 0),
   });
 });
@@ -104,17 +103,18 @@ router.get('/director', authorize(UserRole.DIRECTOR, UserRole.PRINCIPAL), async 
       SELECT COALESCE(SUM(amount), 0) AS total FROM payments
       WHERE "paidAt" >= date_trunc('month', CURRENT_DATE)
     `),
-    AppDataSource.query(`
-      SELECT COALESCE(SUM("totalAmount" - "amountPaid"), 0) AS total
-      FROM invoices WHERE status IN ('sent', 'partial', 'overdue')
-    `),
+    fetchSchoolOutstandingBalance(),
     AppDataSource.query(`
       SELECT COUNT(*)::int AS count FROM tuckshop_items
       WHERE "stockQuantity" <= "reorderLevel" AND "isActive" = true
     `),
     AppDataSource.query(`
-      SELECT COUNT(*)::int AS count FROM invoices
-      WHERE status IN ('sent', 'partial', 'overdue') AND "totalAmount" > "amountPaid"
+      SELECT COUNT(*)::int AS count
+      FROM invoices i
+      INNER JOIN students s ON s.id = i."studentId"
+      WHERE s."isActive" = true
+        AND i.status IN ('sent', 'partial', 'overdue')
+        AND (i."totalAmount" - i."amountPaid") > 0.005
     `),
     AppDataSource.query(`
       SELECT balance FROM cashbook_entries ORDER BY "entryDate" DESC, "createdAt" DESC LIMIT 1
@@ -179,7 +179,7 @@ router.get('/director', authorize(UserRole.DIRECTOR, UserRole.PRINCIPAL), async 
   const totalStudents = Number(students[0]?.count || 0);
   const enrolledStudents = Number(enrolled[0]?.count || 0);
   const monthlyCollections = Number(collections[0]?.total || 0);
-  const totalDebtors = Number(debtors[0]?.total || 0);
+  const totalDebtors = Number(debtors || 0);
   const cashBalance = Number(cashbook[0]?.balance || 0);
   const debtRatio = monthlyCollections > 0 ? (totalDebtors / monthlyCollections) * 100 : totalDebtors > 0 ? 100 : 0;
   let financeHealth = 'Healthy';
@@ -240,9 +240,45 @@ router.get('/director', authorize(UserRole.DIRECTOR, UserRole.PRINCIPAL), async 
   });
 });
 
-router.get('/teacher', authorize(UserRole.TEACHER), async (req: AuthRequest, res: Response) => {
+router.get(
+  '/teacher',
+  authorize(UserRole.TEACHER, UserRole.ADMIN, UserRole.PRINCIPAL, UserRole.DIRECTOR),
+  async (req: AuthRequest, res: Response) => {
   const staffId = req.user!.staffId;
   const userId = req.user!.userId;
+  const isLeadership = [UserRole.ADMIN, UserRole.PRINCIPAL, UserRole.DIRECTOR].includes(req.user!.role);
+
+  // Admins / principals often have no staff profile; still need class lists for LMS & shared pages.
+  if (!staffId && isLeadership) {
+    const allClasses = await AppDataSource.query(`
+      SELECT c.id, c.name, f.name AS "formName"
+      FROM classes c
+      JOIN forms f ON f.id = c."formId"
+      ORDER BY f.level ASC, c.name ASC
+    `);
+    return res.json({
+      staffId: null,
+      currentTerm: null,
+      stats: {
+        assignedClasses: allClasses.length,
+        subjectsTeaching: 0,
+        totalStudents: 0,
+        unreadMessages: 0,
+      },
+      assignments: [],
+      classTeacherOf: allClasses.map((c: { id: string; name: string; formName: string }) => ({
+        classId: c.id,
+        className: c.name,
+        formName: c.formName,
+        studentCount: 0,
+        attendanceMarkedToday: false,
+      })),
+      attendanceToday: [],
+      todaySchedule: [],
+      assignedClasses: allClasses.map((c: { id: string; name: string }) => ({ id: c.id, name: c.name })),
+    });
+  }
+
   if (!staffId) {
     return res.json({
       staffId: null,
@@ -252,6 +288,7 @@ router.get('/teacher', authorize(UserRole.TEACHER), async (req: AuthRequest, res
       classTeacherOf: [],
       attendanceToday: [],
       todaySchedule: [],
+      assignedClasses: [],
     });
   }
 

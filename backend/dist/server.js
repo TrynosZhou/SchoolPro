@@ -43,6 +43,17 @@ const env_1 = require("./config/env");
 const pdf_1 = require("./utils/pdf");
 async function runDeferredStartup() {
     try {
+        const { backfillStudentLifecycle } = await Promise.resolve().then(() => __importStar(require('./services/student-lifecycle.service')));
+        const lifecycle = await backfillStudentLifecycle();
+        if (lifecycle.statusFixed > 0 || lifecycle.snapshotsCreated > 0) {
+            console.log(`[analytics] Student lifecycle backfill: ${lifecycle.statusFixed} status(es) normalised, ` +
+                `${lifecycle.snapshotsCreated} enrollment snapshot(s) created`);
+        }
+    }
+    catch (err) {
+        console.error('[startup] Student lifecycle backfill failed:', err);
+    }
+    try {
         const { backfillGeneralLedgerFromHistory } = await Promise.resolve().then(() => __importStar(require('./services/gl-backfill.service')));
         const backfill = await backfillGeneralLedgerFromHistory();
         const posted = backfill.paymentsPosted +
@@ -80,6 +91,16 @@ async function bootstrap() {
         app_1.default.listen(env_1.env.port, () => {
             console.log(`School Pro API running on http://localhost:${env_1.env.port}`);
         });
+        const { startScheduler } = await Promise.resolve().then(() => __importStar(require('./services/scheduler.service')));
+        startScheduler();
+        try {
+            const { startResultNotificationWorker } = await Promise.resolve().then(() => __importStar(require('./queues/result-notification.queue')));
+            const { processResultNotificationJob } = await Promise.resolve().then(() => __importStar(require('./services/result-notification.service')));
+            startResultNotificationWorker(processResultNotificationJob);
+        }
+        catch (err) {
+            console.error('[startup] Result notification worker failed to start:', err);
+        }
         void runDeferredStartup();
     }
     catch (err) {

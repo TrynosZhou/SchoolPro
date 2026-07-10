@@ -1,0 +1,120 @@
+<app-portal-layout
+  portalTitle="Student Portal"
+  pageTitle="My Learning"
+  homePath="/student"
+  [navSections]="navSections"
+>
+  @if (toast(); as t) {
+    <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'" role="status">{{ t.msg }}</div>
+  }
+
+  <header class="page-hero">
+    <p class="eyebrow">Learning</p>
+    <h1>Assignments &amp; classes</h1>
+    <p class="hero-sub">
+      Submit work, view grades, open lesson materials, and join live classes.
+      <a routerLink="/student/library">Digital library →</a>
+      ·
+      <a routerLink="/student/homework">Class homework files →</a>
+    </p>
+  </header>
+
+  <nav class="tabs" role="tablist">
+    <button type="button" [class.active]="tab() === 'assignments'" (click)="setTab('assignments')">Assignments</button>
+    <button type="button" [class.active]="tab() === 'lessons'" (click)="setTab('lessons')">Lessons</button>
+    <button type="button" [class.active]="tab() === 'classes'" (click)="setTab('classes')">Virtual classes</button>
+  </nav>
+
+  @if (loading()) {
+    <p class="muted">Loading…</p>
+  } @else if (tab() === 'assignments') {
+    @if (!assignments().length) {
+      <section class="card"><p class="muted">No published assignments yet.</p></section>
+    } @else {
+      <div class="list">
+        @for (a of assignments(); track a.id) {
+          <article class="card row">
+            <div>
+              <strong>{{ a.title }}</strong>
+              <p class="meta">
+                @if (a.dueAt) { Due {{ a.dueAt | date:'medium' }} · }
+                {{ a.subject?.name || 'Subject' }}
+                @if (a.maxScore) { · Max {{ a.maxScore }} }
+              </p>
+              @if (a.description) { <p class="desc">{{ a.description }}</p> }
+              @if (mySubs()[a.id]; as sub) {
+                <p class="status-pill" [class.graded]="sub.status === 'graded'">
+                  {{ sub.status }}
+                  @if (sub.grade) { · Score {{ sub.grade }} }
+                  @if (sub.feedback) { — {{ sub.feedback }} }
+                </p>
+              }
+            </div>
+            <div class="actions">
+              @if (href(a.attachmentUrl); as file) {
+                <a [href]="file" target="_blank" rel="noopener">Brief</a>
+              }
+              <button type="button" class="btn-primary" (click)="openSubmit(a)">
+                {{ mySubs()[a.id] ? 'Resubmit' : 'Submit' }}
+              </button>
+            </div>
+          </article>
+        }
+      </div>
+    }
+
+    @if (selectedId(); as id) {
+      <section class="card submit-panel">
+        <h2>Submit work</h2>
+        <label><span>Text answer</span><textarea [(ngModel)]="textAnswer" name="answer" rows="4"></textarea></label>
+        <label><span>File</span><input type="file" (change)="onFile($event)" /></label>
+        <div class="actions">
+          <button type="button" class="btn-outline" (click)="selectedId.set(null)">Cancel</button>
+          <button type="button" class="btn-primary" [disabled]="busy()" (click)="submit()">
+            {{ busy() ? 'Sending…' : 'Submit' }}
+          </button>
+        </div>
+      </section>
+    }
+  } @else if (tab() === 'lessons') {
+    @if (!lessons().length) {
+      <section class="card"><p class="muted">No lesson materials published.</p></section>
+    } @else {
+      <div class="list">
+        @for (l of lessons(); track l.id) {
+          <article class="card row">
+            <div>
+              <strong>{{ l.title }}</strong>
+              <p class="meta">{{ l.contentType }} · {{ l.subject?.name || '' }}</p>
+              @if (l.description) { <p class="desc">{{ l.description }}</p> }
+            </div>
+            <div class="actions">
+              @if (l.externalUrl) { <a [href]="l.externalUrl" target="_blank" rel="noopener">Open</a> }
+              @if (href(l.fileUrl); as file) { <a [href]="file" target="_blank" rel="noopener">Download</a> }
+            </div>
+          </article>
+        }
+      </div>
+    }
+  } @else {
+    @if (!virtualClasses().length) {
+      <section class="card"><p class="muted">No virtual classes scheduled.</p></section>
+    } @else {
+      <div class="list">
+        @for (v of virtualClasses(); track v.id) {
+          <article class="card row">
+            <div>
+              <strong>{{ v.title }}</strong>
+              <p class="meta">{{ v.startsAt | date:'medium' }} · {{ v.status }}</p>
+            </div>
+            <div class="actions">
+              @if (v.joinUrl) {
+                <a class="btn-primary" [href]="v.joinUrl" target="_blank" rel="noopener">Join class</a>
+              }
+            </div>
+          </article>
+        }
+      </div>
+    }
+  }
+</app-portal-layout>

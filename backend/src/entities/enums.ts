@@ -173,3 +173,57 @@ export enum ApplicationDocumentType {
   OTHER = 'other',
 }
 
+/** LMS assignment lifecycle. */
+export enum LmsAssignmentStatus {
+  DRAFT = 'draft',
+  PUBLISHED = 'published',
+  CLOSED = 'closed',
+}
+
+/** Student submission grading state. */
+export enum LmsSubmissionStatus {
+  SUBMITTED = 'submitted',
+  LATE = 'late',
+  GRADED = 'graded',
+  RETURNED = 'returned',
+}
+
+/** Lesson content media kinds. */
+export enum LessonContentType {
+  VIDEO = 'video',
+  NOTE = 'note',
+  LINK = 'link',
+  DOCUMENT = 'document',
+  OTHER = 'other',
+}
+
+/** Virtual class meeting provider (manual until Zoom/Meet keys are configured). */
+export enum VirtualClassProvider {
+  MANUAL = 'manual',
+  ZOOM = 'zoom',
+  GOOGLE_MEET = 'google_meet',
+}
+
+export enum VirtualClassStatus {
+  SCHEDULED = 'scheduled',
+  LIVE = 'live',
+  ENDED = 'ended',
+  CANCELLED = 'cancelled',
+}
+
+/** How the student attended that day. */
+export enum AttendanceMode {
+  IN_PERSON = 'in_person',
+  REMOTE = 'remote',
+}
+
+/** Digital library resource kinds. */
+export enum LibraryResourceType {
+  BOOK = 'book',
+  PDF = 'pdf',
+  VIDEO = 'video',
+  AUDIO = 'audio',
+  LINK = 'link',
+  OTHER = 'other',
+}
+

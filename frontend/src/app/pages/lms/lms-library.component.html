@@ -1,0 +1,340 @@
+<app-portal-layout
+  [portalTitle]="portalTitle"
+  pageTitle="Digital Library"
+  [homePath]="homePath"
+  [navSections]="navSections"
+>
+  <div class="lms-lib">
+    <header class="greeting" aria-labelledby="lib-heading">
+      <div class="greeting-copy">
+        <p class="eyebrow">Learning · Content</p>
+        <h1 id="lib-heading">Digital Library</h1>
+        <p class="greeting-sub">
+          @if (canManage) {
+            Publish PDFs, books, videos, and links for classes — or browse what is already available.
+          } @else {
+            Browse course materials, open files, and save bookmarks for later.
+          }
+        </p>
+      </div>
+      <div class="greeting-actions">
+        @if (canManage) {
+          <button
+            type="button"
+            class="cta primary"
+            (click)="showUpload.set(!showUpload())"
+            [attr.aria-expanded]="showUpload()"
+          >
+            {{ showUpload() ? 'Close upload' : 'Add resource' }}
+          </button>
+        }
+        <button
+          type="button"
+          class="cta"
+          [class.active]="view() === 'bookmarks'"
+          (click)="setView(view() === 'bookmarks' ? 'catalog' : 'bookmarks')"
+        >
+          {{ view() === 'bookmarks' ? 'Back to catalog' : 'My bookmarks' }}
+          @if (bookmarkCount() > 0) {
+            <span class="cta-count">{{ bookmarkCount() }}</span>
+          }
+        </button>
+      </div>
+    </header>
+
+    @if (toast(); as t) {
+      <div class="toast" [class.error]="t.type === 'error'" [class.success]="t.type === 'success'" role="status">
+        {{ t.msg }}
+      </div>
+    }
+
+    <section class="summary-row" aria-label="Library summary">
+      <article class="summary-card token-kpi-card token-kpi-card--lavender">
+        <span class="summary-label">In view</span>
+        <strong class="token-kpi-number">{{ loading() ? '—' : resourceCount() }}</strong>
+        <span class="summary-caption">{{ hasFilters ? 'Matching filters' : 'Catalog resources' }}</span>
+      </article>
+      <article class="summary-card token-kpi-card token-kpi-card--mint">
+        <span class="summary-label">Bookmarks</span>
+        <strong class="token-kpi-number">{{ bookmarkCount() }}</strong>
+        <span class="summary-caption">Saved for quick access</span>
+      </article>
+      <article class="summary-card token-kpi-card token-kpi-card--sky">
+        <span class="summary-label">Top types</span>
+        @if (loading()) {
+          <strong class="token-kpi-number">—</strong>
+          <span class="summary-caption">Loading…</span>
+        } @else if (!typeBreakdown().length) {
+          <strong class="token-kpi-number">0</strong>
+          <span class="summary-caption">No resources yet</span>
+        } @else {
+          <div class="type-chips">
+            @for (row of typeBreakdown().slice(0, 3); track row.type) {
+              <span class="type-chip">{{ typeLabel(row.type) }} · {{ row.count }}</span>
+            }
+          </div>
+        }
+      </article>
+    </section>
+
+    @if (view() === 'catalog') {
+      @if (canManage && showUpload()) {
+        <section class="panel upload-panel token-card" aria-labelledby="upload-heading">
+          <div class="panel-head">
+            <div>
+              <h2 id="upload-heading">Add resource</h2>
+              <p>Upload a file or paste an external link for learners.</p>
+            </div>
+          </div>
+          <div class="upload-grid">
+            <label>
+              <span>Title</span>
+              <input [(ngModel)]="title" name="title" autocomplete="off" />
+            </label>
+            <label>
+              <span>Type</span>
+              <select [(ngModel)]="type" name="type">
+                <option value="pdf">PDF</option>
+                <option value="book">Book</option>
+                <option value="video">Video</option>
+                <option value="audio">Audio</option>
+                <option value="link">Link</option>
+                <option value="other">Other</option>
+              </select>
+            </label>
+            <label>
+              <span>Subject</span>
+              <select [(ngModel)]="uploadSubjectId" name="uploadSubject">
+                <option value="">Any subject</option>
+                @for (s of subjects(); track s.id) {
+                  <option [value]="s.id">{{ s.name }}</option>
+                }
+              </select>
+            </label>
+            <label>
+              <span>Form</span>
+              <select [(ngModel)]="uploadFormId" name="uploadForm">
+                <option value="">Any form</option>
+                @for (f of forms(); track f.id) {
+                  <option [value]="f.id">{{ f.name }}</option>
+                }
+              </select>
+            </label>
+            <label class="span-2">
+              <span>Description</span>
+              <textarea [(ngModel)]="description" name="description" rows="2"></textarea>
+            </label>
+            <label>
+              <span>External URL</span>
+              <input [(ngModel)]="externalUrl" name="externalUrl" placeholder="https://…" />
+            </label>
+            <label>
+              <span>File</span>
+              @if (fileInputKey() % 2 === 0) {
+                <input type="file" (change)="onFile($event)" />
+              } @else {
+                <input type="file" (change)="onFile($event)" />
+              }
+            </label>
+          </div>
+          <div class="upload-actions">
+            <button type="button" class="btn primary" [disabled]="busy()" (click)="upload()">
+              {{ busy() ? 'Uploading…' : 'Publish resource' }}
+            </button>
+            <button type="button" class="btn ghost" [disabled]="busy()" (click)="showUpload.set(false)">Cancel</button>
+          </div>
+        </section>
+      }
+
+      <section class="panel filters-panel token-card" aria-label="Library filters">
+        <div class="filters-grid">
+          <label class="search-field">
+            <span class="field-label">Search</span>
+            <input
+              type="search"
+              [(ngModel)]="q"
+              name="q"
+              placeholder="Search title or description…"
+              (keyup.enter)="reload()"
+            />
+          </label>
+          @if (canManage) {
+            <label>
+              <span class="field-label">Subject</span>
+              <select [(ngModel)]="subjectId" name="subjectId" (ngModelChange)="reload()">
+                <option value="">All subjects</option>
+                @for (s of subjects(); track s.id) {
+                  <option [value]="s.id">{{ s.name }}</option>
+                }
+              </select>
+            </label>
+            <label>
+              <span class="field-label">Form</span>
+              <select [(ngModel)]="gradeFormId" name="gradeFormId" (ngModelChange)="reload()">
+                <option value="">All forms</option>
+                @for (f of forms(); track f.id) {
+                  <option [value]="f.id">{{ f.name }}</option>
+                }
+              </select>
+            </label>
+          }
+          <label>
+            <span class="field-label">Type</span>
+            <select [(ngModel)]="resourceType" name="resourceType" (ngModelChange)="reload()">
+              <option value="">All types</option>
+              <option value="pdf">PDF</option>
+              <option value="book">Book</option>
+              <option value="video">Video</option>
+              <option value="audio">Audio</option>
+              <option value="link">Link</option>
+              <option value="other">Other</option>
+            </select>
+          </label>
+          <div class="filter-actions">
+            <button type="button" class="btn" (click)="reload()">Search</button>
+            @if (hasFilters) {
+              <button type="button" class="btn ghost" (click)="clearFilters()">Clear</button>
+            }
+          </div>
+        </div>
+      </section>
+
+      <section class="catalog" aria-labelledby="catalog-heading">
+        <div class="section-head">
+          <h2 id="catalog-heading">Catalog</h2>
+          <p>{{ loading() ? 'Loading…' : resourceCount() + ' resource' + (resourceCount() === 1 ? '' : 's') }}</p>
+        </div>
+
+        @if (loading()) {
+          <div class="skeleton-list" aria-hidden="true">
+            <div class="skeleton-card"></div>
+            <div class="skeleton-card"></div>
+            <div class="skeleton-card"></div>
+          </div>
+        } @else if (!resources().length) {
+          <div class="empty-state token-card">
+            @if (hasFilters) {
+              <h3>No matches</h3>
+              <p>Nothing matches the current filters. Try clearing them or searching a different term.</p>
+              <button type="button" class="btn" (click)="clearFilters()">Show all resources</button>
+            } @else {
+              <h3>No resources yet</h3>
+              <p>
+                @if (canManage) {
+                  Add the first PDF, book, or link to build the school library.
+                } @else {
+                  Check back once teachers publish materials for your classes.
+                }
+              </p>
+              @if (canManage) {
+                <button type="button" class="btn primary" (click)="showUpload.set(true)">Add resource</button>
+              }
+            }
+          </div>
+        } @else {
+          <ul class="resource-list">
+            @for (r of resources(); track r.id) {
+              <li class="resource-card token-card">
+                <div class="resource-icon" [attr.data-type]="r.resourceType" aria-hidden="true">
+                  @switch (r.resourceType) {
+                    @case ('pdf') {
+                      <svg viewBox="0 0 24 24" fill="none"><path d="M8 4h8l3 3v13H8V4z" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" /><path d="M16 4v3h3M10 12h6M10 16h4" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" /></svg>
+                    }
+                    @case ('book') {
+                      <svg viewBox="0 0 24 24" fill="none"><path d="M5 5.5A2.5 2.5 0 0 1 7.5 3H19v16H7.5A2.5 2.5 0 0 0 5 21.5V5.5z" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" /><path d="M5 18.5A2.5 2.5 0 0 1 7.5 16H19" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" /></svg>
+                    }
+                    @case ('video') {
+                      <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="6" width="14" height="12" rx="2" stroke="currentColor" stroke-width="1.75" /><path d="M17 10l4-2v8l-4-2v-4z" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" /></svg>
+                    }
+                    @case ('audio') {
+                      <svg viewBox="0 0 24 24" fill="none"><path d="M9 18V6l10-2v12" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" /><circle cx="7" cy="18" r="2.5" stroke="currentColor" stroke-width="1.75" /><circle cx="17" cy="16" r="2.5" stroke="currentColor" stroke-width="1.75" /></svg>
+                    }
+                    @case ('link') {
+                      <svg viewBox="0 0 24 24" fill="none"><path d="M10 14a4 4 0 0 0 5.66 0l2.12-2.12a4 4 0 0 0-5.66-5.66L11 7.34" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" /><path d="M14 10a4 4 0 0 0-5.66 0L6.22 12.12a4 4 0 1 0 5.66 5.66L13 16.66" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" /></svg>
+                    }
+                    @default {
+                      <svg viewBox="0 0 24 24" fill="none"><rect x="4" y="4" width="16" height="16" rx="2" stroke="currentColor" stroke-width="1.75" /><path d="M8 12h8M8 16h5" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" /></svg>
+                    }
+                  }
+                </div>
+                <div class="resource-body">
+                  <div class="resource-meta">
+                    <span class="type-badge">{{ typeLabel(r.resourceType) }}</span>
+                    @if (r.subject?.name) {
+                      <span class="tag">{{ r.subject?.name }}</span>
+                    }
+                    @if (r.gradeForm?.name) {
+                      <span class="tag">{{ r.gradeForm?.name }}</span>
+                    }
+                  </div>
+                  <h3>{{ r.title }}</h3>
+                  @if (r.description) {
+                    <p>{{ r.description }}</p>
+                  }
+                </div>
+                <div class="resource-actions">
+                  @if (href(r.fileUrl); as file) {
+                    <a class="btn" [href]="file" target="_blank" rel="noopener">Open file</a>
+                  }
+                  @if (r.externalUrl) {
+                    <a class="btn" [href]="r.externalUrl" target="_blank" rel="noopener">Open link</a>
+                  }
+                  <button type="button" class="btn ghost" (click)="toggleBookmark(r.id)">
+                    {{ bookmarkIds().has(r.id) ? 'Bookmarked' : 'Bookmark' }}
+                  </button>
+                  @if (canManage) {
+                    <button type="button" class="btn danger" (click)="remove(r.id)">Delete</button>
+                  }
+                </div>
+              </li>
+            }
+          </ul>
+        }
+      </section>
+    } @else {
+      <section class="catalog" aria-labelledby="bookmarks-heading">
+        <div class="section-head">
+          <h2 id="bookmarks-heading">My bookmarks</h2>
+          <p>{{ bookmarkCount() }} saved</p>
+        </div>
+
+        @if (!bookmarks().length) {
+          <div class="empty-state token-card">
+            <h3>No bookmarks yet</h3>
+            <p>Bookmark resources from the catalog to find them here quickly.</p>
+            <button type="button" class="btn" (click)="setView('catalog')">Browse catalog</button>
+          </div>
+        } @else {
+          <ul class="resource-list">
+            @for (b of bookmarks(); track b.id) {
+              <li class="resource-card token-card">
+                <div class="resource-icon" [attr.data-type]="b.resource?.resourceType || 'other'" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none"><path d="M7 4h10v16l-5-3-5 3V4z" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" /></svg>
+                </div>
+                <div class="resource-body">
+                  <div class="resource-meta">
+                    <span class="type-badge">{{ typeLabel(b.resource?.resourceType) }}</span>
+                    <span class="tag">Saved {{ b.createdAt | date: 'mediumDate' }}</span>
+                  </div>
+                  <h3>{{ b.resource?.title || 'Unavailable resource' }}</h3>
+                  @if (b.resource?.description) {
+                    <p>{{ b.resource?.description }}</p>
+                  }
+                </div>
+                <div class="resource-actions">
+                  @if (href(b.resource?.fileUrl); as file) {
+                    <a class="btn" [href]="file" target="_blank" rel="noopener">Open file</a>
+                  }
+                  @if (b.resource?.externalUrl) {
+                    <a class="btn" [href]="b.resource!.externalUrl!" target="_blank" rel="noopener">Open link</a>
+                  }
+                  <button type="button" class="btn ghost" (click)="toggleBookmark(b.resourceId)">Remove</button>
+                </div>
+              </li>
+            }
+          </ul>
+        }
+      </section>
+    }
+  </div>
+</app-portal-layout>

@@ -19,6 +19,17 @@ export interface User {
 export interface AuthResponse {
   token: string;
   user: User;
+  /** Present on tokens issued by POST /auth/demo-login. */
+  demo?: boolean;
+  sessionTimeoutMinutes?: number;
+}
+
+export interface DemoAccount {
+  role: UserRole;
+  username: string;
+  password: string;
+  label: string;
+  description: string;
 }
 
 export interface Student {
@@ -45,6 +56,8 @@ export interface Guardian {
   fullName: string;
   relationship: string;
   phone: string;
+  guardianPhone?: string;
+  guardianWhatsappConsent?: boolean;
   email?: string;
   isPrimary?: boolean;
 }

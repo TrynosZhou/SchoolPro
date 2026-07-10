@@ -1,0 +1,75 @@
+<div class="demo-shell">
+  <nav class="demo-nav">
+    <a routerLink="/login" class="back-link">← Back to sign in</a>
+  </nav>
+
+  <main class="demo-main">
+    <header class="demo-hero">
+      <span class="demo-kicker">Live preview</span>
+      <h1>Try School Pro in demo mode</h1>
+      <p>
+        Explore a fully seeded school with classes, attendance, exam marks, invoices, and role-based portals.
+        No setup required — pick a role and start clicking.
+      </p>
+    </header>
+
+    @if (loading()) {
+      <p class="status">Loading demo accounts…</p>
+    } @else if (unavailable()) {
+      <div class="alert" role="alert">
+        Demo mode is not enabled on this server. Contact the administrator or use a regular sign-in.
+      </div>
+    } @else {
+      @if (error()) {
+        <div class="alert" role="alert">{{ error() }}</div>
+      }
+
+      <div class="account-grid">
+        @for (account of accounts(); track account.role) {
+          <article class="account-card">
+            <div class="account-head">
+              <span class="account-icon" aria-hidden="true">{{ roleIcon(account.role) }}</span>
+              <div>
+                <h2>{{ account.label }}</h2>
+                <p>{{ account.description }}</p>
+              </div>
+            </div>
+
+            <dl class="credentials">
+              <div>
+                <dt>Username</dt>
+                <dd><code>{{ account.username }}</code></dd>
+              </div>
+              <div>
+                <dt>Password</dt>
+                <dd><code>{{ account.password }}</code></dd>
+              </div>
+            </dl>
+
+            <button
+              type="button"
+              class="btn-login"
+              [disabled]="loggingInRole() === account.role"
+              (click)="loginAs(account)"
+            >
+              @if (loggingInRole() === account.role) {
+                Signing in…
+              } @else {
+                Enter as {{ account.label }}
+              }
+            </button>
+          </article>
+        }
+      </div>
+
+      <aside class="demo-notes">
+        <h3>What to expect</h3>
+        <ul>
+          <li>Demo data resets on a schedule — your changes will not be permanent.</li>
+          <li>Email, SMS, and payment integrations are mocked — nothing is sent or charged.</li>
+          <li>Destructive actions, exports, and billing configuration are disabled.</li>
+        </ul>
+      </aside>
+    }
+  </main>
+</div>

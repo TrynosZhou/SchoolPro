@@ -69,8 +69,6 @@ export class AttendanceMarkRegisterComponent implements OnInit {
   hasLoaded = signal(false);
   submitting = signal(false);
   search = signal('');
-  classSearch = signal('');
-  formFilter = signal('all');
   statusFilter = signal<StatusFilter>('all');
   viewMode = signal<ViewMode>('table');
   toast = signal<{ type: 'success' | 'error'; msg: string } | null>(null);
@@ -79,24 +77,9 @@ export class AttendanceMarkRegisterComponent implements OnInit {
 
   selectedClassLabel = computed(() => classDisplayName(this.classes(), this.selectedClassId));
 
-  classFormOptions = computed(() => {
-    const names = new Set<string>();
-    for (const c of this.classes()) {
-      if (c.form?.name) names.add(c.form.name);
-    }
-    return [...names].sort();
-  });
-
-  visibleClasses = computed(() => {
-    let rows = [...this.classes()].sort((a, b) => a.name.localeCompare(b.name));
-    const form = this.formFilter();
-    if (form !== 'all') rows = rows.filter((c) => c.form?.name === form);
-    const q = this.classSearch().trim().toLowerCase();
-    if (q) {
-      rows = rows.filter((c) => `${c.name} ${c.form?.name ?? ''}`.toLowerCase().includes(q));
-    }
-    return rows;
-  });
+  visibleClasses = computed(() =>
+    [...this.classes()].sort((a, b) => a.name.localeCompare(b.name)),
+  );
 
   filteredStudents = computed(() => {
     const q = this.search().trim().toLowerCase();
@@ -177,10 +160,6 @@ export class AttendanceMarkRegisterComponent implements OnInit {
         this.showToast('error', 'Could not load classes.');
       },
     });
-  }
-
-  classStudentCount(c: ClassOption): number {
-    return c.students?.length ?? 0;
   }
 
   selectClass(classId: string): void {
@@ -308,10 +287,14 @@ export class AttendanceMarkRegisterComponent implements OnInit {
     }));
 
     this.submitting.set(true);
-    this.api.post('/attendance/students/bulk', { date: this.selectedDate, records }).subscribe({
-      next: () => {
+    this.api.post<{ queued?: boolean; message?: string }>('/attendance/students/bulk', { date: this.selectedDate, records }).subscribe({
+      next: (res) => {
         this.submitting.set(false);
-        this.showToast('success', `Attendance saved for ${this.selectedDate}.`);
+        if (res?.queued) {
+          this.showToast('success', res.message || 'Attendance saved offline — will sync when you reconnect.');
+        } else {
+          this.showToast('success', `Attendance saved for ${this.selectedDate}.`);
+        }
       },
       error: (e) => {
         this.submitting.set(false);

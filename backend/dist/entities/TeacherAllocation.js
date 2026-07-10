@@ -81,6 +81,8 @@ __decorate([
 ], TeacherAllocation.prototype, "updatedAt", void 0);
 exports.TeacherAllocation = TeacherAllocation = __decorate([
     (0, typeorm_1.Entity)('teacher_allocations'),
-    (0, typeorm_1.Unique)('UQ_teacher_allocations_timetable_entry', ['timetableEntryId']),
-    (0, typeorm_1.Unique)('UQ_teacher_allocations_teacher_slot', ['teacherId', 'dayOfWeek', 'startTime', 'endTime'])
+    (0, typeorm_1.Unique)('UQ_teacher_allocations_timetable_entry', ['timetableEntryId'])
+    // NOTE: a teacher may be allocated to 2+ classes in the same slot (double-booking is
+    // allowed via the timetable "Ignore conflicts" flow), so there is intentionally no
+    // unique constraint on (teacherId, dayOfWeek, startTime, endTime).
 ], TeacherAllocation);

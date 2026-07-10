@@ -1,0 +1,247 @@
+<app-portal-layout
+  [portalTitle]="portalLayout.portalTitle"
+  pageTitle="Learning (LMS)"
+  [homePath]="homePath"
+  [navSections]="portalLayout.navSections || []"
+  [navItems]="portalLayout.navItems || []"
+>
+  @if (toast(); as t) {
+    <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'" role="status">{{ t.msg }}</div>
+  }
+
+  <header class="page-hero">
+    <p class="eyebrow">Learning &amp; content</p>
+    <h1>LMS workspace</h1>
+    <p class="hero-sub">
+      Create graded assignments, upload lesson materials, schedule virtual classes, and mark submissions.
+      <a [routerLink]="libraryPath">Open digital library →</a>
+    </p>
+  </header>
+
+  <div class="filters card">
+    <label>
+      <span>Class</span>
+      <select [(ngModel)]="selectedClassId" name="classId" (ngModelChange)="onClassChange()">
+        <option value="">All / select…</option>
+        @for (c of classes(); track c.id) {
+          <option [value]="c.id">{{ formatStudentClassLabel(c.name) }}</option>
+        }
+      </select>
+    </label>
+    <label>
+      <span>Subject</span>
+      <select [(ngModel)]="selectedSubjectId" name="subjectId" (ngModelChange)="refresh()">
+        <option value="">All subjects</option>
+        @for (s of subjects(); track s.id) {
+          <option [value]="s.id">{{ s.name }}</option>
+        }
+      </select>
+    </label>
+    <label>
+      <span>Term</span>
+      <select [(ngModel)]="selectedTermId" name="termId" (ngModelChange)="refresh()">
+        <option value="">Any term</option>
+        @for (t of terms(); track t.id) {
+          <option [value]="t.id">{{ t.name }}</option>
+        }
+      </select>
+    </label>
+  </div>
+
+  <nav class="tabs" role="tablist" aria-label="LMS sections">
+    <button type="button" role="tab" [attr.aria-selected]="tab() === 'assignments'" [class.active]="tab() === 'assignments'" (click)="setTab('assignments')">Assignments</button>
+    <button type="button" role="tab" [attr.aria-selected]="tab() === 'lessons'" [class.active]="tab() === 'lessons'" (click)="setTab('lessons')">Lesson content</button>
+    <button type="button" role="tab" [attr.aria-selected]="tab() === 'virtual'" [class.active]="tab() === 'virtual'" (click)="setTab('virtual')">Virtual classes</button>
+    <button type="button" role="tab" [attr.aria-selected]="tab() === 'grade'" [class.active]="tab() === 'grade'" (click)="setTab('grade')">Grade submissions</button>
+  </nav>
+
+  @if (loading()) {
+    <p class="muted">Loading…</p>
+  } @else if (tab() === 'assignments') {
+    <section class="card">
+      <h2>Create assignment</h2>
+      <div class="form-grid">
+        <label class="full"><span>Title *</span><input [(ngModel)]="aTitle" name="aTitle" maxlength="200" /></label>
+        <label class="full"><span>Description</span><textarea [(ngModel)]="aDescription" name="aDesc" rows="3"></textarea></label>
+        <label><span>Due</span><input type="datetime-local" [(ngModel)]="aDueAt" name="aDue" /></label>
+        <label><span>Max score</span><input type="number" min="0" step="0.5" [(ngModel)]="aMaxScore" name="aMax" /></label>
+        <label>
+          <span>Status</span>
+          <select [(ngModel)]="aStatus" name="aStatus">
+            <option value="published">Published</option>
+            <option value="draft">Draft</option>
+          </select>
+        </label>
+        <label class="full"><span>Attachment</span><input type="file" (change)="onFile($event, 'a')" /></label>
+      </div>
+      <button type="button" class="btn-primary" [disabled]="busy()" (click)="createAssignment()">
+        {{ busy() ? 'Saving…' : 'Create assignment' }}
+      </button>
+    </section>
+
+    <section class="card">
+      <h2>Assignments</h2>
+      @if (!assignments().length) {
+        <p class="muted">No assignments yet for this filter.</p>
+      } @else {
+        <div class="list">
+          @for (a of assignments(); track a.id) {
+            <article class="row">
+              <div>
+                <strong>{{ a.title }}</strong>
+                <p class="meta">
+                  {{ a.status }}
+                  @if (a.dueAt) { · due {{ a.dueAt | date:'medium' }} }
+                  @if (a.maxScore) { · max {{ a.maxScore }} }
+                </p>
+                @if (a.description) { <p class="desc">{{ a.description }}</p> }
+              </div>
+              <div class="actions">
+                @if (attachmentHref(a.attachmentUrl); as href) {
+                  <a [href]="href" target="_blank" rel="noopener">File</a>
+                }
+                @if (a.status === 'draft') {
+                  <button type="button" class="btn-outline" (click)="publishAssignment(a)">Publish</button>
+                }
+                <button type="button" class="btn-outline" (click)="openGrade(a)">Grade</button>
+                <button type="button" class="btn-danger" (click)="deleteAssignment(a)">Delete</button>
+              </div>
+            </article>
+          }
+        </div>
+      }
+    </section>
+  } @else if (tab() === 'lessons') {
+    <section class="card">
+      <h2>Upload lesson content</h2>
+      <div class="form-grid">
+        <label class="full"><span>Title *</span><input [(ngModel)]="lTitle" name="lTitle" /></label>
+        <label>
+          <span>Type</span>
+          <select [(ngModel)]="lType" name="lType">
+            <option value="note">Note</option>
+            <option value="document">Document</option>
+            <option value="link">Link</option>
+            <option value="video">Video</option>
+          </select>
+        </label>
+        <label class="full"><span>Description</span><textarea [(ngModel)]="lDescription" name="lDesc" rows="2"></textarea></label>
+        <label class="full"><span>External URL</span><input [(ngModel)]="lUrl" name="lUrl" placeholder="https://…" /></label>
+        <label class="full"><span>File</span><input type="file" (change)="onFile($event, 'l')" /></label>
+      </div>
+      <button type="button" class="btn-primary" [disabled]="busy()" (click)="createLesson()">
+        {{ busy() ? 'Uploading…' : 'Save lesson' }}
+      </button>
+    </section>
+
+    <section class="card">
+      <h2>Lesson materials</h2>
+      @if (!lessons().length) {
+        <p class="muted">No lesson content yet.</p>
+      } @else {
+        <div class="list">
+          @for (l of lessons(); track l.id) {
+            <article class="row">
+              <div>
+                <strong>{{ l.title }}</strong>
+                <p class="meta">{{ l.contentType }} · {{ l.subject?.name || 'Subject' }}</p>
+              </div>
+              <div class="actions">
+                @if (l.externalUrl) {
+                  <a [href]="l.externalUrl" target="_blank" rel="noopener">Open link</a>
+                }
+                @if (attachmentHref(l.fileUrl); as href) {
+                  <a [href]="href" target="_blank" rel="noopener">File</a>
+                }
+                <button type="button" class="btn-danger" (click)="deleteLesson(l.id)">Delete</button>
+              </div>
+            </article>
+          }
+        </div>
+      }
+    </section>
+  } @else if (tab() === 'virtual') {
+    <section class="card">
+      <h2>Schedule virtual class</h2>
+      <p class="hint">Paste a Zoom/Meet/Teams join link (API auto-create comes later).</p>
+      <div class="form-grid">
+        <label class="full"><span>Title *</span><input [(ngModel)]="vTitle" name="vTitle" /></label>
+        <label class="full"><span>Description</span><textarea [(ngModel)]="vDescription" name="vDesc" rows="2"></textarea></label>
+        <label><span>Starts *</span><input type="datetime-local" [(ngModel)]="vStartsAt" name="vStart" /></label>
+        <label><span>Ends</span><input type="datetime-local" [(ngModel)]="vEndsAt" name="vEnd" /></label>
+        <label class="full"><span>Join URL *</span><input [(ngModel)]="vJoinUrl" name="vJoin" placeholder="https://…" /></label>
+      </div>
+      <button type="button" class="btn-primary" [disabled]="busy()" (click)="createVirtual()">
+        {{ busy() ? 'Saving…' : 'Schedule class' }}
+      </button>
+    </section>
+
+    <section class="card">
+      <h2>Upcoming / recent</h2>
+      @if (!virtualClasses().length) {
+        <p class="muted">No virtual classes scheduled.</p>
+      } @else {
+        <div class="list">
+          @for (v of virtualClasses(); track v.id) {
+            <article class="row">
+              <div>
+                <strong>{{ v.title }}</strong>
+                <p class="meta">{{ v.startsAt | date:'medium' }} · {{ v.status }}</p>
+              </div>
+              <div class="actions">
+                @if (v.joinUrl) {
+                  <a [href]="v.joinUrl" target="_blank" rel="noopener">Join</a>
+                }
+                <button type="button" class="btn-danger" (click)="deleteVirtual(v.id)">Delete</button>
+              </div>
+            </article>
+          }
+        </div>
+      }
+    </section>
+  } @else {
+    <section class="card">
+      <h2>Grade submissions</h2>
+      <label>
+        <span>Assignment</span>
+        <select
+          [ngModel]="selectedAssignmentId()"
+          (ngModelChange)="selectedAssignmentId.set($event); loadSubmissions()"
+          name="gradeAssignment"
+        >
+          <option value="">Select assignment…</option>
+          @for (a of assignments(); track a.id) {
+            <option [value]="a.id">{{ a.title }}</option>
+          }
+        </select>
+      </label>
+
+      @if (!selectedAssignmentId()) {
+        <p class="muted">Choose an assignment to view submissions.</p>
+      } @else if (!submissions().length) {
+        <p class="muted">No submissions yet.</p>
+      } @else {
+        <div class="list">
+          @for (s of submissions(); track s.id) {
+            <article class="row grade-row">
+              <div>
+                <strong>{{ s.student?.lastName }}, {{ s.student?.firstName }}</strong>
+                <p class="meta">{{ s.status }} @if (s.submittedAt) { · {{ s.submittedAt | date:'short' }} }</p>
+                @if (s.textAnswer) { <p class="desc">{{ s.textAnswer }}</p> }
+                @if (s.grade) { <p class="meta">Grade: {{ s.grade }} @if (s.feedback) { — {{ s.feedback }} }</p> }
+              </div>
+              <div class="actions grade-actions">
+                @if (attachmentHref(s.fileUrl); as href) {
+                  <a [href]="href" target="_blank" rel="noopener">Download</a>
+                }
+                <input type="number" min="0" step="0.5" [(ngModel)]="gradeValue" [name]="'g'+s.id" placeholder="Score" />
+                <input type="text" [(ngModel)]="gradeFeedback" [name]="'f'+s.id" placeholder="Feedback" />
+                <button type="button" class="btn-primary" (click)="grade(s)">Save grade</button>
+              </div>
+            </article>
+          }
+        </div>
+      }
+    </section>
+  }
+</app-portal-layout>

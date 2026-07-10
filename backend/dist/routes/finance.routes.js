@@ -4,13 +4,13 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const data_source_1 = require("../config/data-source");
 const entities_1 = require("../entities");
-const enums_1 = require("../entities/enums");
 const auth_1 = require("../middleware/auth");
 const typeorm_helpers_1 = require("../utils/typeorm-helpers");
 const gl_posting_service_1 = require("../services/gl-posting.service");
+const portal_roles_1 = require("../config/portal-roles");
 const router = (0, express_1.Router)();
 router.use(auth_1.authenticate);
-router.get('/cashbook', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), async (req, res) => {
+router.get('/cashbook', (0, auth_1.authorize)(...portal_roles_1.FINANCE_ROLES), async (req, res) => {
     const repo = data_source_1.AppDataSource.getRepository(entities_1.CashbookEntry);
     const { from, to } = req.query;
     const qb = repo.createQueryBuilder('c').orderBy('c.entryDate', 'DESC').addOrderBy('c.createdAt', 'DESC');
@@ -18,7 +18,7 @@ router.get('/cashbook', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.Us
         qb.where('c.entryDate BETWEEN :from AND :to', { from, to });
     res.json(await qb.getMany());
 });
-router.post('/cashbook', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (req, res) => {
+router.post('/cashbook', (0, auth_1.authorize)(...portal_roles_1.FINANCE_WRITE_ROLES), async (req, res) => {
     const repo = data_source_1.AppDataSource.getRepository(entities_1.CashbookEntry);
     const last = await (0, typeorm_helpers_1.findLatest)(repo);
     const prevBalance = last ? Number(last.balance) : 0;
@@ -44,7 +44,7 @@ router.post('/cashbook', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (r
     }
     res.status(201).json(saved);
 });
-router.get('/balance-sheet', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), async (_req, res) => {
+router.get('/balance-sheet', (0, auth_1.authorize)(...portal_roles_1.FINANCE_ROLES), async (_req, res) => {
     const cashbook = await (0, typeorm_helpers_1.findLatest)(data_source_1.AppDataSource.getRepository(entities_1.CashbookEntry));
     const debtors = await data_source_1.AppDataSource.query(`
     SELECT COALESCE(SUM("totalAmount" - "amountPaid"), 0) as total
@@ -61,7 +61,7 @@ router.get('/balance-sheet', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums
         generatedAt: new Date(),
     });
 });
-router.get('/recent-payments', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), async (req, res) => {
+router.get('/recent-payments', (0, auth_1.authorize)(...portal_roles_1.FINANCE_ROLES), async (req, res) => {
     const limit = Math.min(parseInt(req.query.limit) || 15, 50);
     const payments = await data_source_1.AppDataSource.query(`
     SELECT p.id, p."paymentReference", p.amount, p.method, p.label, p."feeType", p."paidAt",
@@ -74,7 +74,7 @@ router.get('/recent-payments', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enu
   `, [limit]);
     res.json(payments);
 });
-router.get('/class-debt-summary', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), async (_req, res) => {
+router.get('/class-debt-summary', (0, auth_1.authorize)(...portal_roles_1.FINANCE_ROLES), async (_req, res) => {
     const result = await data_source_1.AppDataSource.query(`
     SELECT c.id, c.name, f.name as "formName",
       COALESCE(SUM(i."totalAmount" - i."amountPaid"), 0) as owed,
@@ -88,7 +88,7 @@ router.get('/class-debt-summary', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, 
   `);
     res.json(result);
 });
-router.get('/cashbook/summary', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), async (req, res) => {
+router.get('/cashbook/summary', (0, auth_1.authorize)(...portal_roles_1.FINANCE_ROLES), async (req, res) => {
     const { from, to } = req.query;
     let dateFilter = '';
     const params = [];
@@ -105,7 +105,7 @@ router.get('/cashbook/summary', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, en
   `, params);
     res.json(totals);
 });
-router.get('/debtors-aging', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), async (_req, res) => {
+router.get('/debtors-aging', (0, auth_1.authorize)(...portal_roles_1.FINANCE_ROLES), async (_req, res) => {
     const result = await data_source_1.AppDataSource.query(`
     SELECT
       CASE

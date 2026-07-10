@@ -1,27 +1,27 @@
-<app-portal-layout [portalTitle]="portalTitle" pageTitle="All Students" [navSections]="navSections">
+<app-portal-layout [portalTitle]="portalTitle" [pageTitle]="'students.pageTitle' | t" [navSections]="navSections">
   <div class="students-page">
-    @if (toast(); as t) {
-      <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>
+    @if (toast(); as toastMsg) {
+      <div class="toast" role="status" aria-live="polite" [class.success]="toastMsg.type === 'success'" [class.error]="toastMsg.type === 'error'">{{ toastMsg.msg }}</div>
     }
 
     <header class="hero">
       <div class="hero-copy">
-        <p class="eyebrow">Students</p>
-        <h2>Student registry</h2>
+        <p class="eyebrow">{{ 'students.eyebrow' | t }}</p>
+        <h2>{{ 'students.heroTitle' | t }}</h2>
         <p class="hero-sub">
-          Register learners, track enrollment status, and manage guardian contacts. Registration invoices are created
-          automatically from <a [routerLink]="basePath + '/manage-fees'">Manage Fees</a>.
+          {{ 'students.heroSub' | t }}
+          <a [routerLink]="basePath + '/manage-fees'">{{ 'nav.Manage Fees' | t }}</a>.
         </p>
         <div class="hero-actions">
           <button type="button" class="primary-action" (click)="openRegister()">
             <span>+</span>
-            Register student
+            {{ 'students.register' | t }}
           </button>
           @if (!isAccountant) {
-            <a [routerLink]="basePath + '/enrollment'" class="secondary-action">Class enrollment</a>
+            <a [routerLink]="basePath + '/enrollment'" class="secondary-action">{{ 'students.enrollment' | t }}</a>
           }
           <button type="button" class="refresh-action" (click)="load(true)" [disabled]="refreshing() || loading()">
-            {{ refreshing() ? 'Refreshing…' : 'Refresh list' }}
+            {{ refreshing() ? ('students.refreshing' | t) : ('students.refresh' | t) }}
           </button>
         </div>
         @if (!isAccountant && stats().pending) {
@@ -35,28 +35,28 @@
           <span class="kpi-icon">👥</span>
           <div>
             <strong>{{ stats().total }}</strong>
-            <span>Total</span>
+            <span>{{ 'students.kpiTotal' | t }}</span>
           </div>
         </article>
         <article class="kpi accent">
           <span class="kpi-icon">✅</span>
           <div>
             <strong>{{ stats().enrolled }}</strong>
-            <span>Enrolled</span>
+            <span>{{ 'students.kpiEnrolled' | t }}</span>
           </div>
         </article>
         <article class="kpi warn">
           <span class="kpi-icon">⏳</span>
           <div>
             <strong>{{ stats().pending }}</strong>
-            <span>Awaiting class</span>
+            <span>{{ 'students.kpiPending' | t }}</span>
           </div>
         </article>
         <article class="kpi">
           <span class="kpi-icon">🏠</span>
           <div>
             <strong>{{ stats().dayScholars }}</strong>
-            <span>Day scholars</span>
+            <span>{{ 'students.kpiDay' | t }}</span>
           </div>
         </article>
       </div>
@@ -79,10 +79,12 @@
       <div class="list-toolbar">
         <div class="search-wrap">
           <span class="search-icon" aria-hidden="true">🔍</span>
+          <label class="sr-only" for="studentsSearch">{{ 'students.search' | t }}</label>
           <input
+            id="studentsSearch"
             type="search"
             class="search-input"
-            placeholder="Search name, student ID, class, guardian…"
+            [placeholder]="'students.searchPlaceholder' | t"
             [ngModel]="search()"
             (ngModelChange)="search.set($event)"
             name="search"
@@ -93,26 +95,27 @@
         </div>
 
         <div class="toolbar-row">
-          <div class="filter-chips">
-            <button type="button" class="chip" [class.active]="enrollmentFilter() === 'all'" (click)="enrollmentFilter.set('all')">
-              All
+          <div class="filter-chips" role="group" aria-label="Filter students">
+            <button type="button" class="chip" [class.active]="enrollmentFilter() === 'all'" [attr.aria-pressed]="enrollmentFilter() === 'all'" (click)="enrollmentFilter.set('all')">
+              {{ 'students.filterAll' | t }}
             </button>
-            <button type="button" class="chip" [class.active]="enrollmentFilter() === 'enrolled'" (click)="enrollmentFilter.set('enrolled')">
-              Enrolled
+            <button type="button" class="chip" [class.active]="enrollmentFilter() === 'enrolled'" [attr.aria-pressed]="enrollmentFilter() === 'enrolled'" (click)="enrollmentFilter.set('enrolled')">
+              {{ 'students.filterEnrolled' | t }}
             </button>
-            <button type="button" class="chip" [class.active]="enrollmentFilter() === 'pending'" (click)="enrollmentFilter.set('pending')">
-              Awaiting class
+            <button type="button" class="chip" [class.active]="enrollmentFilter() === 'pending'" [attr.aria-pressed]="enrollmentFilter() === 'pending'" (click)="enrollmentFilter.set('pending')">
+              {{ 'students.filterPending' | t }}
             </button>
-            <span class="chip-divider"></span>
-            <button type="button" class="chip" [class.active]="typeFilter() === 'day_scholar'" (click)="typeFilter.set('day_scholar')">
-              Day scholar
+            <span class="chip-divider" aria-hidden="true"></span>
+            <button type="button" class="chip" [class.active]="typeFilter() === 'day_scholar'" [attr.aria-pressed]="typeFilter() === 'day_scholar'" (click)="typeFilter.set('day_scholar')">
+              {{ 'students.dayScholar' | t }}
             </button>
-            <button type="button" class="chip" [class.active]="typeFilter() === 'boarder'" (click)="typeFilter.set('boarder')">
-              Boarder
+            <button type="button" class="chip" [class.active]="typeFilter() === 'boarder'" [attr.aria-pressed]="typeFilter() === 'boarder'" (click)="typeFilter.set('boarder')">
+              {{ 'students.boarder' | t }}
             </button>
             @if (forms().length) {
-              <span class="chip-divider"></span>
-              <select class="form-filter" [ngModel]="formFilter()" (ngModelChange)="formFilter.set($event)" name="formFilter">
+              <span class="chip-divider" aria-hidden="true"></span>
+              <label class="sr-only" for="formFilter">Filter by form</label>
+              <select id="formFilter" class="form-filter" [ngModel]="formFilter()" (ngModelChange)="formFilter.set($event)" name="formFilter">
                 <option value="all">All forms</option>
                 @for (f of forms(); track f.id) {
                   <option [value]="f.id">{{ f.name }}</option>
@@ -122,21 +125,22 @@
           </div>
 
           <div class="toolbar-actions">
-            <select [ngModel]="sortOrder()" (ngModelChange)="sortOrder.set($event)" name="sortOrder" class="sort-select">
+            <label class="sr-only" for="sortOrder">Sort students</label>
+            <select id="sortOrder" [ngModel]="sortOrder()" (ngModelChange)="sortOrder.set($event)" name="sortOrder" class="sort-select">
               <option value="name-asc">Name A–Z</option>
               <option value="name-desc">Name Z–A</option>
               <option value="id-asc">Student ID A–Z</option>
               <option value="id-desc">Student ID Z–A</option>
             </select>
             <div class="view-toggle" role="group" aria-label="View mode">
-              <button type="button" class="view-btn" [class.active]="viewMode() === 'table'" (click)="viewMode.set('table')" title="Table view">☰</button>
-              <button type="button" class="view-btn" [class.active]="viewMode() === 'cards'" (click)="viewMode.set('cards')" title="Card view">▦</button>
+              <button type="button" class="view-btn" [class.active]="viewMode() === 'table'" [attr.aria-pressed]="viewMode() === 'table'" (click)="viewMode.set('table')" aria-label="Table view">☰</button>
+              <button type="button" class="view-btn" [class.active]="viewMode() === 'cards'" [attr.aria-pressed]="viewMode() === 'cards'" (click)="viewMode.set('cards')" aria-label="Card view">▦</button>
             </div>
           </div>
         </div>
 
-        <div class="results-meta">
-          <span>Showing <strong>{{ visibleStudents().length }}</strong> of <strong>{{ students().length }}</strong> students</span>
+        <div class="results-meta" aria-live="polite">
+          <span>{{ 'students.showing' | t:{ visible: visibleStudents().length, total: students().length } }}</span>
           @if (hasActiveFilters()) {
             <button type="button" class="clear-filters" (click)="clearFilters()">Clear filters</button>
           }
@@ -204,7 +208,7 @@
                 @if (enrollmentStatus(s) === 'pending') {
                   <a routerLink="/admin/enrollment" class="btn-link">Enroll</a>
                 }
-                <button type="button" class="btn-icon danger" (click)="confirmDelete(s, $event)">Delete</button>
+                <button *appUnlessDemo type="button" class="btn-icon danger" (click)="confirmDelete(s, $event)">Delete</button>
               </div>
             </article>
           }
@@ -268,7 +272,7 @@
                           <path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1.003 1.003 0 0 0 0-1.42l-2.34-2.34a1.003 1.003 0 0 0-1.42 0l-1.83 1.83 3.75 3.75 1.84-1.82z"/>
                         </svg>
                       </button>
-                      <button type="button" class="icon-btn delete" (click)="confirmDelete(s, $event)" title="Delete student" aria-label="Delete student">
+                      <button *appUnlessDemo type="button" class="icon-btn delete" (click)="confirmDelete(s, $event)" title="Delete student" aria-label="Delete student">
                         <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
                           <path fill="currentColor" d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
                         </svg>
@@ -287,7 +291,7 @@
 
 @if (registerDrawerOpen()) {
   <div class="drawer-backdrop" (click)="closeRegister()"></div>
-  <aside class="drawer" role="dialog" aria-labelledby="register-title">
+  <aside class="drawer" role="dialog" aria-modal="true" aria-labelledby="register-title">
     <div class="drawer-head">
       <div>
         <p class="eyebrow">New student</p>
@@ -310,7 +314,8 @@
 
       <div class="student-id-preview">
         <label>Student ID (auto-generated)</label>
-        <div class="id-badge">{{ nextStudentId() || 'SP------' }}</div>
+        <div class="id-badge">{{ nextStudentId() || '—' }}</div>
+        <small class="id-hint">Uses settings prefix + 4 random digits + DOB month + registration year (10 digits).</small>
       </div>
 
       <ng-container *ngTemplateOutlet="studentFields"></ng-container>
@@ -327,7 +332,7 @@
 
 @if (editingStudent(); as student) {
   <div class="drawer-backdrop" (click)="closeEdit()"></div>
-  <aside class="drawer" role="dialog" aria-labelledby="edit-title">
+  <aside class="drawer" role="dialog" aria-modal="true" aria-labelledby="edit-title">
     <div class="drawer-head">
       <div>
         <p class="eyebrow">Edit student</p>
@@ -441,7 +446,11 @@
             </div>
             <div>
               <dt>Phone</dt>
-              <dd>{{ guardian.phone || '—' }}</dd>
+              <dd>{{ guardian.guardianPhone || guardian.phone || '—' }}</dd>
+            </div>
+            <div>
+              <dt>WhatsApp notifications</dt>
+              <dd>{{ guardian.guardianWhatsappConsent ? 'Opted in' : 'Not opted in' }}</dd>
             </div>
             <div>
               <dt>Relationship</dt>
@@ -468,35 +477,42 @@
   </div>
   <div class="form-grid">
     <div class="field">
-      <label>First name *</label>
-      <input [(ngModel)]="form.firstName" name="fn" required placeholder="Enter first name" autocomplete="given-name" />
+      <label for="stuFirstName">First name *</label>
+      <input id="stuFirstName" [(ngModel)]="form.firstName" name="fn" required placeholder="Enter first name" autocomplete="given-name" />
     </div>
     <div class="field">
-      <label>Last name *</label>
-      <input [(ngModel)]="form.lastName" name="ln" required placeholder="Enter last name" autocomplete="family-name" />
+      <label for="stuLastName">Last name *</label>
+      <input id="stuLastName" [(ngModel)]="form.lastName" name="ln" required placeholder="Enter last name" autocomplete="family-name" />
     </div>
     <div class="field">
-      <label>Date of birth</label>
-      <input type="date" [(ngModel)]="form.dateOfBirth" name="dob" />
+      <label for="stuDob">Date of birth *</label>
+      <input
+        id="stuDob"
+        type="date"
+        [(ngModel)]="form.dateOfBirth"
+        (ngModelChange)="onDateOfBirthChange()"
+        name="dob"
+        required
+      />
     </div>
     <div class="field">
-      <label>Gender *</label>
-      <select [(ngModel)]="form.gender" name="gender" required>
+      <label for="stuGender">Gender *</label>
+      <select id="stuGender" [(ngModel)]="form.gender" name="gender" required>
         <option value="">— Select gender —</option>
         <option value="Male">Male</option>
         <option value="Female">Female</option>
       </select>
     </div>
     <div class="field">
-      <label>Student type *</label>
-      <select [(ngModel)]="form.studentType" name="studentType" required>
+      <label for="stuType">Student type *</label>
+      <select id="stuType" [(ngModel)]="form.studentType" name="studentType" required>
         <option value="day_scholar">Day scholar</option>
         <option value="boarder">Boarder</option>
       </select>
     </div>
     <div class="field">
-      <label>Form *</label>
-      <select [(ngModel)]="form.formId" name="formId" required>
+      <label for="stuForm">Form *</label>
+      <select id="stuForm" [(ngModel)]="form.formId" name="formId" required>
         <option value="">— Select form —</option>
         @for (f of forms(); track f.id) {
           <option [value]="f.id">{{ f.name }}</option>
@@ -504,12 +520,12 @@
       </select>
     </div>
     <div class="field span-2">
-      <label>Address</label>
-      <input [(ngModel)]="form.address" name="addr" placeholder="Residential address" autocomplete="street-address" />
+      <label for="stuAddress">Address</label>
+      <input id="stuAddress" [(ngModel)]="form.address" name="addr" placeholder="Residential address" autocomplete="street-address" />
     </div>
     <div class="field span-2">
-      <label>Previous school</label>
-      <input [(ngModel)]="form.previousSchool" name="prev" placeholder="Last school attended (optional)" />
+      <label for="stuPrevSchool">Previous school</label>
+      <input id="stuPrevSchool" [(ngModel)]="form.previousSchool" name="prev" placeholder="Last school attended (optional)" />
     </div>
   </div>
 
@@ -517,19 +533,32 @@
     <legend>Guardian / parent contact</legend>
     <div class="form-grid">
       <div class="field">
-        <label>Full name</label>
-        <input [(ngModel)]="guardian.fullName" name="gname" placeholder="Primary guardian full name" autocomplete="name" />
+        <label for="guardianName">Full name</label>
+        <input id="guardianName" [(ngModel)]="guardian.fullName" name="gname" placeholder="Primary guardian full name" autocomplete="name" />
       </div>
       <div class="field">
-        <label>Phone</label>
-        <input [(ngModel)]="guardian.phone" name="gphone" placeholder="+263..." autocomplete="tel" />
+        <label for="guardianPhone">Phone</label>
+        <input id="guardianPhone" [(ngModel)]="guardian.phone" name="gphone" placeholder="+263..." autocomplete="tel" />
       </div>
       <div class="field">
-        <label>Relationship</label>
-        <select [(ngModel)]="guardian.relationship" name="grel">
+        <label for="guardianRel">Relationship</label>
+        <select id="guardianRel" [(ngModel)]="guardian.relationship" name="grel">
           <option value="Parent">Parent</option>
           <option value="Guardian">Guardian</option>
         </select>
+      </div>
+      <div class="field span-2 consent-field">
+        <label class="consent-label">
+          <input
+            type="checkbox"
+            [(ngModel)]="guardian.guardianWhatsappConsent"
+            name="gwhatsapp"
+          />
+          <span>
+            I agree to receive WhatsApp notifications about my child's academic results and school updates.
+          </span>
+        </label>
+        <p class="consent-hint muted">Unchecked by default. SMS may still be used when WhatsApp is not available.</p>
       </div>
     </div>
   </fieldset>

@@ -72,10 +72,15 @@ import { AdminAnalyticsRetentionComponent } from './pages/admin/admin-analytics-
 import { AdminReportBuilderComponent } from './pages/admin/admin-report-builder.component';
 import { AdminAuditTrailComponent } from './pages/admin/admin-audit-trail.component';
 import { AccountantDashboardComponent } from './pages/accountant/accountant-dashboard.component';
+import { DemoLandingComponent } from './pages/public/demo-landing.component';
+import { LmsTeacherComponent } from './pages/lms/lms-teacher.component';
+import { LmsStudentComponent } from './pages/lms/lms-student.component';
+import { LmsLibraryComponent } from './pages/lms/lms-library.component';
 
 export const routes: Routes = [
   { path: '', redirectTo: 'login', pathMatch: 'full' },
   { path: 'login', component: LoginComponent },
+  { path: 'demo', component: DemoLandingComponent },
   { path: 'apply', component: ApplyComponent },
   { path: 'apply/status', component: ApplicationStatusComponent },
   { path: 'admissions', redirectTo: 'apply', pathMatch: 'full' },
@@ -177,6 +182,8 @@ export const routes: Routes = [
       { path: 'classes', component: AdminDashboardComponent },
       { path: 'staff-attendance', component: AdminStaffAttendanceComponent },
       { path: 'class-assignments', component: AdminClassAssignmentsComponent },
+      { path: 'lms', component: LmsTeacherComponent },
+      { path: 'library', component: LmsLibraryComponent },
       { path: 'settings', component: AdminSettingsComponent },
       { path: 'academic-settings', component: AdminAcademicSettingsComponent },
       { path: 'user-management', component: AdminUserManagementComponent },
@@ -221,6 +228,8 @@ export const routes: Routes = [
       { path: 'mark-entry-progress', component: AdminMarkEntryProgressComponent },
       { path: 'record-book', component: RecordBookComponent },
       { path: 'assignments', component: TeacherAssignmentsComponent },
+      { path: 'lms', component: LmsTeacherComponent },
+      { path: 'library', component: LmsLibraryComponent },
       { path: 'attendance', redirectTo: 'attendance/mark-register', pathMatch: 'full' },
       { path: 'attendance/mark-register', component: AttendanceMarkRegisterComponent },
       { path: 'attendance/report', component: AttendanceReportComponent },
@@ -260,6 +269,8 @@ export const routes: Routes = [
       { path: 'report-cards', component: ParentReportCardsComponent },
       { path: 'report-card/:studentId', component: ParentReportCardComponent },
       { path: 'homework', component: StudentHomeworkComponent },
+      { path: 'lms', component: LmsStudentComponent },
+      { path: 'library', component: LmsLibraryComponent },
       { path: 'messages', component: MessagingCenterComponent },
       { path: 'notifications', component: NotificationsComponent },
       { path: 'change-password', component: ChangePasswordPageComponent },

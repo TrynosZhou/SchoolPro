@@ -5,24 +5,16 @@
   [navSections]="adminNav"
 >
   <div class="admin-dashboard">
-    <header class="hero token-card">
-      <div class="hero-copy">
+    <header class="greeting" aria-labelledby="dash-greeting">
+      <div class="greeting-copy">
         <p class="eyebrow">{{ todayLabel }}</p>
-        <h2>Good day, {{ greetingName() }}</h2>
-        <p class="hero-sub">
-          Your command centre for students, finance, attendance, and school operations — everything in one place.
-        </p>
-        <div class="hero-actions">
-          <a routerLink="/admin/attendance/mark-register" class="hero-btn primary">Mark register</a>
-          <a routerLink="/admin/payment" class="hero-btn">Record payment</a>
-          <a routerLink="/admin/communication/send" class="hero-btn">Send announcement</a>
-        </div>
+        <h1 id="dash-greeting">Good {{ greetingPeriod }}, {{ greetingName() }}</h1>
+        <p class="greeting-sub">School operations overview — students, finance, and attendance at a glance.</p>
       </div>
-      <div class="hero-aside">
-        <article class="mini-stat">
-          <strong>{{ attendanceTotal() }}</strong>
-          <span>Attendance entries today</span>
-        </article>
+      <div class="greeting-actions">
+        <a routerLink="/admin/attendance/mark-register" class="cta primary">Mark register</a>
+        <a routerLink="/admin/payment" class="cta">Record payment</a>
+        <a routerLink="/admin/communication/send" class="cta">Send announcement</a>
       </div>
     </header>
 
@@ -101,10 +93,10 @@
     </section>
 
     <div class="workspace">
-      <section class="panel attendance-panel token-card">
+      <section class="panel attendance-panel token-card" aria-labelledby="att-heading">
         <div class="panel-head">
           <div>
-            <h3>Attendance today</h3>
+            <h2 id="att-heading">Attendance today</h2>
             <p>Live register submissions across the school</p>
           </div>
           <span class="panel-badge">{{ attendanceTotal() }} records</span>
@@ -139,10 +131,10 @@
         <a routerLink="/admin/attendance/mark-register" class="panel-link">Open mark register →</a>
       </section>
 
-      <section class="panel finance-panel token-card">
+      <section class="panel finance-panel token-card" aria-labelledby="fin-heading">
         <div class="panel-head">
           <div>
-            <h3>Finance snapshot</h3>
+            <h2 id="fin-heading">Finance snapshot</h2>
             <p>Collections vs outstanding balances this month</p>
           </div>
         </div>
@@ -188,126 +180,79 @@
           <a routerLink="/admin/fin-reports/fee-collection-revenue" class="panel-link muted">Revenue report →</a>
         </div>
       </section>
-
-      <aside class="side-stack">
-        <section class="panel quick-panel token-card">
-          <div class="panel-head compact">
-            <h3>Quick actions</h3>
-          </div>
-          <div class="quick-grid">
-            @for (action of quickActions; track action.path) {
-              <a [routerLink]="action.path" class="quick-card">
-                <span class="quick-icon" aria-hidden="true">
-                  @switch (action.path) {
-                    @case ('/admin/attendance/mark-register') {
-                      <svg viewBox="0 0 24 24" fill="none"><rect x="4" y="5" width="16" height="15" rx="2" stroke="currentColor" stroke-width="1.75" /><path d="M8 3v4M16 3v4M4 10h16" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" /><path d="M9.5 14.5l1.75 1.75L15 12.5" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" /></svg>
-                    }
-                    @case ('/admin/payment') {
-                      <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="6" width="18" height="12" rx="2" stroke="currentColor" stroke-width="1.75" /><path d="M3 10h18" stroke="currentColor" stroke-width="1.75" /><path d="M7 15h4" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" /></svg>
-                    }
-                    @case ('/admin/billing') {
-                      <svg viewBox="0 0 24 24" fill="none"><path d="M8 4h8l3 3v13H8V4z" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" /><path d="M16 4v3h3M10 12h6M10 16h4" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" /></svg>
-                    }
-                    @case ('/admin/communication/send') {
-                      <svg viewBox="0 0 24 24" fill="none"><path d="M5 6.5h14a2 2 0 0 1 2 2v6.5a2 2 0 0 1-2 2H9l-4 3v-3H5a2 2 0 0 1-2-2V8.5a2 2 0 0 1 2-2z" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" /></svg>
-                    }
-                    @case ('/admin/report-cards') {
-                      <svg viewBox="0 0 24 24" fill="none"><path d="M8 4h8l3 3v13H8V4z" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" /><path d="M16 4v3h3M10 12h6" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" /></svg>
-                    }
-                    @case ('/admin/timetable/generate') {
-                      <svg viewBox="0 0 24 24" fill="none"><rect x="4" y="5" width="16" height="15" rx="2" stroke="currentColor" stroke-width="1.75" /><path d="M8 3v4M16 3v4M4 10h16" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" /><path d="M8 14h2M14 14h2M8 17h2M14 17h2" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" /></svg>
-                    }
-                    @case ('/admin/change-password') {
-                      <svg viewBox="0 0 24 24" fill="none"><rect x="5" y="11" width="14" height="10" rx="2" stroke="currentColor" stroke-width="1.75" /><path d="M8 11V8a4 4 0 1 1 8 0v3" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" /><circle cx="12" cy="16" r="1" fill="currentColor" /></svg>
-                    }
-                  }
-                </span>
-                <span class="quick-label">{{ action.label }}</span>
-              </a>
-            }
-          </div>
-        </section>
-
-        <section class="panel modules-intro token-card">
-          <div class="panel-head compact">
-            <h3>School modules</h3>
-            <p>Select a module below to see its pages</p>
-          </div>
-        </section>
-      </aside>
     </div>
 
-    <section class="modules-section">
-      <div class="menu-grid">
-        @for (menu of majorMenus; track menu.title) {
-          <button
-            type="button"
-            class="menu-tile"
-            [id]="'menu-tile-' + menuDomId(menu.title)"
-            [class.selected]="isSelected(menu.title)"
-            (click)="toggleMenu(menu.title)"
-            [attr.aria-expanded]="isSelected(menu.title)"
-          >
-            <span class="menu-tile-icon" aria-hidden="true">
-              <ng-container *ngTemplateOutlet="menuIcon; context: { $implicit: menu.icon }" />
-            </span>
-            <span class="menu-tile-label">{{ menu.title }}</span>
-            <span class="menu-tile-count">{{ menu.links.length }} pages</span>
-          </button>
-        }
-      </div>
-
-      @if (selectedMenu(); as active) {
-        <div class="submenu-panel token-card">
-          <div class="submenu-head">
-            <div>
-              <h4>{{ active }}</h4>
-              <p>Shortcuts within this module</p>
-            </div>
-            <a [routerLink]="primaryPathFor(active)" class="submenu-primary">Open module →</a>
-          </div>
-          <div class="submenu-links">
-            @for (link of selectedMenuLinks(); track link.path) {
-              <a [routerLink]="link.path" class="submenu-link" (click)="onDashboardSubmenuClick()">{{ link.label }}</a>
-            }
+    <div class="focus-row">
+      <section class="panel attention-panel token-card" aria-labelledby="attn-heading">
+        <div class="panel-head compact">
+          <div>
+            <h2 id="attn-heading">Needs attention</h2>
+            <p>Items that may need action today</p>
           </div>
         </div>
-      }
-    </section>
+
+        @if (loading()) {
+          <div class="empty-note">Checking school status…</div>
+        } @else if (!attentionItems().length) {
+          <div class="empty-note success">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9.5 14.5l1.75 1.75L15 12.5" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" /><circle cx="12" cy="12" r="8.25" stroke="currentColor" stroke-width="1.75" /></svg>
+            All clear — no urgent flags right now.
+          </div>
+        } @else {
+          <ul class="attention-list">
+            @for (item of attentionItems(); track item.id) {
+              <li>
+                <a [routerLink]="item.path" class="attention-card" [attr.data-tone]="item.tone">
+                  <span class="attention-title">{{ item.title }}</span>
+                  <span class="attention-detail">{{ item.detail }}</span>
+                  <span class="attention-go" aria-hidden="true">→</span>
+                </a>
+              </li>
+            }
+          </ul>
+        }
+      </section>
+
+      <section class="panel quick-panel token-card" aria-labelledby="quick-heading">
+        <div class="panel-head compact">
+          <h2 id="quick-heading">Quick actions</h2>
+        </div>
+        <div class="quick-grid">
+          @for (action of quickActions; track action.path) {
+            <a [routerLink]="action.path" class="quick-card">
+              <span class="quick-icon" aria-hidden="true">
+                @switch (action.path) {
+                  @case ('/admin/attendance/mark-register') {
+                    <svg viewBox="0 0 24 24" fill="none"><rect x="4" y="5" width="16" height="15" rx="2" stroke="currentColor" stroke-width="1.75" /><path d="M8 3v4M16 3v4M4 10h16" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" /><path d="M9.5 14.5l1.75 1.75L15 12.5" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" /></svg>
+                  }
+                  @case ('/admin/payment') {
+                    <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="6" width="18" height="12" rx="2" stroke="currentColor" stroke-width="1.75" /><path d="M3 10h18" stroke="currentColor" stroke-width="1.75" /><path d="M7 15h4" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" /></svg>
+                  }
+                  @case ('/admin/billing') {
+                    <svg viewBox="0 0 24 24" fill="none"><path d="M8 4h8l3 3v13H8V4z" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" /><path d="M16 4v3h3M10 12h6M10 16h4" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" /></svg>
+                  }
+                  @case ('/admin/communication/send') {
+                    <svg viewBox="0 0 24 24" fill="none"><path d="M5 6.5h14a2 2 0 0 1 2 2v6.5a2 2 0 0 1-2 2H9l-4 3v-3H5a2 2 0 0 1-2-2V8.5a2 2 0 0 1 2-2z" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" /></svg>
+                  }
+                  @case ('/admin/report-cards') {
+                    <svg viewBox="0 0 24 24" fill="none"><path d="M8 4h8l3 3v13H8V4z" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" /><path d="M16 4v3h3M10 12h6" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" /></svg>
+                  }
+                  @case ('/admin/timetable/generate') {
+                    <svg viewBox="0 0 24 24" fill="none"><rect x="4" y="5" width="16" height="15" rx="2" stroke="currentColor" stroke-width="1.75" /><path d="M8 3v4M16 3v4M4 10h16" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" /><path d="M8 14h2M14 14h2M8 17h2M14 17h2" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" /></svg>
+                  }
+                  @case ('/admin/lms') {
+                    <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="14" rx="2" stroke="currentColor" stroke-width="1.75" /><path d="M8 9h8M8 13h5" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" /></svg>
+                  }
+                  @case ('/admin/library') {
+                    <svg viewBox="0 0 24 24" fill="none"><path d="M5 5.5A2.5 2.5 0 0 1 7.5 3H19v16H7.5A2.5 2.5 0 0 0 5 21.5V5.5z" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" /><path d="M5 18.5A2.5 2.5 0 0 1 7.5 16H19" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" /></svg>
+                  }
+                }
+              </span>
+              <span class="quick-label">{{ action.label }}</span>
+            </a>
+          }
+        </div>
+      </section>
+    </div>
   </div>
 </app-portal-layout>
-
-<ng-template #menuIcon let-key>
-  @switch (key) {
-    @case ('students') {
-      <svg viewBox="0 0 24 24" fill="none"><path d="M16 19a4 4 0 0 0-8 0" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" /><circle cx="12" cy="8" r="3.25" stroke="currentColor" stroke-width="1.75" /><path d="M19 19a3 3 0 0 0-2.2-2.87M5 19a3 3 0 0 1 2.2-2.87" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" /></svg>
-    }
-    @case ('parents') {
-      <svg viewBox="0 0 24 24" fill="none"><circle cx="9" cy="8" r="2.75" stroke="currentColor" stroke-width="1.75" /><circle cx="17" cy="9" r="2.25" stroke="currentColor" stroke-width="1.75" /><path d="M4 19a5 5 0 0 1 5-4.5M15 19a4 4 0 0 1 4-3.5" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" /></svg>
-    }
-    @case ('attendance') {
-      <svg viewBox="0 0 24 24" fill="none"><rect x="4" y="5" width="16" height="15" rx="2" stroke="currentColor" stroke-width="1.75" /><path d="M8 3v4M16 3v4M4 10h16" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" /><path d="M9.5 14.5l1.75 1.75L15 12.5" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" /></svg>
-    }
-    @case ('staff') {
-      <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.5" stroke="currentColor" stroke-width="1.75" /><path d="M6 20a6 6 0 0 1 12 0" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" /></svg>
-    }
-    @case ('examinations') {
-      <svg viewBox="0 0 24 24" fill="none"><path d="M8 4h8l3 3v13H8V4z" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" /><path d="M16 4v3h3M10 12h6M10 16h6" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" /></svg>
-    }
-    @case ('finance') {
-      <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="6" width="18" height="12" rx="2" stroke="currentColor" stroke-width="1.75" /><path d="M3 10h18" stroke="currentColor" stroke-width="1.75" /><path d="M7 15h4" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" /></svg>
-    }
-    @case ('fin-reports') {
-      <svg viewBox="0 0 24 24" fill="none"><path d="M5 19V9M12 19V5M19 19v-7" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" /></svg>
-    }
-    @case ('communication') {
-      <svg viewBox="0 0 24 24" fill="none"><path d="M5 6.5h14a2 2 0 0 1 2 2v6.5a2 2 0 0 1-2 2H9l-4 3v-3H5a2 2 0 0 1-2-2V8.5a2 2 0 0 1 2-2z" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" /></svg>
-    }
-    @case ('timetable') {
-      <svg viewBox="0 0 24 24" fill="none"><rect x="4" y="5" width="16" height="15" rx="2" stroke="currentColor" stroke-width="1.75" /><path d="M8 3v4M16 3v4M4 10h16" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" /><path d="M8 14h2M14 14h2M8 17h2M14 17h2" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" /></svg>
-    }
-    @case ('system-admin') {
-      <svg viewBox="0 0 24 24" fill="none"><path d="M12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4z" stroke="currentColor" stroke-width="1.75" /><path d="M5.5 8.5a7 7 0 0 1 13 0M4 12a8.5 8.5 0 0 0 16 0M2.5 15.5a10 10 0 0 1 19 0" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" /></svg>
-    }
-  }
-</ng-template>

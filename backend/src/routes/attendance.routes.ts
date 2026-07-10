@@ -209,9 +209,15 @@ router.post('/students/bulk', authorize(UserRole.TEACHER, UserRole.ADMIN), async
       existing.status = r.status;
       existing.remarks = r.remarks;
       existing.markedById = req.user!.staffId;
+      if (r.mode === 'in_person' || r.mode === 'remote') existing.mode = r.mode;
       saved.push(await repo.save(existing));
     } else {
-      saved.push(await repo.save(repo.create({ ...r, date, markedById: req.user!.staffId })));
+      saved.push(await repo.save(repo.create({
+        ...r,
+        date,
+        markedById: req.user!.staffId,
+        mode: r.mode === 'remote' ? 'remote' : 'in_person',
+      })));
     }
     // Only alert when a student becomes absent (avoid re-alerting on edits).
     if (r.status === AttendanceStatus.ABSENT && !wasAbsent) newlyAbsent.push(r.studentId);

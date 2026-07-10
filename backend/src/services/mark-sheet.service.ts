@@ -17,6 +17,7 @@ export interface MarkSheetSubject {
   id: string;
   code: string;
   name: string;
+  short?: string | null;
 }
 
 export interface MarkSheetCell {
@@ -127,6 +128,7 @@ export async function buildMarkSheet(params: MarkSheetParams): Promise<MarkSheet
         id: cs.subject.id,
         code: cs.subject.code,
         name: cs.subject.name,
+        short: cs.subject.short ?? null,
       });
     }
   }
@@ -136,6 +138,7 @@ export async function buildMarkSheet(params: MarkSheetParams): Promise<MarkSheet
         id: m.subject.id,
         code: m.subject.code,
         name: m.subject.name,
+        short: m.subject.short ?? null,
       });
     }
   }

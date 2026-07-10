@@ -9,6 +9,7 @@ const data_source_1 = require("../config/data-source");
 const typeorm_1 = require("typeorm");
 const entities_1 = require("../entities");
 const enums_1 = require("../entities/enums");
+const student_lifecycle_service_1 = require("../services/student-lifecycle.service");
 const auth_1 = require("../middleware/auth");
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const typeorm_helpers_1 = require("../utils/typeorm-helpers");
@@ -32,10 +33,21 @@ const multer_1 = __importDefault(require("multer"));
 const path_1 = __importDefault(require("path"));
 const fs_1 = __importDefault(require("fs"));
 const pdf_1 = require("../utils/pdf");
+const gender_1 = require("../utils/gender");
+const portal_roles_1 = require("../config/portal-roles");
 const router = (0, express_1.Router)();
 router.use(auth_1.authenticate);
 const SETTINGS_ID = 'default';
 const logosDir = path_1.default.join(process.cwd(), 'uploads', 'logos');
+/** Normalize an incoming staff gender value to 'male' | 'female' | null. */
+function normalizeGender(value) {
+    const v = String(value ?? '').trim().toLowerCase();
+    if (v === 'male' || v === 'm')
+        return 'male';
+    if (v === 'female' || v === 'f')
+        return 'female';
+    return null;
+}
 const logoUpload = (0, multer_1.default)({
     storage: multer_1.default.diskStorage({
         destination: (_req, _file, cb) => {
@@ -216,7 +228,7 @@ router.post('/integrations/test/:provider', (0, auth_1.authorize)(enums_1.UserRo
     }
     return res.status(404).json({ message: 'Unknown integration provider' });
 });
-router.get('/school-years', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), async (_req, res) => {
+router.get('/school-years', (0, auth_1.authorize)(...portal_roles_1.SCHOOL_READ_ROLES), async (_req, res) => {
     const repo = data_source_1.AppDataSource.getRepository(entities_1.SchoolYear);
     res.json(await repo.find({ relations: (0, typeorm_helpers_1.relations)('terms'), order: { startDate: 'DESC' } }));
 });
@@ -756,6 +768,7 @@ router.post('/class-promotion/promote', (0, auth_1.authorize)(enums_1.UserRole.A
         });
     }
     const enrollmentDate = targetYear.startDate || (0, helpers_1.today)();
+    const promotedStudentIds = students.map((s) => s.id);
     if (toClass) {
         await studentRepo
             .createQueryBuilder()
@@ -770,17 +783,38 @@ router.post('/class-promotion/promote', (0, auth_1.authorize)(enums_1.UserRole.A
             .execute();
     }
     else {
-        // Completion: remove from class; keep student active.
+        // Completion: student has finished the top level — record graduation & remove from class.
         await studentRepo
             .createQueryBuilder()
             .update(entities_1.Student)
             .set({
             classId: null,
             enrollmentDate: null,
+            status: enums_1.StudentStatus.GRADUATED,
+            exitDate: completingYear.endDate || (0, helpers_1.today)(),
+            isActive: false,
         })
             .where('classId = :classId', { classId: fromClass.id })
             .andWhere('isActive = true')
             .execute();
+    }
+    // Maintain year-over-year enrollment snapshots for retention analytics.
+    try {
+        await (0, student_lifecycle_service_1.recordPromotionSnapshots)({
+            studentIds: promotedStudentIds,
+            completingYearId: completingYear.id,
+            completingYearEndDate: completingYear.endDate,
+            targetYearId: targetYear.id,
+            targetYearStartDate: targetYear.startDate,
+            toClassId: toClass?.id ?? null,
+            toFormId: toClass?.formId ?? null,
+            toClassName: toClass?.name ?? null,
+            toFormName: toClass?.form?.name ?? null,
+            graduation: !toClass,
+        });
+    }
+    catch (err) {
+        console.error('[class-promotion] enrollment snapshot update failed:', err);
     }
     const fromLabel = `${fromClass.form?.name || 'Form'} ${fromClass.name}`;
     const toLabel = toClass ? `${toClass.form?.name || 'Form'} ${toClass.name}` : null;
@@ -924,13 +958,13 @@ router.get('/staff/:id', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.U
     res.json(staff);
 });
 router.post('/staff', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (req, res) => {
-    const { email, password, firstName, lastName, phone, role = enums_1.UserRole.TEACHER, department, qualification, hireDate, title, employeeNumber: _ignored, } = req.body;
+    const { email, password, firstName, lastName, phone, role = enums_1.UserRole.TEACHER, department, qualification, hireDate, title, gender, employeeNumber: _ignored, } = req.body;
     const userRepo = data_source_1.AppDataSource.getRepository(entities_1.User);
     const staffRepo = data_source_1.AppDataSource.getRepository(entities_1.Staff);
     const existing = await userRepo.findOne({ where: { email: email?.toLowerCase() } });
     if (existing)
         return res.status(400).json({ message: 'Email already registered' });
-    const allowedRoles = [enums_1.UserRole.TEACHER, enums_1.UserRole.ADMIN, enums_1.UserRole.PRINCIPAL];
+    const allowedRoles = [enums_1.UserRole.TEACHER, enums_1.UserRole.ADMIN, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.ACCOUNTANT];
     const staffRole = allowedRoles.includes(role) ? role : enums_1.UserRole.TEACHER;
     const plainPassword = password || 'Teacher123!';
     const policy = await (0, security_policy_service_1.getSecurityPolicy)();
@@ -947,10 +981,12 @@ router.post('/staff', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (req,
         role: staffRole,
     }));
     const employeeNumber = await (0, helpers_1.generateEmployeeNumber)();
+    const normalizedGender = normalizeGender(gender);
     const staff = await staffRepo.save(staffRepo.create({
         userId: user.id,
         employeeNumber,
         title: title ? String(title).trim() : null,
+        gender: normalizedGender,
         department,
         qualification,
         hireDate: hireDate || (0, helpers_1.today)(),
@@ -971,7 +1007,7 @@ router.patch('/staff/:id', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async 
     });
     if (!staff)
         return res.status(404).json({ message: 'Staff member not found' });
-    const { email, password, firstName, lastName, phone, role, department, qualification, hireDate, title, employeeNumber: _ignored, isActive, } = req.body;
+    const { email, password, firstName, lastName, phone, role, department, qualification, hireDate, title, gender, employeeNumber: _ignored, isActive, } = req.body;
     if (email && email.toLowerCase() !== staff.user.email) {
         const dup = await userRepo.findOne({ where: { email: email.toLowerCase() } });
         if (dup)
@@ -1004,6 +1040,8 @@ router.patch('/staff/:id', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async 
     }
     if (title !== undefined)
         staff.title = title ? String(title).trim() : null;
+    if (gender !== undefined)
+        staff.gender = normalizeGender(gender);
     if (isActive !== undefined) {
         staff.isActive = isActive;
         staff.user.isActive = isActive;
@@ -1064,7 +1102,7 @@ router.post('/uniform/sales', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), asy
     }));
     res.status(201).json(sale);
 });
-const STAFF_PORTAL_ROLES = [enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.ADMIN, enums_1.UserRole.TEACHER];
+const STAFF_PORTAL_ROLES = [enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.ADMIN, enums_1.UserRole.ACCOUNTANT, enums_1.UserRole.TEACHER];
 function serializeManagedUser(user) {
     return {
         id: user.id,
@@ -1139,7 +1177,7 @@ router.get('/users/:id', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (r
     res.json(serializeManagedUser(user));
 });
 router.post('/users', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (req, res) => {
-    const { email, password, firstName, lastName, phone, role, schoolRoleId, department, qualification, hireDate, admissionNumber, linkAdmissionNumber, relationship, } = req.body || {};
+    const { email, password, firstName, lastName, phone, role, schoolRoleId, department, qualification, hireDate, admissionNumber, linkAdmissionNumber, relationship, gender, } = req.body || {};
     const trimmedEmail = String(email || '').trim().toLowerCase();
     const trimmedFirst = String(firstName || '').trim();
     const trimmedLast = String(lastName || '').trim();
@@ -1181,6 +1219,7 @@ router.post('/users', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (req,
             lastName: trimmedLast,
             phone: phone?.trim() || undefined,
             role: enums_1.UserRole.STUDENT,
+            portalPasswordCustomized: true,
         }));
         student.userId = user.id;
         await studentRepo.save(student);
@@ -1212,7 +1251,11 @@ router.post('/users', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (req,
     }
     else if (portalRole === enums_1.UserRole.PARENT) {
         const parentRepo = data_source_1.AppDataSource.getRepository(entities_1.Parent);
-        const parent = await parentRepo.save(parentRepo.create({ userId: user.id }));
+        const parentGender = (0, gender_1.resolveParentGender)(gender, relationship);
+        const parent = await parentRepo.save(parentRepo.create({
+            userId: user.id,
+            gender: parentGender ?? undefined,
+        }));
         const linkAdmission = String(linkAdmissionNumber || '').trim().toUpperCase();
         if (linkAdmission) {
             const studentRepo = data_source_1.AppDataSource.getRepository(entities_1.Student);
@@ -1286,6 +1329,9 @@ router.patch('/users/:id', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async 
         user.passwordHash = await bcryptjs_1.default.hash(password, 10);
         user.failedLoginAttempts = 0;
         user.lockedUntil = null;
+        if (user.role === enums_1.UserRole.STUDENT) {
+            user.portalPasswordCustomized = true;
+        }
     }
     if (schoolRoleId !== undefined) {
         if (schoolRoleId === null || schoolRoleId === '') {
@@ -1323,6 +1369,11 @@ router.patch('/users/:id', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async 
         if (hireDate !== undefined)
             user.staffProfile.hireDate = hireDate || user.staffProfile.hireDate;
         await data_source_1.AppDataSource.getRepository(entities_1.Staff).save(user.staffProfile);
+    }
+    if (user.studentProfile && user.role === enums_1.UserRole.STUDENT) {
+        user.studentProfile.firstName = user.firstName;
+        user.studentProfile.lastName = user.lastName;
+        await data_source_1.AppDataSource.getRepository(entities_1.Student).save(user.studentProfile);
     }
     const full = await loadManagedUser(user.id);
     res.json(serializeManagedUser(full));
@@ -1367,6 +1418,7 @@ function serializeParent(parent) {
         phone: user.phone ?? null,
         isActive: user.isActive,
         occupation: parent.occupation ?? null,
+        gender: parent.gender ?? null,
         address: parent.address ?? null,
         receivesWhatsApp: parent.receivesWhatsApp,
         linkedStudents,
@@ -1495,7 +1547,7 @@ router.delete('/parents/:id/students/:studentId/unlink', (0, auth_1.authorize)(e
     res.json({ parent: serializeParent(full) });
 });
 router.post('/parents', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (req, res) => {
-    const { email, password, firstName, lastName, phone, occupation, address, receivesWhatsApp, linkAdmissionNumber, relationship, } = req.body || {};
+    const { email, password, firstName, lastName, phone, occupation, address, receivesWhatsApp, linkAdmissionNumber, relationship, gender, } = req.body || {};
     const trimmedEmail = String(email || '').trim().toLowerCase();
     const trimmedFirst = String(firstName || '').trim();
     const trimmedLast = String(lastName || '').trim();
@@ -1522,11 +1574,13 @@ router.post('/parents', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (re
         isActive: true,
     }));
     const parentRepo = data_source_1.AppDataSource.getRepository(entities_1.Parent);
+    const parentGender = (0, gender_1.resolveParentGender)(gender, relationship);
     const parent = await parentRepo.save(parentRepo.create({
         userId: user.id,
         occupation: occupation?.trim() || undefined,
         address: address?.trim() || undefined,
         receivesWhatsApp: receivesWhatsApp !== false,
+        gender: parentGender ?? undefined,
     }));
     const linkAdmission = String(linkAdmissionNumber || '').trim().toUpperCase();
     if (linkAdmission) {
@@ -1563,7 +1617,7 @@ router.patch('/parents/:id', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), asyn
     const parent = await loadParentRecord(req.params.id);
     if (!parent)
         return res.status(404).json({ message: 'Parent not found' });
-    const { email, password, firstName, lastName, phone, occupation, address, receivesWhatsApp, isActive, linkAdmissionNumber, relationship, } = req.body || {};
+    const { email, password, firstName, lastName, phone, occupation, address, receivesWhatsApp, isActive, linkAdmissionNumber, relationship, gender, } = req.body || {};
     const userRepo = data_source_1.AppDataSource.getRepository(entities_1.User);
     const parentRepo = data_source_1.AppDataSource.getRepository(entities_1.Parent);
     const user = parent.user;
@@ -1599,6 +1653,10 @@ router.patch('/parents/:id', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), asyn
         parent.address = address?.trim() || undefined;
     if (receivesWhatsApp !== undefined)
         parent.receivesWhatsApp = Boolean(receivesWhatsApp);
+    if (gender !== undefined || relationship !== undefined) {
+        const rel = relationship !== undefined ? relationship : parent.guardians?.[0]?.relationship;
+        parent.gender = (0, gender_1.resolveParentGender)(gender !== undefined ? gender : parent.gender, rel) ?? undefined;
+    }
     await userRepo.save(user);
     await parentRepo.save(parent);
     const linkAdmission = String(linkAdmissionNumber || '').trim().toUpperCase();

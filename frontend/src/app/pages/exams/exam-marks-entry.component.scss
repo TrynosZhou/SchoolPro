@@ -382,7 +382,7 @@
 }
 
 .btn-sm {
-  font-size: 0.8rem;
+  font-size: 1.04rem;
   padding: 0.35rem 0.65rem;
 }
 
@@ -624,7 +624,7 @@
   display: inline-block;
   padding: 0.2rem 0.6rem;
   border-radius: 999px;
-  font-size: 0.75rem;
+  font-size: 0.975rem;
   background: #e0e7ff;
   color: #3730a3;
   font-weight: 500;
@@ -696,7 +696,7 @@
   border: 1px solid #e2e8f0;
   border-radius: 999px;
   background: #fff;
-  font-size: 0.78rem;
+  font-size: 1.014rem;
   font-weight: 500;
   color: #64748b;
   cursor: pointer;
@@ -712,7 +712,7 @@
 }
 
 .chip-count {
-  font-size: 0.7rem;
+  font-size: 0.91rem;
   padding: 0.05rem 0.35rem;
   background: #f1f5f9;
   border-radius: 10px;
@@ -732,7 +732,7 @@
     border: none;
     background: #fff;
     padding: 0.35rem 0.75rem;
-    font-size: 0.8rem;
+    font-size: 1.04rem;
     font-weight: 500;
     color: #64748b;
     cursor: pointer;
@@ -748,7 +748,7 @@
   align-items: center;
   gap: 0.4rem;
   span {
-    font-size: 0.75rem;
+    font-size: 0.975rem;
     font-weight: 600;
     color: #64748b;
   }
@@ -756,7 +756,7 @@
     padding: 0.35rem 0.5rem;
     border: 1px solid #e2e8f0;
     border-radius: 8px;
-    font-size: 0.8rem;
+    font-size: 1.04rem;
   }
 }
 
@@ -772,7 +772,7 @@
   left: 0.65rem;
   top: 50%;
   transform: translateY(-50%);
-  font-size: 0.85rem;
+  font-size: 1.105rem;
   opacity: 0.5;
   pointer-events: none;
 }
@@ -782,7 +782,7 @@
   padding: 0.5rem 2rem 0.5rem 2.1rem;
   border: 1px solid #e2e8f0;
   border-radius: 10px;
-  font-size: 0.875rem;
+  font-size: 1.1375rem;
   background: #fff;
   transition: border-color 0.15s, box-shadow 0.15s;
 
@@ -825,7 +825,7 @@
 .marks-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.875rem;
+  font-size: 1.1375rem;
 
   th, td {
     padding: 0.6rem 0.85rem;
@@ -840,7 +840,7 @@
 
     th {
       background: #f8fafc;
-      font-size: 0.7rem;
+      font-size: 0.91rem;
       text-transform: uppercase;
       letter-spacing: 0.04em;
       color: #475569;
@@ -868,7 +868,7 @@
 
 .mono {
   font-family: ui-monospace, monospace;
-  font-size: 0.82rem;
+  font-size: 1.066rem;
   color: #334155;
 }
 
@@ -876,7 +876,7 @@
   display: inline-block;
   padding: 0.15rem 0.5rem;
   border-radius: 6px;
-  font-size: 0.75rem;
+  font-size: 0.975rem;
   background: #f1f5f9;
   color: #475569;
 }
@@ -886,6 +886,7 @@
   padding: 0.4rem 0.5rem;
   border-radius: 8px;
   border: 1px solid #cbd5e1;
+  font-size: 1.1375rem;
   transition: border-color 0.15s, box-shadow 0.15s;
 
   &:focus {
@@ -901,6 +902,7 @@
   padding: 0.4rem 0.55rem;
   border-radius: 8px;
   border: 1px solid #cbd5e1;
+  font-size: 1.1375rem;
   transition: border-color 0.15s;
 
   &:focus {
@@ -914,7 +916,7 @@
   padding: 0.2rem 0.55rem;
   border-radius: 6px;
   font-weight: 700;
-  font-size: 0.8rem;
+  font-size: 1.04rem;
   background: #eef2ff;
   color: #4338ca;
 
@@ -1072,7 +1074,7 @@
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  font-size: 0.75rem;
+  font-size: 0.975rem;
   font-weight: 600;
 
   &.saving { color: #d97706; }

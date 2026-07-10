@@ -42,6 +42,7 @@ interface SchoolSettings {
   logoUrl?: string;
   updatedAt?: string;
   currency: string;
+  studentIdPrefix?: string;
   feeReminderTemplate?: string;
   gradeBoundaries?: GradeBoundaryRow[];
   bankAccountName?: string;
@@ -182,6 +183,7 @@ export class AdminSettingsComponent implements OnInit {
     website: '',
     facebookPageUrl: '',
     currency: 'USD',
+    studentIdPrefix: 'SP',
     feeReminderTemplate: '',
   };
 
@@ -319,7 +321,7 @@ export class AdminSettingsComponent implements OnInit {
       next: (data) => {
         this.school.set(data.settings.school);
         this.whatsapp.set(data.settings.whatsapp);
-        this.profileForm = { ...data.settings.school };
+        this.profileForm = { ...data.settings.school, studentIdPrefix: data.settings.school.studentIdPrefix || 'SP' };
         this.bankForm = {
           bankAccountName: data.settings.school.bankAccountName || '',
           bankName: data.settings.school.bankName || '',
@@ -392,10 +394,19 @@ export class AdminSettingsComponent implements OnInit {
 
   saveProfile() {
     this.submitting.set(true);
-    this.api.patch<SchoolSettings>('/admin/settings', this.profileForm).subscribe({
+    const prefix = String(this.profileForm.studentIdPrefix || 'SP')
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, '')
+      .slice(0, 8);
+    const payload = {
+      ...this.profileForm,
+      studentIdPrefix: prefix || 'SP',
+    };
+    this.api.patch<SchoolSettings>('/admin/settings', payload).subscribe({
       next: (s) => {
         this.school.set(s);
-        this.profileForm = { ...s };
+        this.profileForm = { ...s, studentIdPrefix: s.studentIdPrefix || 'SP' };
         this.submitting.set(false);
         this.showToast('success', 'School profile saved');
       },

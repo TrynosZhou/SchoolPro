@@ -10,11 +10,13 @@ import { generateReportCardPortalPdf } from './report-card-portal.pdf';
 const receiptsDir = path.join(process.cwd(), 'uploads', 'receipts');
 const invoicesDir = path.join(process.cwd(), 'uploads', 'invoices');
 const logosDir = path.join(process.cwd(), 'uploads', 'logos');
+const developerPhotosDir = path.join(process.cwd(), 'uploads', 'developer-photos');
 
 export function ensureUploadDirs() {
   fs.mkdirSync(receiptsDir, { recursive: true });
   fs.mkdirSync(invoicesDir, { recursive: true });
   fs.mkdirSync(logosDir, { recursive: true });
+  fs.mkdirSync(developerPhotosDir, { recursive: true });
 }
 
 export interface SchoolBranding {
@@ -1423,7 +1425,7 @@ export interface MarkSheetPdfData {
   classTeacherName?: string | null;
   maxMarks: number;
   generatedAt: Date;
-  subjects: { code: string; name: string }[];
+  subjects: { code: string; name: string; short?: string | null }[];
   students: {
     position: number | null;
     admissionNumber: string;
@@ -1567,7 +1569,7 @@ export async function generateMarkSheetPdf(data: MarkSheetPdfData): Promise<Buff
       'LAST NAME',
       'FIRST NAME',
       'GENDER',
-      ...data.subjects.map((s) => formatSubjectAbbrev(s.code, s.name)),
+      ...data.subjects.map((s) => formatSubjectAbbrev(s.code, s.name, s.short)),
       'COUNT',
       'SUBJ PASSED',
       'AVERAGE %',

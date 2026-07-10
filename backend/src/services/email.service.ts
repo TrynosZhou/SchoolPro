@@ -1,4 +1,5 @@
 import { getIntegrationsConfig } from './integrations.service';
+import { tenantContext } from '../config/tenant-context';
 
 export interface SendEmailResult {
   sent: boolean;
@@ -13,6 +14,13 @@ export async function sendTransactionalEmail(params: {
   text: string;
   html?: string;
 }): Promise<SendEmailResult> {
+  // Demo sessions never send real email, even if the shared SMTP config has real
+  // credentials — the tenant context flags this regardless of process-wide config.
+  if (tenantContext.isDemo()) {
+    console.log(`[Email DEMO MOCK] To: ${params.to}\nSubject: ${params.subject}\n\n${params.text}`);
+    return { sent: false, mock: true };
+  }
+
   const config = await getIntegrationsConfig();
   const email = config.email;
 

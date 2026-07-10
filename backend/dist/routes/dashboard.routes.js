@@ -21,8 +21,26 @@ router.get('/school-links', async (_req, res) => {
 });
 router.get('/overview', (0, auth_1.authorize)(enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.ADMIN), async (_req, res) => {
     const [students, staff, attendanceToday, collections, debtors, lowStock] = await Promise.all([
-        data_source_1.AppDataSource.query(`SELECT COUNT(*) as count FROM students WHERE "isActive" = true`),
-        data_source_1.AppDataSource.query(`SELECT COUNT(*) as count FROM staff WHERE "isActive" = true`),
+        data_source_1.AppDataSource.query(`
+      SELECT
+        COUNT(*)::int AS count,
+        COUNT(*) FILTER (WHERE "studentType" = 'boarder')::int AS boarders,
+        COUNT(*) FILTER (WHERE "studentType" IS DISTINCT FROM 'boarder')::int AS "dayScholars"
+      FROM students WHERE "isActive" = true
+    `),
+        data_source_1.AppDataSource.query(`
+      SELECT
+        COUNT(*)::int AS count,
+        COUNT(*) FILTER (
+          WHERE lower(gender) = 'male'
+             OR (gender IS NULL AND lower(title) = 'mr')
+        )::int AS "maleStaff",
+        COUNT(*) FILTER (
+          WHERE lower(gender) = 'female'
+             OR (gender IS NULL AND lower(title) IN ('mrs', 'ms', 'miss'))
+        )::int AS "femaleStaff"
+      FROM staff WHERE "isActive" = true
+    `),
         data_source_1.AppDataSource.query(`
       SELECT status, COUNT(*) as count FROM student_attendance
       WHERE date = CURRENT_DATE GROUP BY status
@@ -42,7 +60,11 @@ router.get('/overview', (0, auth_1.authorize)(enums_1.UserRole.DIRECTOR, enums_1
     ]);
     res.json({
         totalStudents: Number(students[0]?.count || 0),
+        boarders: Number(students[0]?.boarders || 0),
+        dayScholars: Number(students[0]?.dayScholars || 0),
         totalStaff: Number(staff[0]?.count || 0),
+        maleStaff: Number(staff[0]?.maleStaff || 0),
+        femaleStaff: Number(staff[0]?.femaleStaff || 0),
         attendanceToday,
         monthlyCollections: Number(collections[0]?.total || 0),
         totalDebtors: Number(debtors[0]?.total || 0),
@@ -362,6 +384,89 @@ router.get('/parent', (0, auth_1.authorize)(enums_1.UserRole.PARENT), async (req
         });
     }
     res.json(summaries);
+});
+router.get('/student', (0, auth_1.authorize)(enums_1.UserRole.STUDENT), async (req, res) => {
+    const studentId = req.user.studentId;
+    if (!studentId) {
+        return res.json({
+            student: null,
+            currentTerm: null,
+            balanceOwed: 0,
+            attendance: [],
+            recentAssessments: [],
+            recentClassAssignments: [],
+            recentSchedules: [],
+            unreadMessages: 0,
+        });
+    }
+    const studentRows = await data_source_1.AppDataSource.query(`
+    SELECT s.*, c.name AS "className", f.name AS "formName"
+    FROM students s
+    LEFT JOIN classes c ON c.id = s."classId"
+    LEFT JOIN forms f ON f.id = COALESCE(c."formId", s."formId")
+    WHERE s.id = $1 AND s."isActive" = true
+    LIMIT 1
+    `, [studentId]);
+    const student = studentRows[0] || null;
+    const [attendance, balance, recentAssessment, unreadRow, termRow, recentSchedules, recentClassAssignments] = await Promise.all([
+        data_source_1.AppDataSource.query(`
+      SELECT status, COUNT(*)::text AS count FROM student_attendance
+      WHERE "studentId" = $1 AND date >= CURRENT_DATE - INTERVAL '30 days'
+      GROUP BY status
+      `, [studentId]),
+        data_source_1.AppDataSource.query(`
+      SELECT COALESCE(SUM("totalAmount" - "amountPaid"), 0) AS owed
+      FROM invoices WHERE "studentId" = $1 AND status IN ('sent','partial','overdue')
+      `, [studentId]),
+        data_source_1.AppDataSource.query(`
+      SELECT a.*, sub.name AS "subjectName"
+      FROM weekly_assessments a
+      LEFT JOIN subjects sub ON sub.id = a."subjectId"
+      WHERE a."studentId" = $1
+      ORDER BY a."weekStart" DESC
+      LIMIT 8
+      `, [studentId]),
+        data_source_1.AppDataSource.query(`SELECT COUNT(*)::int AS count FROM messages WHERE "recipientId" = $1 AND "isRead" = false`, [req.user.userId]),
+        data_source_1.AppDataSource.query(`SELECT id, name FROM terms WHERE "isCurrent" = true ORDER BY "startDate" DESC LIMIT 1`),
+        student?.classId
+            ? data_source_1.AppDataSource.query(`
+          SELECT ls.*, sub.name AS "subjectName", sub.code AS "subjectCode"
+          FROM learning_schedules ls
+          LEFT JOIN subjects sub ON sub.id = ls."subjectId"
+          WHERE ls."classId" = $1
+          ORDER BY ls."weekStart" DESC
+          LIMIT 6
+          `, [student.classId])
+            : Promise.resolve([]),
+        student?.classId
+            ? data_source_1.AppDataSource.query(`
+          SELECT ha.id, ha.title, ha.instructions, ha."originalFileName", ha."storedFileName",
+                 ha."mimeType", ha."fileSize", ha."dueDate", ha."createdAt",
+                 sub.name AS "subjectName",
+                 TRIM(CONCAT(u."firstName", ' ', u."lastName")) AS "teacherName"
+          FROM homework_assignments ha
+          LEFT JOIN subjects sub ON sub.id = ha."subjectId"
+          LEFT JOIN staff st ON st.id = ha."teacherId"
+          LEFT JOIN users u ON u.id = st."userId"
+          WHERE ha."classId" = $1
+          ORDER BY ha."createdAt" DESC
+          LIMIT 8
+          `, [student.classId])
+            : Promise.resolve([]),
+    ]);
+    res.json({
+        student,
+        currentTerm: termRow[0] ? { id: termRow[0].id, name: termRow[0].name } : null,
+        balanceOwed: Number(balance[0]?.owed || 0),
+        attendance,
+        recentAssessments: recentAssessment,
+        recentClassAssignments: recentClassAssignments.map((row) => ({
+            ...row,
+            fileUrl: `/uploads/homework-assignments/${row.storedFileName}`,
+        })),
+        recentSchedules,
+        unreadMessages: Number(unreadRow[0]?.count || 0),
+    });
 });
 router.get('/notifications', async (req, res) => {
     const notifs = await data_source_1.AppDataSource.query(`

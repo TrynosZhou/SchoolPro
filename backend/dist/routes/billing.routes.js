@@ -17,6 +17,7 @@ const class_display_1 = require("../utils/class-display");
 const pdf_1 = require("../utils/pdf");
 const fee_catalog_service_1 = require("../services/fee-catalog.service");
 const registration_invoice_service_1 = require("../services/registration-invoice.service");
+const portal_roles_1 = require("../config/portal-roles");
 const school_branding_service_1 = require("../services/school-branding.service");
 const whatsapp_service_1 = require("../services/whatsapp.service");
 const gl_posting_service_1 = require("../services/gl-posting.service");
@@ -29,22 +30,21 @@ const invoice_adjustment_service_1 = require("../services/invoice-adjustment.ser
 const fee_collection_revenue_service_1 = require("../services/fee-collection-revenue.service");
 const pdf_2 = require("../utils/pdf");
 const invoice_lookup_service_1 = require("../services/invoice-lookup.service");
+const access_control_1 = require("../middleware/access-control");
+const access_control_service_1 = require("../services/access-control.service");
 const router = (0, express_1.Router)();
 router.use(auth_1.authenticate);
-async function assertParentStudentAccess(req, studentId) {
-    if (req.user.role === enums_1.UserRole.STUDENT) {
-        return req.user.studentId === studentId ? null : 'You can only view your own finance records';
+const finView = (0, access_control_1.requireModuleAccess)('finance', 'view');
+const finCreate = (0, access_control_1.requireModuleAccess)('finance', 'create');
+const finEdit = (0, access_control_1.requireModuleAccess)('finance', 'edit');
+async function assertFinanceStudentAccess(req, studentId) {
+    if (!access_control_service_1.AccessControlService.can(req.user, 'finance', 'view')) {
+        return 'You do not have permission to view finance records';
     }
-    if (req.user.role !== enums_1.UserRole.PARENT) {
-        return null;
+    if (!(await access_control_service_1.AccessControlService.userCanAccessStudent(req.user, studentId))) {
+        return 'You can only view finance records for students you are linked to';
     }
-    if (!req.user.parentId) {
-        return 'Parent profile not linked';
-    }
-    const link = await data_source_1.AppDataSource.getRepository(entities_1.Guardian).findOne({
-        where: { parentId: req.user.parentId, studentId },
-    });
-    return link ? null : 'You can only view finance for your linked students';
+    return null;
 }
 async function notifyLinkedParentUsersOfReceipt(manager, senderId, student, receipt, payment) {
     const guardianRepo = manager.getRepository(entities_1.Guardian);
@@ -132,7 +132,7 @@ function renderGeneratedFooter(doc, generatedAt, margin = 34) {
     const formatted = `${pad2(generatedAt.getDate())}/${pad2(generatedAt.getMonth() + 1)}/${generatedAt.getFullYear()}, ${pad2(generatedAt.getHours())}:${pad2(generatedAt.getMinutes())}:${pad2(generatedAt.getSeconds())}`;
     doc.text(`Generated: ${formatted}`, margin, y, { width: contentW, align: 'center' });
 }
-router.get('/fees', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.TEACHER), async (req, res) => {
+router.get('/fees', (0, auth_1.authorize)(...portal_roles_1.FINANCE_ROLES, enums_1.UserRole.TEACHER), async (req, res) => {
     await (0, registration_invoice_service_1.ensureRegistrationSchoolFees)();
     const repo = data_source_1.AppDataSource.getRepository(entities_1.SchoolFee);
     const activeOnly = req.query.active === 'true';
@@ -142,7 +142,7 @@ router.get('/fees', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRo
     });
     res.json(fees);
 });
-router.post('/fees', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (req, res) => {
+router.post('/fees', (0, auth_1.authorize)(...portal_roles_1.FINANCE_WRITE_ROLES), async (req, res) => {
     await (0, registration_invoice_service_1.ensureRegistrationSchoolFees)();
     const repo = data_source_1.AppDataSource.getRepository(entities_1.SchoolFee);
     const { name, code, description, defaultAmount, icon, isActive, sortOrder } = req.body;
@@ -168,7 +168,7 @@ router.post('/fees', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (req, 
     }));
     res.status(201).json(fee);
 });
-router.patch('/fees/:id', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (req, res) => {
+router.patch('/fees/:id', (0, auth_1.authorize)(...portal_roles_1.FINANCE_WRITE_ROLES), async (req, res) => {
     const repo = data_source_1.AppDataSource.getRepository(entities_1.SchoolFee);
     const fee = await repo.findOne({ where: { id: req.params.id } });
     if (!fee)
@@ -206,7 +206,7 @@ router.patch('/fees/:id', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (
     }
     res.json(await repo.save(fee));
 });
-router.delete('/fees/:id', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (req, res) => {
+router.delete('/fees/:id', (0, auth_1.authorize)(...portal_roles_1.FINANCE_WRITE_ROLES), async (req, res) => {
     const repo = data_source_1.AppDataSource.getRepository(entities_1.SchoolFee);
     const fee = await repo.findOne({ where: { id: req.params.id } });
     if (!fee)
@@ -229,7 +229,7 @@ router.delete('/fees/:id', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async 
         forced: inUse,
     });
 });
-router.get('/invoices', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.PARENT), async (req, res) => {
+router.get('/invoices', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.ACCOUNTANT, enums_1.UserRole.PARENT, enums_1.UserRole.STUDENT), finView, async (req, res) => {
     const repo = data_source_1.AppDataSource.getRepository(entities_1.Invoice);
     const { studentId, status, termId } = req.query;
     const qb = repo.createQueryBuilder('i')
@@ -242,25 +242,23 @@ router.get('/invoices', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.Us
         qb.andWhere('i.status = :status', { status });
     if (termId)
         qb.andWhere('i.termId = :termId', { termId });
-    if (req.user.role === enums_1.UserRole.PARENT) {
-        const children = await data_source_1.AppDataSource.query(`SELECT "studentId" FROM guardians WHERE "parentId" = $1`, [req.user.parentId]);
-        const ids = children.map((c) => c.studentId);
+    if (req.user.role === enums_1.UserRole.PARENT || req.user.role === enums_1.UserRole.STUDENT) {
+        const accessible = await access_control_service_1.AccessControlService.getAccessibleStudentIds(req.user);
+        const ids = accessible === 'all' ? [] : accessible;
         if (!ids.length)
             return res.json([]);
         qb.andWhere('i.studentId IN (:...ids)', { ids });
     }
     res.json(await qb.orderBy('i.createdAt', 'DESC').getMany());
 });
-router.get('/invoices/resolve', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.PARENT), async (req, res) => {
+router.get('/invoices/resolve', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.ACCOUNTANT, enums_1.UserRole.PARENT, enums_1.UserRole.STUDENT), finView, async (req, res) => {
     const studentId = String(req.query.studentId || '').trim();
     if (!studentId) {
         return res.status(400).json({ message: 'studentId is required' });
     }
-    if (req.user.role === enums_1.UserRole.PARENT) {
-        const accessError = await assertParentStudentAccess(req, studentId);
-        if (accessError) {
-            return res.status(403).json({ message: accessError });
-        }
+    const accessError = await assertFinanceStudentAccess(req, studentId);
+    if (accessError && (req.user.role === enums_1.UserRole.PARENT || req.user.role === enums_1.UserRole.STUDENT)) {
+        return res.status(403).json({ message: accessError });
     }
     const invoice = await (0, invoice_lookup_service_1.resolveStudentInvoiceForLookup)(studentId);
     if (!invoice) {
@@ -275,7 +273,7 @@ router.get('/invoices/resolve', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, en
         status: invoice.status,
     });
 });
-router.get('/invoices/bulk-tuition/preview', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), async (_req, res) => {
+router.get('/invoices/bulk-tuition/preview', (0, auth_1.authorize)(...portal_roles_1.FINANCE_ROLES), finView, async (_req, res) => {
     try {
         res.json(await (0, bulk_tuition_invoice_service_1.previewBulkTuitionInvoices)());
     }
@@ -283,7 +281,7 @@ router.get('/invoices/bulk-tuition/preview', (0, auth_1.authorize)(enums_1.UserR
         return res.status(400).json({ message: err instanceof Error ? err.message : 'Failed to preview bulk tuition billing' });
     }
 });
-router.post('/invoices/bulk-tuition', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), async (_req, res) => {
+router.post('/invoices/bulk-tuition', (0, auth_1.authorize)(...portal_roles_1.FINANCE_ROLES), finCreate, async (_req, res) => {
     try {
         const result = await (0, bulk_tuition_invoice_service_1.createBulkTuitionInvoices)();
         res.status(201).json({
@@ -295,7 +293,7 @@ router.post('/invoices/bulk-tuition', (0, auth_1.authorize)(enums_1.UserRole.ADM
         return res.status(400).json({ message: err instanceof Error ? err.message : 'Failed to create bulk tuition invoices' });
     }
 });
-router.post('/invoices/bulk-tuition/reverse', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (req, res) => {
+router.post('/invoices/bulk-tuition/reverse', (0, auth_1.authorize)(...portal_roles_1.FINANCE_WRITE_ROLES), finEdit, async (req, res) => {
     try {
         const nextTermName = typeof req.body?.nextTermName === 'string' ? req.body.nextTermName.trim() : undefined;
         const result = await (0, bulk_tuition_invoice_service_1.reverseBulkTuitionInvoices)(nextTermName || undefined);
@@ -308,7 +306,7 @@ router.post('/invoices/bulk-tuition/reverse', (0, auth_1.authorize)(enums_1.User
         return res.status(400).json({ message: err instanceof Error ? err.message : 'Failed to reverse bulk tuition invoices' });
     }
 });
-const financeStaff = [enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL];
+const financeStaff = portal_roles_1.FINANCE_ROLES;
 router.get('/tuition-exemptions', (0, auth_1.authorize)(...financeStaff), async (_req, res) => {
     res.json(await (0, tuition_exemption_service_1.listTuitionExemptions)());
 });
@@ -482,7 +480,7 @@ router.post('/invoice-adjustments/debit-note', (0, auth_1.authorize)(...financeS
         return res.status(400).json({ message: err instanceof Error ? err.message : 'Failed to apply debit note' });
     }
 });
-router.post('/invoices', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (req, res) => {
+router.post('/invoices', (0, auth_1.authorize)(...portal_roles_1.FINANCE_WRITE_ROLES), finCreate, async (req, res) => {
     const repo = data_source_1.AppDataSource.getRepository(entities_1.Invoice);
     const ledgerRepo = data_source_1.AppDataSource.getRepository(entities_1.LedgerEntry);
     const studentRepo = data_source_1.AppDataSource.getRepository(entities_1.Student);
@@ -566,7 +564,7 @@ router.post('/invoices', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (r
     }
     res.status(201).json(invoice);
 });
-router.post('/payments', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (req, res) => {
+router.post('/payments', (0, auth_1.authorize)(...portal_roles_1.FINANCE_WRITE_ROLES), finCreate, async (req, res) => {
     const { studentId, invoiceId, amount, method, feeType, label, notes } = req.body;
     const paymentAmount = Number(amount) || 0;
     if (paymentAmount <= 0) {
@@ -742,7 +740,7 @@ router.post('/payments', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (r
         await queryRunner.release();
     }
 });
-router.get('/receipts/:id/pdf', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.PARENT), async (req, res) => {
+router.get('/receipts/:id/pdf', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.ACCOUNTANT, enums_1.UserRole.PARENT, enums_1.UserRole.STUDENT), finView, async (req, res) => {
     const repo = data_source_1.AppDataSource.getRepository(entities_1.Receipt);
     const receipt = await repo.findOne({
         where: { id: req.params.id },
@@ -751,8 +749,8 @@ router.get('/receipts/:id/pdf', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, en
     if (!receipt?.payment?.student) {
         return res.status(404).json({ message: 'Receipt not found' });
     }
-    const accessError = await assertParentStudentAccess(req, receipt.payment.studentId);
-    if (accessError) {
+    const accessError = await assertFinanceStudentAccess(req, receipt.payment.studentId);
+    if (accessError && (req.user.role === enums_1.UserRole.PARENT || req.user.role === enums_1.UserRole.STUDENT)) {
         return res.status(403).json({ message: accessError });
     }
     const branding = await (0, school_branding_service_1.loadSchoolBranding)();
@@ -781,7 +779,7 @@ router.get('/receipts/:id/pdf', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, en
     res.setHeader('Content-Disposition', `${inline ? 'inline' : 'attachment'}; filename="${fileName}"`);
     res.sendFile(path_1.default.resolve(pdfPath));
 });
-router.get('/invoices/:id/pdf', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.PARENT), async (req, res) => {
+router.get('/invoices/:id/pdf', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.ACCOUNTANT, enums_1.UserRole.PARENT, enums_1.UserRole.STUDENT), finView, async (req, res) => {
     const repo = data_source_1.AppDataSource.getRepository(entities_1.Invoice);
     const invoice = await repo.findOne({
         where: { id: req.params.id },
@@ -790,12 +788,9 @@ router.get('/invoices/:id/pdf', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, en
     if (!invoice?.student) {
         return res.status(404).json({ message: 'Invoice not found' });
     }
-    if (req.user.role === enums_1.UserRole.PARENT) {
-        const children = await data_source_1.AppDataSource.query(`SELECT "studentId" FROM guardians WHERE "parentId" = $1`, [req.user.parentId]);
-        const ids = children.map((c) => c.studentId);
-        if (!ids.includes(invoice.studentId)) {
-            return res.status(403).json({ message: 'Access denied' });
-        }
+    const accessError = await assertFinanceStudentAccess(req, invoice.studentId);
+    if (accessError && (req.user.role === enums_1.UserRole.PARENT || req.user.role === enums_1.UserRole.STUDENT)) {
+        return res.status(403).json({ message: accessError });
     }
     const branding = await (0, school_branding_service_1.loadSchoolBranding)();
     const s = invoice.student;
@@ -830,9 +825,9 @@ router.get('/invoices/:id/pdf', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, en
     res.setHeader('Content-Disposition', `${inline ? 'inline' : 'attachment'}; filename="${fileName}"`);
     res.sendFile(path_1.default.resolve(pdfPath));
 });
-router.get('/receipts/student/:studentId', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.PARENT, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), async (req, res) => {
-    const accessError = await assertParentStudentAccess(req, req.params.studentId);
-    if (accessError) {
+router.get('/receipts/student/:studentId', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.PARENT, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.ACCOUNTANT, enums_1.UserRole.STUDENT), finView, async (req, res) => {
+    const accessError = await assertFinanceStudentAccess(req, req.params.studentId);
+    if (accessError && (req.user.role === enums_1.UserRole.PARENT || req.user.role === enums_1.UserRole.STUDENT)) {
         return res.status(403).json({ message: accessError });
     }
     const payments = await data_source_1.AppDataSource.getRepository(entities_1.Payment).find({
@@ -842,9 +837,30 @@ router.get('/receipts/student/:studentId', (0, auth_1.authorize)(enums_1.UserRol
     });
     res.json(payments.filter((p) => p.receipt).map((p) => ({ ...p.receipt, payment: p })));
 });
-router.get('/statement/:studentId', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.PARENT), async (req, res) => {
-    const accessError = await assertParentStudentAccess(req, req.params.studentId);
-    if (accessError) {
+/**
+ * Compute a student's statement summary the same way the admin balance views do
+ * (debtor-aging / student-balance / term balances):
+ *  - only billable invoices count (exclude cancelled & draft)
+ *  - totalPaid is the amount actually applied to invoices (SUM amountPaid)
+ *  - each invoice's outstanding is floored at 0, so an overpayment on one invoice
+ *    cannot mask what is still owed on another.
+ *
+ * The previous version used SUM(payments.amount) for "totalPaid" and
+ * totalInvoiced - totalPaid for the balance. When a student has unapplied /
+ * overflow payments, that raw payment total can exceed the invoiced amount and
+ * produce a bogus negative "Balance due" even while an invoice is still unpaid.
+ */
+function summarizeStudentInvoices(invoices) {
+    const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
+    const billable = invoices.filter((i) => i.status !== 'cancelled' && i.status !== 'draft');
+    const totalInvoiced = round2(billable.reduce((s, i) => s + Number(i.totalAmount || 0), 0));
+    const totalPaid = round2(billable.reduce((s, i) => s + Number(i.amountPaid || 0), 0));
+    const balance = round2(billable.reduce((s, i) => s + Math.max(Number(i.totalAmount || 0) - Number(i.amountPaid || 0), 0), 0));
+    return { totalInvoiced, totalPaid, balance };
+}
+router.get('/statement/:studentId', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.ACCOUNTANT, enums_1.UserRole.PARENT, enums_1.UserRole.STUDENT), finView, async (req, res) => {
+    const accessError = await assertFinanceStudentAccess(req, req.params.studentId);
+    if (accessError && (req.user.role === enums_1.UserRole.PARENT || req.user.role === enums_1.UserRole.STUDENT)) {
         return res.status(403).json({ message: accessError });
     }
     const { termId } = req.query;
@@ -857,12 +873,10 @@ router.get('/statement/:studentId', (0, auth_1.authorize)(enums_1.UserRole.ADMIN
     const ledger = await ledgerRepo.find({ where, order: { entryDate: 'ASC' } });
     const invoices = await invoiceRepo.find({ where: { studentId: req.params.studentId } });
     const payments = await paymentRepo.find({ where: { studentId: req.params.studentId } });
-    const totalInvoiced = invoices.reduce((s, i) => s + Number(i.totalAmount), 0);
-    const totalPaid = payments.reduce((s, p) => s + Number(p.amount), 0);
-    const balance = totalInvoiced - totalPaid;
-    res.json({ ledger, invoices, payments, summary: { totalInvoiced, totalPaid, balance } });
+    const summary = summarizeStudentInvoices(invoices);
+    res.json({ ledger, invoices, payments, summary });
 });
-router.get('/statement/:studentId/pdf', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.PARENT), async (req, res) => {
+router.get('/statement/:studentId/pdf', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.ACCOUNTANT, enums_1.UserRole.PARENT, enums_1.UserRole.STUDENT), finView, async (req, res) => {
     const requestedStudentId = String(req.params.studentId || '').trim();
     const studentRepo = data_source_1.AppDataSource.getRepository(entities_1.Student);
     let resolvedForAccess = requestedStudentId;
@@ -870,8 +884,8 @@ router.get('/statement/:studentId/pdf', (0, auth_1.authorize)(enums_1.UserRole.A
         ?? await studentRepo.findOne({ where: { admissionNumber: requestedStudentId } });
     if (studentForAccess)
         resolvedForAccess = studentForAccess.id;
-    const accessError = await assertParentStudentAccess(req, resolvedForAccess);
-    if (accessError) {
+    const accessError = await assertFinanceStudentAccess(req, resolvedForAccess);
+    if (accessError && (req.user.role === enums_1.UserRole.PARENT || req.user.role === enums_1.UserRole.STUDENT)) {
         return res.status(403).json({ message: accessError });
     }
     const { termId } = req.query;
@@ -895,9 +909,7 @@ router.get('/statement/:studentId/pdf', (0, auth_1.authorize)(enums_1.UserRole.A
     const ledger = await ledgerRepo.find({ where, order: { entryDate: 'ASC' } });
     const invoices = await invoiceRepo.find({ where: { studentId: resolvedStudentId }, order: { issuedDate: 'ASC' } });
     const payments = await paymentRepo.find({ where: { studentId: resolvedStudentId }, order: { paidAt: 'ASC' } });
-    const totalInvoiced = invoices.reduce((s, i) => s + Number(i.totalAmount), 0);
-    const totalPaid = payments.reduce((s, p) => s + Number(p.amount), 0);
-    const balance = totalInvoiced - totalPaid;
+    const { totalInvoiced, totalPaid, balance } = summarizeStudentInvoices(invoices);
     const doc = new pdfkit_1.default({ size: 'A4', margin: 36 });
     const chunks = [];
     doc.on('data', (c) => chunks.push(c));
@@ -1052,10 +1064,10 @@ async function fetchBillingSummary() {
         pendingInvoices: Number(pending[0]?.count || 0),
     };
 }
-router.get('/summary', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), async (_req, res) => {
+router.get('/summary', (0, auth_1.authorize)(...portal_roles_1.FINANCE_ROLES), async (_req, res) => {
     res.json(await fetchBillingSummary());
 });
-router.get('/payments', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), async (req, res) => {
+router.get('/payments', (0, auth_1.authorize)(...portal_roles_1.FINANCE_ROLES), async (req, res) => {
     const limit = Math.min(parseInt(req.query.limit) || 50, 100);
     const { studentId } = req.query;
     const paymentRepo = data_source_1.AppDataSource.getRepository(entities_1.Payment);
@@ -1093,10 +1105,10 @@ async function fetchBillingDebtors() {
   `);
     return result.map((r) => ({ ...r, owed: Number(r.owed || 0) }));
 }
-router.get('/debtors', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), async (_req, res) => {
+router.get('/debtors', (0, auth_1.authorize)(...portal_roles_1.FINANCE_ROLES), async (_req, res) => {
     res.json(await fetchBillingDebtors());
 });
-router.get('/overview/export.pdf', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), async (req, res) => {
+router.get('/overview/export.pdf', (0, auth_1.authorize)(...portal_roles_1.FINANCE_ROLES), async (req, res) => {
     const inline = String(req.query.preview || '') === 'true';
     const tab = String(req.query.tab || 'debtors').toLowerCase();
     const debtorQ = String(req.query.debtorQ || '').trim().toLowerCase();
@@ -1329,7 +1341,7 @@ router.get('/overview/export.pdf', (0, auth_1.authorize)(enums_1.UserRole.ADMIN,
     renderGeneratedFooter(doc, new Date(), margin);
     doc.end();
 });
-router.get('/reports/student-ledger', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), async (req, res) => {
+router.get('/reports/student-ledger', (0, auth_1.authorize)(...portal_roles_1.FINANCE_ROLES), async (req, res) => {
     const termId = String(req.query.termId || '').trim();
     const q = String(req.query.q || '').trim();
     const studentId = String(req.query.studentId || '').trim();
@@ -1358,7 +1370,7 @@ router.get('/reports/student-ledger', (0, auth_1.authorize)(enums_1.UserRole.ADM
         return res.status(404).json({ message: 'Student not found' });
     return res.json({ needsSelection: false, report });
 });
-router.get('/reports/student-ledger/export.pdf', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), async (req, res) => {
+router.get('/reports/student-ledger/export.pdf', (0, auth_1.authorize)(...portal_roles_1.FINANCE_ROLES), async (req, res) => {
     const termId = String(req.query.termId || '').trim();
     const q = String(req.query.q || '').trim();
     const studentId = String(req.query.studentId || '').trim();
@@ -1439,7 +1451,7 @@ router.get('/reports/student-ledger/export.pdf', (0, auth_1.authorize)(enums_1.U
     drawSummaryCard(margin, 'Opening', fmtMoney(report.summary.openingBalance), 'neutral');
     drawSummaryCard(margin + cardW + cardGap, 'Term debits', fmtMoney(report.summary.totalDebits), 'neutral');
     drawSummaryCard(margin + (cardW + cardGap) * 2, 'Credits', fmtMoney(report.summary.totalCredits), 'positive');
-    drawSummaryCard(margin + (cardW + cardGap) * 3, 'Invoice balance', fmtMoney(report.invoiceBalance), report.invoiceBalance > 0 ? 'warn' : 'positive');
+    drawSummaryCard(margin + (cardW + cardGap) * 3, 'Amount owed', fmtMoney(report.summary.closingBalance), report.summary.closingBalance > 0 ? 'warn' : 'positive');
     y += 52;
     const reconParts = [
         `Opening ${fmtMoney(report.summary.openingBalance)} + term debits ${fmtMoney(report.summary.totalDebits)}`,
@@ -1450,12 +1462,12 @@ router.get('/reports/student-ledger/export.pdf', (0, auth_1.authorize)(enums_1.U
         reconParts.push(`· term overpayment ${fmtMoney(report.summary.termOverpayment)}`);
     }
     else if (report.summary.termNetMovement > 0) {
-        reconParts.push(`· term balance ${fmtMoney(report.summary.termNetMovement)}`);
+        reconParts.push(`· amount owed ${fmtMoney(report.summary.closingBalance)}`);
     }
     else {
         reconParts.push('· term settled');
     }
-    reconParts.push(`· open invoices ${fmtMoney(report.invoiceBalance)}`);
+    reconParts.push(`· open invoices ${fmtMoney(report.termInvoiceBalance)}`);
     doc.save();
     doc.roundedRect(margin, y, contentW, 28, 6).fillAndStroke('#f8fafc', '#e2e8f0');
     doc.restore();
@@ -1552,11 +1564,11 @@ router.get('/reports/student-ledger/export.pdf', (0, auth_1.authorize)(enums_1.U
     renderGeneratedFooter(doc, new Date(), margin);
     doc.end();
 });
-router.get('/reports/outstanding-invoices', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), async (_req, res) => {
+router.get('/reports/outstanding-invoices', (0, auth_1.authorize)(...portal_roles_1.FINANCE_ROLES), async (_req, res) => {
     const data = await (0, fin_reports_service_1.buildOutstandingInvoicesReport)();
     res.json(data);
 });
-router.post('/terms/:termId/carry-forward-balances', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), async (req, res) => {
+router.post('/terms/:termId/carry-forward-balances', (0, auth_1.authorize)(...portal_roles_1.FINANCE_ROLES), async (req, res) => {
     try {
         const result = await (0, term_balance_service_1.carryForwardBalancesForTerm)(req.params.termId);
         res.json({
@@ -1568,7 +1580,7 @@ router.post('/terms/:termId/carry-forward-balances', (0, auth_1.authorize)(enums
         return res.status(400).json({ message: err instanceof Error ? err.message : 'Failed to carry forward balances' });
     }
 });
-router.get('/students/:studentId/term-balance/:termId', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), async (req, res) => {
+router.get('/students/:studentId/term-balance/:termId', (0, auth_1.authorize)(...portal_roles_1.FINANCE_ROLES), async (req, res) => {
     try {
         const summary = await (0, term_balance_service_1.getTermBalanceSummary)(req.params.studentId, req.params.termId);
         res.json(summary);
@@ -1577,7 +1589,7 @@ router.get('/students/:studentId/term-balance/:termId', (0, auth_1.authorize)(en
         return res.status(400).json({ message: err instanceof Error ? err.message : 'Failed to load term balance' });
     }
 });
-router.get('/reports/outstanding-invoices/export.pdf', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), async (req, res) => {
+router.get('/reports/outstanding-invoices/export.pdf', (0, auth_1.authorize)(...portal_roles_1.FINANCE_ROLES), async (req, res) => {
     const data = await (0, fin_reports_service_1.buildOutstandingInvoicesReport)();
     const inline = String(req.query.preview || '') === 'true';
     const doc = new pdfkit_1.default({ size: 'A4', layout: 'landscape', margin: 34 });
@@ -1702,7 +1714,7 @@ function reconciliationQueryParams(req) {
         detailed: req.query.detailed !== 'false',
     };
 }
-router.get('/reports/student-reconciliation', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), async (req, res) => {
+router.get('/reports/student-reconciliation', (0, auth_1.authorize)(...portal_roles_1.FINANCE_ROLES), async (req, res) => {
     const result = await (0, fin_reports_service_1.buildStudentReconciliationReport)(reconciliationQueryParams(req));
     if ('error' in result)
         return res.status(400).json({ message: result.error });
@@ -1710,7 +1722,7 @@ router.get('/reports/student-reconciliation', (0, auth_1.authorize)(enums_1.User
         return res.json(result);
     res.json(result);
 });
-router.get('/reports/student-reconciliation/export.pdf', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), async (req, res) => {
+router.get('/reports/student-reconciliation/export.pdf', (0, auth_1.authorize)(...portal_roles_1.FINANCE_ROLES), async (req, res) => {
     const detailed = req.query.mode !== 'summary';
     const inline = String(req.query.preview || '') === 'true';
     const result = await (0, fin_reports_service_1.buildStudentReconciliationReport)({
@@ -1753,7 +1765,7 @@ router.get('/reports/student-reconciliation/export.pdf', (0, auth_1.authorize)(e
     res.setHeader('Content-Disposition', `${inline ? 'inline' : 'attachment'}; filename="student-reconciliation-${detailed ? 'detailed' : 'summary'}.pdf"`);
     res.send(pdf);
 });
-router.get('/reports/student-reconciliation/export.xlsx', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), async (req, res) => {
+router.get('/reports/student-reconciliation/export.xlsx', (0, auth_1.authorize)(...portal_roles_1.FINANCE_ROLES), async (req, res) => {
     const detailed = req.query.mode !== 'summary';
     const result = await (0, fin_reports_service_1.buildStudentReconciliationReport)({
         ...reconciliationQueryParams(req),
@@ -1784,7 +1796,7 @@ function debtorAgingQueryParams(req) {
         escalationDays: Number(req.query.escalationDays || 90),
     };
 }
-router.get('/reports/debtor-aging', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), async (req, res) => {
+router.get('/reports/debtor-aging', (0, auth_1.authorize)(...portal_roles_1.FINANCE_ROLES), async (req, res) => {
     const result = await (0, fin_reports_service_1.buildDebtorAgingReport)(debtorAgingQueryParams(req));
     if ('error' in result)
         return res.status(400).json({ message: result.error });
@@ -1792,7 +1804,7 @@ router.get('/reports/debtor-aging', (0, auth_1.authorize)(enums_1.UserRole.ADMIN
         return res.json(result);
     res.json(result);
 });
-router.get('/reports/debtor-aging/export.xlsx', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), async (req, res) => {
+router.get('/reports/debtor-aging/export.xlsx', (0, auth_1.authorize)(...portal_roles_1.FINANCE_ROLES), async (req, res) => {
     const detailed = req.query.mode !== 'summary';
     const result = await (0, fin_reports_service_1.buildDebtorAgingReport)(debtorAgingQueryParams(req));
     if ('error' in result)
@@ -1804,7 +1816,7 @@ router.get('/reports/debtor-aging/export.xlsx', (0, auth_1.authorize)(enums_1.Us
     res.setHeader('Content-Disposition', `attachment; filename="debtor-aging-${detailed ? 'detailed' : 'summary'}.csv"`);
     res.send(csv);
 });
-router.get('/reports/debtor-aging/export.pdf', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), async (req, res) => {
+router.get('/reports/debtor-aging/export.pdf', (0, auth_1.authorize)(...portal_roles_1.FINANCE_ROLES), async (req, res) => {
     const detailed = req.query.mode !== 'summary';
     const inline = String(req.query.preview || '') === 'true';
     const result = await (0, fin_reports_service_1.buildDebtorAgingReport)(debtorAgingQueryParams(req));
@@ -1955,7 +1967,7 @@ router.get('/reports/debtor-aging/export.pdf', (0, auth_1.authorize)(enums_1.Use
     renderGeneratedFooter(doc, new Date(), margin);
     doc.end();
 });
-router.post('/reports/debtor-aging/notes', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), async (req, res) => {
+router.post('/reports/debtor-aging/notes', (0, auth_1.authorize)(...portal_roles_1.FINANCE_ROLES), async (req, res) => {
     const { studentId, note } = req.body || {};
     if (!studentId || !String(note || '').trim())
         return res.status(400).json({ message: 'studentId and note are required' });
@@ -1969,7 +1981,7 @@ router.post('/reports/debtor-aging/notes', (0, auth_1.authorize)(enums_1.UserRol
     }));
     res.status(201).json(saved);
 });
-router.get('/reports/debtor-aging/notes/:studentId', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), async (req, res) => {
+router.get('/reports/debtor-aging/notes/:studentId', (0, auth_1.authorize)(...portal_roles_1.FINANCE_ROLES), async (req, res) => {
     const rows = await data_source_1.AppDataSource.getRepository(entities_1.Notification).find({
         where: { type: 'debtor_note' },
         order: { createdAt: 'DESC' },
@@ -1994,7 +2006,7 @@ function feeCollectionQueryParams(req, summaryOnly = false) {
         summaryOnly,
     };
 }
-router.get('/reports/fee-collection-revenue', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), async (req, res) => {
+router.get('/reports/fee-collection-revenue', (0, auth_1.authorize)(...portal_roles_1.FINANCE_ROLES), async (req, res) => {
     const summaryOnly = req.user.role === enums_1.UserRole.PRINCIPAL;
     const result = await (0, fee_collection_revenue_service_1.buildFeeCollectionRevenueReport)(feeCollectionQueryParams(req, summaryOnly));
     if ('error' in result)
@@ -2003,7 +2015,7 @@ router.get('/reports/fee-collection-revenue', (0, auth_1.authorize)(enums_1.User
         return res.json(result);
     res.json({ ...result, accessLevel: summaryOnly ? 'summary' : 'full' });
 });
-router.get('/reports/fee-collection-revenue/export.xlsx', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), async (req, res) => {
+router.get('/reports/fee-collection-revenue/export.xlsx', (0, auth_1.authorize)(...portal_roles_1.FINANCE_ROLES), async (req, res) => {
     const summaryOnly = req.user.role === enums_1.UserRole.PRINCIPAL;
     const detailed = !summaryOnly && req.query.mode !== 'summary';
     const result = await (0, fee_collection_revenue_service_1.buildFeeCollectionRevenueReport)(feeCollectionQueryParams(req, summaryOnly));
@@ -2016,7 +2028,7 @@ router.get('/reports/fee-collection-revenue/export.xlsx', (0, auth_1.authorize)(
     res.setHeader('Content-Disposition', `attachment; filename="fee-collection-revenue-${detailed ? 'detailed' : 'summary'}.csv"`);
     res.send(csv);
 });
-router.get('/reports/fee-collection-revenue/export.pdf', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), async (req, res) => {
+router.get('/reports/fee-collection-revenue/export.pdf', (0, auth_1.authorize)(...portal_roles_1.FINANCE_ROLES), async (req, res) => {
     const summaryOnly = req.user.role === enums_1.UserRole.PRINCIPAL;
     const detailed = !summaryOnly && req.query.mode !== 'summary';
     const inline = String(req.query.preview || '') === 'true';
@@ -2223,7 +2235,7 @@ router.post('/reports/debtor-aging/write-off', (0, auth_1.authorize)(enums_1.Use
     }));
     res.json({ studentId, totalWrittenOff });
 });
-router.get('/reports/debtor-aging/reminder-letter.pdf', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), async (req, res) => {
+router.get('/reports/debtor-aging/reminder-letter.pdf', (0, auth_1.authorize)(...portal_roles_1.FINANCE_ROLES), async (req, res) => {
     const studentId = String(req.query.studentId || '').trim();
     if (!studentId)
         return res.status(400).json({ message: 'studentId is required' });
@@ -2305,14 +2317,14 @@ async function fetchStudentBalances(rawQ) {
         balance: (0, term_balance_service_1.roundMoney)(Math.max(0, Number(r.balance || 0))),
     }));
 }
-router.get('/student-balance', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), async (req, res) => {
+router.get('/student-balance', (0, auth_1.authorize)(...portal_roles_1.FINANCE_ROLES), async (req, res) => {
     const rawQ = String(req.query.q || '').trim();
     if (!rawQ) {
         return res.status(400).json({ message: 'Query is required' });
     }
     res.json(await fetchStudentBalances(rawQ));
 });
-router.get('/student-balance/export.pdf', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), async (req, res) => {
+router.get('/student-balance/export.pdf', (0, auth_1.authorize)(...portal_roles_1.FINANCE_ROLES), async (req, res) => {
     const rawQ = String(req.query.q || '').trim();
     if (!rawQ)
         return res.status(400).json({ message: 'Query is required' });
@@ -2428,7 +2440,7 @@ router.get('/student-balance/export.pdf', (0, auth_1.authorize)(enums_1.UserRole
     renderGeneratedFooter(doc, new Date(), margin);
     doc.end();
 });
-router.get('/class-balances/:classId', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), async (req, res) => {
+router.get('/class-balances/:classId', (0, auth_1.authorize)(...portal_roles_1.FINANCE_ROLES), async (req, res) => {
     const result = await data_source_1.AppDataSource.query(`
     SELECT COALESCE(SUM(i."totalAmount" - i."amountPaid"), 0) as "totalOwed",
       COUNT(DISTINCT s.id) as "studentsWithBalance"

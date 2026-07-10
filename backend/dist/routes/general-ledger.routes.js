@@ -35,13 +35,13 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const data_source_1 = require("../config/data-source");
+const portal_roles_1 = require("../config/portal-roles");
 const enums_1 = require("../entities/enums");
-const enums_2 = require("../entities/enums");
 const auth_1 = require("../middleware/auth");
 const general_ledger_report_service_1 = require("../services/general-ledger-report.service");
 const ledger_service_1 = require("../services/ledger.service");
 const router = (0, express_1.Router)();
-const GL_ROLES = [enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL];
+const GL_ROLES = portal_roles_1.FINANCE_ROLES;
 router.use(auth_1.authenticate);
 router.use((0, auth_1.authorize)(...GL_ROLES));
 function parseGlFilters(req) {
@@ -53,10 +53,10 @@ function parseGlFilters(req) {
         startDate: String(req.query.startDate || '').trim() || undefined,
         endDate: String(req.query.endDate || '').trim() || undefined,
         accountId: String(req.query.accountId || '').trim() || undefined,
-        accountType: Object.values(enums_2.GlAccountType).includes(accountType)
+        accountType: Object.values(enums_1.GlAccountType).includes(accountType)
             ? accountType
             : undefined,
-        referenceType: Object.values(enums_2.GlReferenceType).includes(referenceType)
+        referenceType: Object.values(enums_1.GlReferenceType).includes(referenceType)
             ? referenceType
             : undefined,
         search: String(req.query.search || '').trim() || undefined,

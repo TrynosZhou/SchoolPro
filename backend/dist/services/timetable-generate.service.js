@@ -110,8 +110,10 @@ function listCandidates(task, periods, occupied, placed, rand) {
     }
     return candidates.sort((a, b) => a.score - b.score);
 }
-function scheduleAssignments(tasks, periods) {
-    const occupied = new Set();
+function scheduleAssignments(tasks, periods, preOccupied) {
+    // Seed with slots that are already taken (e.g. existing lessons when appending) so
+    // auto-generation never double-books a class or a teacher.
+    const occupied = new Set(preOccupied ?? []);
     const placed = [];
     const failures = [];
     const scheduledCount = new Map();
@@ -384,8 +386,20 @@ async function generateTimetableFromTeacherLoad(input) {
     if (requiredSlots > capacityPerWeek * new Set(tasks.map((t) => t.classId)).size) {
         // Soft warning only — per-class capacity is periods*5, not global
     }
-    const { placed, failures } = scheduleAssignments(tasks, periods);
     const replacing = input.replaceExisting !== false;
+    // When appending (not replacing), the generator must know which class/teacher slots
+    // are already used so it does not place lessons on top of existing ones.
+    const preOccupied = new Set();
+    if (!replacing) {
+        const existing = await data_source_1.AppDataSource.getRepository(entities_1.Timetable).find();
+        for (const e of existing) {
+            preOccupied.add(slotKey('c', e.classId, e.dayOfWeek, e.startTime));
+            if (e.teacherId) {
+                preOccupied.add(slotKey('t', e.teacherId, e.dayOfWeek, e.startTime));
+            }
+        }
+    }
+    const { placed, failures } = scheduleAssignments(tasks, periods, preOccupied);
     await data_source_1.AppDataSource.transaction(async (manager) => {
         const timetableRepo = manager.getRepository(entities_1.Timetable);
         const allocationRepo = manager.getRepository(entities_1.TeacherAllocation);

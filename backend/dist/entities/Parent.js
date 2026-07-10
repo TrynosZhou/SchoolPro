@@ -34,6 +34,10 @@ __decorate([
     __metadata("design:type", String)
 ], Parent.prototype, "occupation", void 0);
 __decorate([
+    (0, typeorm_1.Column)({ type: 'varchar', length: 16, nullable: true }),
+    __metadata("design:type", String)
+], Parent.prototype, "gender", void 0);
+__decorate([
     (0, typeorm_1.Column)({ nullable: true }),
     __metadata("design:type", String)
 ], Parent.prototype, "address", void 0);

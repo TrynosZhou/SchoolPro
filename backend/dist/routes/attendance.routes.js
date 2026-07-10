@@ -10,6 +10,9 @@ const auth_1 = require("../middleware/auth");
 const helpers_1 = require("../utils/helpers");
 const typeorm_helpers_1 = require("../utils/typeorm-helpers");
 const teacher_class_access_1 = require("../utils/teacher-class-access");
+const auto_notify_service_1 = require("../services/auto-notify.service");
+const attendance_register_service_1 = require("../services/attendance-register.service");
+const enums_2 = require("../entities/enums");
 const router = (0, express_1.Router)();
 router.use(auth_1.authenticate);
 async function assertParentLinkedStudent(req, studentId) {
@@ -107,10 +110,24 @@ router.get('/students/parent-report', (0, auth_1.authorize)(enums_1.UserRole.PAR
         })),
     });
 });
+router.get('/unmarked-classes', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.TEACHER), async (req, res) => {
+    const date = req.query.date || (0, helpers_1.today)();
+    const staffId = req.user.role === enums_1.UserRole.TEACHER ? req.user.staffId : undefined;
+    res.json(await (0, attendance_register_service_1.getUnmarkedClassesForDate)(date, staffId ? { staffId } : {}));
+});
 router.get('/students', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.TEACHER, enums_1.UserRole.PARENT), async (req, res) => {
     const { studentId, classId, date, from, to } = req.query;
-    if (classId && !(await (0, teacher_class_access_1.assertTeacherClassAccess)(req, classId))) {
-        return res.status(403).json({ message: 'You are not assigned to this class' });
+    if (classId) {
+        const allowed = req.user.role === enums_1.UserRole.TEACHER
+            ? await (0, teacher_class_access_1.assertTeacherClassTeacherAccess)(req, classId)
+            : await (0, teacher_class_access_1.assertTeacherClassAccess)(req, classId);
+        if (!allowed) {
+            return res.status(403).json({
+                message: req.user.role === enums_1.UserRole.TEACHER
+                    ? 'Only the class teacher can view or mark attendance for this class'
+                    : 'You are not assigned to this class',
+            });
+        }
     }
     const repo = data_source_1.AppDataSource.getRepository(entities_1.StudentAttendance);
     const qb = repo.createQueryBuilder('a').leftJoinAndSelect('a.student', 's');
@@ -129,6 +146,11 @@ router.post('/students/bulk', (0, auth_1.authorize)(enums_1.UserRole.TEACHER, en
     const repo = data_source_1.AppDataSource.getRepository(entities_1.StudentAttendance);
     const studentRepo = data_source_1.AppDataSource.getRepository(entities_1.Student);
     const { date = (0, helpers_1.today)(), records } = req.body;
+    if (!(0, helpers_1.isSchoolDay)(date)) {
+        return res.status(400).json({
+            message: 'Attendance registers cannot be marked on weekends. Registers are marked Monday to Friday only.',
+        });
+    }
     if (!Array.isArray(records) || !records.length) {
         return res.status(400).json({ message: 'records array is required' });
     }
@@ -144,12 +166,19 @@ router.post('/students/bulk', (0, auth_1.authorize)(enums_1.UserRole.TEACHER, en
     if (classIds.length !== 1) {
         return res.status(400).json({ message: 'All students must belong to the same class' });
     }
-    if (!(await (0, teacher_class_access_1.assertTeacherClassAccess)(req, classIds[0]))) {
+    if (req.user.role === enums_1.UserRole.TEACHER) {
+        if (!(await (0, teacher_class_access_1.assertTeacherClassTeacherAccess)(req, classIds[0]))) {
+            return res.status(403).json({ message: 'Only the class teacher can mark attendance for this class' });
+        }
+    }
+    else if (!(await (0, teacher_class_access_1.assertTeacherClassAccess)(req, classIds[0]))) {
         return res.status(403).json({ message: 'You are not assigned to this class' });
     }
     const saved = [];
+    const newlyAbsent = [];
     for (const r of records) {
         let existing = await repo.findOne({ where: { studentId: r.studentId, date } });
+        const wasAbsent = existing?.status === enums_2.AttendanceStatus.ABSENT;
         if (existing) {
             existing.status = r.status;
             existing.remarks = r.remarks;
@@ -159,6 +188,12 @@ router.post('/students/bulk', (0, auth_1.authorize)(enums_1.UserRole.TEACHER, en
         else {
             saved.push(await repo.save(repo.create({ ...r, date, markedById: req.user.staffId })));
         }
+        // Only alert when a student becomes absent (avoid re-alerting on edits).
+        if (r.status === enums_2.AttendanceStatus.ABSENT && !wasAbsent)
+            newlyAbsent.push(r.studentId);
+    }
+    if (newlyAbsent.length) {
+        void (0, auto_notify_service_1.sendAbsenceAlerts)(newlyAbsent, date);
     }
     res.json(saved);
 });

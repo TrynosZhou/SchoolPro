@@ -3,12 +3,12 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const data_source_1 = require("../config/data-source");
 const entities_1 = require("../entities");
-const enums_1 = require("../entities/enums");
+const portal_roles_1 = require("../config/portal-roles");
 const auth_1 = require("../middleware/auth");
 const typeorm_helpers_1 = require("../utils/typeorm-helpers");
 const payroll_service_1 = require("../services/payroll.service");
 const router = (0, express_1.Router)();
-const PAYROLL_ROLES = [enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL];
+const PAYROLL_ROLES = portal_roles_1.FINANCE_ROLES;
 router.use(auth_1.authenticate);
 router.use((0, auth_1.authorize)(...PAYROLL_ROLES));
 router.get('/summary', async (_req, res) => {

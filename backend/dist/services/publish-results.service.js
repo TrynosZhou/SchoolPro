@@ -10,6 +10,9 @@ const env_1 = require("../config/env");
 const entities_1 = require("../entities");
 const typeorm_helpers_1 = require("../utils/typeorm-helpers");
 const whatsapp_service_1 = require("./whatsapp.service");
+const email_service_1 = require("./email.service");
+const notification_settings_service_1 = require("./notification-settings.service");
+const result_notification_service_1 = require("./result-notification.service");
 function normalizePhone(phone) {
     const trimmed = phone.trim();
     if (!trimmed)
@@ -84,7 +87,15 @@ async function publishResults(params) {
     await reportRepo.update({ termId, examTypeId }, { isPublished: true });
     const settings = await data_source_1.AppDataSource.getRepository(entities_1.SchoolSettings).findOne({ where: { id: 'default' } });
     const schoolName = settings?.schoolName || 'School Pro Academy';
-    const message = buildResultsMessage(schoolName, term.name, examType.name);
+    const examCfg = (await (0, notification_settings_service_1.getNotificationSettings)()).examResults;
+    const message = examCfg.template
+        ? examCfg.template
+            .replace(/\{school\}/g, schoolName)
+            .replace(/\{exam\}/g, examType.name)
+            .replace(/\{term\}/g, term.name)
+        : buildResultsMessage(schoolName, term.name, examType.name);
+    const wantEmail = examCfg.channels.email;
+    const wantInApp = examCfg.channels.inApp;
     const studentIds = [...new Set(reports.map((r) => r.studentId))];
     const guardians = await data_source_1.AppDataSource.getRepository(entities_1.Guardian).find({
         where: { studentId: (0, typeorm_1.In)(studentIds) },
@@ -94,21 +105,20 @@ async function publishResults(params) {
         where: { id: (0, typeorm_1.In)(studentIds) },
         relations: (0, typeorm_helpers_1.relations)('user'),
     });
-    const phonesWhatsApp = new Set();
     const phonesSms = new Set();
+    const emails = new Set();
     const notifyUserIds = new Set();
     for (const g of guardians) {
-        const phone = g.phone || g.parent?.user?.phone;
-        if (!phone)
-            continue;
-        const normalized = normalizePhone(phone);
-        if (!normalized)
-            continue;
-        if (g.parent?.receivesWhatsApp !== false && notifyWhatsApp) {
-            phonesWhatsApp.add(normalized);
+        if (wantEmail) {
+            const email = g.email || g.parent?.user?.email;
+            if (email)
+                emails.add(email);
         }
-        if (notifySms) {
-            phonesSms.add(normalized);
+        const phone = g.phone || g.parent?.user?.phone;
+        if (phone && notifySms) {
+            const normalized = normalizePhone(phone);
+            if (normalized)
+                phonesSms.add(normalized);
         }
         if (g.parent?.userId) {
             notifyUserIds.add(g.parent.userId);
@@ -117,6 +127,8 @@ async function publishResults(params) {
     for (const s of students) {
         if (s.userId)
             notifyUserIds.add(s.userId);
+        if (wantEmail && s.user?.email)
+            emails.add(s.user.email);
         if (s.user?.phone && notifySms) {
             const normalized = normalizePhone(s.user.phone);
             if (normalized)
@@ -125,11 +137,21 @@ async function publishResults(params) {
     }
     let whatsappSent = 0;
     let smsSent = 0;
+    let emailsSent = 0;
     if (notifyWhatsApp) {
-        for (const phone of phonesWhatsApp) {
-            const ok = await (0, whatsapp_service_1.sendWhatsAppReminder)(phone, message);
-            if (ok)
-                whatsappSent += 1;
+        try {
+            const whatsappSummary = await (0, result_notification_service_1.queueWhatsAppResultNotifications)({
+                reports,
+                guardians,
+                examTypeId,
+                examName: examType.name,
+                termId,
+            });
+            whatsappSent = whatsappSummary.whatsappQueued + whatsappSummary.smsQueued;
+            console.log(`[publish-results] Result notifications queued: whatsapp=${whatsappSummary.whatsappQueued}, sms=${whatsappSummary.smsQueued}, skipped=${whatsappSummary.skipped}, enqueueFailed=${whatsappSummary.enqueueFailed}`);
+        }
+        catch (err) {
+            console.error('[publish-results] WhatsApp result notifications failed (non-blocking):', err);
         }
     }
     if (notifySms) {
@@ -139,10 +161,18 @@ async function publishResults(params) {
                 smsSent += 1;
         }
     }
+    if (wantEmail) {
+        const subject = `${schoolName}: ${examType.name} results published`;
+        for (const email of emails) {
+            const result = await (0, email_service_1.sendTransactionalEmail)({ to: email, subject, text: message });
+            if (result.sent)
+                emailsSent += 1;
+        }
+    }
     const notificationRepo = data_source_1.AppDataSource.getRepository(entities_1.Notification);
     let notificationsCreated = 0;
     const title = `${examType.name} results published`;
-    for (const userId of notifyUserIds) {
+    for (const userId of wantInApp ? notifyUserIds : []) {
         await notificationRepo.save(notificationRepo.create({
             userId,
             title,
@@ -170,6 +200,7 @@ async function publishResults(params) {
         reportCardCount: reports.length,
         whatsappSent,
         smsSent,
+        emailsSent,
         notificationsCreated,
         publishedAt: publication.publishedAt.toISOString(),
     };

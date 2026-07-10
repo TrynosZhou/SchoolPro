@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.RECON_FEE_TYPE_OPTIONS = void 0;
 exports.searchStudents = searchStudents;
+exports.fetchStudentInvoiceBalance = fetchStudentInvoiceBalance;
 exports.buildStudentLedgerReport = buildStudentLedgerReport;
 exports.buildOutstandingInvoicesReport = buildOutstandingInvoicesReport;
 exports.buildStudentReconciliationReport = buildStudentReconciliationReport;
@@ -93,6 +94,14 @@ async function fetchStudentInvoiceBalance(studentId) {
         AND i.status NOT IN ('cancelled', 'draft', 'paid')
     `, [studentId]);
     return (0, term_balance_service_1.roundMoney)(Number(result[0]?.owed || 0));
+}
+function sumOpenInvoiceBalance(invoices) {
+    return (0, term_balance_service_1.roundMoney)(invoices.reduce((sum, inv) => {
+        if (['cancelled', 'draft', 'paid'].includes(String(inv.status)))
+            return sum;
+        const owed = Number(inv.totalAmount) - Number(inv.amountPaid);
+        return owed > 0.005 ? sum + owed : sum;
+    }, 0));
 }
 async function findBalanceTerm(studentId) {
     const rows = await data_source_1.AppDataSource.query(`
@@ -254,6 +263,34 @@ async function buildStudentLedgerReport(studentId, termId) {
             credit: Number(pay.amount),
         });
     }
+    const creditedByInvoiceId = new Map();
+    for (const pay of termPayments) {
+        if (!pay.invoiceId)
+            continue;
+        creditedByInvoiceId.set(pay.invoiceId, roundMoney((creditedByInvoiceId.get(pay.invoiceId) || 0) + Number(pay.amount)));
+    }
+    for (const inv of termInvoices) {
+        if (inv.feeType === term_balance_service_1.BALANCE_FORWARD_FEE_TYPE)
+            continue;
+        const paidOnInvoice = roundMoney(Number(inv.amountPaid));
+        if (paidOnInvoice <= 0.005)
+            continue;
+        const credited = creditedByInvoiceId.get(inv.id) || 0;
+        const remaining = roundMoney(paidOnInvoice - credited);
+        if (remaining <= 0.005)
+            continue;
+        const appliedAt = inv.updatedAt || inv.issuedDate || term.endDate;
+        const appliedDate = toDateKey(appliedAt);
+        txns.push({
+            date: appliedDate,
+            sortAt: new Date(appliedAt).getTime() + 1,
+            type: 'payment',
+            reference: inv.invoiceNumber || '—',
+            description: `Payment applied — ${inv.description || inv.invoiceNumber}`,
+            debit: 0,
+            credit: remaining,
+        });
+    }
     txns.sort((a, b) => a.sortAt - b.sortAt || a.reference.localeCompare(b.reference));
     const lines = [];
     let owedRunning = Math.max(0, openingBalance);
@@ -293,12 +330,9 @@ async function buildStudentLedgerReport(studentId, termId) {
     const termCharges = roundMoney(openingBalance + totalDebits);
     const termNetMovement = roundMoney(termCharges - totalCredits);
     const termOverpayment = roundMoney(Math.max(0, totalCredits - termCharges));
+    const termInvoiceBalance = sumOpenInvoiceBalance(termInvoices);
     const invoiceBalance = await fetchStudentInvoiceBalance(studentId);
-    // Invoice balance is authoritative (matches Outstanding Invoices report).
-    const closingBalance = invoiceBalance;
-    if (lines.length && Math.abs(owedRunning - invoiceBalance) > 0.01) {
-        lines[lines.length - 1].balance = invoiceBalance;
-    }
+    const closingBalance = owedRunning;
     const balanceTerm = await findBalanceTerm(studentId);
     return {
         student: {
@@ -319,6 +353,7 @@ async function buildStudentLedgerReport(studentId, termId) {
         },
         lines,
         invoiceBalance,
+        termInvoiceBalance,
         balanceTermId: balanceTerm?.termId,
         balanceTermName: balanceTerm?.termName,
         summary: {

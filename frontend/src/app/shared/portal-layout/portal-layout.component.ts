@@ -7,6 +7,10 @@ import { filter, Subscription } from 'rxjs';
 import { AuthService } from '../../core/services/auth.service';
 import { ApiService } from '../../core/services/api.service';
 import { MessageBadgeService } from '../../core/services/message-badge.service';
+import { ThemeService, FontScale, ThemeMode } from '../../core/services/theme.service';
+import { I18nService, AppLocale } from '../../core/services/i18n.service';
+import { OfflineService } from '../../core/services/offline.service';
+import { TranslatePipe } from '../../core/pipes/translate.pipe';
 import { environment } from '../../../environments/environment';
 import { HelpTopic, helpTopicsForRole, scoreHelpTopic } from '../../core/config/system-help-manual';
 import { downloadHelpManualPdf } from '../../core/utils/help-manual-pdf.util';
@@ -45,7 +49,7 @@ interface BalanceEnquiryRow {
 @Component({
   selector: 'app-portal-layout',
   standalone: true,
-  imports: [RouterLink, RouterLinkActive, NgTemplateOutlet, FormsModule],
+  imports: [RouterLink, RouterLinkActive, NgTemplateOutlet, FormsModule, TranslatePipe],
   templateUrl: './portal-layout.component.html',
   styleUrl: './portal-layout.component.scss',
 })
@@ -63,6 +67,9 @@ export class PortalLayoutComponent implements OnInit, OnChanges, OnDestroy {
   auth = inject(AuthService);
   private api = inject(ApiService);
   private messageBadge = inject(MessageBadgeService);
+  readonly theme = inject(ThemeService);
+  readonly i18n = inject(I18nService);
+  readonly offline = inject(OfflineService);
   private router = inject(Router);
   private title = inject(Title);
   private elementRef = inject(ElementRef<HTMLElement>);
@@ -70,9 +77,43 @@ export class PortalLayoutComponent implements OnInit, OnChanges, OnDestroy {
   readonly userMenuOpen = signal(false);
   readonly logoutConfirmOpen = signal(false);
   readonly helpOpen = signal(false);
+  readonly helpTab = signal<'manual' | 'developer'>('manual');
   readonly helpQuery = signal('');
   readonly helpNoMatch = signal(false);
   readonly helpPdfLoading = signal(false);
+
+  readonly systemDeveloper = {
+    name: 'Trynos Zhou',
+    qualifications: [
+      'BSc Hons Information Systems (MSU)',
+      'PGDE — Post Graduate Diploma in Education (MSU)',
+    ],
+    contacts: [
+      {
+        label: 'WhatsApp number',
+        display: '+263 777751301',
+        telHref: 'tel:+263777751301',
+        whatsappHref:
+          'https://wa.me/263777751301?text=' +
+          encodeURIComponent('Hello Trynos Zhou, I am contacting you regarding School Pro.'),
+      },
+      {
+        label: 'WhatsApp number',
+        display: '+263 783128556',
+        telHref: 'tel:+263783128556',
+        whatsappHref:
+          'https://wa.me/263783128556?text=' +
+          encodeURIComponent('Hello Trynos Zhou, I am contacting you regarding School Pro.'),
+      },
+    ],
+  } as const;
+
+  readonly developerPhotoUrl = signal<string | null>(null);
+  readonly developerPhotoUploading = signal(false);
+  readonly developerPhotoToast = signal<{ type: 'success' | 'error'; msg: string } | null>(null);
+  readonly canManageDeveloperPhoto = computed(
+    () => (this.auth.user()?.role || '').toLowerCase() === 'admin',
+  );
   readonly balanceOpen = signal(false);
   balanceQuery = '';
   readonly balanceLoading = signal(false);
@@ -85,6 +126,7 @@ export class PortalLayoutComponent implements OnInit, OnChanges, OnDestroy {
   readonly schoolFacebookUrl = signal<string | null>(null);
   readonly sidebarOpen = signal(false);
   readonly sidebarCollapsed = signal(false);
+  private lastFocusEl: HTMLElement | null = null;
 
   readonly unreadMessageCount = this.messageBadge.unreadCount;
 
@@ -173,6 +215,9 @@ export class PortalLayoutComponent implements OnInit, OnChanges, OnDestroy {
       this.loadSchoolLinks();
       this.messageBadge.startPolling();
     }
+    if (this.offline.online()) {
+      void this.offline.flushQueue();
+    }
     this.routerSub = this.router.events
       .pipe(filter((e): e is NavigationEnd => e instanceof NavigationEnd))
       .subscribe(() => {
@@ -256,6 +301,30 @@ export class PortalLayoutComponent implements OnInit, OnChanges, OnDestroy {
     this.sidebarCollapsed.update((v) => !v);
   }
 
+  cycleTheme(): void {
+    this.theme.cycleTheme();
+  }
+
+  setTheme(mode: ThemeMode): void {
+    this.theme.setTheme(mode);
+  }
+
+  setFontScale(scale: FontScale): void {
+    this.theme.setFontScale(scale);
+  }
+
+  setLocale(code: AppLocale): void {
+    void this.i18n.setLocale(code);
+  }
+
+  syncNow(): void {
+    void this.offline.flushQueue();
+  }
+
+  navLabel(label: string): string {
+    return this.i18n.nav(label);
+  }
+
   closeSidebar(): void {
     if (!this.sidebarOpen()) return;
     this.sidebarOpen.set(false);
@@ -266,8 +335,8 @@ export class PortalLayoutComponent implements OnInit, OnChanges, OnDestroy {
     this.userMenuOpen.update((open) => !open);
     if (this.userMenuOpen()) {
       this.closeSidebar();
-      this.closeHelp();
-      this.closeBalanceEnquiry();
+      this.closeHelpWithoutRestore();
+      this.closeBalanceEnquiryWithoutRestore();
     }
   }
 
@@ -276,13 +345,15 @@ export class PortalLayoutComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   openBalanceEnquiry(): void {
+    this.captureFocus();
     this.balanceOpen.set(true);
     this.balanceSearched.set(false);
     this.balanceResults.set([]);
     this.balanceSelected.set(null);
     this.userMenuOpen.set(false);
     this.closeSidebar();
-    this.closeHelp();
+    this.closeHelpWithoutRestore();
+    queueMicrotask(() => this.focusInDialog('.balance-modal'));
   }
 
   closeBalanceEnquiry(): void {
@@ -291,6 +362,7 @@ export class PortalLayoutComponent implements OnInit, OnChanges, OnDestroy {
     this.balanceSearched.set(false);
     this.balanceResults.set([]);
     this.balanceSelected.set(null);
+    this.restoreFocus();
   }
 
   getBalanceEnquiry(): void {
@@ -344,17 +416,46 @@ export class PortalLayoutComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   openHelp(): void {
+    this.captureFocus();
     this.helpOpen.set(true);
+    this.helpTab.set('manual');
     this.helpNoMatch.set(false);
     this.userMenuOpen.set(false);
     this.closeSidebar();
-    this.closeBalanceEnquiry();
+    this.closeBalanceEnquiryWithoutRestore();
+    queueMicrotask(() => this.focusInDialog('.help-modal'));
+  }
+
+  setHelpTab(tab: 'manual' | 'developer'): void {
+    this.helpTab.set(tab);
+    if (tab === 'developer') {
+      this.helpNoMatch.set(false);
+      this.loadDeveloperPhoto();
+    }
   }
 
   closeHelp(): void {
     this.helpOpen.set(false);
+    this.helpTab.set('manual');
     this.helpQuery.set('');
     this.helpNoMatch.set(false);
+    this.restoreFocus();
+  }
+
+  private closeHelpWithoutRestore(): void {
+    this.helpOpen.set(false);
+    this.helpTab.set('manual');
+    this.helpQuery.set('');
+    this.helpNoMatch.set(false);
+  }
+
+  /** Close balance without stealing focus when opening another overlay. */
+  private closeBalanceEnquiryWithoutRestore(): void {
+    this.balanceOpen.set(false);
+    this.balanceQuery = '';
+    this.balanceSearched.set(false);
+    this.balanceResults.set([]);
+    this.balanceSelected.set(null);
   }
 
   onHelpQueryChange(value: string): void {
@@ -389,11 +490,14 @@ export class PortalLayoutComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   requestLogout(): void {
+    this.captureFocus();
     this.logoutConfirmOpen.set(true);
+    queueMicrotask(() => this.focusInDialog('.logout-modal'));
   }
 
   cancelLogout(): void {
     this.logoutConfirmOpen.set(false);
+    this.restoreFocus();
   }
 
   confirmLogout(): void {
@@ -441,6 +545,26 @@ export class PortalLayoutComponent implements OnInit, OnChanges, OnDestroy {
 
   private syncBodyScroll(): void {
     document.body.style.overflow = this.sidebarOpen() ? 'hidden' : '';
+  }
+
+  private captureFocus(): void {
+    this.lastFocusEl = document.activeElement as HTMLElement | null;
+  }
+
+  private restoreFocus(): void {
+    const el = this.lastFocusEl;
+    this.lastFocusEl = null;
+    queueMicrotask(() => el?.focus?.());
+  }
+
+  private focusInDialog(selector: string): void {
+    const root = this.elementRef.nativeElement.querySelector(selector) as HTMLElement | null;
+    if (!root) return;
+    const target =
+      (root.querySelector(
+        'input, button, select, textarea, [href], [tabindex]:not([tabindex="-1"])',
+      ) as HTMLElement | null) ?? root;
+    target.focus?.();
   }
 
   isExpanded(heading: string): boolean {
@@ -528,19 +652,77 @@ export class PortalLayoutComponent implements OnInit, OnChanges, OnDestroy {
       logoUrl: string | null;
       website: string | null;
       facebookPageUrl: string | null;
+      developerPhotoUrl?: string | null;
     }>('/dashboard/school-links').subscribe({
       next: (data) => {
         if (data.schoolName) this.schoolName.set(data.schoolName);
         this.schoolLogoUrl.set(this.toAssetUrl(data.logoUrl));
         this.schoolWebsiteUrl.set(this.toExternalUrl(data.website));
         this.schoolFacebookUrl.set(this.toExternalUrl(data.facebookPageUrl));
+        this.developerPhotoUrl.set(this.toAssetUrl(data.developerPhotoUrl));
       },
       error: () => {
         this.schoolLogoUrl.set(null);
         this.schoolWebsiteUrl.set(null);
         this.schoolFacebookUrl.set(null);
+        this.developerPhotoUrl.set(null);
       },
     });
+  }
+
+  private loadDeveloperPhoto(): void {
+    this.api.get<{ developerPhotoUrl?: string | null }>('/dashboard/school-links').subscribe({
+      next: (data) => this.developerPhotoUrl.set(this.toAssetUrl(data.developerPhotoUrl)),
+      error: () => undefined,
+    });
+  }
+
+  onDeveloperPhotoSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0] ?? null;
+    input.value = '';
+    if (!file) return;
+    if (!/^image\/(png|jpe?g|webp)$/i.test(file.type)) {
+      this.showDeveloperPhotoToast('error', 'Use a JPG, PNG, or WebP image.');
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      this.showDeveloperPhotoToast('error', 'Photo must be 2 MB or smaller.');
+      return;
+    }
+    this.developerPhotoUploading.set(true);
+    this.api.uploadFile<{ developerPhotoUrl?: string }>('/admin/settings/developer-photo', file, 'photo').subscribe({
+      next: (saved) => {
+        this.developerPhotoUploading.set(false);
+        this.developerPhotoUrl.set(this.toAssetUrl(saved.developerPhotoUrl));
+        this.showDeveloperPhotoToast('success', 'Passport photo uploaded.');
+      },
+      error: (e) => {
+        this.developerPhotoUploading.set(false);
+        this.showDeveloperPhotoToast('error', e.error?.message || 'Upload failed.');
+      },
+    });
+  }
+
+  removeDeveloperPhoto(): void {
+    if (!confirm('Remove the system developer passport photo?')) return;
+    this.developerPhotoUploading.set(true);
+    this.api.delete<{ developerPhotoUrl?: string | null }>('/admin/settings/developer-photo').subscribe({
+      next: () => {
+        this.developerPhotoUploading.set(false);
+        this.developerPhotoUrl.set(null);
+        this.showDeveloperPhotoToast('success', 'Passport photo removed.');
+      },
+      error: (e) => {
+        this.developerPhotoUploading.set(false);
+        this.showDeveloperPhotoToast('error', e.error?.message || 'Could not remove photo.');
+      },
+    });
+  }
+
+  private showDeveloperPhotoToast(type: 'success' | 'error', msg: string): void {
+    this.developerPhotoToast.set({ type, msg });
+    setTimeout(() => this.developerPhotoToast.set(null), 3500);
   }
 
   private toAssetUrl(path: string | null | undefined): string | null {

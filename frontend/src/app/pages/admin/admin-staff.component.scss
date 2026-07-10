@@ -484,7 +484,7 @@ $list-cols: 40px 7.5rem 1.4fr 6.5rem 1fr 1.2fr 5.5rem 6.5rem;
   padding: 0.65rem 1rem;
   background: #f8fafc;
   border-bottom: 1px solid #e2e8f0;
-  font-size: 0.7rem;
+  font-size: 0.91rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -588,13 +588,18 @@ $list-cols: 40px 7.5rem 1.4fr 6.5rem 1fr 1.2fr 5.5rem 6.5rem;
   min-width: 0;
 }
 
+.col-dept > span {
+  font-size: 1.196rem;
+  color: #0f172a;
+}
+
 .list-name {
-  font-size: 0.92rem;
+  font-size: 1.196rem;
   color: #0f172a;
 }
 
 .list-sub {
-  font-size: 0.75rem;
+  font-size: 0.975rem;
   color: #94a3b8;
   white-space: nowrap;
   overflow: hidden;
@@ -602,7 +607,7 @@ $list-cols: 40px 7.5rem 1.4fr 6.5rem 1fr 1.2fr 5.5rem 6.5rem;
 }
 
 .contact-line {
-  font-size: 0.82rem;
+  font-size: 1.066rem;
   color: #475569;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -619,7 +624,7 @@ $list-cols: 40px 7.5rem 1.4fr 6.5rem 1fr 1.2fr 5.5rem 6.5rem;
   align-items: center;
   justify-content: center;
   font-weight: 700;
-  font-size: 0.8rem;
+  font-size: 1.04rem;
   flex-shrink: 0;
 
   &[data-role='admin'] {
@@ -633,18 +638,18 @@ $list-cols: 40px 7.5rem 1.4fr 6.5rem 1fr 1.2fr 5.5rem 6.5rem;
   &.sm {
     width: 36px;
     height: 36px;
-    font-size: 0.72rem;
+    font-size: 0.936rem;
   }
 
   &.lg {
     width: 56px;
     height: 56px;
-    font-size: 1rem;
+    font-size: 1.3rem;
   }
 }
 
 .emp-id {
-  font-size: 0.75rem;
+  font-size: 0.975rem;
   background: #f0fdfa;
   color: #0f766e;
   padding: 0.15rem 0.45rem;
@@ -654,7 +659,7 @@ $list-cols: 40px 7.5rem 1.4fr 6.5rem 1fr 1.2fr 5.5rem 6.5rem;
 
 .role-badge {
   display: inline-block;
-  font-size: 0.72rem;
+  font-size: 0.936rem;
   font-weight: 600;
   padding: 0.2rem 0.55rem;
   border-radius: 20px;
@@ -678,7 +683,7 @@ $list-cols: 40px 7.5rem 1.4fr 6.5rem 1fr 1.2fr 5.5rem 6.5rem;
 
 .status-pill {
   display: inline-block;
-  font-size: 0.72rem;
+  font-size: 0.936rem;
   font-weight: 600;
   padding: 0.2rem 0.55rem;
   border-radius: 20px;

@@ -196,6 +196,24 @@ export async function fetchStudentInvoiceBalance(studentId: string): Promise<num
   return termRoundMoney(Number(result[0]?.owed || 0));
 }
 
+/**
+ * School-wide outstanding debtor total — active students only, positive open
+ * invoice balances. Matches Outstanding Invoices / Debtor Aging reports.
+ */
+export async function fetchSchoolOutstandingBalance(): Promise<number> {
+  const result = await AppDataSource.query(
+    `
+      SELECT COALESCE(SUM(i."totalAmount" - i."amountPaid"), 0) as total
+      FROM invoices i
+      INNER JOIN students s ON s.id = i."studentId"
+      WHERE s."isActive" = true
+        AND (i."totalAmount" - i."amountPaid") > 0.005
+        AND i.status NOT IN ('cancelled', 'draft', 'paid')
+    `,
+  );
+  return termRoundMoney(Number(result[0]?.total || 0));
+}
+
 function sumOpenInvoiceBalance(invoices: Invoice[]): number {
   return termRoundMoney(
     invoices.reduce((sum, inv) => {

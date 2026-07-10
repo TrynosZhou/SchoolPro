@@ -96,6 +96,18 @@ __decorate([
     __metadata("design:type", Boolean)
 ], Student.prototype, "isActive", void 0);
 __decorate([
+    (0, typeorm_1.Column)({ type: 'varchar', length: 24, default: enums_1.StudentStatus.ACTIVE }),
+    __metadata("design:type", String)
+], Student.prototype, "status", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'date', nullable: true }),
+    __metadata("design:type", String)
+], Student.prototype, "exitDate", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'varchar', length: 255, nullable: true }),
+    __metadata("design:type", String)
+], Student.prototype, "exitReason", void 0);
+__decorate([
     (0, typeorm_1.Column)({ type: 'date', nullable: true }),
     __metadata("design:type", String)
 ], Student.prototype, "enrollmentDate", void 0);
@@ -123,6 +135,10 @@ __decorate([
     (0, typeorm_1.CreateDateColumn)(),
     __metadata("design:type", Date)
 ], Student.prototype, "createdAt", void 0);
+__decorate([
+    (0, typeorm_1.UpdateDateColumn)(),
+    __metadata("design:type", Date)
+], Student.prototype, "updatedAt", void 0);
 exports.Student = Student = __decorate([
     (0, typeorm_1.Entity)('students')
 ], Student);

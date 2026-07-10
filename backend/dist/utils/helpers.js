@@ -5,6 +5,7 @@ exports.generateEmployeeNumber = generateEmployeeNumber;
 exports.generateNumber = generateNumber;
 exports.calculateGrade = calculateGrade;
 exports.today = today;
+exports.isSchoolDay = isSchoolDay;
 exports.invoiceDescriptionWithTerm = invoiceDescriptionWithTerm;
 exports.toDateOnly = toDateOnly;
 exports.termReportDateRange = termReportDateRange;
@@ -53,6 +54,12 @@ function calculateGrade(marks, max = 100) {
 }
 function today() {
     return new Date().toISOString().split('T')[0];
+}
+/** Monday–Friday are school days; Saturday and Sunday are not. */
+function isSchoolDay(dateStr) {
+    const d = new Date(`${dateStr}T12:00:00`);
+    const day = d.getDay();
+    return day >= 1 && day <= 5;
 }
 /** Append the billing term name when missing, e.g. "Term fees" -> "Term fees (Term 3)". */
 function invoiceDescriptionWithTerm(description, termName) {

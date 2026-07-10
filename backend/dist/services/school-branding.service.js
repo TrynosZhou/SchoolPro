@@ -15,6 +15,7 @@ async function loadSchoolBranding() {
         phone: settings?.phone,
         email: settings?.email,
         website: settings?.website,
+        headmasterName: settings?.headmasterName,
         currency: settings?.currency || 'USD',
         bankAccountName: settings?.bankAccountName,
         bankName: settings?.bankName,

@@ -1,5 +1,6 @@
 import { AppDataSource } from '../config/data-source';
 import { SchoolSettings } from '../entities';
+import { tenantContext } from '../config/tenant-context';
 import {
   DEFAULT_SECURITY_POLICY,
   normalizeSecurityPolicy,
@@ -7,13 +8,24 @@ import {
 } from '../types/security-policy';
 
 const SETTINGS_ID = 'default';
-let cachedPolicy: SecurityPolicy | null = null;
-let cacheTime = 0;
+/**
+ * Keyed by tenant ("demo" | "prod") so a demo request can never be served a
+ * stale in-memory copy of production's settings (or vice versa) within the
+ * cache window — this module-level cache sits above the DataSource proxy, so
+ * it needs its own tenant separation.
+ */
+const cache = new Map<string, { policy: SecurityPolicy; time: number }>();
 const CACHE_MS = 30_000;
 
+function cacheKey(): string {
+  return tenantContext.isDemo() ? 'demo' : 'prod';
+}
+
 export async function getSecurityPolicy(): Promise<SecurityPolicy> {
+  const key = cacheKey();
   const now = Date.now();
-  if (cachedPolicy && now - cacheTime < CACHE_MS) return cachedPolicy;
+  const cached = cache.get(key);
+  if (cached && now - cached.time < CACHE_MS) return cached.policy;
 
   const repo = AppDataSource.getRepository(SchoolSettings);
   let settings = await repo.findOne({ where: { id: SETTINGS_ID } });
@@ -31,12 +43,10 @@ export async function getSecurityPolicy(): Promise<SecurityPolicy> {
     settings.securityPolicy = policy;
     await repo.save(settings);
   }
-  cachedPolicy = policy;
-  cacheTime = now;
+  cache.set(key, { policy, time: now });
   return policy;
 }
 
 export function invalidateSecurityPolicyCache(): void {
-  cachedPolicy = null;
-  cacheTime = 0;
+  cache.clear();
 }

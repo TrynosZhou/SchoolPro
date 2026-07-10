@@ -16,6 +16,7 @@ interface MarkSheetSubject {
   id: string;
   code: string;
   name: string;
+  short?: string | null;
 }
 
 interface MarkSheetCell {
@@ -216,7 +217,7 @@ export class AdminMarkSheetComponent implements OnInit, OnDestroy {
   }
 
   subjectAbbrev(sub: MarkSheetSubject): string {
-    return formatSubjectAbbrev(sub.code, sub.name);
+    return formatSubjectAbbrev(sub.code, sub.name, sub.short);
   }
 
   isPassingMark(mark: number): boolean {

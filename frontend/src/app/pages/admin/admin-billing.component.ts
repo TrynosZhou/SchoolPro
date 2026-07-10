@@ -12,6 +12,7 @@ import { AuthService } from '../../core/services/auth.service';
 import { environment } from '../../../environments/environment';
 import { Student } from '../../core/models';
 import { formatGenderLabel, formatStudentClassLabel } from '../../core/utils/class-display';
+import { TranslatePipe } from '../../core/pipes/translate.pipe';
 
 type FinanceMode = 'billing' | 'payment';
 type BillingTab = 'single-invoice' | 'bulk-invoice' | 'invoices' | 'get-invoice' | 'credit-note' | 'debit-note';
@@ -119,7 +120,7 @@ interface AdjustmentStudentRow {
 @Component({
   selector: 'app-admin-billing',
   standalone: true,
-  imports: [PortalLayoutComponent, FormsModule, DecimalPipe, DatePipe, RouterLink],
+  imports: [PortalLayoutComponent, FormsModule, DecimalPipe, DatePipe, RouterLink, TranslatePipe],
   templateUrl: './admin-billing.component.html',
   styleUrl: './admin-billing.component.scss',
 })

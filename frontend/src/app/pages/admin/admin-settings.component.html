@@ -132,6 +132,21 @@
                     <option value="ZWL">ZWL (Z$)</option>
                   </select>
                 </div>
+                <div class="field">
+                  <label>Student ID prefix</label>
+                  <input
+                    [(ngModel)]="profileForm.studentIdPrefix"
+                    name="studentIdPrefix"
+                    maxlength="8"
+                    placeholder="SP"
+                    class="input-mono"
+                  />
+                  <small>
+                    Used for auto Student IDs:
+                    <code>{{ (profileForm.studentIdPrefix || 'SP').toUpperCase() }}RRRRMMYYYY</code>
+                    (4 random digits + DOB month + registration year = 10 digits).
+                  </small>
+                </div>
                 <div class="field span-2">
                   <label>Fee Reminder Template</label>
                   <textarea [(ngModel)]="profileForm.feeReminderTemplate" name="feeTpl" rows="3"

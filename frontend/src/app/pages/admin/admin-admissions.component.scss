@@ -208,7 +208,7 @@
   color: #475569;
   padding: 0.4rem 0.85rem;
   border-radius: 999px;
-  font-size: 0.82rem;
+  font-size: 1.066rem;
   font-weight: 600;
   cursor: pointer;
 
@@ -232,14 +232,14 @@
   border: 1px solid #cbd5e1;
   border-radius: 8px;
   padding: 0 0.6rem;
-  font-size: 0.85rem;
+  font-size: 1.105rem;
   background: #fff;
 }
 
 .date-field {
   display: flex;
   flex-direction: column;
-  font-size: 0.68rem;
+  font-size: 0.884rem;
   color: #64748b;
   font-weight: 600;
   text-transform: uppercase;
@@ -250,7 +250,7 @@
     border: 1px solid #cbd5e1;
     border-radius: 8px;
     padding: 0 0.5rem;
-    font-size: 0.82rem;
+    font-size: 1.066rem;
   }
 }
 
@@ -258,7 +258,7 @@
   display: flex;
   align-items: center;
   gap: 1rem;
-  font-size: 0.82rem;
+  font-size: 1.066rem;
   color: #64748b;
 
   .clear-filters {
@@ -308,14 +308,14 @@
 .data-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.9rem;
+  font-size: 1.17rem;
 
   thead th {
     text-align: left;
     padding: 0.75rem 1rem;
     background: #f8fafc;
     color: #475569;
-    font-size: 0.75rem;
+    font-size: 0.975rem;
     text-transform: uppercase;
     letter-spacing: 0.05em;
     border-bottom: 1px solid #e2e8f0;
@@ -340,7 +340,7 @@
   background: #f1f5f9;
   border-radius: 6px;
   padding: 0.15rem 0.4rem;
-  font-size: 0.8rem;
+  font-size: 1.04rem;
   color: #4338ca;
   font-weight: 600;
 }
@@ -351,15 +351,15 @@
   gap: 0.55rem;
 
   .avatar {
-    width: 2rem;
-    height: 2rem;
+    width: 2.6rem;
+    height: 2.6rem;
     border-radius: 50%;
     background: #eef2ff;
     color: #4338ca;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    font-size: 0.72rem;
+    font-size: 0.936rem;
     font-weight: 700;
   }
 }
@@ -368,7 +368,7 @@
   display: flex;
   flex-direction: column;
   line-height: 1.25;
-  small { color: #94a3b8; font-size: 0.78rem; }
+  small { color: #94a3b8; font-size: 1.014rem; }
 }
 
 .doc-count {
@@ -380,7 +380,7 @@
   border-radius: 6px;
   background: #f1f5f9;
   color: #475569;
-  font-size: 0.8rem;
+  font-size: 1.04rem;
   font-weight: 700;
 }
 
@@ -388,7 +388,7 @@
   display: inline-block;
   padding: 0.25rem 0.65rem;
   border-radius: 999px;
-  font-size: 0.75rem;
+  font-size: 0.975rem;
   font-weight: 700;
 
   &.status-applied { background: #eef2ff; color: #4338ca; }
@@ -404,7 +404,7 @@
   padding: 0.35rem 0.85rem;
   border-radius: 8px;
   font-weight: 600;
-  font-size: 0.82rem;
+  font-size: 1.066rem;
   cursor: pointer;
 
   &:hover { background: #e0e7ff; }

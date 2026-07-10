@@ -9,7 +9,7 @@ import {
 } from 'typeorm';
 import { FK_CASCADE } from './constraints';
 import { Student } from './Student';
-import { AttendanceStatus } from './enums';
+import { AttendanceStatus, AttendanceMode } from './enums';
 
 @Entity('student_attendance')
 @Unique(['studentId', 'date'])
@@ -29,6 +29,10 @@ export class StudentAttendance {
 
   @Column({ type: 'enum', enum: AttendanceStatus })
   status!: AttendanceStatus;
+
+  /** in_person (default) or remote for hybrid sessions. */
+  @Column({ type: 'enum', enum: AttendanceMode, default: AttendanceMode.IN_PERSON })
+  mode!: AttendanceMode;
 
   @Column({ nullable: true })
   markedById?: string;

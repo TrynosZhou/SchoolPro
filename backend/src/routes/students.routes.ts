@@ -7,7 +7,7 @@ import { UserRole, StudentType, StudentStatus } from '../entities/enums';
 import { authenticate, authorize, AuthRequest } from '../middleware/auth';
 import bcrypt from 'bcryptjs';
 import { relations, param } from '../utils/typeorm-helpers';
-import { generateStudentId, today } from '../utils/helpers';
+import { generateStudentId, previewStudentId, today } from '../utils/helpers';
 import { generateClassListPdf, generateStudentIdCardPdf } from '../utils/pdf';
 import { loadSchoolBranding } from '../services/school-branding.service';
 import { FINANCE_ROLES, FINANCE_WRITE_ROLES, STUDENT_REGISTRATION_ROLES, ENROLLMENT_ROLES } from '../config/portal-roles';
@@ -32,6 +32,20 @@ const stuEdit = requireModuleAccess('students', 'edit');
 const stuDelete = requireModuleAccess('students', 'delete');
 const enrollEdit = requireModuleAccess('enrollment', 'edit');
 const enrollCreate = requireModuleAccess('enrollment', 'create');
+
+function normalizeGuardianInput(g: Record<string, unknown> = {}) {
+  const phone = String(g.guardianPhone || g.phone || '').trim() || undefined;
+  return {
+    fullName: g.fullName,
+    phone,
+    guardianPhone: phone,
+    guardianWhatsappConsent: g.guardianWhatsappConsent === true,
+    relationship: g.relationship,
+    email: g.email,
+    isPrimary: g.isPrimary ?? true,
+    parentId: g.parentId,
+  };
+}
 
 async function filterAccessibleStudents(req: AuthRequest, qb: ReturnType<ReturnType<typeof AppDataSource.getRepository<Student>>['createQueryBuilder']>, options?: { unenrolled?: boolean }) {
   if (
@@ -135,8 +149,9 @@ router.get(
   },
 );
 
-router.get('/next-student-id', authorize(...STUDENT_REGISTRATION_ROLES), stuCreate, async (_req, res: Response) => {
-  const studentId = await generateStudentId();
+router.get('/next-student-id', authorize(...STUDENT_REGISTRATION_ROLES), stuCreate, async (req, res: Response) => {
+  const dateOfBirth = typeof req.query.dateOfBirth === 'string' ? req.query.dateOfBirth : undefined;
+  const studentId = await previewStudentId(dateOfBirth);
   res.json({ studentId });
 });
 
@@ -414,9 +429,13 @@ router.post('/', authorize(...STUDENT_REGISTRATION_ROLES), stuCreate, async (req
     return res.status(400).json({ message: 'Selected form was not found' });
   }
 
+  if (!data.dateOfBirth) {
+    return res.status(400).json({ message: 'Date of birth is required to generate the Student ID' });
+  }
+
   let student;
-  for (let attempt = 0; attempt < 5; attempt++) {
-    const studentId = await generateStudentId();
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const studentId = await generateStudentId(data.dateOfBirth);
     try {
       const created = repo.create({
         ...data,
@@ -428,14 +447,15 @@ router.post('/', authorize(...STUDENT_REGISTRATION_ROLES), stuCreate, async (req
       student = await repo.save(Array.isArray(created) ? created[0] : created);
       break;
     } catch (err: { code?: string }) {
-      if (err?.code === '23505' && attempt < 4) continue;
+      if (err?.code === '23505' && attempt < 7) continue;
       throw err;
     }
   }
 
   if (guardians?.length) {
     for (const g of guardians) {
-      await guardianRepo.save(guardianRepo.create({ ...g, studentId: student.id }));
+      const normalized = normalizeGuardianInput(g);
+      await guardianRepo.save(guardianRepo.create({ ...normalized, studentId: student.id }));
     }
   }
 
@@ -647,18 +667,25 @@ router.put('/:id', authorize(UserRole.ADMIN, UserRole.TEACHER), stuEdit, async (
     const existing = student.guardians?.find((x) => x.isPrimary) || student.guardians?.[0];
     if (existing) {
       if (g.fullName !== undefined) existing.fullName = g.fullName;
-      if (g.phone !== undefined) existing.phone = g.phone;
       if (g.relationship !== undefined) existing.relationship = g.relationship;
+      if (g.guardianWhatsappConsent !== undefined) {
+        existing.guardianWhatsappConsent = g.guardianWhatsappConsent === true;
+      }
+      if (g.phone !== undefined || g.guardianPhone !== undefined) {
+        const phone = String(g.guardianPhone || g.phone || '').trim() || undefined;
+        existing.phone = phone;
+        existing.guardianPhone = phone;
+      }
       await guardianRepo.save(existing);
     } else if (g.fullName) {
+      const normalized = normalizeGuardianInput(g);
       await guardianRepo.save(
         guardianRepo.create({
           studentId: student.id,
-          fullName: g.fullName,
-          phone: g.phone,
-          relationship: g.relationship || 'Parent',
+          ...normalized,
+          relationship: normalized.relationship || 'Parent',
           isPrimary: true,
-        })
+        }),
       );
     }
   }
