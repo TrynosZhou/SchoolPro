@@ -29,6 +29,25 @@
       </div>
     </div>
 
+    <a
+      class="topbar-home"
+      [routerLink]="homeLink"
+      routerLinkActive="active"
+      [routerLinkActiveOptions]="{ exact: true }"
+      [attr.aria-label]="'shell.home' | t"
+      [attr.title]="'shell.home' | t"
+    >
+      <svg class="topbar-home-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path
+          d="M4 10.5 12 4l8 6.5V20a1.5 1.5 0 0 1-1.5 1.5H15v-5.5H9V21.5H5.5A1.5 1.5 0 0 1 4 20v-9.5z"
+          stroke="currentColor"
+          stroke-width="1.8"
+          stroke-linejoin="round"
+        />
+      </svg>
+      <span>{{ 'shell.home' | t }}</span>
+    </a>
+
     <nav class="topbar-actions" [attr.aria-label]="'shell.quickActions' | t">
       @if (schoolFacebookUrl(); as fbUrl) {
         <a class="topbar-action" [href]="fbUrl" target="_blank" rel="noopener noreferrer" [attr.aria-label]="'shell.facebook' | t">

@@ -1,4 +1,4 @@
-<app-portal-layout portalTitle="Parent Portal" pageTitle="My Children" [navItems]="nav">
+<app-portal-layout portalTitle="Parent Portal" pageTitle="My Children" homePath="/parent" [navItems]="nav">
 
   @if (toast(); as t) {
     <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>

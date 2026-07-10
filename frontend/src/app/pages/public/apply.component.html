@@ -7,6 +7,24 @@
         <small>Admissions</small>
       </div>
     </div>
+    @if (showParentHome) {
+      <a
+        class="public-home"
+        [routerLink]="parentDashboardPath"
+        aria-label="Back to parent dashboard"
+        title="Back to parent dashboard"
+      >
+        <svg class="public-home-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path
+            d="M4 10.5 12 4l8 6.5V20a1.5 1.5 0 0 1-1.5 1.5H15v-5.5H9V21.5H5.5A1.5 1.5 0 0 1 4 20v-9.5z"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linejoin="round"
+          />
+        </svg>
+        <span>Home</span>
+      </a>
+    }
     <nav class="public-links">
       <a routerLink="/apply/status">Track application</a>
       <a routerLink="/login">Sign in</a>
@@ -35,7 +53,11 @@
           <a class="btn-primary" [routerLink]="['/apply/status']" [queryParams]="{ ref: result.referenceNumber }">
             Track my application
           </a>
-          <a class="btn-secondary" routerLink="/login">Back to sign in</a>
+          @if (showParentHome) {
+            <a class="btn-secondary" [routerLink]="parentDashboardPath">Back to dashboard</a>
+          } @else {
+            <a class="btn-secondary" routerLink="/login">Back to sign in</a>
+          }
         </div>
       </section>
     } @else {
@@ -176,7 +198,11 @@
           </fieldset>
 
           <div class="form-foot">
-            <a routerLink="/login" class="btn-secondary">Cancel</a>
+            @if (showParentHome) {
+              <a [routerLink]="parentDashboardPath" class="btn-secondary">Cancel</a>
+            } @else {
+              <a routerLink="/login" class="btn-secondary">Cancel</a>
+            }
             <button type="submit" class="btn-primary" [disabled]="submitting()">
               {{ submitting() ? 'Submitting…' : 'Submit application' }}
             </button>

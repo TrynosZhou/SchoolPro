@@ -299,6 +299,7 @@ router.get(
       c.id AS "classId",
       c.name AS "className",
       f.name AS "formName",
+      f.level AS "formLevel",
       s.id AS "subjectId",
       s.name AS "subjectName",
       s.code AS "subjectCode",
@@ -315,7 +316,7 @@ router.get(
 
   const classTeacherRows = await AppDataSource.query(
     `
-    SELECT c.id AS "classId", c.name AS "className", f.name AS "formName"
+    SELECT c.id AS "classId", c.name AS "className", f.name AS "formName", f.level AS "formLevel"
     FROM classes c
     JOIN forms f ON f.id = c."formId"
     WHERE c."classTeacherId" = $1

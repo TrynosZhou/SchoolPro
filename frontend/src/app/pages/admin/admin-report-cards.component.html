@@ -12,10 +12,6 @@
         <p class="hero-sub">
           Generate ranked report cards for a class, review subject results and attendance, add remarks, and export or print summaries.
         </p>
-        <p class="hero-school">{{ schoolName() }}</p>
-        @if (schoolBranding()?.tagline) {
-          <p class="hero-tagline">{{ schoolBranding()!.tagline }}</p>
-        }
       </div>
       <div class="hero-actions">
         <a [routerLink]="examsLink" class="hero-link">Exam marks →</a>

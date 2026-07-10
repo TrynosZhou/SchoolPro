@@ -365,10 +365,10 @@
 .chip-filter {
   border: 1px solid #cbd5e1;
   border-radius: 999px;
-  padding: 0.32rem 0.7rem;
+  padding: 0.38rem 0.82rem;
   background: #fff;
   color: #475569;
-  font-size: 0.76rem;
+  font-size: 0.988rem;
   font-weight: 600;
   cursor: pointer;
   text-transform: capitalize;
@@ -405,9 +405,9 @@
 .bulk-btn {
   border: 1px solid #e2e8f0;
   border-radius: 8px;
-  padding: 0.35rem 0.6rem;
+  padding: 0.42rem 0.68rem;
   background: #fff;
-  font-size: 0.72rem;
+  font-size: 0.936rem;
   font-weight: 600;
   cursor: pointer;
   text-transform: capitalize;
@@ -430,10 +430,10 @@
 .view-btn {
   border: 0;
   background: transparent;
-  padding: 0.4rem 0.65rem;
+  padding: 0.45rem 0.72rem;
   color: #64748b;
   cursor: pointer;
-  font-size: 0.95rem;
+  font-size: 1.235rem;
 
   &.active {
     background: #059669;
@@ -444,9 +444,10 @@
 .btn-primary {
   border: 0;
   border-radius: 10px;
-  padding: 0.55rem 1rem;
+  padding: 0.62rem 1.05rem;
   background: linear-gradient(135deg, #059669, #10b981);
   color: #fff;
+  font-size: 1.14rem;
   font-weight: 700;
   cursor: pointer;
 

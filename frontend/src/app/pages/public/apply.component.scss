@@ -18,6 +18,28 @@
   padding: 0.9rem 1.5rem;
   background: #0a2540;
   color: #fff;
+  flex-wrap: wrap;
+}
+
+.public-home {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: #fff;
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  margin-right: auto;
+
+  .public-home-icon {
+    width: 1.1rem;
+    height: 1.1rem;
+  }
+
+  &:hover {
+    color: #dbeafe;
+  }
 }
 
 .brand {
@@ -433,6 +455,10 @@
 }
 
 @media (max-width: 640px) {
+  .public-home span {
+    display: none;
+  }
+
   .grid {
     grid-template-columns: 1fr;
   }

@@ -63,7 +63,7 @@
     <section class="list-shell">
       <div class="list-toolbar">
         <h3>Register setup</h3>
-        <p>Choose a class and date. The register loads automatically when both are selected.</p>
+        <p>Choose a class and date, then click <strong>Load register</strong> to display enrolled students.</p>
 
         <div class="setup-row">
           <div class="field">
@@ -241,8 +241,16 @@
       } @else {
         <div class="empty-state initial">
           <span class="empty-icon">☑</span>
-          <h3>Select a class and date</h3>
-          <p>Choose a class and date above to load the attendance register.</p>
+          @if (selectedClassId && canMarkSelectedDate()) {
+            <h3>Ready to load</h3>
+            <p>
+              Click <strong>Load register</strong> to display students enrolled in
+              <strong>{{ selectedClassLabel() }}</strong> for {{ selectedDate }}.
+            </p>
+          } @else {
+            <h3>Select a class and date</h3>
+            <p>Choose a class and weekday above, then click <strong>Load register</strong> to view the attendance register.</p>
+          }
         </div>
       }
     </section>

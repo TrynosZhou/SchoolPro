@@ -168,6 +168,11 @@ export class PortalLayoutComponent implements OnInit, OnChanges, OnDestroy {
 
   get homeLink(): string {
     if (this.homePath) return this.homePath;
+    const title = this.portalTitle;
+    if (title === 'Parent Portal') return '/parent';
+    if (title === 'Student Portal') return '/student';
+    if (title === 'Teacher Portal') return '/teacher';
+    if (title === 'Admin Portal') return '/admin';
     if (this.navSections.length) {
       return this.navSections[0].path || this.navSections[0].items[0]?.path || '/';
     }
@@ -607,6 +612,9 @@ export class PortalLayoutComponent implements OnInit, OnChanges, OnDestroy {
     }
     if (path === '/student') {
       return url === '/student' || url === '/student/';
+    }
+    if (path === '/parent') {
+      return url === '/parent' || url === '/parent/';
     }
     return url === path || url.startsWith(`${path}/`);
   }

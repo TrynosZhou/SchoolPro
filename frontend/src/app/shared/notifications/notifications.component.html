@@ -1,6 +1,7 @@
 <app-portal-layout
   [portalTitle]="portalTitle"
   pageTitle="Notifications"
+  [homePath]="homePath"
   [navItems]="navItems"
   [navSections]="navSections"
 >
@@ -41,7 +42,18 @@
               <p class="notif-body">{{ n.message }}</p>
               <span class="notif-tag">{{ meta(n.type).label }}</span>
             </div>
-            @if (!n.isRead) { <span class="dot" aria-label="Unread"></span> }
+            <div class="notif-actions">
+              @if (!n.isRead) { <span class="dot" aria-label="Unread"></span> }
+              <button
+                type="button"
+                class="btn-delete"
+                title="Delete notification"
+                aria-label="Delete notification"
+                (click)="deleteNotification(n, $event)"
+              >
+                Delete
+              </button>
+            </div>
           </li>
         }
       </ul>

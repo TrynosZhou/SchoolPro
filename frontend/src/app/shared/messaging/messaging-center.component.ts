@@ -103,6 +103,12 @@ export class MessagingCenterComponent implements OnInit {
     return this.role === 'student' ? 'Student Portal' : 'Parent Portal';
   }
 
+  get homePath(): string {
+    if (this.isTeacher) return '/teacher';
+    if (this.isStudent) return '/student';
+    return '/parent';
+  }
+
   get navItems(): NavItem[] {
     if (this.isTeacher || this.role === 'student') return [];
     return PARENT_NAV_ITEMS;

@@ -71,6 +71,14 @@ router.post('/notifications/read-all', async (req: AuthRequest, res: Response) =
   res.json({ ok: true });
 });
 
+router.delete('/notifications/:id', async (req: AuthRequest, res: Response) => {
+  const repo = AppDataSource.getRepository(Notification);
+  const n = await repo.findOne({ where: { id: String(req.params.id), userId: req.user!.userId } });
+  if (!n) return res.status(404).json({ message: 'Notification not found' });
+  await repo.remove(n);
+  res.json({ ok: true });
+});
+
 /* ------------------------------------------------------------------ */
 /* Automated notification settings (admin)                            */
 /* ------------------------------------------------------------------ */

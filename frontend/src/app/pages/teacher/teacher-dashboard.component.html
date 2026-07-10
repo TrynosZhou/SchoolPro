@@ -1,205 +1,251 @@
 <app-portal-layout portalTitle="Teacher Portal" pageTitle="Teacher Dashboard" homePath="/teacher" [navSections]="teacherNav">
   <div class="teacher-dashboard">
-    <section class="hero">
-      <div class="hero-glow" aria-hidden="true"></div>
-      <div class="hero-content">
-        <p class="eyebrow">Teacher Dashboard</p>
-        <h2>{{ greeting() }}, {{ teacherName() }}</h2>
-        <p class="hero-sub">Your teaching hub — classes, attendance, exams, and reports at a glance.</p>
-        <div class="hero-meta">
-          <span class="meta-chip">
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-            {{ todayLabel }}
-          </span>
+    <header class="greeting" aria-labelledby="teacher-dash-greeting">
+      <div class="greeting-copy">
+        <p class="eyebrow">{{ todayLabel }}</p>
+        <h1 id="teacher-dash-greeting">Good {{ greetingPeriod() }}, {{ teacherName() }}</h1>
+        <p class="greeting-sub">
+          Your teaching workspace — classes organised by form, today's lessons, attendance, and quick tasks.
+        </p>
+        <div class="greeting-meta">
           @if (data()?.currentTerm; as term) {
-            <span class="meta-chip accent">{{ term.name }}</span>
+            <span class="meta-pill">{{ term.name }}</span>
           }
           @if (attendancePendingClasses().length) {
-            <span class="status-pill warn">{{ attendancePendingClasses().length }} register(s) pending</span>
-          } @else if ((data()?.classTeacherOf?.length ?? 0) > 0) {
-            <span class="status-pill ok">Attendance up to date</span>
+            <span class="meta-pill warn">{{ attendancePendingClasses().length }} register(s) pending today</span>
+          } @else if (homeroomClasses().length) {
+            <span class="meta-pill ok">Homeroom attendance up to date</span>
           }
         </div>
       </div>
-      <div class="hero-visual" aria-hidden="true">
-        <div class="orbit orbit-1"></div>
-        <div class="orbit orbit-2"></div>
-        <span class="hero-badge">TP</span>
+      <div class="greeting-actions">
+        @if (homeroomClasses().length) {
+          <a routerLink="/teacher/attendance/mark-register" class="cta primary">Mark register</a>
+        }
+        <a routerLink="/teacher/exams" class="cta">Input marks</a>
+        <a routerLink="/teacher/messages" class="cta">Messages</a>
       </div>
-    </section>
+    </header>
 
-    <section class="stats-grid">
+    <section class="stats-grid" aria-label="Teaching overview">
       @for (stat of statCards(); track stat.key) {
-        <article class="stat-card" [class]="stat.tone">
-          <div class="stat-icon" aria-hidden="true">{{ stat.icon }}</div>
+        <a
+          [routerLink]="stat.path"
+          class="stat-card token-kpi-card"
+          [class.token-kpi-card--lavender]="stat.tone === 'lavender'"
+          [class.token-kpi-card--mint]="stat.tone === 'mint'"
+          [class.token-kpi-card--sky]="stat.tone === 'sky'"
+          [class.token-kpi-card--peach]="stat.tone === 'peach'"
+        >
+          <span class="stat-icon token-kpi-icon-badge" aria-hidden="true">
+            @switch (stat.key) {
+              @case ('classes') {
+                <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="8" width="7" height="11" rx="1.5" stroke="currentColor" stroke-width="1.75" /><rect x="14" y="5" width="7" height="14" rx="1.5" stroke="currentColor" stroke-width="1.75" /><path d="M7 12h0M17 10h0" stroke="currentColor" stroke-width="2" stroke-linecap="round" /></svg>
+              }
+              @case ('subjects') {
+                <svg viewBox="0 0 24 24" fill="none"><path d="M8 4h8l3 3v13H8V4z" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" /><path d="M16 4v3h3M10 12h6M10 16h6" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" /></svg>
+              }
+              @case ('students') {
+                <svg viewBox="0 0 24 24" fill="none"><path d="M16 19a4 4 0 0 0-8 0" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" /><circle cx="12" cy="8" r="3.25" stroke="currentColor" stroke-width="1.75" /></svg>
+              }
+              @case ('messages') {
+                <svg viewBox="0 0 24 24" fill="none"><path d="M5 6.5h14a2 2 0 0 1 2 2v6.5a2 2 0 0 1-2 2H9l-4 3v-3H5a2 2 0 0 1-2-2V8.5a2 2 0 0 1 2-2z" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" /></svg>
+              }
+            }
+          </span>
           <div class="stat-body">
-            <p class="stat-title">{{ stat.title }}</p>
+            <span class="stat-label">{{ stat.title }}</span>
             @if (loading()) {
               <span class="stat-skeleton"></span>
             } @else {
-              <strong>{{ stat.value }}</strong>
+              <strong class="stat-value token-kpi-number">{{ stat.value }}</strong>
             }
             <span class="stat-caption">{{ stat.caption }}</span>
           </div>
-        </article>
+        </a>
       }
     </section>
 
-    <section class="dashboard-grid">
-      <article class="panel">
+    <div class="dashboard-layout">
+      <section class="panel classes-panel" aria-labelledby="classes-heading">
         <div class="panel-head">
           <div>
-            <h3>My Classes</h3>
-            <p class="panel-sub">Teaching assignments grouped by class</p>
+            <h2 id="classes-heading">My classes</h2>
+            <p class="panel-sub">Grouped by form — homeroom classes first, subjects listed per class</p>
           </div>
-          <a routerLink="/teacher/class-list" class="chip link-chip">View all →</a>
+          <a routerLink="/teacher/class-list" class="panel-link">Full class list →</a>
         </div>
+
         @if (loading()) {
-          <p class="muted">Loading classes…</p>
-        } @else if (!groupedAssignments().length) {
+          <p class="muted pad">Loading your classes…</p>
+        } @else if (!classGroups().length) {
           <div class="empty-state">
-            <span class="empty-icon">🏫</span>
-            <p>No class assignments yet. Contact the administrator to assign subjects.</p>
+            <span class="empty-icon" aria-hidden="true">🏫</span>
+            <p>No class assignments yet. Ask the administrator to assign you on Staff → Teacher Load.</p>
           </div>
         } @else {
-          <div class="class-cards">
-            @for (group of groupedAssignments(); track group.classId) {
-              <article class="class-card">
-                <header>
-                  <div>
-                    <h4>{{ group.classLabel }}</h4>
-                    <span class="student-count">{{ group.studentCount }} student{{ group.studentCount === 1 ? '' : 's' }}</span>
-                  </div>
-                  @if (group.isClassTeacher) {
-                    <span class="badge">Class teacher</span>
-                  }
-                </header>
-                <div class="subject-chips">
-                  @for (sub of group.subjects; track sub.id) {
-                    <span class="subject-chip">{{ sub.subjectName }}</span>
+          @if (homeroomClasses().length) {
+            <div class="homeroom-strip">
+              <h3 class="section-label">Homeroom</h3>
+              <div class="homeroom-cards">
+                @for (group of homeroomClasses(); track group.classId) {
+                  <article class="class-card homeroom" [class.pending]="!group.attendanceMarkedToday">
+                    <div class="class-card-top">
+                      <div>
+                        <span class="form-tag">{{ group.formName }}</span>
+                        <h4>{{ group.classLabel }}</h4>
+                        <p>{{ group.studentCount }} student{{ group.studentCount === 1 ? '' : 's' }}</p>
+                      </div>
+                      <span class="role-badge">Class teacher</span>
+                    </div>
+                    @if (group.subjects.length) {
+                      <ul class="subject-list">
+                        @for (sub of group.subjects; track sub.id) {
+                          <li>
+                            <span>{{ sub.subjectName }}</span>
+                            @if (sub.subjectCode) {
+                              <code>{{ sub.subjectCode }}</code>
+                            }
+                          </li>
+                        }
+                      </ul>
+                    }
+                    <div class="class-card-actions">
+                      @if (!group.attendanceMarkedToday) {
+                        <a routerLink="/teacher/attendance/mark-register" class="action-chip primary">Mark register</a>
+                      } @else {
+                        <span class="action-chip done">Register marked</span>
+                      }
+                      <a routerLink="/teacher/class-list" class="action-chip">Class list</a>
+                      <a routerLink="/teacher/exams" class="action-chip">Input marks</a>
+                    </div>
+                  </article>
+                }
+              </div>
+            </div>
+          }
+
+          @if (subjectFormSections().length) {
+            <h3 class="section-label section-divider">Subject teaching by form</h3>
+          }
+
+          @for (section of subjectFormSections(); track section.formName) {
+            <div class="form-section">
+              <div class="form-section-head">
+                <h3 class="section-label">{{ section.formName }}</h3>
+                <span class="section-count">{{ section.classes.length }} class{{ section.classes.length === 1 ? '' : 'es' }}</span>
+              </div>
+              <div class="class-grid">
+                @for (group of section.classes; track group.classId) {
+                  <article class="class-card">
+                    <div class="class-card-top">
+                      <div>
+                        <h4>{{ group.classLabel }}</h4>
+                        <p>{{ group.studentCount }} student{{ group.studentCount === 1 ? '' : 's' }}</p>
+                      </div>
+                    </div>
+                    @if (group.subjects.length) {
+                      <ul class="subject-list">
+                        @for (sub of group.subjects; track sub.id) {
+                          <li>
+                            <span>{{ sub.subjectName }}</span>
+                            @if (sub.subjectCode) {
+                              <code>{{ sub.subjectCode }}</code>
+                            }
+                          </li>
+                        }
+                      </ul>
+                    } @else {
+                      <p class="no-subjects">Homeroom only — no subject assignments</p>
+                    }
+                    <div class="class-card-actions">
+                      <a routerLink="/teacher/exams" class="action-chip">Input marks</a>
+                      <a routerLink="/teacher/class-list" class="action-chip">Class list</a>
+                    </div>
+                  </article>
+                }
+              </div>
+            </div>
+          }
+        }
+      </section>
+
+      <aside class="side-stack">
+        <article class="panel">
+          <div class="panel-head compact">
+            <div>
+              <h2>Today's schedule</h2>
+              <p class="panel-sub">{{ data()?.todaySchedule?.length ?? 0 }} lesson(s)</p>
+            </div>
+          </div>
+          <div class="timeline">
+            @for (slot of data()?.todaySchedule ?? []; track slot.id) {
+              <div class="timeline-row">
+                <div class="timeline-time">
+                  <strong>{{ formatTime(slot.startTime) }}</strong>
+                  <span>{{ formatTime(slot.endTime) }}</span>
+                </div>
+                <div class="timeline-body">
+                  <strong>{{ slot.subjectName }}</strong>
+                  <span>{{ classLabel(slot) }}</span>
+                  @if (slot.room) {
+                    <span class="room-tag">{{ slot.room }}</span>
                   }
                 </div>
-                <div class="class-actions">
-                  @if (group.isClassTeacher) {
-                    <a [routerLink]="['/teacher/attendance/mark-register']" class="mini-btn">Mark register</a>
-                  }
-                  <a [routerLink]="['/teacher/exams']" class="mini-btn">Input marks</a>
-                </div>
-              </article>
+              </div>
+            } @empty {
+              <div class="empty-state compact">
+                <span class="empty-icon" aria-hidden="true">📅</span>
+                <p>No lessons on your timetable today.</p>
+              </div>
             }
           </div>
-        }
-      </article>
+        </article>
 
-      <article class="panel">
-        <div class="panel-head">
-          <div>
-            <h3>Today's Schedule</h3>
-            <p class="panel-sub">Lessons on your timetable</p>
+        <article class="panel">
+          <div class="panel-head compact">
+            <div>
+              <h2>Attendance today</h2>
+              <p class="panel-sub">{{ attendanceTotal() }} register entries</p>
+            </div>
           </div>
-          <span class="chip">{{ data()?.todaySchedule?.length ?? 0 }} period(s)</span>
-        </div>
-        <div class="schedule-list">
-          @for (slot of data()?.todaySchedule ?? []; track slot.id) {
-            <div class="schedule-row">
-              <div class="schedule-time">
-                <strong>{{ formatTime(slot.startTime) }}</strong>
-                <span>{{ formatTime(slot.endTime) }}</span>
+          <div class="attendance-list">
+            @for (item of data()?.attendanceToday ?? []; track item.status) {
+              <div class="attendance-row" [class]="attendanceTone(item.status)">
+                <span class="attendance-label">
+                  <span class="dot" aria-hidden="true"></span>
+                  {{ item.status }}
+                </span>
+                <strong>{{ item.count }}</strong>
               </div>
-              <div class="schedule-detail">
-                <strong>{{ slot.subjectName }}</strong>
-                <span>{{ classLabel(slot) }}</span>
-                @if (slot.room) { <span class="room">{{ slot.room }}</span> }
-              </div>
-            </div>
-          } @empty {
-            <div class="empty-state compact">
-              <span class="empty-icon">📅</span>
-              <p>No lessons scheduled for today.</p>
-            </div>
-          }
-        </div>
-      </article>
-    </section>
-
-    <section class="dashboard-grid">
-      <article class="panel">
-        <div class="panel-head">
-          <div>
-            <h3>Attendance Today</h3>
-            <p class="panel-sub">Register entries for your classes</p>
-          </div>
-          <span class="chip">{{ attendanceTotal() }} records</span>
-        </div>
-        <div class="attendance-list">
-          @for (item of data()?.attendanceToday ?? []; track item.status) {
-            <div class="attendance-row" [class]="attendanceTone(item.status)">
-              <div class="attendance-label">
-                <span class="dot"></span>
-                <span>{{ item.status }}</span>
-              </div>
-              <strong>{{ item.count }}</strong>
-            </div>
-          } @empty {
-            <div class="empty-state compact">
-              <span class="empty-icon">📋</span>
-              <p>No attendance marked yet today.</p>
-              @if (attendancePendingClasses().length) {
-                <a routerLink="/teacher/attendance/mark-register" class="link-btn">Mark register now →</a>
-              }
-            </div>
-          }
-        </div>
-      </article>
-
-      <article class="panel">
-        <div class="panel-head">
-          <div>
-            <h3>Class Teacher Duties</h3>
-            <p class="panel-sub">Classes where you are the form teacher</p>
-          </div>
-        </div>
-        @if (!(data()?.classTeacherOf?.length)) {
-          <div class="empty-state compact">
-            <span class="empty-icon">👩‍🏫</span>
-            <p>You are not assigned as a class teacher.</p>
-          </div>
-        } @else {
-          <div class="duty-list">
-            @for (c of data()!.classTeacherOf; track c.classId) {
-              <div class="duty-row" [class.pending]="!c.attendanceMarkedToday">
-                <div>
-                  <strong>{{ classLabel(c) }}</strong>
-                  <span>{{ c.studentCount }} students</span>
-                </div>
-                @if (c.attendanceMarkedToday) {
-                  <span class="duty-status done">Register marked</span>
-                } @else {
-                  <a routerLink="/teacher/attendance/mark-register" class="duty-status pending">Mark register</a>
+            } @empty {
+              <div class="empty-state compact">
+                <p>No attendance recorded yet today.</p>
+                @if (attendancePendingClasses().length) {
+                  <a routerLink="/teacher/attendance/mark-register" class="panel-link">Mark register →</a>
                 }
               </div>
             }
           </div>
-        }
-      </article>
-    </section>
+        </article>
+      </aside>
+    </div>
 
-    <section class="panel quick-actions">
+    <section class="panel quick-actions" aria-labelledby="quick-actions-heading">
       <div class="panel-head">
         <div>
-          <h3>Quick Actions</h3>
-          <p class="panel-sub">Jump to common teaching tasks</p>
+          <h2 id="quick-actions-heading">Quick actions</h2>
+          <p class="panel-sub">Common teaching tasks</p>
         </div>
-        <span class="chip accent">Shortcuts</span>
       </div>
       <div class="action-columns">
         @for (group of visibleActionGroups(); track group.title) {
           <div class="action-group">
-            <h4>{{ group.title }}</h4>
+            <h3>{{ group.title }}</h3>
             <div class="action-grid">
               @for (link of group.links; track link.path) {
                 <a [routerLink]="link.path" class="action-btn">
-                  <span class="action-icon">{{ link.icon }}</span>
+                  <span class="action-icon" aria-hidden="true">{{ link.icon }}</span>
                   <span class="action-label">{{ link.label }}</span>
                   <svg class="action-arrow" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                     <path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>

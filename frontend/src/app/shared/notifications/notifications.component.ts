@@ -80,6 +80,23 @@ export class NotificationsComponent implements OnInit {
     }
   }
 
+  get homePath(): string {
+    switch (this.role) {
+      case 'teacher':
+        return '/teacher';
+      case 'student':
+        return '/student';
+      case 'admin':
+        return '/admin';
+      case 'director':
+        return '/director';
+      case 'principal':
+        return '/principal';
+      default:
+        return '/parent';
+    }
+  }
+
   ngOnInit(): void {
     this.load();
   }
@@ -117,6 +134,16 @@ export class NotificationsComponent implements OnInit {
     this.api.post('/communication/notifications/read-all', {}).subscribe({
       next: () => {
         this.notifications.update((list) => list.map((x) => ({ ...x, isRead: true })));
+      },
+    });
+  }
+
+  deleteNotification(n: AppNotification, event?: Event): void {
+    event?.stopPropagation();
+    if (!confirm('Delete this notification?')) return;
+    this.api.delete<{ ok: boolean }>(`/communication/notifications/${n.id}`).subscribe({
+      next: () => {
+        this.notifications.update((list) => list.filter((x) => x.id !== n.id));
       },
     });
   }

@@ -12,6 +12,7 @@ interface TeacherAssignment {
   classId: string;
   className: string;
   formName: string;
+  formLevel?: number;
   subjectId: string;
   subjectName: string;
   subjectCode: string;
@@ -23,6 +24,7 @@ interface ClassTeacherRow {
   classId: string;
   className: string;
   formName: string;
+  formLevel?: number;
   studentCount: number;
   attendanceMarkedToday: boolean;
 }
@@ -52,6 +54,42 @@ interface TeacherDashboardData {
   todaySchedule: ScheduleSlot[];
 }
 
+interface ClassSubjectRow {
+  id: string;
+  subjectName: string;
+  subjectCode: string;
+}
+
+interface TeacherClassGroup {
+  classId: string;
+  className: string;
+  classLabel: string;
+  formName: string;
+  formLevel: number;
+  studentCount: number;
+  isClassTeacher: boolean;
+  attendanceMarkedToday: boolean;
+  subjects: ClassSubjectRow[];
+}
+
+interface FormClassSection {
+  formName: string;
+  formLevel: number;
+  classes: TeacherClassGroup[];
+}
+
+function parseFormLevel(formName: string, explicit?: number): number {
+  if (explicit != null && Number.isFinite(explicit)) return Number(explicit);
+  const match = String(formName || '').match(/(\d+)/);
+  return match ? Number(match[1]) : 99;
+}
+
+function compareClassGroups(a: TeacherClassGroup, b: TeacherClassGroup): number {
+  if (a.isClassTeacher !== b.isClassTeacher) return a.isClassTeacher ? -1 : 1;
+  if (a.formLevel !== b.formLevel) return a.formLevel - b.formLevel;
+  return a.className.localeCompare(b.className, undefined, { numeric: true, sensitivity: 'base' });
+}
+
 @Component({
   selector: 'app-teacher-dashboard',
   standalone: true,
@@ -77,11 +115,11 @@ export class TeacherDashboardComponent implements OnInit {
     year: 'numeric',
   }).format(new Date());
 
-  readonly greeting = computed(() => {
+  readonly greetingPeriod = computed(() => {
     const hour = new Date().getHours();
-    if (hour < 12) return 'Good morning';
-    if (hour < 17) return 'Good afternoon';
-    return 'Good evening';
+    if (hour < 12) return 'morning';
+    if (hour < 17) return 'afternoon';
+    return 'evening';
   });
 
   readonly teacherName = computed(() => {
@@ -99,32 +137,32 @@ export class TeacherDashboardComponent implements OnInit {
         title: 'Classes',
         value: String(s?.assignedClasses ?? 0),
         caption: 'Classes you teach or lead',
-        icon: '🏫',
-        tone: 'teal',
+        tone: 'lavender',
+        path: '/teacher/class-list',
       },
       {
         key: 'subjects',
         title: 'Subjects',
         value: String(s?.subjectsTeaching ?? 0),
         caption: 'Active teaching assignments',
-        icon: '📚',
-        tone: 'indigo',
+        tone: 'mint',
+        path: '/teacher/exams',
       },
       {
         key: 'students',
         title: 'Students',
         value: String(s?.totalStudents ?? 0),
         caption: 'Learners across your classes',
-        icon: '👥',
-        tone: 'blue',
+        tone: 'sky',
+        path: '/teacher/class-list',
       },
       {
         key: 'messages',
         title: 'Messages',
         value: String(s?.unreadMessages ?? 0),
         caption: 'Unread inbox items',
-        icon: '💬',
-        tone: 'amber',
+        tone: 'peach',
+        path: '/teacher/messages',
       },
     ];
   });
@@ -137,25 +175,92 @@ export class TeacherDashboardComponent implements OnInit {
     (this.data()?.classTeacherOf ?? []).filter((c) => !c.attendanceMarkedToday),
   );
 
-  readonly groupedAssignments = computed(() => {
-    const map = new Map<string, { classId: string; classLabel: string; subjects: TeacherAssignment[]; studentCount: number; isClassTeacher: boolean }>();
-    for (const a of this.data()?.assignments ?? []) {
-      const key = a.classId;
-      const classLabel = formatStudentClassLabel(a.className);
-      if (!map.has(key)) {
-        map.set(key, {
+  /** Unified class list: subject assignments + homeroom-only classes, sorted by form. */
+  readonly classGroups = computed((): TeacherClassGroup[] => {
+    const d = this.data();
+    const map = new Map<string, TeacherClassGroup>();
+    const homeroomByClass = new Map(
+      (d?.classTeacherOf ?? []).map((c) => [c.classId, c]),
+    );
+
+    for (const a of d?.assignments ?? []) {
+      if (!map.has(a.classId)) {
+        const homeroom = homeroomByClass.get(a.classId);
+        map.set(a.classId, {
           classId: a.classId,
-          classLabel,
-          subjects: [],
+          className: a.className,
+          classLabel: formatStudentClassLabel(a.className),
+          formName: a.formName || '—',
+          formLevel: parseFormLevel(a.formName, a.formLevel),
           studentCount: a.studentCount,
-          isClassTeacher: a.isClassTeacher,
+          isClassTeacher: Boolean(a.isClassTeacher),
+          attendanceMarkedToday: homeroom?.attendanceMarkedToday ?? false,
+          subjects: [],
         });
       }
-      const group = map.get(key)!;
-      group.subjects.push(a);
+      const group = map.get(a.classId)!;
+      group.subjects.push({
+        id: a.id,
+        subjectName: a.subjectName,
+        subjectCode: a.subjectCode,
+      });
       group.isClassTeacher = group.isClassTeacher || a.isClassTeacher;
+      group.studentCount = Math.max(group.studentCount, a.studentCount);
     }
-    return [...map.values()];
+
+    for (const c of d?.classTeacherOf ?? []) {
+      if (!map.has(c.classId)) {
+        map.set(c.classId, {
+          classId: c.classId,
+          className: c.className,
+          classLabel: formatStudentClassLabel(c.className),
+          formName: c.formName || '—',
+          formLevel: parseFormLevel(c.formName, c.formLevel),
+          studentCount: c.studentCount,
+          isClassTeacher: true,
+          attendanceMarkedToday: c.attendanceMarkedToday,
+          subjects: [],
+        });
+      } else {
+        const group = map.get(c.classId)!;
+        group.isClassTeacher = true;
+        group.attendanceMarkedToday = c.attendanceMarkedToday;
+        group.studentCount = Math.max(group.studentCount, c.studentCount);
+      }
+    }
+
+    const groups = [...map.values()];
+    for (const g of groups) {
+      g.subjects.sort((x, y) =>
+        x.subjectName.localeCompare(y.subjectName, undefined, { sensitivity: 'base' }),
+      );
+    }
+    return groups.sort(compareClassGroups);
+  });
+
+  readonly homeroomClasses = computed(() =>
+    this.classGroups().filter((g) => g.isClassTeacher),
+  );
+
+  readonly subjectFormSections = computed((): FormClassSection[] => {
+    const sectionMap = new Map<string, TeacherClassGroup[]>();
+    for (const group of this.classGroups()) {
+      if (group.isClassTeacher) continue;
+      const key = group.formName?.trim() || 'Other';
+      if (!sectionMap.has(key)) sectionMap.set(key, []);
+      sectionMap.get(key)!.push(group);
+    }
+    return [...sectionMap.entries()]
+      .map(([formName, classes]) => ({
+        formName,
+        formLevel: classes[0]?.formLevel ?? 99,
+        classes: [...classes].sort(compareClassGroups),
+      }))
+      .sort(
+        (a, b) =>
+          a.formLevel - b.formLevel ||
+          a.formName.localeCompare(b.formName, undefined, { numeric: true }),
+      );
   });
 
   readonly actionGroups = [

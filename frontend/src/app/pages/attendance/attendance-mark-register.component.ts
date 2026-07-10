@@ -166,13 +166,17 @@ export class AttendanceMarkRegisterComponent implements OnInit {
     this.selectedClassId = classId;
     this.hasLoaded.set(false);
     this.students.set([]);
-    this.tryAutoLoad();
+    this.marks.set({});
+    this.remarks.set({});
+    this.clearFilters();
   }
 
   onDateChange(): void {
     this.hasLoaded.set(false);
     this.students.set([]);
-    this.tryAutoLoad();
+    this.marks.set({});
+    this.remarks.set({});
+    this.clearFilters();
   }
 
   setToday(): void {
@@ -325,12 +329,6 @@ export class AttendanceMarkRegisterComponent implements OnInit {
 
   rowStatus(studentId: string): AttendanceStatus {
     return this.marks()[studentId] || 'present';
-  }
-
-  private tryAutoLoad(): void {
-    if (this.selectedClassId && this.selectedDate && !this.loadingRegister()) {
-      this.loadRegister();
-    }
   }
 
   private showToast(type: 'success' | 'error', msg: string): void {

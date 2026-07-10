@@ -95,6 +95,13 @@ export class ApplyComponent implements OnInit {
     address: '',
   };
 
+  /** Signed-in parent applying for another child (e.g. from /apply?prefill=1). */
+  get showParentHome(): boolean {
+    return this.auth.hasRole('parent');
+  }
+
+  readonly parentDashboardPath = '/parent';
+
   ngOnInit(): void {
     this.api.get<AdmissionClassOption[]>('/admissions/classes').subscribe({
       next: (rows) => this.classOptions.set(rows || []),
