@@ -50,7 +50,7 @@
     "reflect-metadata": "^0.2.2",
     "twilio": "^5.13.1",
     "typeorm": "^1.0.0",
-    "uuid": "^14.0.0"
+    "uuid": "^8.3.2"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
