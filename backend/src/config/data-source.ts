@@ -26,6 +26,8 @@ export const RealAppDataSource = new DataSource({
   username: env.db.username,
   password: env.db.password,
   database: env.db.database,
+  /** Neon (and most managed Postgres) requires SSL; local dev Postgres does not. */
+  ssl: env.nodeEnv === 'production' ? { rejectUnauthorized: false } : false,
   /** Migrations own schema changes; sync would race them and break on NOT NULL backfills. */
   synchronize: false,
   migrationsRun: true,
