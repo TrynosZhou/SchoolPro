@@ -25,11 +25,27 @@ const receiptsDir = path_1.default.join(process.cwd(), 'uploads', 'receipts');
 const invoicesDir = path_1.default.join(process.cwd(), 'uploads', 'invoices');
 const logosDir = path_1.default.join(process.cwd(), 'uploads', 'logos');
 const developerPhotosDir = path_1.default.join(process.cwd(), 'uploads', 'developer-photos');
+function ensureDir(dirPath) {
+    try {
+        if (!fs_1.default.existsSync(dirPath)) {
+            fs_1.default.mkdirSync(dirPath, { recursive: true });
+        }
+    }
+    catch (err) {
+        if (err &&
+            typeof err === 'object' &&
+            'code' in err &&
+            (err.code === 'EROFS' || err.code === 'EACCES' || err.code === 'EPERM' || err.code === 'ENOENT')) {
+            return;
+        }
+        throw err;
+    }
+}
 function ensureUploadDirs() {
-    fs_1.default.mkdirSync(receiptsDir, { recursive: true });
-    fs_1.default.mkdirSync(invoicesDir, { recursive: true });
-    fs_1.default.mkdirSync(logosDir, { recursive: true });
-    fs_1.default.mkdirSync(developerPhotosDir, { recursive: true });
+    ensureDir(receiptsDir);
+    ensureDir(invoicesDir);
+    ensureDir(logosDir);
+    ensureDir(developerPhotosDir);
 }
 const BILL = {
     primary: '#4f46e5',

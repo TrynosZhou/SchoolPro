@@ -12,11 +12,29 @@ const invoicesDir = path.join(process.cwd(), 'uploads', 'invoices');
 const logosDir = path.join(process.cwd(), 'uploads', 'logos');
 const developerPhotosDir = path.join(process.cwd(), 'uploads', 'developer-photos');
 
+function ensureDir(dirPath: string): void {
+  try {
+    if (!fs.existsSync(dirPath)) {
+      fs.mkdirSync(dirPath, { recursive: true });
+    }
+  } catch (err) {
+    if (
+      err &&
+      typeof err === 'object' &&
+      'code' in err &&
+      (err.code === 'EROFS' || err.code === 'EACCES' || err.code === 'EPERM' || err.code === 'ENOENT')
+    ) {
+      return;
+    }
+    throw err;
+  }
+}
+
 export function ensureUploadDirs() {
-  fs.mkdirSync(receiptsDir, { recursive: true });
-  fs.mkdirSync(invoicesDir, { recursive: true });
-  fs.mkdirSync(logosDir, { recursive: true });
-  fs.mkdirSync(developerPhotosDir, { recursive: true });
+  ensureDir(receiptsDir);
+  ensureDir(invoicesDir);
+  ensureDir(logosDir);
+  ensureDir(developerPhotosDir);
 }
 
 export interface SchoolBranding {
