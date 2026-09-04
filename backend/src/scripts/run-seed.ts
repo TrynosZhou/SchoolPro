@@ -1,4 +1,3 @@
-Set-Content -Path .\src\scripts\run-seed.ts -Encoding utf8 -Value @'
 import 'reflect-metadata';
 import dotenv from 'dotenv';
 import path from 'path';
@@ -23,4 +22,3 @@ main().catch((err) => {
   console.error('SEED ERROR:', err);
   process.exit(1);
 });
-'@
