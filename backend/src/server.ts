@@ -96,6 +96,19 @@ export async function initializeServer(): Promise<void> {
         `database=${env.db.database} user=${env.db.username} (nodeEnv=${env.nodeEnv})`,
     );
 
+    const localhostish =
+      env.db.host === 'localhost' || env.db.host === '127.0.0.1' || env.db.host === '';
+    if (localhostish && env.nodeEnv === 'production') {
+      console.error(
+        '[startup] DANGER: nodeEnv=production but DB_HOST is still pointing at ' +
+          `${JSON.stringify(env.db.host)}. A Vercel serverless function has NO local Postgres — ` +
+          'you MUST set DB_HOST / DB_PORT / DB_DATABASE / DB_USERNAME / DB_PASSWORD in ' +
+          'Vercel Project → Settings → Environment Variables (for all 3 environments: ' +
+          'Production, Preview, Development). DB_SSL_MODE=require is also almost always ' +
+          'needed for managed Postgres providers (Neon / Supabase / Railway / Render / AWS RDS).',
+      );
+    }
+
     let lastDbErr: unknown;
     const attempts = 4;
     for (let attempt = 0; attempt < attempts; attempt++) {

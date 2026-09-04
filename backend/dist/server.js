@@ -120,6 +120,15 @@ async function initializeServer() {
         }
         console.log(`[startup] Connecting to PostgreSQL host=${env_1.env.db.host} port=${env_1.env.db.port} ` +
             `database=${env_1.env.db.database} user=${env_1.env.db.username} (nodeEnv=${env_1.env.nodeEnv})`);
+        const localhostish = env_1.env.db.host === 'localhost' || env_1.env.db.host === '127.0.0.1' || env_1.env.db.host === '';
+        if (localhostish && env_1.env.nodeEnv === 'production') {
+            console.error('[startup] DANGER: nodeEnv=production but DB_HOST is still pointing at ' +
+                `${JSON.stringify(env_1.env.db.host)}. A Vercel serverless function has NO local Postgres — ` +
+                'you MUST set DB_HOST / DB_PORT / DB_DATABASE / DB_USERNAME / DB_PASSWORD in ' +
+                'Vercel Project → Settings → Environment Variables (for all 3 environments: ' +
+                'Production, Preview, Development). DB_SSL_MODE=require is also almost always ' +
+                'needed for managed Postgres providers (Neon / Supabase / Railway / Render / AWS RDS).');
+        }
         let lastDbErr;
         const attempts = 4;
         for (let attempt = 0; attempt < attempts; attempt++) {
