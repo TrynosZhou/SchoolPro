@@ -37,17 +37,23 @@ app.use(
     crossOriginResourcePolicy: { policy: 'cross-origin' },
   }),
 );
+function stripTrailingSlash(s: string): string {
+  return s.endsWith('/') ? s.slice(0, -1) : s;
+}
+
 const allowedOrigins = env.frontendUrl
   .split(',')
-  .map((v) => v.trim())
+  .map((v) => stripTrailingSlash(v.trim()))
   .filter(Boolean);
 
 app.use(
   cors({
     origin: (origin, callback) => {
       if (!origin) return callback(null, true);
-      if (allowedOrigins.includes(origin)) return callback(null, true);
-      if (env.nodeEnv === 'development' && /^http:\/\/localhost:\d+$/.test(origin)) {
+      const normalizedOrigin = stripTrailingSlash(origin);
+      if (allowedOrigins.includes(normalizedOrigin)) return callback(null, true);
+      if (allowedOrigins.includes('*')) return callback(null, true);
+      if (env.nodeEnv === 'development' && /^http:\/\/localhost:\d+$/.test(normalizedOrigin)) {
         return callback(null, true);
       }
       return callback(new Error(`CORS blocked for origin: ${origin}`));

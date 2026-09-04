@@ -37,17 +37,23 @@ app.use((0, helmet_1.default)({
     // Allow frontend (different origin) to load /uploads images (school logo, etc.)
     crossOriginResourcePolicy: { policy: 'cross-origin' },
 }));
+function stripTrailingSlash(s) {
+    return s.endsWith('/') ? s.slice(0, -1) : s;
+}
 const allowedOrigins = env_1.env.frontendUrl
     .split(',')
-    .map((v) => v.trim())
+    .map((v) => stripTrailingSlash(v.trim()))
     .filter(Boolean);
 app.use((0, cors_1.default)({
     origin: (origin, callback) => {
         if (!origin)
             return callback(null, true);
-        if (allowedOrigins.includes(origin))
+        const normalizedOrigin = stripTrailingSlash(origin);
+        if (allowedOrigins.includes(normalizedOrigin))
             return callback(null, true);
-        if (env_1.env.nodeEnv === 'development' && /^http:\/\/localhost:\d+$/.test(origin)) {
+        if (allowedOrigins.includes('*'))
+            return callback(null, true);
+        if (env_1.env.nodeEnv === 'development' && /^http:\/\/localhost:\d+$/.test(normalizedOrigin)) {
             return callback(null, true);
         }
         return callback(new Error(`CORS blocked for origin: ${origin}`));

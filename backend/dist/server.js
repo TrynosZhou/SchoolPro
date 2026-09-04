@@ -36,6 +36,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.initializeServer = initializeServer;
 require("reflect-metadata");
 const app_1 = __importDefault(require("./app"));
 const data_source_1 = require("./config/data-source");
@@ -95,9 +96,28 @@ async function runDeferredStartup() {
         console.error('[startup] Deferred GL tasks failed:', err);
     }
 }
-async function bootstrap() {
+/**
+ * Performs the minimum initialization required to serve HTTP requests:
+ * upload dirs, primary database connection, seed, default roles, chart of accounts.
+ *
+ * Does NOT:
+ *   - call app.listen() (not applicable in serverless)
+ *   - start long-running schedulers / cron jobs (not meaningful per-request)
+ *   - start Redis workers / queue consumers (serverless functions don't outlive the request)
+ *   - run heavy deferred backfills (demo, analytics, GL integrity sweeps)
+ *
+ * Safe to call on every Vercel cold start. Duplicate calls are idempotent after
+ * the first DataSource.initialize() because TypeORM will short-circuit on an
+ * already-initialized DataSource.
+ */
+async function initializeServer() {
     try {
-        (0, pdf_1.ensureUploadDirs)();
+        try {
+            (0, pdf_1.ensureUploadDirs)();
+        }
+        catch (err) {
+            console.warn('[startup] Could not ensure local upload directories (safe to ignore when using S3 storage):', err);
+        }
         await data_source_1.AppDataSource.initialize();
         console.log('Database connected');
         const { seedDatabase } = await Promise.resolve().then(() => __importStar(require('./seed')));
@@ -106,6 +126,15 @@ async function bootstrap() {
         await ensureDefaultRoles();
         const { ensureChartOfAccountsSeeded } = await Promise.resolve().then(() => __importStar(require('./services/ledger.service')));
         await ensureChartOfAccountsSeeded();
+    }
+    catch (err) {
+        console.error('initializeServer failed:', err);
+        throw err;
+    }
+}
+async function bootstrap() {
+    try {
+        await initializeServer();
         app_1.default.listen(env_1.env.port, () => {
             console.log(`School Pro API running on http://localhost:${env_1.env.port}`);
         });
@@ -137,7 +166,9 @@ async function bootstrap() {
         process.exit(1);
     }
 }
-bootstrap();
+if (require.main === module) {
+    bootstrap();
+}
 process.on('unhandledRejection', (reason) => {
     console.error('Unhandled promise rejection:', reason);
 });

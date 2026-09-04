@@ -68,9 +68,27 @@ async function runDeferredStartup(): Promise<void> {
   }
 }
 
-async function bootstrap() {
+/**
+ * Performs the minimum initialization required to serve HTTP requests:
+ * upload dirs, primary database connection, seed, default roles, chart of accounts.
+ *
+ * Does NOT:
+ *   - call app.listen() (not applicable in serverless)
+ *   - start long-running schedulers / cron jobs (not meaningful per-request)
+ *   - start Redis workers / queue consumers (serverless functions don't outlive the request)
+ *   - run heavy deferred backfills (demo, analytics, GL integrity sweeps)
+ *
+ * Safe to call on every Vercel cold start. Duplicate calls are idempotent after
+ * the first DataSource.initialize() because TypeORM will short-circuit on an
+ * already-initialized DataSource.
+ */
+export async function initializeServer(): Promise<void> {
   try {
-    ensureUploadDirs();
+    try {
+      ensureUploadDirs();
+    } catch (err) {
+      console.warn('[startup] Could not ensure local upload directories (safe to ignore when using S3 storage):', err);
+    }
     await AppDataSource.initialize();
     console.log('Database connected');
 
@@ -80,6 +98,15 @@ async function bootstrap() {
     await ensureDefaultRoles();
     const { ensureChartOfAccountsSeeded } = await import('./services/ledger.service');
     await ensureChartOfAccountsSeeded();
+  } catch (err) {
+    console.error('initializeServer failed:', err);
+    throw err;
+  }
+}
+
+async function bootstrap() {
+  try {
+    await initializeServer();
 
     app.listen(env.port, () => {
       console.log(`School Pro API running on http://localhost:${env.port}`);
@@ -114,7 +141,9 @@ async function bootstrap() {
   }
 }
 
-bootstrap();
+if (require.main === module) {
+  bootstrap();
+}
 
 process.on('unhandledRejection', (reason) => {
   console.error('Unhandled promise rejection:', reason);
@@ -123,4 +152,3 @@ process.on('unhandledRejection', (reason) => {
 process.on('uncaughtException', (err) => {
   console.error('Uncaught exception:', err);
 });
-
