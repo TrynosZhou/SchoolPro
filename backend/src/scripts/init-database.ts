@@ -57,6 +57,8 @@ async function ensureDatabaseExists() {
     user: env.db.username,
     password: env.db.password,
     database: 'postgres',
+    /** Neon (and most managed Postgres) requires SSL; local dev Postgres does not. */
+    ssl: env.nodeEnv === 'production' ? { rejectUnauthorized: false } : false,
   });
   await client.connect();
   const res = await client.query('SELECT 1 FROM pg_database WHERE datname = $1', [env.db.database]);

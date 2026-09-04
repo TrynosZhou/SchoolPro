@@ -15,8 +15,8 @@ export const env = {
     secret: process.env.JWT_SECRET || 'dev-secret-change-in-production',
     expiresIn: process.env.JWT_EXPIRES_IN || '7d',
   },
-  frontendUrl: process.env.FRONTEND_URL || 'http://localhost:4200',
-  apiPublicUrl: process.env.API_PUBLIC_URL || '',
+  frontendUrl: process.env.FRONTEND_URL || 'https://schoolproedu.vercel.app/',
+  apiPublicUrl: process.env.API_PUBLIC_URL || 'https://school-pro-lgbk.vercel.app/',
   redis: {
     url: process.env.REDIS_URL || 'redis://127.0.0.1:6379',
     /** When false, BullMQ workers are not started and enqueue calls are skipped. */

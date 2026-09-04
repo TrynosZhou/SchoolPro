@@ -1,5 +1,5 @@
 export const environment = {
   production: true,
   enableServiceWorker: true,
-  apiUrl: '/api',
+  apiUrl: 'https://school-pro-lgbk.vercel.app/api',
 };
