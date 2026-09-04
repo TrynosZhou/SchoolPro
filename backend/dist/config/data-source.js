@@ -29,7 +29,7 @@ exports.RealAppDataSource = new typeorm_1.DataSource({
     /** Neon (and most managed Postgres) requires SSL; local dev Postgres does not. */
     ssl: env_1.env.nodeEnv === 'production' ? { rejectUnauthorized: false } : false,
     /** Migrations own schema changes; sync would race them and break on NOT NULL backfills. */
-    synchronize: true,
+    synchronize: false,
     migrationsRun: false,
     logging: env_1.env.nodeEnv === 'development',
     entities: entities_1.entities,
