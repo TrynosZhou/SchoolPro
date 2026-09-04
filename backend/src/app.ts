@@ -68,28 +68,16 @@ app.use((req, res, next) => {
   const state = getStartupState();
   if (state.ok) return next();
   const url = req.originalUrl;
-  const isGet = req.method === 'GET';
   const isPublicSafe =
     url === '/api/health' ||
     url.startsWith('/api/public/') ||
     url === '/api/auth/password-policy' ||
     url.startsWith('/webhooks/');
   if (isPublicSafe) return next();
-  if (!isGet) {
-    res.setHeader('Retry-After', '30');
-    return res.status(503).json({
-      message: 'Database is warming up or unreachable — please retry in a moment.',
-    });
-  }
-  const authRequired =
-    url.startsWith('/api/auth/') && url !== '/api/auth/password-policy';
-  if (authRequired) {
-    res.setHeader('Retry-After', '30');
-    return res.status(503).json({
-      message: 'Database is warming up or unreachable — please retry in a moment.',
-    });
-  }
-  return next();
+  res.setHeader('Retry-After', '30');
+  return res.status(503).json({
+    message: 'Database is warming up or unreachable — please retry in a moment.',
+  });
 });
 
 app.use(tenantContextMiddleware);
