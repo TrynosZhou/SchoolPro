@@ -3,6 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import path from 'path';
 import { env } from './config/env';
+import { getStartupState } from './server';
 
 import authRoutes from './routes/auth.routes';
 import studentsRoutes from './routes/students.routes';
@@ -33,7 +34,6 @@ const app = express();
 
 app.use(
   helmet({
-    // Allow frontend (different origin) to load /uploads images (school logo, etc.)
     crossOriginResourcePolicy: { policy: 'cross-origin' },
   }),
 );
@@ -64,18 +64,47 @@ app.use(
 app.use(express.json());
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
-/**
- * Demo tenant detection (peeks at the JWT's `demo` claim, doesn't enforce auth) +
- * guardrails. Mounted globally, ahead of every router, so demo requests are routed
- * to the demo database and destructive routes are blocked regardless of which
- * router eventually handles them. See middleware/tenant-context.middleware.ts and
- * middleware/demo-guard.middleware.ts for details.
- */
+app.use((req, res, next) => {
+  const state = getStartupState();
+  if (state.ok) return next();
+  const url = req.originalUrl;
+  const isGet = req.method === 'GET';
+  const isPublicSafe =
+    url === '/api/health' ||
+    url.startsWith('/api/public/') ||
+    url === '/api/auth/password-policy' ||
+    url.startsWith('/webhooks/');
+  if (isPublicSafe) return next();
+  if (!isGet) {
+    res.setHeader('Retry-After', '30');
+    return res.status(503).json({
+      message: 'Database is warming up or unreachable — please retry in a moment.',
+    });
+  }
+  const authRequired =
+    url.startsWith('/api/auth/') && url !== '/api/auth/password-policy';
+  if (authRequired) {
+    res.setHeader('Retry-After', '30');
+    return res.status(503).json({
+      message: 'Database is warming up or unreachable — please retry in a moment.',
+    });
+  }
+  return next();
+});
+
 app.use(tenantContextMiddleware);
 app.use(demoWriteRateLimiter);
 app.use(demoGlobalWriteGuard);
 
-app.get('/api/health', (_req, res) => res.json({ status: 'ok', service: 'School Pro API' }));
+app.get('/api/health', (_req, res) => {
+  const state = getStartupState();
+  res.json({
+    status: state.ok ? 'ok' : 'degraded',
+    degraded: !state.ok,
+    error: state.error ? { name: state.error.name, message: state.error.message } : undefined,
+    service: 'School Pro API',
+  });
+});
 
 app.use('/api/auth', authRoutes);
 app.use('/api/students', studentsRoutes);

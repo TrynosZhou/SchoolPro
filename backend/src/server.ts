@@ -68,7 +68,18 @@ async function runDeferredStartup(): Promise<void> {
   }
 }
 
+const _startupState: { ok: boolean; error?: Error; startedAt: number } = {
+  ok: false,
+  error: undefined,
+  startedAt: 0,
+};
+
+export function getStartupState(): { ok: boolean; error?: Error; startedAt: number } {
+  return _startupState;
+}
+
 export async function initializeServer(): Promise<void> {
+  if (_startupState.ok) return;
   try {
     try {
       ensureUploadDirs();
@@ -80,8 +91,21 @@ export async function initializeServer(): Promise<void> {
       `[startup] Connecting to PostgreSQL host=${env.db.host} port=${env.db.port} ` +
         `database=${env.db.database} user=${env.db.username} (nodeEnv=${env.nodeEnv})`,
     );
-    await AppDataSource.initialize();
-    console.log('[startup] Database connected');
+    try {
+      await AppDataSource.initialize();
+      console.log('[startup] Database connected');
+    } catch (dbErr) {
+      const msg = dbErr instanceof Error ? dbErr.message : String(dbErr);
+      console.error(
+        `[startup] Cannot connect to the database — continuing in "degraded" mode. ` +
+          `Public endpoints (health, branding, password-policy) will return defaults. ` +
+          `Authenticated endpoints will return 503 until DB is reachable. Detail: ${msg}`,
+      );
+      _startupState.ok = false;
+      _startupState.error = dbErr instanceof Error ? dbErr : new Error(msg);
+      _startupState.startedAt = Date.now();
+      return;
+    }
 
     try {
       const applied = await RealAppDataSource.runMigrations({ transaction: 'each' });
@@ -121,9 +145,15 @@ export async function initializeServer(): Promise<void> {
     } catch (err) {
       console.warn('[startup] ensureChartOfAccountsSeeded skipped (non-fatal):', err instanceof Error ? err.message : String(err));
     }
+
+    _startupState.ok = true;
+    _startupState.error = undefined;
+    _startupState.startedAt = Date.now();
   } catch (err) {
-    console.error('initializeServer failed:', err);
-    throw err;
+    console.error('initializeServer failed (continuing in degraded mode):', err);
+    _startupState.ok = false;
+    _startupState.error = err instanceof Error ? err : new Error(String(err));
+    _startupState.startedAt = Date.now();
   }
 }
 

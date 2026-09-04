@@ -36,6 +36,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.getStartupState = getStartupState;
 exports.initializeServer = initializeServer;
 require("reflect-metadata");
 const app_1 = __importDefault(require("./app"));
@@ -96,7 +97,17 @@ async function runDeferredStartup() {
         console.error('[startup] Deferred GL tasks failed:', err);
     }
 }
+const _startupState = {
+    ok: false,
+    error: undefined,
+    startedAt: 0,
+};
+function getStartupState() {
+    return _startupState;
+}
 async function initializeServer() {
+    if (_startupState.ok)
+        return;
     try {
         try {
             (0, pdf_1.ensureUploadDirs)();
@@ -106,8 +117,20 @@ async function initializeServer() {
         }
         console.log(`[startup] Connecting to PostgreSQL host=${env_1.env.db.host} port=${env_1.env.db.port} ` +
             `database=${env_1.env.db.database} user=${env_1.env.db.username} (nodeEnv=${env_1.env.nodeEnv})`);
-        await data_source_1.AppDataSource.initialize();
-        console.log('[startup] Database connected');
+        try {
+            await data_source_1.AppDataSource.initialize();
+            console.log('[startup] Database connected');
+        }
+        catch (dbErr) {
+            const msg = dbErr instanceof Error ? dbErr.message : String(dbErr);
+            console.error(`[startup] Cannot connect to the database — continuing in "degraded" mode. ` +
+                `Public endpoints (health, branding, password-policy) will return defaults. ` +
+                `Authenticated endpoints will return 503 until DB is reachable. Detail: ${msg}`);
+            _startupState.ok = false;
+            _startupState.error = dbErr instanceof Error ? dbErr : new Error(msg);
+            _startupState.startedAt = Date.now();
+            return;
+        }
         try {
             const applied = await data_source_1.RealAppDataSource.runMigrations({ transaction: 'each' });
             if (applied.length > 0) {
@@ -143,10 +166,15 @@ async function initializeServer() {
         catch (err) {
             console.warn('[startup] ensureChartOfAccountsSeeded skipped (non-fatal):', err instanceof Error ? err.message : String(err));
         }
+        _startupState.ok = true;
+        _startupState.error = undefined;
+        _startupState.startedAt = Date.now();
     }
     catch (err) {
-        console.error('initializeServer failed:', err);
-        throw err;
+        console.error('initializeServer failed (continuing in degraded mode):', err);
+        _startupState.ok = false;
+        _startupState.error = err instanceof Error ? err : new Error(String(err));
+        _startupState.startedAt = Date.now();
     }
 }
 async function bootstrap() {
