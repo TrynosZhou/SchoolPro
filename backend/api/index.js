@@ -6,7 +6,17 @@ let bootPromise = null;
 function bootOnce() {
   if (!bootPromise) {
     bootPromise = initializeServer().catch((err) => {
-      console.error('[vercel] initializeServer failed on cold start:', err);
+      const meta = {
+        name: err?.name,
+        message: err?.message,
+        code: err?.code,
+        stack: err?.stack?.split('\n').slice(0, 8).join('\n'),
+      };
+      console.error(
+        '[vercel:backend] initializeServer failed on cold start — ' +
+          'this is usually DB credentials/network, or migrations failing. Check DB_HOST/DB_PORT/DB_USERNAME/DB_PASSWORD env vars in Vercel.',
+        JSON.stringify(meta, null, 2),
+      );
       bootPromise = null;
       throw err;
     });

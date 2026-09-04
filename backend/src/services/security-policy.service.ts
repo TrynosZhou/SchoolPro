@@ -28,23 +28,38 @@ export async function getSecurityPolicy(): Promise<SecurityPolicy> {
   if (cached && now - cached.time < CACHE_MS) return cached.policy;
 
   const repo = AppDataSource.getRepository(SchoolSettings);
-  let settings = await repo.findOne({ where: { id: SETTINGS_ID } });
-  if (!settings) {
-    settings = await repo.save(
-      repo.create({
-        id: SETTINGS_ID,
-        schoolName: 'School Pro Academy',
-        securityPolicy: DEFAULT_SECURITY_POLICY,
-      }),
-    );
+  try {
+    let settings = await repo.findOne({ where: { id: SETTINGS_ID } });
+    if (!settings) {
+      try {
+        settings = await repo.save(
+          repo.create({
+            id: SETTINGS_ID,
+            schoolName: 'School Pro Academy',
+            securityPolicy: DEFAULT_SECURITY_POLICY,
+          }),
+        );
+      } catch (insertErr) {
+        console.warn('[security-policy] Could not auto-create default settings row (non-fatal, schema may still be initialising or DB read-only):', insertErr instanceof Error ? insertErr.message : String(insertErr));
+        cache.set(key, { policy: DEFAULT_SECURITY_POLICY, time: now });
+        return { ...DEFAULT_SECURITY_POLICY };
+      }
+    }
+    const policy = normalizeSecurityPolicy(settings.securityPolicy || DEFAULT_SECURITY_POLICY);
+    if (!settings.securityPolicy) {
+      try {
+        settings.securityPolicy = policy;
+        await repo.save(settings);
+      } catch (saveErr) {
+        console.warn('[security-policy] Could not persist default policy (non-fatal):', saveErr instanceof Error ? saveErr.message : String(saveErr));
+      }
+    }
+    cache.set(key, { policy, time: now });
+    return policy;
+  } catch (err) {
+    console.warn('[security-policy] Falling back to DEFAULT_SECURITY_POLICY because DB lookup failed:', err instanceof Error ? err.message : String(err));
+    return { ...DEFAULT_SECURITY_POLICY };
   }
-  const policy = normalizeSecurityPolicy(settings.securityPolicy || DEFAULT_SECURITY_POLICY);
-  if (!settings.securityPolicy) {
-    settings.securityPolicy = policy;
-    await repo.save(settings);
-  }
-  cache.set(key, { policy, time: now });
-  return policy;
 }
 
 export function invalidateSecurityPolicyCache(): void {

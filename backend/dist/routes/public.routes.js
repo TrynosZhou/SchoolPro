@@ -10,13 +10,23 @@ const router = (0, express_1.Router)();
  * admins manage on /admin/settings.
  */
 router.get('/branding', async (_req, res) => {
-    const settings = await data_source_1.AppDataSource.getRepository(entities_1.SchoolSettings).findOne({
-        where: { id: 'default' },
-    });
-    res.json({
-        schoolName: settings?.schoolName?.trim() || 'School Pro Academy',
-        tagline: settings?.tagline?.trim() || null,
-        logoUrl: settings?.logoUrl?.trim() || null,
-    });
+    try {
+        const settings = await data_source_1.AppDataSource.getRepository(entities_1.SchoolSettings).findOne({
+            where: { id: 'default' },
+        });
+        res.json({
+            schoolName: settings?.schoolName?.trim() || 'School Pro Academy',
+            tagline: settings?.tagline?.trim() || null,
+            logoUrl: settings?.logoUrl?.trim() || null,
+        });
+    }
+    catch (err) {
+        console.warn('[public:branding] DB lookup failed — returning default branding (non-fatal):', err instanceof Error ? err.message : String(err));
+        res.json({
+            schoolName: 'School Pro Academy',
+            tagline: null,
+            logoUrl: null,
+        });
+    }
 });
 exports.default = router;

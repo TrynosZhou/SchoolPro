@@ -25,21 +25,39 @@ async function getSecurityPolicy() {
     if (cached && now - cached.time < CACHE_MS)
         return cached.policy;
     const repo = data_source_1.AppDataSource.getRepository(entities_1.SchoolSettings);
-    let settings = await repo.findOne({ where: { id: SETTINGS_ID } });
-    if (!settings) {
-        settings = await repo.save(repo.create({
-            id: SETTINGS_ID,
-            schoolName: 'School Pro Academy',
-            securityPolicy: security_policy_1.DEFAULT_SECURITY_POLICY,
-        }));
+    try {
+        let settings = await repo.findOne({ where: { id: SETTINGS_ID } });
+        if (!settings) {
+            try {
+                settings = await repo.save(repo.create({
+                    id: SETTINGS_ID,
+                    schoolName: 'School Pro Academy',
+                    securityPolicy: security_policy_1.DEFAULT_SECURITY_POLICY,
+                }));
+            }
+            catch (insertErr) {
+                console.warn('[security-policy] Could not auto-create default settings row (non-fatal, schema may still be initialising or DB read-only):', insertErr instanceof Error ? insertErr.message : String(insertErr));
+                cache.set(key, { policy: security_policy_1.DEFAULT_SECURITY_POLICY, time: now });
+                return { ...security_policy_1.DEFAULT_SECURITY_POLICY };
+            }
+        }
+        const policy = (0, security_policy_1.normalizeSecurityPolicy)(settings.securityPolicy || security_policy_1.DEFAULT_SECURITY_POLICY);
+        if (!settings.securityPolicy) {
+            try {
+                settings.securityPolicy = policy;
+                await repo.save(settings);
+            }
+            catch (saveErr) {
+                console.warn('[security-policy] Could not persist default policy (non-fatal):', saveErr instanceof Error ? saveErr.message : String(saveErr));
+            }
+        }
+        cache.set(key, { policy, time: now });
+        return policy;
     }
-    const policy = (0, security_policy_1.normalizeSecurityPolicy)(settings.securityPolicy || security_policy_1.DEFAULT_SECURITY_POLICY);
-    if (!settings.securityPolicy) {
-        settings.securityPolicy = policy;
-        await repo.save(settings);
+    catch (err) {
+        console.warn('[security-policy] Falling back to DEFAULT_SECURITY_POLICY because DB lookup failed:', err instanceof Error ? err.message : String(err));
+        return { ...security_policy_1.DEFAULT_SECURITY_POLICY };
     }
-    cache.set(key, { policy, time: now });
-    return policy;
 }
 function invalidateSecurityPolicyCache() {
     cache.clear();

@@ -10,14 +10,23 @@ const router = Router();
  * admins manage on /admin/settings.
  */
 router.get('/branding', async (_req: Request, res: Response) => {
-  const settings = await AppDataSource.getRepository(SchoolSettings).findOne({
-    where: { id: 'default' },
-  });
-  res.json({
-    schoolName: settings?.schoolName?.trim() || 'School Pro Academy',
-    tagline: settings?.tagline?.trim() || null,
-    logoUrl: settings?.logoUrl?.trim() || null,
-  });
+  try {
+    const settings = await AppDataSource.getRepository(SchoolSettings).findOne({
+      where: { id: 'default' },
+    });
+    res.json({
+      schoolName: settings?.schoolName?.trim() || 'School Pro Academy',
+      tagline: settings?.tagline?.trim() || null,
+      logoUrl: settings?.logoUrl?.trim() || null,
+    });
+  } catch (err) {
+    console.warn('[public:branding] DB lookup failed — returning default branding (non-fatal):', err instanceof Error ? err.message : String(err));
+    res.json({
+      schoolName: 'School Pro Academy',
+      tagline: null,
+      logoUrl: null,
+    });
+  }
 });
 
 export default router;

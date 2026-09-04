@@ -17,7 +17,17 @@ async function bootOnce() {
   if (!bootPromise) {
     const { initializeServer } = require(path.join(BACKEND_DIST, 'server'));
     bootPromise = initializeServer().catch((err) => {
-      console.error('[api:root] initializeServer failed on cold start:', err);
+      const meta = {
+        name: err?.name,
+        message: err?.message,
+        code: err?.code,
+        stack: err?.stack?.split('\n').slice(0, 8).join('\n'),
+      };
+      console.error(
+        '[api:root] initializeServer failed on cold start — ' +
+          'this is usually DB credentials/network, or migrations failing. Check DB_HOST/DB_PORT/DB_USERNAME/DB_PASSWORD env vars in Vercel.',
+        JSON.stringify(meta, null, 2),
+      );
       bootPromise = null;
       throw err;
     });

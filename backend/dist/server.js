@@ -104,6 +104,8 @@ async function initializeServer() {
         catch (err) {
             console.warn('[startup] Could not ensure local upload directories (safe to ignore when using S3 storage):', err);
         }
+        console.log(`[startup] Connecting to PostgreSQL host=${env_1.env.db.host} port=${env_1.env.db.port} ` +
+            `database=${env_1.env.db.database} user=${env_1.env.db.username} (nodeEnv=${env_1.env.nodeEnv})`);
         await data_source_1.AppDataSource.initialize();
         console.log('[startup] Database connected');
         try {
@@ -117,8 +119,8 @@ async function initializeServer() {
             }
         }
         catch (err) {
-            console.error('[startup] FATAL: migrations failed. Schema may be inconsistent — aborting startup.', err);
-            throw err;
+            console.warn('[startup] Migrations could not be applied — continuing without them. ' +
+                'If endpoints later report "relation does not exist", you must run migrations via the CLI first. Detail:', err instanceof Error ? err.message : String(err));
         }
         try {
             const { seedDatabase } = await Promise.resolve().then(() => __importStar(require('./seed')));

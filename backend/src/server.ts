@@ -76,6 +76,10 @@ export async function initializeServer(): Promise<void> {
       console.warn('[startup] Could not ensure local upload directories (safe to ignore when using S3 storage):', err);
     }
 
+    console.log(
+      `[startup] Connecting to PostgreSQL host=${env.db.host} port=${env.db.port} ` +
+        `database=${env.db.database} user=${env.db.username} (nodeEnv=${env.nodeEnv})`,
+    );
     await AppDataSource.initialize();
     console.log('[startup] Database connected');
 
@@ -90,8 +94,11 @@ export async function initializeServer(): Promise<void> {
         console.log('[startup] Database schema is up to date (no new migrations).');
       }
     } catch (err) {
-      console.error('[startup] FATAL: migrations failed. Schema may be inconsistent — aborting startup.', err);
-      throw err;
+      console.warn(
+        '[startup] Migrations could not be applied — continuing without them. ' +
+          'If endpoints later report "relation does not exist", you must run migrations via the CLI first. Detail:',
+        err instanceof Error ? err.message : String(err),
+      );
     }
 
     try {
