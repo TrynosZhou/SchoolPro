@@ -105,6 +105,9 @@ const _startupState = {
 function getStartupState() {
     return _startupState;
 }
+async function sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
 async function initializeServer() {
     if (_startupState.ok)
         return;
@@ -117,17 +120,46 @@ async function initializeServer() {
         }
         console.log(`[startup] Connecting to PostgreSQL host=${env_1.env.db.host} port=${env_1.env.db.port} ` +
             `database=${env_1.env.db.database} user=${env_1.env.db.username} (nodeEnv=${env_1.env.nodeEnv})`);
-        try {
-            await data_source_1.AppDataSource.initialize();
-            console.log('[startup] Database connected');
+        let lastDbErr;
+        const attempts = 4;
+        for (let attempt = 0; attempt < attempts; attempt++) {
+            try {
+                const { sslMode, ds } = await (0, data_source_1.initializeRealAppDataSourceWithSslFallback)();
+                try {
+                    await ds.query('SELECT 1 AS _ping');
+                }
+                catch (pingErr) {
+                    console.warn(`[startup] DB ping failed on attempt ${attempt + 1} — ${pingErr instanceof Error ? pingErr.message : String(pingErr)}`);
+                    try {
+                        if (ds.isInitialized)
+                            await ds.destroy();
+                    }
+                    catch { /* swallow */ }
+                    await sleep(500 * (attempt + 1));
+                    continue;
+                }
+                _startupState.ok = true;
+                _startupState.error = undefined;
+                _startupState.sslMode = sslMode;
+                _startupState.startedAt = Date.now();
+                lastDbErr = undefined;
+                break;
+            }
+            catch (err) {
+                lastDbErr = err;
+                console.warn(`[startup] DB initialize attempt ${attempt + 1}/${attempts} failed — ${err instanceof Error ? err.message : String(err)}`);
+                if (attempt < attempts - 1) {
+                    await sleep(500 * (attempt + 1));
+                }
+            }
         }
-        catch (dbErr) {
-            const msg = dbErr instanceof Error ? dbErr.message : String(dbErr);
-            console.error(`[startup] Cannot connect to the database — continuing in "degraded" mode. ` +
+        if (!_startupState.ok) {
+            const msg = lastDbErr instanceof Error ? lastDbErr.message : String(lastDbErr);
+            console.error(`[startup] Cannot connect to the database after ${attempts} attempts — continuing in "degraded" mode. ` +
                 `Public endpoints (health, branding, password-policy) will return defaults. ` +
                 `Authenticated endpoints will return 503 until DB is reachable. Detail: ${msg}`);
             _startupState.ok = false;
-            _startupState.error = dbErr instanceof Error ? dbErr : new Error(msg);
+            _startupState.error = lastDbErr instanceof Error ? lastDbErr : new Error(msg);
             _startupState.startedAt = Date.now();
             return;
         }
@@ -166,8 +198,6 @@ async function initializeServer() {
         catch (err) {
             console.warn('[startup] ensureChartOfAccountsSeeded skipped (non-fatal):', err instanceof Error ? err.message : String(err));
         }
-        _startupState.ok = true;
-        _startupState.error = undefined;
         _startupState.startedAt = Date.now();
     }
     catch (err) {

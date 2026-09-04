@@ -21,6 +21,8 @@ exports.env = {
         username: process.env.DB_USERNAME || 'postgres',
         password: process.env.DB_PASSWORD || 'postgres',
         database: process.env.DB_DATABASE || 'schoolpro',
+        /** 'auto' (default, recommended) — try with SSL, then fall back to no-SSL. */
+        sslMode: process.env.DB_SSL_MODE || 'auto',
     },
     jwt: {
         secret: process.env.JWT_SECRET || 'dev-secret-change-in-production',

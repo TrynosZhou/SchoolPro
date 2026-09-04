@@ -89,6 +89,7 @@ app.get('/api/health', (_req, res) => {
   res.json({
     status: state.ok ? 'ok' : 'degraded',
     degraded: !state.ok,
+    sslMode: state.sslMode,
     error: state.error ? { name: state.error.name, message: state.error.message } : undefined,
     service: 'School Pro API',
   });
