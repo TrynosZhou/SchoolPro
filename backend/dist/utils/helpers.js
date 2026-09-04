@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.generateStudentId = generateStudentId;
+exports.previewStudentId = previewStudentId;
 exports.generateEmployeeNumber = generateEmployeeNumber;
 exports.generateNumber = generateNumber;
 exports.calculateGrade = calculateGrade;
@@ -10,23 +11,71 @@ exports.invoiceDescriptionWithTerm = invoiceDescriptionWithTerm;
 exports.toDateOnly = toDateOnly;
 exports.termReportDateRange = termReportDateRange;
 exports.reportCardPdfFilename = reportCardPdfFilename;
+const crypto_1 = require("crypto");
 const uuid_1 = require("uuid");
 const data_source_1 = require("../config/data-source");
+const entities_1 = require("../entities");
 const grade_boundaries_1 = require("../types/grade-boundaries");
-const STUDENT_ID_PREFIX = 'SP';
-const STUDENT_ID_DIGITS = 6;
-/** Next sequential Student ID: SP + 6 digits (e.g. SP000001). */
-async function generateStudentId() {
-    const [row] = await data_source_1.AppDataSource.query(`
-    SELECT COALESCE(MAX(CAST(SUBSTRING("admissionNumber" FROM 3) AS INTEGER)), 0) AS max_num
-    FROM students
-    WHERE "admissionNumber" ~ '^SP[0-9]{6}$'
-  `);
-    const next = Number(row?.max_num ?? 0) + 1;
-    if (next > 10 ** STUDENT_ID_DIGITS - 1) {
-        throw new Error('Student ID sequence exhausted (SP999999)');
+const DEFAULT_STUDENT_ID_PREFIX = 'SP';
+/**
+ * Student ID format: {prefix}{RRRR}{MM}{YYYY}
+ * - prefix from Admin → Settings (default SP)
+ * - RRRR = 4 random digits (0000–9999)
+ * - MM = month of student's date of birth (01–12)
+ * - YYYY = year the student is registered
+ * Example: SP1742072026 (prefix SP, random 1742, DOB month July, registered 2026)
+ * Numeric part is 10 digits; last 4 = year, next 2 from the right = DOB month.
+ */
+async function generateStudentId(dateOfBirth) {
+    const prefix = await resolveStudentIdPrefix();
+    const month = extractDobMonth(dateOfBirth);
+    const year = String(new Date().getFullYear());
+    for (let attempt = 0; attempt < 50; attempt++) {
+        const randomDigits = String((0, crypto_1.randomInt)(0, 10000)).padStart(4, '0');
+        const candidate = `${prefix}${randomDigits}${month}${year}`;
+        const [row] = await data_source_1.AppDataSource.query(`SELECT 1 AS found FROM students WHERE "admissionNumber" = $1 LIMIT 1`, [candidate]);
+        if (!row)
+            return candidate;
     }
-    return `${STUDENT_ID_PREFIX}${String(next).padStart(STUDENT_ID_DIGITS, '0')}`;
+    throw new Error(`Could not allocate a unique Student ID for DOB month ${month} in ${year} (prefix ${prefix}). ` +
+        `All random variants may already be in use.`);
+}
+/** Preview helper — same structure, may collide until save retries. */
+async function previewStudentId(dateOfBirth) {
+    const prefix = await resolveStudentIdPrefix();
+    const month = extractDobMonth(dateOfBirth);
+    const year = String(new Date().getFullYear());
+    const randomDigits = String((0, crypto_1.randomInt)(0, 10000)).padStart(4, '0');
+    return `${prefix}${randomDigits}${month}${year}`;
+}
+async function resolveStudentIdPrefix() {
+    const settings = await data_source_1.AppDataSource.getRepository(entities_1.SchoolSettings).findOne({
+        where: { id: 'default' },
+    });
+    const raw = String(settings?.studentIdPrefix || DEFAULT_STUDENT_ID_PREFIX).trim().toUpperCase();
+    const cleaned = raw.replace(/[^A-Z0-9]/g, '').slice(0, 8);
+    return cleaned || DEFAULT_STUDENT_ID_PREFIX;
+}
+function extractDobMonth(dateOfBirth) {
+    if (!dateOfBirth)
+        return '01';
+    if (typeof dateOfBirth === 'string') {
+        const match = dateOfBirth.trim().match(/^(\d{4})-(\d{2})/);
+        if (match) {
+            const month = Number(match[2]);
+            if (month >= 1 && month <= 12)
+                return String(month).padStart(2, '0');
+        }
+        const parsed = new Date(dateOfBirth);
+        if (!Number.isNaN(parsed.getTime())) {
+            return String(parsed.getUTCMonth() + 1).padStart(2, '0');
+        }
+        return '01';
+    }
+    if (dateOfBirth instanceof Date && !Number.isNaN(dateOfBirth.getTime())) {
+        return String(dateOfBirth.getUTCMonth() + 1).padStart(2, '0');
+    }
+    return '01';
 }
 const EMPLOYEE_ID_PREFIX = 'EMP';
 const EMPLOYEE_ID_DIGITS = 6;

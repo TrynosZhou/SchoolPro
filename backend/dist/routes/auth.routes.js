@@ -21,6 +21,8 @@ const user_auth_1 = require("../utils/user-auth");
 const user_password_1 = require("../utils/user-password");
 const student_portal_auth_service_1 = require("../services/student-portal-auth.service");
 const gender_1 = require("../utils/gender");
+const tenant_context_1 = require("../config/tenant-context");
+const demo_accounts_1 = require("../config/demo-accounts");
 const router = (0, express_1.Router)();
 function resolveUserGender(user) {
     return (user.staffProfile?.gender ??
@@ -28,7 +30,7 @@ function resolveUserGender(user) {
         user.parentProfile?.gender ??
         null);
 }
-async function issueAuthToken(fullUser, res) {
+async function issueAuthToken(fullUser, res, opts = {}) {
     await (0, role_permissions_service_1.ensureDefaultRoles)();
     const permissions = (0, role_permissions_service_1.resolvePermissionsForUser)(fullUser);
     const payload = {
@@ -45,12 +47,25 @@ async function issueAuthToken(fullUser, res) {
         payload.parentId = fullUser.parentProfile.id;
     if (fullUser.studentProfile)
         payload.studentId = fullUser.studentProfile.id;
-    const policy = await (0, security_policy_service_1.getSecurityPolicy)();
-    const expiresIn = (0, security_policy_1.sessionTimeoutToJwtExpires)(policy.sessionTimeoutMinutes);
+    let sessionTimeoutMinutes;
+    let expiresIn;
+    if (opts.demo) {
+        // Demo sessions always use a short, fixed TTL — never the school's own security
+        // policy — regardless of how long that policy's sessionTimeoutMinutes is set to.
+        payload.demo = true;
+        sessionTimeoutMinutes = env_1.env.demo.jwtTtlMinutes;
+        expiresIn = `${env_1.env.demo.jwtTtlMinutes}m`;
+    }
+    else {
+        const policy = await (0, security_policy_service_1.getSecurityPolicy)();
+        sessionTimeoutMinutes = policy.sessionTimeoutMinutes;
+        expiresIn = (0, security_policy_1.sessionTimeoutToJwtExpires)(policy.sessionTimeoutMinutes);
+    }
     const token = jsonwebtoken_1.default.sign(payload, env_1.env.jwt.secret, { expiresIn: expiresIn });
     res.json({
         token,
-        sessionTimeoutMinutes: policy.sessionTimeoutMinutes,
+        sessionTimeoutMinutes,
+        demo: !!opts.demo,
         user: {
             id: fullUser.id,
             email: fullUser.email,
@@ -131,6 +146,54 @@ router.post('/login', async (req, res) => {
             message: 'Login failed',
             error: env_1.env.nodeEnv === 'development' && err instanceof Error ? err.message : undefined,
         });
+    }
+});
+/** Public: lists the fixed demo roles/credentials for the /demo landing page (no secrets beyond the documented demo passwords). */
+router.get('/demo-accounts', (_req, res) => {
+    if (!env_1.env.demo.enabled) {
+        return res.status(404).json({ message: 'Demo mode is not available' });
+    }
+    res.json({
+        accounts: demo_accounts_1.DEMO_ACCOUNTS.map((a) => ({
+            role: a.role,
+            username: a.username,
+            password: a.password,
+            label: a.label,
+            description: a.description,
+        })),
+    });
+});
+/**
+ * One-click demo login: validates against the fixed demo accounts in the isolated
+ * demo database and issues a JWT with `demo: true` + a short fixed TTL. The whole
+ * lookup runs inside a forced demo tenant context so it can never touch production
+ * user records even if a demo username collided with a real one.
+ */
+router.post('/demo-login', async (req, res) => {
+    if (!env_1.env.demo.enabled) {
+        return res.status(404).json({ message: 'Demo mode is not available' });
+    }
+    try {
+        const { role } = req.body;
+        const account = (0, demo_accounts_1.findDemoAccount)(role);
+        if (!account) {
+            return res.status(400).json({ message: 'Unknown demo role' });
+        }
+        await tenant_context_1.tenantContext.run({ isDemo: true }, async () => {
+            const user = await (0, user_auth_1.findActiveUserByLoginIdentifier)(account.username, typeorm_helpers_1.USER_PROFILES);
+            if (!user || !(await bcryptjs_1.default.compare(account.password, user.passwordHash))) {
+                res.status(503).json({
+                    message: 'The demo environment is still warming up — please try again in a moment.',
+                });
+                return;
+            }
+            const fullUser = (await (0, role_permissions_service_1.loadUserWithRole)(user.id)) ?? user;
+            await issueAuthToken(fullUser, res, { demo: true });
+        });
+    }
+    catch (err) {
+        console.error('Demo login error:', err);
+        res.status(500).json({ message: 'Demo login failed' });
     }
 });
 /** Student portal sign-in: Student ID + date of birth (first sign-in) or custom password. */

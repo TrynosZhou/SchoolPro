@@ -14,6 +14,7 @@ const crypto_1 = require("crypto");
 const data_source_1 = require("../config/data-source");
 const gl_accounts_1 = require("../config/gl-accounts");
 Object.defineProperty(exports, "GL_ACCOUNT_CODES", { enumerable: true, get: function () { return gl_accounts_1.GL_ACCOUNT_CODES; } });
+const tenant_context_1 = require("../config/tenant-context");
 const entities_1 = require("../entities");
 const enums_1 = require("../entities/enums");
 const helpers_1 = require("../utils/helpers");
@@ -209,9 +210,16 @@ async function ensureChartOfAccountsSeeded() {
         }
     }
 }
+// Account IDs are DB-generated and differ between the production and demo
+// databases, so the cache key must include the tenant to avoid resolving a
+// prod account ID while running against the demo DataSource (or vice versa).
 const accountIdByCodeCache = new Map();
+function accountCacheKey(code) {
+    return `${tenant_context_1.tenantContext.isDemo() ? 'demo' : 'prod'}:${code}`;
+}
 async function resolveGlAccountIdByCode(code) {
-    const cached = accountIdByCodeCache.get(code);
+    const key = accountCacheKey(code);
+    const cached = accountIdByCodeCache.get(key);
     if (cached)
         return cached;
     await ensureChartOfAccountsSeeded();
@@ -220,7 +228,7 @@ async function resolveGlAccountIdByCode(code) {
     });
     if (!account)
         throw new Error(`GL account ${code} is not configured.`);
-    accountIdByCodeCache.set(code, account.id);
+    accountIdByCodeCache.set(key, account.id);
     return account.id;
 }
 function revenueAccountCodeForFeeType(feeType) {

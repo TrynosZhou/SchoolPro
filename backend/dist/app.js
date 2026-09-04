@@ -29,6 +29,9 @@ const analytics_routes_1 = __importDefault(require("./routes/analytics.routes"))
 const reports_routes_1 = __importDefault(require("./routes/reports.routes"));
 const access_control_routes_1 = __importDefault(require("./routes/access-control.routes"));
 const webhooks_routes_1 = __importDefault(require("./routes/webhooks.routes"));
+const lms_routes_1 = __importDefault(require("./routes/lms.routes"));
+const tenant_context_middleware_1 = require("./middleware/tenant-context.middleware");
+const demo_guard_middleware_1 = require("./middleware/demo-guard.middleware");
 const app = (0, express_1.default)();
 app.use((0, helmet_1.default)({
     // Allow frontend (different origin) to load /uploads images (school logo, etc.)
@@ -53,6 +56,16 @@ app.use((0, cors_1.default)({
 }));
 app.use(express_1.default.json());
 app.use('/uploads', express_1.default.static(path_1.default.join(process.cwd(), 'uploads')));
+/**
+ * Demo tenant detection (peeks at the JWT's `demo` claim, doesn't enforce auth) +
+ * guardrails. Mounted globally, ahead of every router, so demo requests are routed
+ * to the demo database and destructive routes are blocked regardless of which
+ * router eventually handles them. See middleware/tenant-context.middleware.ts and
+ * middleware/demo-guard.middleware.ts for details.
+ */
+app.use(tenant_context_middleware_1.tenantContextMiddleware);
+app.use(demo_guard_middleware_1.demoWriteRateLimiter);
+app.use(demo_guard_middleware_1.demoGlobalWriteGuard);
 app.get('/api/health', (_req, res) => res.json({ status: 'ok', service: 'School Pro API' }));
 app.use('/api/auth', auth_routes_1.default);
 app.use('/api/students', students_routes_1.default);
@@ -74,6 +87,7 @@ app.use('/api/communication', communication_routes_1.default);
 app.use('/api/analytics', analytics_routes_1.default);
 app.use('/api/reports', reports_routes_1.default);
 app.use('/api/access-control', access_control_routes_1.default);
+app.use('/api/lms', lms_routes_1.default);
 app.use('/webhooks', webhooks_routes_1.default);
 app.use((err, _req, res, _next) => {
     console.error(err);

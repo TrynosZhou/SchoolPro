@@ -6,6 +6,7 @@ exports.enqueueResultNotification = enqueueResultNotification;
 exports.startResultNotificationWorker = startResultNotificationWorker;
 exports.closeResultNotificationQueue = closeResultNotificationQueue;
 const bullmq_1 = require("bullmq");
+const env_1 = require("../config/env");
 const redis_1 = require("../config/redis");
 exports.RESULT_NOTIFICATION_QUEUE_NAME = 'result-whatsapp-notifications';
 let queue = null;
@@ -28,6 +29,8 @@ function getResultNotificationQueue() {
     return queue;
 }
 async function enqueueResultNotification(data) {
+    if (!env_1.env.redis.enabled)
+        return null;
     try {
         const job = await getResultNotificationQueue().add('send-result-notification', data, {
             jobId: data.notificationLogId,
@@ -41,8 +44,11 @@ async function enqueueResultNotification(data) {
     }
 }
 function startResultNotificationWorker(processor) {
+    if (!env_1.env.redis.enabled)
+        return null;
     if (worker)
         return worker;
+    let lastErrorLogAt = 0;
     try {
         worker = new bullmq_1.Worker(exports.RESULT_NOTIFICATION_QUEUE_NAME, processor, {
             connection: (0, redis_1.getRedisConnectionOptions)(),
@@ -55,7 +61,11 @@ function startResultNotificationWorker(processor) {
             console.error(`[result-notification-queue] Job ${job?.id ?? 'unknown'} failed after ${job?.attemptsMade ?? 0} attempt(s):`, err.message);
         });
         worker.on('error', (err) => {
-            console.error('[result-notification-queue] Worker error:', err);
+            const now = Date.now();
+            if (now - lastErrorLogAt < 60000)
+                return;
+            lastErrorLogAt = now;
+            console.error('[result-notification-queue] Worker error (is Redis running?):', err.message);
         });
         console.log('[result-notification-queue] Worker started (concurrency=5, retries=3, exponential backoff)');
         return worker;

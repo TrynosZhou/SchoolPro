@@ -55,9 +55,17 @@ __decorate([
     __metadata("design:type", String)
 ], SchoolSettings.prototype, "logoUrl", void 0);
 __decorate([
+    (0, typeorm_1.Column)({ nullable: true }),
+    __metadata("design:type", String)
+], SchoolSettings.prototype, "developerPhotoUrl", void 0);
+__decorate([
     (0, typeorm_1.Column)({ default: 'USD' }),
     __metadata("design:type", String)
 ], SchoolSettings.prototype, "currency", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'varchar', length: 8, default: 'SP' }),
+    __metadata("design:type", String)
+], SchoolSettings.prototype, "studentIdPrefix", void 0);
 __decorate([
     (0, typeorm_1.Column)({ nullable: true }),
     __metadata("design:type", String)

@@ -1,21 +1,17 @@
 "use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.processResultNotificationJob = processResultNotificationJob;
 exports.queueWhatsAppResultNotifications = queueWhatsAppResultNotifications;
-const path_1 = __importDefault(require("path"));
 const data_source_1 = require("../config/data-source");
 const env_1 = require("../config/env");
 const entities_1 = require("../entities");
-const result_notification_queue_1 = require("../queues/result-notification.queue");
-// Standalone Twilio module (plain JS) — kept separate for isolated testing.
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const { sendResultNotification, sendSmsFallback } = require(path_1.default.join(__dirname, '../../services/whatsapp.js'));
+const whatsapp_service_1 = require("./whatsapp.service");
 function normalizePhone(phone) {
     const trimmed = phone.trim();
     if (!trimmed)
+        return '';
+    // Ignore placeholder / em-dash phones stored in demo or incomplete records.
+    if (/^[+\-—–\s]*$/.test(trimmed) || trimmed === '—' || trimmed === '-')
         return '';
     if (trimmed.startsWith('+'))
         return trimmed;
@@ -39,15 +35,15 @@ function buildPortalLink(studentId, termId, examTypeId) {
 }
 async function deliverResultNotification(channel, params) {
     if (channel === 'sms') {
-        const smsResult = await sendSmsFallback(params);
+        const smsResult = await (0, whatsapp_service_1.sendResultSms)(params);
         return { ...smsResult, deliveredVia: 'sms' };
     }
-    const whatsappResult = await sendResultNotification(params);
+    const whatsappResult = await (0, whatsapp_service_1.sendResultWhatsApp)(params);
     if (whatsappResult.success) {
         return { ...whatsappResult, deliveredVia: 'whatsapp' };
     }
     console.log(`[result-notification] WhatsApp failed for ${params.parentPhone}, attempting SMS fallback`);
-    const smsResult = await sendSmsFallback(params);
+    const smsResult = await (0, whatsapp_service_1.sendResultSms)(params);
     if (smsResult.success) {
         return { ...smsResult, deliveredVia: 'sms' };
     }
@@ -77,7 +73,7 @@ async function processResultNotificationJob(job) {
         console.error(`[result-notification] Unexpected send error for ${parentPhone}:`, err);
         sendResult = { success: false, error: message };
     }
-    if (!sendResult.success) {
+    if (!sendResult.success || !sendResult.deliveredVia) {
         try {
             await logRepo.update(notificationLogId, {
                 status: 'failed',
@@ -94,17 +90,38 @@ async function processResultNotificationJob(job) {
         await logRepo.update(notificationLogId, {
             messageSid: sendResult.sid,
             status: 'sent',
-            errorMessage: sendResult.deliveredVia === 'sms' ? 'Delivered via SMS fallback' : undefined,
+            errorMessage: sendResult.deliveredVia === 'sms' && channel === 'whatsapp'
+                ? 'Delivered via SMS fallback'
+                : undefined,
         });
     }
     catch (logErr) {
         console.error(`[result-notification] Failed to update notification_log ${notificationLogId}:`, logErr);
     }
-    console.log(`[result-notification] Sent successfully${viaLabel} (sid=${sendResult.sid})`);
+    console.log(`[result-notification] Sent successfully via ${sendResult.deliveredVia}${viaLabel} (sid=${sendResult.sid})`);
+    return sendResult.deliveredVia;
+}
+/** Prefer dedicated WhatsApp phone, then guardian phone, then linked parent account phone. */
+function resolveGuardianNotifyPhone(guardian) {
+    const raw = guardian.guardianPhone?.trim() ||
+        guardian.phone?.trim() ||
+        guardian.parent?.user?.phone?.trim() ||
+        '';
+    return normalizePhone(raw);
 }
 /**
- * Queue per-student result notifications for guardians.
- * WhatsApp when consent is given; SMS when consent is not given or as worker fallback.
+ * Prefer WhatsApp unless the linked parent explicitly disabled it.
+ * Unlinked guardians (no parent row) also get WhatsApp — same rule as fee/absence notify.
+ */
+function guardianAllowsWhatsApp(guardian) {
+    if (guardian.guardianWhatsappConsent === true)
+        return true;
+    // parent?.receivesWhatsApp !== false → true when parent is missing or WhatsApp is enabled
+    return guardian.parent?.receivesWhatsApp !== false;
+}
+/**
+ * Send per-student result notifications for guardians.
+ * Counts are based on the channel that actually delivered (not the intended channel).
  */
 async function queueWhatsAppResultNotifications(params) {
     const { reports, guardians, examTypeId, examName, termId } = params;
@@ -121,6 +138,8 @@ async function queueWhatsAppResultNotifications(params) {
         guardiansByStudent.set(guardian.studentId, list);
     }
     const logRepo = data_source_1.AppDataSource.getRepository(entities_1.NotificationLog);
+    /** Avoid duplicate WhatsApp/SMS to the same phone for one publish run. */
+    const notifiedPhones = new Set();
     console.log(`[result-notification] Queueing result notifications for ${reports.length} report card(s), exam="${examName}"`);
     for (const report of reports) {
         const student = report.student;
@@ -137,23 +156,26 @@ async function queueWhatsAppResultNotifications(params) {
             continue;
         }
         for (const guardian of studentGuardians) {
-            const rawPhone = guardian.guardianPhone?.trim();
-            if (!rawPhone) {
-                console.log(`[result-notification] Skipping guardian ${guardian.id} (student ${report.studentId}): guardianPhone empty`);
-                summary.skipped += 1;
-                continue;
-            }
-            const parentPhone = normalizePhone(rawPhone);
+            const parentPhone = resolveGuardianNotifyPhone(guardian);
             if (!parentPhone) {
-                console.log(`[result-notification] Skipping guardian ${guardian.id} (student ${report.studentId}): invalid phone`);
+                console.log(`[result-notification] Skipping guardian ${guardian.id} (student ${report.studentId}): no phone on guardian/parent`);
                 summary.skipped += 1;
                 continue;
             }
-            const channel = guardian.guardianWhatsappConsent
+            const phoneKey = `${report.studentId}:${parentPhone}`;
+            if (notifiedPhones.has(phoneKey)) {
+                summary.skipped += 1;
+                continue;
+            }
+            notifiedPhones.add(phoneKey);
+            const channel = guardianAllowsWhatsApp(guardian)
                 ? 'whatsapp'
                 : 'sms';
             if (channel === 'sms') {
-                console.log(`[result-notification] Guardian ${guardian.id} has no WhatsApp consent — queueing SMS for ${parentPhone}`);
+                console.log(`[result-notification] Guardian ${guardian.id} opted out of WhatsApp — using SMS for ${parentPhone}`);
+            }
+            else {
+                console.log(`[result-notification] Guardian ${guardian.id} — using WhatsApp for ${parentPhone}`);
             }
             let logRow;
             try {
@@ -169,7 +191,7 @@ async function queueWhatsAppResultNotifications(params) {
                 summary.enqueueFailed += 1;
                 continue;
             }
-            const jobId = await (0, result_notification_queue_1.enqueueResultNotification)({
+            const jobData = {
                 notificationLogId: logRow.id,
                 parentPhone,
                 studentName,
@@ -177,29 +199,27 @@ async function queueWhatsAppResultNotifications(params) {
                 score,
                 portalLink,
                 channel,
-            });
-            if (!jobId) {
+            };
+            // Send immediately. BullMQ requires Redis ≥5; many school installs still run Redis 3.x
+            // where enqueue appears to succeed but the worker never processes jobs.
+            try {
+                const deliveredVia = await processResultNotificationJob({
+                    id: `direct-${logRow.id}`,
+                    data: jobData,
+                    attemptsMade: 0,
+                });
+                if (deliveredVia === 'whatsapp')
+                    summary.whatsappQueued += 1;
+                else
+                    summary.smsQueued += 1;
+                console.log(`[result-notification] Delivered via ${deliveredVia} for ${parentPhone} (${studentName}, log=${logRow.id})`);
+            }
+            catch (sendErr) {
                 summary.enqueueFailed += 1;
-                try {
-                    await logRepo.update(logRow.id, {
-                        status: 'failed',
-                        errorMessage: 'Failed to enqueue result notification job',
-                    });
-                }
-                catch (logErr) {
-                    console.error(`[result-notification] Failed to mark log ${logRow.id} as failed:`, logErr);
-                }
-                continue;
+                console.error(`[result-notification] Send failed for ${parentPhone}:`, sendErr instanceof Error ? sendErr.message : sendErr);
             }
-            if (channel === 'whatsapp') {
-                summary.whatsappQueued += 1;
-            }
-            else {
-                summary.smsQueued += 1;
-            }
-            console.log(`[result-notification] Queued ${channel} notification for ${parentPhone} (${studentName}, log=${logRow.id})`);
         }
     }
-    console.log(`[result-notification] Queueing finished: whatsappQueued=${summary.whatsappQueued}, smsQueued=${summary.smsQueued}, skipped=${summary.skipped}, enqueueFailed=${summary.enqueueFailed}`);
+    console.log(`[result-notification] Finished: whatsappSent=${summary.whatsappQueued}, smsSent=${summary.smsQueued}, skipped=${summary.skipped}, failed=${summary.enqueueFailed}`);
     return summary;
 }

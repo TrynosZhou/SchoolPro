@@ -39,6 +39,10 @@ __decorate([
     __metadata("design:type", String)
 ], StudentAttendance.prototype, "status", void 0);
 __decorate([
+    (0, typeorm_1.Column)({ type: 'enum', enum: enums_1.AttendanceMode, default: enums_1.AttendanceMode.IN_PERSON }),
+    __metadata("design:type", String)
+], StudentAttendance.prototype, "mode", void 0);
+__decorate([
     (0, typeorm_1.Column)({ nullable: true }),
     __metadata("design:type", String)
 ], StudentAttendance.prototype, "markedById", void 0);

@@ -24,10 +24,12 @@ const report_card_portal_pdf_1 = require("./report-card-portal.pdf");
 const receiptsDir = path_1.default.join(process.cwd(), 'uploads', 'receipts');
 const invoicesDir = path_1.default.join(process.cwd(), 'uploads', 'invoices');
 const logosDir = path_1.default.join(process.cwd(), 'uploads', 'logos');
+const developerPhotosDir = path_1.default.join(process.cwd(), 'uploads', 'developer-photos');
 function ensureUploadDirs() {
     fs_1.default.mkdirSync(receiptsDir, { recursive: true });
     fs_1.default.mkdirSync(invoicesDir, { recursive: true });
     fs_1.default.mkdirSync(logosDir, { recursive: true });
+    fs_1.default.mkdirSync(developerPhotosDir, { recursive: true });
 }
 const BILL = {
     primary: '#4f46e5',
@@ -1227,7 +1229,7 @@ async function generateMarkSheetPdf(data) {
             'LAST NAME',
             'FIRST NAME',
             'GENDER',
-            ...data.subjects.map((s) => (0, subject_abbrev_1.formatSubjectAbbrev)(s.code, s.name)),
+            ...data.subjects.map((s) => (0, subject_abbrev_1.formatSubjectAbbrev)(s.code, s.name, s.short)),
             'COUNT',
             'SUBJ PASSED',
             'AVERAGE %',

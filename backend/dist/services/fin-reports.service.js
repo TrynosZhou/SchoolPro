@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.RECON_FEE_TYPE_OPTIONS = void 0;
 exports.searchStudents = searchStudents;
 exports.fetchStudentInvoiceBalance = fetchStudentInvoiceBalance;
+exports.fetchSchoolOutstandingBalance = fetchSchoolOutstandingBalance;
 exports.buildStudentLedgerReport = buildStudentLedgerReport;
 exports.buildOutstandingInvoicesReport = buildOutstandingInvoicesReport;
 exports.buildStudentReconciliationReport = buildStudentReconciliationReport;
@@ -94,6 +95,21 @@ async function fetchStudentInvoiceBalance(studentId) {
         AND i.status NOT IN ('cancelled', 'draft', 'paid')
     `, [studentId]);
     return (0, term_balance_service_1.roundMoney)(Number(result[0]?.owed || 0));
+}
+/**
+ * School-wide outstanding debtor total — active students only, positive open
+ * invoice balances. Matches Outstanding Invoices / Debtor Aging reports.
+ */
+async function fetchSchoolOutstandingBalance() {
+    const result = await data_source_1.AppDataSource.query(`
+      SELECT COALESCE(SUM(i."totalAmount" - i."amountPaid"), 0) as total
+      FROM invoices i
+      INNER JOIN students s ON s.id = i."studentId"
+      WHERE s."isActive" = true
+        AND (i."totalAmount" - i."amountPaid") > 0.005
+        AND i.status NOT IN ('cancelled', 'draft', 'paid')
+    `);
+    return (0, term_balance_service_1.roundMoney)(Number(result[0]?.total || 0));
 }
 function sumOpenInvoiceBalance(invoices) {
     return (0, term_balance_service_1.roundMoney)(invoices.reduce((sum, inv) => {

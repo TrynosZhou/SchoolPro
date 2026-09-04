@@ -35,8 +35,15 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.sendTransactionalEmail = sendTransactionalEmail;
 const integrations_service_1 = require("./integrations.service");
+const tenant_context_1 = require("../config/tenant-context");
 /** Send transactional email when SMTP is configured; otherwise log to console. */
 async function sendTransactionalEmail(params) {
+    // Demo sessions never send real email, even if the shared SMTP config has real
+    // credentials — the tenant context flags this regardless of process-wide config.
+    if (tenant_context_1.tenantContext.isDemo()) {
+        console.log(`[Email DEMO MOCK] To: ${params.to}\nSubject: ${params.subject}\n\n${params.text}`);
+        return { sent: false, mock: true };
+    }
     const config = await (0, integrations_service_1.getIntegrationsConfig)();
     const email = config.email;
     if (!email.enabled || !email.host || !email.user || !email.password) {

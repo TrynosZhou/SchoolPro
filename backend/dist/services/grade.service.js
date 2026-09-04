@@ -5,24 +5,28 @@ exports.getGradeBoundaries = getGradeBoundaries;
 exports.gradeForMarks = gradeForMarks;
 const data_source_1 = require("../config/data-source");
 const entities_1 = require("../entities");
+const tenant_context_1 = require("../config/tenant-context");
 const grade_boundaries_1 = require("../types/grade-boundaries");
 const SETTINGS_ID = 'default';
-let cachedBoundaries = null;
-let cacheTime = 0;
+/** Keyed by tenant so demo and production never share a cached copy. */
+const cache = new Map();
 const CACHE_MS = 30000;
+function cacheKey() {
+    return tenant_context_1.tenantContext.isDemo() ? 'demo' : 'prod';
+}
 function invalidateGradeBoundariesCache() {
-    cachedBoundaries = null;
-    cacheTime = 0;
+    cache.clear();
 }
 async function getGradeBoundaries() {
-    if (cachedBoundaries && Date.now() - cacheTime < CACHE_MS) {
-        return cachedBoundaries;
+    const key = cacheKey();
+    const cached = cache.get(key);
+    if (cached && Date.now() - cached.time < CACHE_MS) {
+        return cached.boundaries;
     }
     const repo = data_source_1.AppDataSource.getRepository(entities_1.SchoolSettings);
     const settings = await repo.findOne({ where: { id: SETTINGS_ID } });
     const boundaries = settings?.gradeBoundaries?.length ? settings.gradeBoundaries : grade_boundaries_1.DEFAULT_GRADE_BOUNDARIES;
-    cachedBoundaries = boundaries;
-    cacheTime = Date.now();
+    cache.set(key, { boundaries, time: Date.now() });
     return boundaries;
 }
 async function gradeForMarks(marks, max = 100) {

@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ApplicationDocumentType = exports.ApplicationStatus = exports.TeacherAssignmentRole = exports.DayOfWeek = exports.LessonLength = exports.GlReferenceType = exports.GlAccountType = exports.PayslipStatus = exports.PayrollRunStatus = exports.PayrollPaymentMethod = exports.PayFrequency = exports.CashbookEntryType = exports.ExamTypeName = exports.InvoiceAdjustmentType = exports.TuitionExemptionType = exports.FeeType = exports.EnrollmentStatus = exports.StudentStatus = exports.StudentType = exports.InvoiceStatus = exports.PaymentMethod = exports.AttendanceStatus = exports.UserRole = void 0;
+exports.LibraryResourceType = exports.AttendanceMode = exports.VirtualClassStatus = exports.VirtualClassProvider = exports.LessonContentType = exports.LmsSubmissionStatus = exports.LmsAssignmentStatus = exports.ApplicationDocumentType = exports.ApplicationStatus = exports.TeacherAssignmentRole = exports.DayOfWeek = exports.LessonLength = exports.GlReferenceType = exports.GlAccountType = exports.PayslipStatus = exports.PayrollRunStatus = exports.PayrollPaymentMethod = exports.PayFrequency = exports.CashbookEntryType = exports.ExamTypeName = exports.InvoiceAdjustmentType = exports.TuitionExemptionType = exports.FeeType = exports.EnrollmentStatus = exports.StudentStatus = exports.StudentType = exports.InvoiceStatus = exports.PaymentMethod = exports.AttendanceStatus = exports.UserRole = void 0;
 var UserRole;
 (function (UserRole) {
     UserRole["DIRECTOR"] = "director";
@@ -176,3 +176,57 @@ var ApplicationDocumentType;
     ApplicationDocumentType["ID_COPY"] = "id_copy";
     ApplicationDocumentType["OTHER"] = "other";
 })(ApplicationDocumentType || (exports.ApplicationDocumentType = ApplicationDocumentType = {}));
+/** LMS assignment lifecycle. */
+var LmsAssignmentStatus;
+(function (LmsAssignmentStatus) {
+    LmsAssignmentStatus["DRAFT"] = "draft";
+    LmsAssignmentStatus["PUBLISHED"] = "published";
+    LmsAssignmentStatus["CLOSED"] = "closed";
+})(LmsAssignmentStatus || (exports.LmsAssignmentStatus = LmsAssignmentStatus = {}));
+/** Student submission grading state. */
+var LmsSubmissionStatus;
+(function (LmsSubmissionStatus) {
+    LmsSubmissionStatus["SUBMITTED"] = "submitted";
+    LmsSubmissionStatus["LATE"] = "late";
+    LmsSubmissionStatus["GRADED"] = "graded";
+    LmsSubmissionStatus["RETURNED"] = "returned";
+})(LmsSubmissionStatus || (exports.LmsSubmissionStatus = LmsSubmissionStatus = {}));
+/** Lesson content media kinds. */
+var LessonContentType;
+(function (LessonContentType) {
+    LessonContentType["VIDEO"] = "video";
+    LessonContentType["NOTE"] = "note";
+    LessonContentType["LINK"] = "link";
+    LessonContentType["DOCUMENT"] = "document";
+    LessonContentType["OTHER"] = "other";
+})(LessonContentType || (exports.LessonContentType = LessonContentType = {}));
+/** Virtual class meeting provider (manual until Zoom/Meet keys are configured). */
+var VirtualClassProvider;
+(function (VirtualClassProvider) {
+    VirtualClassProvider["MANUAL"] = "manual";
+    VirtualClassProvider["ZOOM"] = "zoom";
+    VirtualClassProvider["GOOGLE_MEET"] = "google_meet";
+})(VirtualClassProvider || (exports.VirtualClassProvider = VirtualClassProvider = {}));
+var VirtualClassStatus;
+(function (VirtualClassStatus) {
+    VirtualClassStatus["SCHEDULED"] = "scheduled";
+    VirtualClassStatus["LIVE"] = "live";
+    VirtualClassStatus["ENDED"] = "ended";
+    VirtualClassStatus["CANCELLED"] = "cancelled";
+})(VirtualClassStatus || (exports.VirtualClassStatus = VirtualClassStatus = {}));
+/** How the student attended that day. */
+var AttendanceMode;
+(function (AttendanceMode) {
+    AttendanceMode["IN_PERSON"] = "in_person";
+    AttendanceMode["REMOTE"] = "remote";
+})(AttendanceMode || (exports.AttendanceMode = AttendanceMode = {}));
+/** Digital library resource kinds. */
+var LibraryResourceType;
+(function (LibraryResourceType) {
+    LibraryResourceType["BOOK"] = "book";
+    LibraryResourceType["PDF"] = "pdf";
+    LibraryResourceType["VIDEO"] = "video";
+    LibraryResourceType["AUDIO"] = "audio";
+    LibraryResourceType["LINK"] = "link";
+    LibraryResourceType["OTHER"] = "other";
+})(LibraryResourceType || (exports.LibraryResourceType = LibraryResourceType = {}));

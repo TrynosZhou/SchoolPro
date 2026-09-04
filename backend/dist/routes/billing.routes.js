@@ -136,11 +136,22 @@ router.get('/fees', (0, auth_1.authorize)(...portal_roles_1.FINANCE_ROLES, enums
     await (0, registration_invoice_service_1.ensureRegistrationSchoolFees)();
     const repo = data_source_1.AppDataSource.getRepository(entities_1.SchoolFee);
     const activeOnly = req.query.active === 'true';
+    const includeUsage = req.query.includeUsage === 'true';
     const fees = await repo.find({
         ...(activeOnly ? { where: { isActive: true } } : {}),
         order: { sortOrder: 'ASC', name: 'ASC' },
     });
-    res.json(fees);
+    if (!includeUsage) {
+        return res.json(fees);
+    }
+    const enriched = await Promise.all(fees.map(async (fee) => {
+        const usage = await (0, fee_catalog_service_1.countFeeCodeUsage)(fee.code);
+        return {
+            ...fee,
+            chargeCount: usage.invoices,
+        };
+    }));
+    res.json(enriched);
 });
 router.post('/fees', (0, auth_1.authorize)(...portal_roles_1.FINANCE_WRITE_ROLES), async (req, res) => {
     await (0, registration_invoice_service_1.ensureRegistrationSchoolFees)();
@@ -1039,11 +1050,8 @@ router.post('/reminders/send', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), as
     res.json({ sent: sent.length, details: sent });
 });
 async function fetchBillingSummary() {
-    const [debtors, monthly, today, pending] = await Promise.all([
-        data_source_1.AppDataSource.query(`
-      SELECT COALESCE(SUM("totalAmount" - "amountPaid"), 0) as total
-      FROM invoices WHERE status IN ('sent', 'partial', 'overdue')
-    `),
+    const [totalDebtors, monthly, today, pending] = await Promise.all([
+        (0, fin_reports_service_1.fetchSchoolOutstandingBalance)(),
         data_source_1.AppDataSource.query(`
       SELECT COALESCE(SUM(amount), 0) as total FROM payments
       WHERE "paidAt" >= date_trunc('month', CURRENT_DATE)
@@ -1053,11 +1061,16 @@ async function fetchBillingSummary() {
       WHERE "paidAt"::date = CURRENT_DATE
     `),
         data_source_1.AppDataSource.query(`
-      SELECT COUNT(*) as count FROM invoices WHERE status IN ('sent', 'partial', 'overdue')
+      SELECT COUNT(*)::int as count
+      FROM invoices i
+      INNER JOIN students s ON s.id = i."studentId"
+      WHERE s."isActive" = true
+        AND i.status IN ('sent', 'partial', 'overdue')
+        AND (i."totalAmount" - i."amountPaid") > 0.005
     `),
     ]);
     return {
-        totalDebtors: Number(debtors[0]?.total || 0),
+        totalDebtors: Number(totalDebtors || 0),
         monthlyCollections: Number(monthly[0]?.total || 0),
         todayCollections: Number(today[0]?.total || 0),
         todayPaymentCount: Number(today[0]?.count || 0),
@@ -1098,9 +1111,10 @@ async function fetchBillingDebtors() {
     LEFT JOIN classes c ON c.id = s."classId"
     LEFT JOIN invoices i ON i."studentId" = s.id
       AND i.status IN ('sent', 'partial', 'overdue')
+      AND (i."totalAmount" - i."amountPaid") > 0.005
     WHERE s."isActive" = true
     GROUP BY s.id, s."firstName", s."lastName", s."admissionNumber", s.gender, c.name
-    HAVING COALESCE(SUM(i."totalAmount" - i."amountPaid"), 0) > 0
+    HAVING COALESCE(SUM(i."totalAmount" - i."amountPaid"), 0) > 0.005
     ORDER BY owed DESC
   `);
     return result.map((r) => ({ ...r, owed: Number(r.owed || 0) }));

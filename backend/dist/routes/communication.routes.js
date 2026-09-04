@@ -46,6 +46,14 @@ router.post('/notifications/read-all', async (req, res) => {
     await data_source_1.AppDataSource.query(`UPDATE notifications SET "isRead" = true WHERE "userId" = $1 AND "isRead" = false`, [req.user.userId]);
     res.json({ ok: true });
 });
+router.delete('/notifications/:id', async (req, res) => {
+    const repo = data_source_1.AppDataSource.getRepository(entities_1.Notification);
+    const n = await repo.findOne({ where: { id: String(req.params.id), userId: req.user.userId } });
+    if (!n)
+        return res.status(404).json({ message: 'Notification not found' });
+    await repo.remove(n);
+    res.json({ ok: true });
+});
 /* ------------------------------------------------------------------ */
 /* Automated notification settings (admin)                            */
 /* ------------------------------------------------------------------ */

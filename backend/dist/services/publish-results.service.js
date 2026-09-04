@@ -138,6 +138,9 @@ async function publishResults(params) {
     let whatsappSent = 0;
     let smsSent = 0;
     let emailsSent = 0;
+    let notificationFailed = 0;
+    /** Phones already covered by the per-student result notification path. */
+    const resultNotifyPhones = new Set();
     if (notifyWhatsApp) {
         try {
             const whatsappSummary = await (0, result_notification_service_1.queueWhatsAppResultNotifications)({
@@ -147,15 +150,29 @@ async function publishResults(params) {
                 examName: examType.name,
                 termId,
             });
-            whatsappSent = whatsappSummary.whatsappQueued + whatsappSummary.smsQueued;
-            console.log(`[publish-results] Result notifications queued: whatsapp=${whatsappSummary.whatsappQueued}, sms=${whatsappSummary.smsQueued}, skipped=${whatsappSummary.skipped}, enqueueFailed=${whatsappSummary.enqueueFailed}`);
+            whatsappSent = whatsappSummary.whatsappQueued;
+            smsSent += whatsappSummary.smsQueued;
+            notificationFailed += whatsappSummary.enqueueFailed;
+            console.log(`[publish-results] Result notifications: whatsapp=${whatsappSummary.whatsappQueued}, sms=${whatsappSummary.smsQueued}, skipped=${whatsappSummary.skipped}, failed=${whatsappSummary.enqueueFailed}`);
         }
         catch (err) {
             console.error('[publish-results] WhatsApp result notifications failed (non-blocking):', err);
         }
     }
+    // Collect phones already targeted by result notifications to avoid duplicate SMS blasts.
+    for (const g of guardians) {
+        const p = g.guardianPhone?.trim() ||
+            g.phone?.trim() ||
+            g.parent?.user?.phone?.trim() ||
+            '';
+        const normalized = normalizePhone(p);
+        if (normalized)
+            resultNotifyPhones.add(normalized);
+    }
     if (notifySms) {
         for (const phone of phonesSms) {
+            if (resultNotifyPhones.has(phone))
+                continue;
             const ok = await (0, whatsapp_service_1.sendSmsMessage)(phone, message);
             if (ok)
                 smsSent += 1;
@@ -202,6 +219,7 @@ async function publishResults(params) {
         smsSent,
         emailsSent,
         notificationsCreated,
+        notificationFailed,
         publishedAt: publication.publishedAt.toISOString(),
     };
 }

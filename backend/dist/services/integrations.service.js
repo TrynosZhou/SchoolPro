@@ -4,25 +4,31 @@ exports.invalidateIntegrationsCache = invalidateIntegrationsCache;
 exports.getIntegrationsConfig = getIntegrationsConfig;
 exports.getIntegrationsPublic = getIntegrationsPublic;
 exports.saveIntegrationsConfig = saveIntegrationsConfig;
+exports.isValidTwilioAccountSid = isValidTwilioAccountSid;
 exports.getEffectiveWhatsApp = getEffectiveWhatsApp;
 exports.testCustomApiConnection = testCustomApiConnection;
 exports.testWebhookConnection = testWebhookConnection;
 const data_source_1 = require("../config/data-source");
 const entities_1 = require("../entities");
 const env_1 = require("../config/env");
+const tenant_context_1 = require("../config/tenant-context");
 const integrations_config_1 = require("../types/integrations-config");
 const SETTINGS_ID = 'default';
-let cachedConfig = null;
-let cacheTime = 0;
+/** Keyed by tenant so demo and production never share a cached copy. */
+const cache = new Map();
 const CACHE_MS = 30000;
+function cacheKey() {
+    return tenant_context_1.tenantContext.isDemo() ? 'demo' : 'prod';
+}
 function invalidateIntegrationsCache() {
-    cachedConfig = null;
-    cacheTime = 0;
+    cache.clear();
 }
 async function getIntegrationsConfig() {
+    const key = cacheKey();
     const now = Date.now();
-    if (cachedConfig && now - cacheTime < CACHE_MS)
-        return cachedConfig;
+    const cached = cache.get(key);
+    if (cached && now - cached.time < CACHE_MS)
+        return cached.config;
     const repo = data_source_1.AppDataSource.getRepository(entities_1.SchoolSettings);
     let settings = await repo.findOne({ where: { id: SETTINGS_ID } });
     if (!settings) {
@@ -50,8 +56,7 @@ async function getIntegrationsConfig() {
         settings.integrationsConfig = config;
         await repo.save(settings);
     }
-    cachedConfig = config;
-    cacheTime = now;
+    cache.set(key, { config, time: now });
     return config;
 }
 async function getIntegrationsPublic() {
@@ -75,20 +80,32 @@ async function saveIntegrationsConfig(patch) {
     invalidateIntegrationsCache();
     return (0, integrations_config_1.maskIntegrations)(settings.integrationsConfig);
 }
+/** Twilio Account SIDs always look like ACxxxxxxxx (34 chars). Reject emails / placeholders. */
+function isValidTwilioAccountSid(sid) {
+    return /^AC[a-f0-9]{32}$/i.test(String(sid || '').trim());
+}
 async function getEffectiveWhatsApp() {
     const config = await getIntegrationsConfig();
     const w = config.whatsapp;
-    if (w.enabled && w.accountSid && w.authToken && w.from) {
-        return { ...w, useMock: false };
+    if (w.accountSid && w.authToken && w.from) {
+        if (isValidTwilioAccountSid(w.accountSid)) {
+            return { ...w, enabled: true, useMock: false };
+        }
+        console.warn(`[whatsapp] Integrations Account SID is not a valid Twilio SID (got "${String(w.accountSid).slice(0, 24)}…"). ` +
+            'Expected format ACxxxxxxxx. Falling back to mock until Integrations is updated.');
     }
-    if (env_1.env.whatsapp.enabled && env_1.env.whatsapp.accountSid && env_1.env.whatsapp.authToken && env_1.env.whatsapp.from) {
-        return {
-            enabled: true,
-            accountSid: env_1.env.whatsapp.accountSid,
-            authToken: env_1.env.whatsapp.authToken,
-            from: env_1.env.whatsapp.from,
-            useMock: false,
-        };
+    const envFrom = env_1.env.whatsapp.from || process.env.TWILIO_WHATSAPP_NUMBER || '';
+    if (env_1.env.whatsapp.accountSid && env_1.env.whatsapp.authToken && envFrom) {
+        if (isValidTwilioAccountSid(env_1.env.whatsapp.accountSid)) {
+            return {
+                enabled: true,
+                accountSid: env_1.env.whatsapp.accountSid,
+                authToken: env_1.env.whatsapp.authToken,
+                from: envFrom,
+                useMock: false,
+            };
+        }
+        console.warn('[whatsapp] TWILIO_ACCOUNT_SID in .env is not a valid Twilio SID. Falling back to mock.');
     }
     return { ...w, enabled: w.enabled || env_1.env.whatsapp.enabled, useMock: true };
 }

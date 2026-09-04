@@ -39,6 +39,7 @@ const router = (0, express_1.Router)();
 router.use(auth_1.authenticate);
 const SETTINGS_ID = 'default';
 const logosDir = path_1.default.join(process.cwd(), 'uploads', 'logos');
+const developerPhotosDir = path_1.default.join(process.cwd(), 'uploads', 'developer-photos');
 /** Normalize an incoming staff gender value to 'male' | 'female' | null. */
 function normalizeGender(value) {
     const v = String(value ?? '').trim().toLowerCase();
@@ -64,6 +65,24 @@ const logoUpload = (0, multer_1.default)({
     fileFilter: (_req, file, cb) => {
         const ok = /^image\/(png|jpe?g|webp|gif)$/i.test(file.mimetype);
         cb(ok ? null : new Error('Only image files are allowed'), ok);
+    },
+});
+const developerPhotoUpload = (0, multer_1.default)({
+    storage: multer_1.default.diskStorage({
+        destination: (_req, _file, cb) => {
+            (0, pdf_1.ensureUploadDirs)();
+            cb(null, developerPhotosDir);
+        },
+        filename: (_req, file, cb) => {
+            const ext = path_1.default.extname(file.originalname).toLowerCase();
+            const safeExt = ['.png', '.jpg', '.jpeg', '.webp'].includes(ext) ? ext : '.jpg';
+            cb(null, `system-developer${safeExt}`);
+        },
+    }),
+    limits: { fileSize: 2 * 1024 * 1024 },
+    fileFilter: (_req, file, cb) => {
+        const ok = /^image\/(png|jpe?g|webp)$/i.test(file.mimetype);
+        cb(ok ? null : new Error('Only JPG, PNG, or WebP images are allowed'), ok);
     },
 });
 async function getOrCreateSettings() {
@@ -94,6 +113,10 @@ async function getOrCreateSettings() {
     }
     if (!settings.integrationsConfig) {
         settings.integrationsConfig = integrations_config_1.DEFAULT_INTEGRATIONS;
+        await repo.save(settings);
+    }
+    if (!settings.studentIdPrefix) {
+        settings.studentIdPrefix = 'SP';
         await repo.save(settings);
     }
     return settings;
@@ -138,6 +161,14 @@ router.patch('/settings', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (
         (0, security_policy_service_1.invalidateSecurityPolicyCache)();
     }
     const { gradeBoundaries: _gb, securityPolicy: _sp, logoUrl: _logo, ...rest } = req.body;
+    if (rest.studentIdPrefix !== undefined) {
+        const cleaned = String(rest.studentIdPrefix || '')
+            .trim()
+            .toUpperCase()
+            .replace(/[^A-Z0-9]/g, '')
+            .slice(0, 8);
+        rest.studentIdPrefix = cleaned || 'SP';
+    }
     Object.assign(settings, rest);
     const saved = await repo.save(settings);
     if (req.body.gradeBoundaries !== undefined)
@@ -164,6 +195,36 @@ router.delete('/settings/logo', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), a
             fs_1.default.unlinkSync(filePath);
         settings.logoUrl = null;
         await repo.save(settings);
+    }
+    res.json(settings);
+});
+router.post('/settings/developer-photo', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), developerPhotoUpload.single('photo'), async (req, res) => {
+    if (!req.file)
+        return res.status(400).json({ message: 'Passport photo image is required' });
+    const settings = await getOrCreateSettings();
+    if (settings.developerPhotoUrl) {
+        const prev = path_1.default.join(process.cwd(), settings.developerPhotoUrl.replace(/^\/+/, ''));
+        if (fs_1.default.existsSync(prev) && path_1.default.dirname(prev) === developerPhotosDir) {
+            try {
+                fs_1.default.unlinkSync(prev);
+            }
+            catch {
+                // ignore stale file cleanup errors
+            }
+        }
+    }
+    settings.developerPhotoUrl = `/uploads/developer-photos/${req.file.filename}`;
+    const saved = await data_source_1.AppDataSource.getRepository(entities_1.SchoolSettings).save(settings);
+    res.json(saved);
+});
+router.delete('/settings/developer-photo', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (_req, res) => {
+    const settings = await getOrCreateSettings();
+    if (settings.developerPhotoUrl) {
+        const filePath = path_1.default.join(process.cwd(), settings.developerPhotoUrl.replace(/^\/+/, ''));
+        if (fs_1.default.existsSync(filePath))
+            fs_1.default.unlinkSync(filePath);
+        settings.developerPhotoUrl = null;
+        await data_source_1.AppDataSource.getRepository(entities_1.SchoolSettings).save(settings);
     }
     res.json(settings);
 });

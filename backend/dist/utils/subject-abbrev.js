@@ -1,12 +1,25 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.formatSubjectAbbrev = formatSubjectAbbrev;
-/** Short label for mark sheets (prefers subject code, e.g. ENG, MATH). */
-function formatSubjectAbbrev(code, name) {
+/** Short label for mark sheets — prefers configured short, then name (e.g. Eng), then alphabetic code. */
+function formatSubjectAbbrev(code, name, shortLabel) {
+    const custom = String(shortLabel || '').trim();
+    if (custom)
+        return custom;
+    const fromName = abbrevFromName(name);
+    if (fromName)
+        return fromName;
     const normalized = (code || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
-    if (normalized.length >= 2 && normalized.length <= 8)
+    // Skip pure numeric exam/board codes (e.g. 0450) — those are not readable column headers.
+    if (normalized.length >= 2 && normalized.length <= 8 && /[A-Z]/.test(normalized)) {
         return normalized;
+    }
+    return '—';
+}
+function abbrevFromName(name) {
     const words = name.trim().split(/\s+/).filter(Boolean);
+    if (!words.length)
+        return null;
     if (words.length >= 2) {
         return words
             .map((w) => w[0])
@@ -14,9 +27,10 @@ function formatSubjectAbbrev(code, name) {
             .toUpperCase()
             .slice(0, 6);
     }
-    if (words.length === 1) {
-        const w = words[0].toUpperCase();
-        return w.length <= 6 ? w : w.slice(0, 4);
+    const word = words[0];
+    if (word.length <= 3) {
+        return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
     }
-    return '—';
+    // e.g. English → Eng, Mathematics → Mat
+    return word.charAt(0).toUpperCase() + word.slice(1, 3).toLowerCase();
 }

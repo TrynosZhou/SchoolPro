@@ -66,6 +66,7 @@ async function buildMarkSheet(params) {
                 id: cs.subject.id,
                 code: cs.subject.code,
                 name: cs.subject.name,
+                short: cs.subject.short ?? null,
             });
         }
     }
@@ -75,6 +76,7 @@ async function buildMarkSheet(params) {
                 id: m.subject.id,
                 code: m.subject.code,
                 name: m.subject.name,
+                short: m.subject.short ?? null,
             });
         }
     }

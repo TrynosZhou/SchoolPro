@@ -8,6 +8,7 @@ const auth_1 = require("../middleware/auth");
 const typeorm_helpers_1 = require("../utils/typeorm-helpers");
 const gl_posting_service_1 = require("../services/gl-posting.service");
 const portal_roles_1 = require("../config/portal-roles");
+const fin_reports_service_1 = require("../services/fin-reports.service");
 const router = (0, express_1.Router)();
 router.use(auth_1.authenticate);
 router.get('/cashbook', (0, auth_1.authorize)(...portal_roles_1.FINANCE_ROLES), async (req, res) => {
@@ -46,17 +47,16 @@ router.post('/cashbook', (0, auth_1.authorize)(...portal_roles_1.FINANCE_WRITE_R
 });
 router.get('/balance-sheet', (0, auth_1.authorize)(...portal_roles_1.FINANCE_ROLES), async (_req, res) => {
     const cashbook = await (0, typeorm_helpers_1.findLatest)(data_source_1.AppDataSource.getRepository(entities_1.CashbookEntry));
-    const debtors = await data_source_1.AppDataSource.query(`
-    SELECT COALESCE(SUM("totalAmount" - "amountPaid"), 0) as total
-    FROM invoices WHERE status IN ('sent', 'partial', 'overdue')
-  `);
-    const payments = await data_source_1.AppDataSource.query(`
-    SELECT COALESCE(SUM(amount), 0) as total FROM payments
-    WHERE "paidAt" >= date_trunc('month', CURRENT_DATE)
-  `);
+    const [totalDebtors, payments] = await Promise.all([
+        (0, fin_reports_service_1.fetchSchoolOutstandingBalance)(),
+        data_source_1.AppDataSource.query(`
+      SELECT COALESCE(SUM(amount), 0) as total FROM payments
+      WHERE "paidAt" >= date_trunc('month', CURRENT_DATE)
+    `),
+    ]);
     res.json({
         cashBalance: cashbook ? Number(cashbook.balance) : 0,
-        totalDebtors: Number(debtors[0]?.total || 0),
+        totalDebtors: Number(totalDebtors || 0),
         monthlyCollections: Number(payments[0]?.total || 0),
         generatedAt: new Date(),
     });
@@ -117,8 +117,10 @@ router.get('/debtors-aging', (0, auth_1.authorize)(...portal_roles_1.FINANCE_ROL
       COUNT(*) as count,
       SUM(i."totalAmount" - i."amountPaid") as amount
     FROM invoices i
-    WHERE i.status IN ('sent', 'partial', 'overdue')
-      AND i."totalAmount" > i."amountPaid"
+    INNER JOIN students s ON s.id = i."studentId"
+    WHERE s."isActive" = true
+      AND i.status IN ('sent', 'partial', 'overdue')
+      AND (i."totalAmount" - i."amountPaid") > 0.005
     GROUP BY bucket
     ORDER BY bucket
   `);

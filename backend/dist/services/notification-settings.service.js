@@ -5,21 +5,28 @@ exports.invalidateNotificationSettingsCache = invalidateNotificationSettingsCach
 exports.saveNotificationSettings = saveNotificationSettings;
 const data_source_1 = require("../config/data-source");
 const entities_1 = require("../entities");
+const tenant_context_1 = require("../config/tenant-context");
 const notification_settings_1 = require("../types/notification-settings");
-let cache = null;
+/** Keyed by tenant so demo and production never share a cached copy. */
+const cache = new Map();
 const CACHE_MS = 30000;
+function cacheKey() {
+    return tenant_context_1.tenantContext.isDemo() ? 'demo' : 'prod';
+}
 async function getNotificationSettings() {
-    if (cache && Date.now() - cache.at < CACHE_MS)
-        return cache.value;
+    const key = cacheKey();
+    const cached = cache.get(key);
+    if (cached && Date.now() - cached.at < CACHE_MS)
+        return cached.value;
     const settings = await data_source_1.AppDataSource.getRepository(entities_1.SchoolSettings).findOne({
         where: { id: 'default' },
     });
     const value = (0, notification_settings_1.normalizeNotificationSettings)(settings?.notificationSettings);
-    cache = { value, at: Date.now() };
+    cache.set(key, { value, at: Date.now() });
     return value;
 }
 function invalidateNotificationSettingsCache() {
-    cache = null;
+    cache.clear();
 }
 async function saveNotificationSettings(patch) {
     const repo = data_source_1.AppDataSource.getRepository(entities_1.SchoolSettings);

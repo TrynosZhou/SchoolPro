@@ -15,7 +15,7 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.InvoiceAdjustment = exports.TuitionExemption = exports.StaffLeaveBalance = exports.Payslip = exports.PayrollRun = exports.StaffPayrollProfile = exports.StudentTermBalance = exports.ResultsPublication = exports.ClassPromotionRule = exports.SchoolFee = exports.SchoolSettings = exports.UniformSale = exports.TuckshopSale = exports.TuckshopItem = exports.Notification = exports.MessageAttachment = exports.Message = exports.WeeklyAssessment = exports.LearningSchedule = exports.TeacherAllocation = exports.Timetable = exports.CashbookEntry = exports.LedgerEntry = exports.Receipt = exports.Payment = exports.InvoiceLine = exports.Invoice = exports.HonourRoll = exports.ReportCard = exports.ExamMark = exports.ExamType = exports.StudentAttendance = exports.StaffAttendance = exports.Staff = exports.Guardian = exports.Student = exports.Parent = exports.TimetableSlot = exports.TeacherAssignment = exports.Section = exports.ClassSubject = exports.Department = exports.Subject = exports.SchoolClass = exports.Form = exports.Term = exports.SchoolYear = exports.SchoolRole = exports.User = exports.entities = void 0;
-exports.NotificationLog = exports.HomeworkAssignment = exports.RecordBookMark = exports.RecordBookColumn = exports.AuditLog = exports.ReportTemplate = exports.StudentEnrollment = exports.BulkMessageRecipient = exports.BulkMessage = exports.ApplicationDocument = exports.Application = exports.GeneralLedgerEntry = exports.ChartOfAccount = void 0;
+exports.LibraryBookmark = exports.LibraryResource = exports.ClassRecording = exports.VirtualClass = exports.LessonContent = exports.LmsSubmission = exports.LmsAssignment = exports.NotificationLog = exports.HomeworkAssignment = exports.RecordBookMark = exports.RecordBookColumn = exports.AuditLog = exports.ReportTemplate = exports.StudentEnrollment = exports.BulkMessageRecipient = exports.BulkMessage = exports.ApplicationDocument = exports.Application = exports.GeneralLedgerEntry = exports.ChartOfAccount = void 0;
 const User_1 = require("./User");
 Object.defineProperty(exports, "User", { enumerable: true, get: function () { return User_1.User; } });
 const SchoolRole_1 = require("./SchoolRole");
@@ -140,6 +140,20 @@ const HomeworkAssignment_1 = require("./HomeworkAssignment");
 Object.defineProperty(exports, "HomeworkAssignment", { enumerable: true, get: function () { return HomeworkAssignment_1.HomeworkAssignment; } });
 const NotificationLog_1 = require("./NotificationLog");
 Object.defineProperty(exports, "NotificationLog", { enumerable: true, get: function () { return NotificationLog_1.NotificationLog; } });
+const LmsAssignment_1 = require("./LmsAssignment");
+Object.defineProperty(exports, "LmsAssignment", { enumerable: true, get: function () { return LmsAssignment_1.LmsAssignment; } });
+const LmsSubmission_1 = require("./LmsSubmission");
+Object.defineProperty(exports, "LmsSubmission", { enumerable: true, get: function () { return LmsSubmission_1.LmsSubmission; } });
+const LessonContent_1 = require("./LessonContent");
+Object.defineProperty(exports, "LessonContent", { enumerable: true, get: function () { return LessonContent_1.LessonContent; } });
+const VirtualClass_1 = require("./VirtualClass");
+Object.defineProperty(exports, "VirtualClass", { enumerable: true, get: function () { return VirtualClass_1.VirtualClass; } });
+const ClassRecording_1 = require("./ClassRecording");
+Object.defineProperty(exports, "ClassRecording", { enumerable: true, get: function () { return ClassRecording_1.ClassRecording; } });
+const LibraryResource_1 = require("./LibraryResource");
+Object.defineProperty(exports, "LibraryResource", { enumerable: true, get: function () { return LibraryResource_1.LibraryResource; } });
+const LibraryBookmark_1 = require("./LibraryBookmark");
+Object.defineProperty(exports, "LibraryBookmark", { enumerable: true, get: function () { return LibraryBookmark_1.LibraryBookmark; } });
 exports.entities = [
     User_1.User,
     SchoolRole_1.SchoolRole,
@@ -203,5 +217,12 @@ exports.entities = [
     RecordBookMark_1.RecordBookMark,
     HomeworkAssignment_1.HomeworkAssignment,
     NotificationLog_1.NotificationLog,
+    LmsAssignment_1.LmsAssignment,
+    LmsSubmission_1.LmsSubmission,
+    LessonContent_1.LessonContent,
+    VirtualClass_1.VirtualClass,
+    ClassRecording_1.ClassRecording,
+    LibraryResource_1.LibraryResource,
+    LibraryBookmark_1.LibraryBookmark,
 ];
 __exportStar(require("./enums"), exports);

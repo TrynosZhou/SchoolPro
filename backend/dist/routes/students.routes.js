@@ -127,8 +127,9 @@ router.get('/class-list/pdf', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enum
     res.setHeader('Content-Disposition', `${inline ? 'inline' : 'attachment'}; filename="${filename}"`);
     res.send(pdf);
 });
-router.get('/next-student-id', (0, auth_1.authorize)(...portal_roles_1.STUDENT_REGISTRATION_ROLES), stuCreate, async (_req, res) => {
-    const studentId = await (0, helpers_1.generateStudentId)();
+router.get('/next-student-id', (0, auth_1.authorize)(...portal_roles_1.STUDENT_REGISTRATION_ROLES), stuCreate, async (req, res) => {
+    const dateOfBirth = typeof req.query.dateOfBirth === 'string' ? req.query.dateOfBirth : undefined;
+    const studentId = await (0, helpers_1.previewStudentId)(dateOfBirth);
     res.json({ studentId });
 });
 router.get('/parent/my-children', (0, auth_1.authorize)(enums_1.UserRole.PARENT), async (req, res) => {
@@ -351,9 +352,12 @@ router.post('/', (0, auth_1.authorize)(...portal_roles_1.STUDENT_REGISTRATION_RO
     if (!form) {
         return res.status(400).json({ message: 'Selected form was not found' });
     }
+    if (!data.dateOfBirth) {
+        return res.status(400).json({ message: 'Date of birth is required to generate the Student ID' });
+    }
     let student;
-    for (let attempt = 0; attempt < 5; attempt++) {
-        const studentId = await (0, helpers_1.generateStudentId)();
+    for (let attempt = 0; attempt < 8; attempt++) {
+        const studentId = await (0, helpers_1.generateStudentId)(data.dateOfBirth);
         try {
             const created = repo.create({
                 ...data,
@@ -366,7 +370,7 @@ router.post('/', (0, auth_1.authorize)(...portal_roles_1.STUDENT_REGISTRATION_RO
             break;
         }
         catch (err) {
-            if (err?.code === '23505' && attempt < 4)
+            if (err?.code === '23505' && attempt < 7)
                 continue;
             throw err;
         }

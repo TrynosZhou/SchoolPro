@@ -39,8 +39,26 @@ Object.defineProperty(exports, "__esModule", { value: true });
 require("reflect-metadata");
 const app_1 = __importDefault(require("./app"));
 const data_source_1 = require("./config/data-source");
+const demo_data_source_1 = require("./config/demo-data-source");
+const bootstrap_demo_schema_1 = require("./config/bootstrap-demo-schema");
 const env_1 = require("./config/env");
 const pdf_1 = require("./utils/pdf");
+async function startDemoTenant() {
+    if (!env_1.env.demo.enabled) {
+        console.log('[demo] Feature disabled (DEMO_FEATURE_ENABLED=false) — skipping demo DB & reset job.');
+        return;
+    }
+    try {
+        await (0, bootstrap_demo_schema_1.ensureDemoSchemaBootstrapped)();
+        await demo_data_source_1.DemoDataSource.initialize();
+        console.log('[demo] Demo database connected.');
+        const { startDemoResetJob } = await Promise.resolve().then(() => __importStar(require('./jobs/demo-reset.job')));
+        startDemoResetJob();
+    }
+    catch (err) {
+        console.error('[demo] Failed to initialize the demo database — demo login will be unavailable:', err);
+    }
+}
 async function runDeferredStartup() {
     try {
         const { backfillStudentLifecycle } = await Promise.resolve().then(() => __importStar(require('./services/student-lifecycle.service')));
@@ -94,14 +112,25 @@ async function bootstrap() {
         const { startScheduler } = await Promise.resolve().then(() => __importStar(require('./services/scheduler.service')));
         startScheduler();
         try {
-            const { startResultNotificationWorker } = await Promise.resolve().then(() => __importStar(require('./queues/result-notification.queue')));
-            const { processResultNotificationJob } = await Promise.resolve().then(() => __importStar(require('./services/result-notification.service')));
-            startResultNotificationWorker(processResultNotificationJob);
+            const { probeRedis } = await Promise.resolve().then(() => __importStar(require('./config/redis')));
+            if (!env_1.env.redis.enabled) {
+                console.log('[result-notification-queue] Redis disabled (REDIS_ENABLED=false) — background notifications off.');
+            }
+            else if (await probeRedis()) {
+                const { startResultNotificationWorker } = await Promise.resolve().then(() => __importStar(require('./queues/result-notification.queue')));
+                const { processResultNotificationJob } = await Promise.resolve().then(() => __importStar(require('./services/result-notification.service')));
+                startResultNotificationWorker(processResultNotificationJob);
+            }
+            else {
+                console.warn(`[result-notification-queue] Redis not reachable at ${env_1.env.redis.url} — ` +
+                    'background WhatsApp/SMS notifications disabled. Start Redis or set REDIS_ENABLED=false.');
+            }
         }
         catch (err) {
             console.error('[startup] Result notification worker failed to start:', err);
         }
         void runDeferredStartup();
+        void startDemoTenant();
     }
     catch (err) {
         console.error('Failed to start server:', err);
