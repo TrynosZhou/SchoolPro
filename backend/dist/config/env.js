@@ -6,12 +6,18 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.env = void 0;
 const dotenv_1 = __importDefault(require("dotenv"));
 dotenv_1.default.config();
+function safeInt(value, fallback) {
+    if (value === undefined || value === null || value.trim() === '')
+        return fallback;
+    const n = parseInt(value, 10);
+    return Number.isFinite(n) ? n : fallback;
+}
 exports.env = {
-    port: parseInt(process.env.PORT || '3000', 10),
+    port: safeInt(process.env.PORT, 3000),
     nodeEnv: process.env.NODE_ENV || 'development',
     db: {
         host: process.env.DB_HOST || 'localhost',
-        port: parseInt(process.env.DB_PORT || '5432', 10),
+        port: safeInt(process.env.DB_PORT, 5432),
         username: process.env.DB_USERNAME || 'postgres',
         password: process.env.DB_PASSWORD || 'postgres',
         database: process.env.DB_DATABASE || 'schoolpro',
@@ -24,7 +30,6 @@ exports.env = {
     apiPublicUrl: process.env.API_PUBLIC_URL || 'https://school-pro-lgbk.vercel.app/',
     redis: {
         url: process.env.REDIS_URL || 'redis://127.0.0.1:6379',
-        /** When false, BullMQ workers are not started and enqueue calls are skipped. */
         enabled: process.env.REDIS_ENABLED !== 'false',
     },
     whatsapp: {
@@ -40,28 +45,22 @@ exports.env = {
         from: process.env.TWILIO_SMS_FROM || '',
     },
     demo: {
-        /** Master switch — when false, /demo-login 404s and no demo DB/cron is started. */
         enabled: process.env.DEMO_FEATURE_ENABLED !== 'false',
         db: {
             host: process.env.DEMO_DB_HOST || process.env.DB_HOST || 'localhost',
-            port: parseInt(process.env.DEMO_DB_PORT || process.env.DB_PORT || '5432', 10),
+            port: safeInt(process.env.DEMO_DB_PORT ?? process.env.DB_PORT, 5432),
             username: process.env.DEMO_DB_USERNAME || process.env.DB_USERNAME || 'postgres',
             password: process.env.DEMO_DB_PASSWORD || process.env.DB_PASSWORD || 'postgres',
             database: process.env.DEMO_DB_DATABASE || 'school_pro_demo',
         },
-        /** Demo JWTs always use this fixed, short TTL regardless of the school's security policy. */
-        jwtTtlMinutes: parseInt(process.env.DEMO_JWT_TTL_MINUTES || '45', 10),
-        /** node-cron expression for the recurring demo reset (default: every 24h at minute 0). */
+        jwtTtlMinutes: safeInt(process.env.DEMO_JWT_TTL_MINUTES, 45),
         resetCron: process.env.DEMO_RESET_CRON || '0 0 */1 * *',
-        /** Re-seed on every boot even if the demo DB already has data (useful in dev). */
         resetOnBoot: process.env.DEMO_RESET_ON_BOOT === 'true',
-        /** Requests per minute allowed per demo session on write (non-GET) endpoints. */
-        writeRateLimitPerMinute: parseInt(process.env.DEMO_WRITE_RATE_LIMIT_PER_MINUTE || '20', 10),
+        writeRateLimitPerMinute: safeInt(process.env.DEMO_WRITE_RATE_LIMIT_PER_MINUTE, 20),
     },
     storage: {
-        /** local (default/dev) or s3 (AWS S3 / R2 / MinIO). */
         driver: (process.env.STORAGE_DRIVER === 's3' ? 's3' : 'local'),
-        maxUploadMb: parseInt(process.env.UPLOAD_MAX_MB || '25', 10),
+        maxUploadMb: safeInt(process.env.UPLOAD_MAX_MB, 25),
         s3: {
             bucket: process.env.S3_BUCKET || '',
             region: process.env.S3_REGION || 'us-east-1',

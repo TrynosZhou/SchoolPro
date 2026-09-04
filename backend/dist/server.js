@@ -96,20 +96,6 @@ async function runDeferredStartup() {
         console.error('[startup] Deferred GL tasks failed:', err);
     }
 }
-/**
- * Performs the minimum initialization required to serve HTTP requests:
- * upload dirs, primary database connection, seed, default roles, chart of accounts.
- *
- * Does NOT:
- *   - call app.listen() (not applicable in serverless)
- *   - start long-running schedulers / cron jobs (not meaningful per-request)
- *   - start Redis workers / queue consumers (serverless functions don't outlive the request)
- *   - run heavy deferred backfills (demo, analytics, GL integrity sweeps)
- *
- * Safe to call on every Vercel cold start. Duplicate calls are idempotent after
- * the first DataSource.initialize() because TypeORM will short-circuit on an
- * already-initialized DataSource.
- */
 async function initializeServer() {
     try {
         try {
@@ -119,13 +105,42 @@ async function initializeServer() {
             console.warn('[startup] Could not ensure local upload directories (safe to ignore when using S3 storage):', err);
         }
         await data_source_1.AppDataSource.initialize();
-        console.log('Database connected');
-        const { seedDatabase } = await Promise.resolve().then(() => __importStar(require('./seed')));
-        await seedDatabase();
-        const { ensureDefaultRoles } = await Promise.resolve().then(() => __importStar(require('./services/role-permissions.service')));
-        await ensureDefaultRoles();
-        const { ensureChartOfAccountsSeeded } = await Promise.resolve().then(() => __importStar(require('./services/ledger.service')));
-        await ensureChartOfAccountsSeeded();
+        console.log('[startup] Database connected');
+        try {
+            const applied = await data_source_1.RealAppDataSource.runMigrations({ transaction: 'each' });
+            if (applied.length > 0) {
+                console.log(`[startup] Applied ${applied.length} migration(s): ` +
+                    applied.map((m) => m.name ?? String(m)).join(', '));
+            }
+            else {
+                console.log('[startup] Database schema is up to date (no new migrations).');
+            }
+        }
+        catch (err) {
+            console.error('[startup] FATAL: migrations failed. Schema may be inconsistent — aborting startup.', err);
+            throw err;
+        }
+        try {
+            const { seedDatabase } = await Promise.resolve().then(() => __importStar(require('./seed')));
+            await seedDatabase();
+        }
+        catch (err) {
+            console.warn('[startup] seedDatabase skipped (non-fatal; tables may already have data or schema is still initialising):', err instanceof Error ? err.message : String(err));
+        }
+        try {
+            const { ensureDefaultRoles } = await Promise.resolve().then(() => __importStar(require('./services/role-permissions.service')));
+            await ensureDefaultRoles();
+        }
+        catch (err) {
+            console.warn('[startup] ensureDefaultRoles skipped (non-fatal):', err instanceof Error ? err.message : String(err));
+        }
+        try {
+            const { ensureChartOfAccountsSeeded } = await Promise.resolve().then(() => __importStar(require('./services/ledger.service')));
+            await ensureChartOfAccountsSeeded();
+        }
+        catch (err) {
+            console.warn('[startup] ensureChartOfAccountsSeeded skipped (non-fatal):', err instanceof Error ? err.message : String(err));
+        }
     }
     catch (err) {
         console.error('initializeServer failed:', err);

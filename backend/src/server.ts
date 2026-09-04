@@ -1,6 +1,6 @@
 import 'reflect-metadata';
 import app from './app';
-import { AppDataSource } from './config/data-source';
+import { AppDataSource, RealAppDataSource } from './config/data-source';
 import { DemoDataSource } from './config/demo-data-source';
 import { ensureDemoSchemaBootstrapped } from './config/bootstrap-demo-schema';
 import { env } from './config/env';
@@ -68,20 +68,6 @@ async function runDeferredStartup(): Promise<void> {
   }
 }
 
-/**
- * Performs the minimum initialization required to serve HTTP requests:
- * upload dirs, primary database connection, seed, default roles, chart of accounts.
- *
- * Does NOT:
- *   - call app.listen() (not applicable in serverless)
- *   - start long-running schedulers / cron jobs (not meaningful per-request)
- *   - start Redis workers / queue consumers (serverless functions don't outlive the request)
- *   - run heavy deferred backfills (demo, analytics, GL integrity sweeps)
- *
- * Safe to call on every Vercel cold start. Duplicate calls are idempotent after
- * the first DataSource.initialize() because TypeORM will short-circuit on an
- * already-initialized DataSource.
- */
 export async function initializeServer(): Promise<void> {
   try {
     try {
@@ -89,15 +75,45 @@ export async function initializeServer(): Promise<void> {
     } catch (err) {
       console.warn('[startup] Could not ensure local upload directories (safe to ignore when using S3 storage):', err);
     }
-    await AppDataSource.initialize();
-    console.log('Database connected');
 
-    const { seedDatabase } = await import('./seed');
-    await seedDatabase();
-    const { ensureDefaultRoles } = await import('./services/role-permissions.service');
-    await ensureDefaultRoles();
-    const { ensureChartOfAccountsSeeded } = await import('./services/ledger.service');
-    await ensureChartOfAccountsSeeded();
+    await AppDataSource.initialize();
+    console.log('[startup] Database connected');
+
+    try {
+      const applied = await RealAppDataSource.runMigrations({ transaction: 'each' });
+      if (applied.length > 0) {
+        console.log(
+          `[startup] Applied ${applied.length} migration(s): ` +
+            applied.map((m) => (m as { name?: string }).name ?? String(m)).join(', '),
+        );
+      } else {
+        console.log('[startup] Database schema is up to date (no new migrations).');
+      }
+    } catch (err) {
+      console.error('[startup] FATAL: migrations failed. Schema may be inconsistent — aborting startup.', err);
+      throw err;
+    }
+
+    try {
+      const { seedDatabase } = await import('./seed');
+      await seedDatabase();
+    } catch (err) {
+      console.warn('[startup] seedDatabase skipped (non-fatal; tables may already have data or schema is still initialising):', err instanceof Error ? err.message : String(err));
+    }
+
+    try {
+      const { ensureDefaultRoles } = await import('./services/role-permissions.service');
+      await ensureDefaultRoles();
+    } catch (err) {
+      console.warn('[startup] ensureDefaultRoles skipped (non-fatal):', err instanceof Error ? err.message : String(err));
+    }
+
+    try {
+      const { ensureChartOfAccountsSeeded } = await import('./services/ledger.service');
+      await ensureChartOfAccountsSeeded();
+    } catch (err) {
+      console.warn('[startup] ensureChartOfAccountsSeeded skipped (non-fatal):', err instanceof Error ? err.message : String(err));
+    }
   } catch (err) {
     console.error('initializeServer failed:', err);
     throw err;
