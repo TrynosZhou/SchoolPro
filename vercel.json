@@ -1,11 +1,22 @@
 {
-  "buildCommand": "cd frontend && npm run build:prod",
-  "outputDirectory": "frontend/dist/frontend",
-  "framework": null,
-  "rewrites": [
+  "version": 2,
+  "builds": [
     {
-      "source": "/(.*)",
-      "destination": "/index.html"
+      "src": "frontend/package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "dist"
+      }
+    }
+  ],
+  "routes": [
+    {
+      "src": "/static/(.*)",
+      "dest": "/frontend/static/$1"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/frontend/index.html"
     }
   ]
 }

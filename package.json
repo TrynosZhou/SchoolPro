@@ -1,0 +1,13 @@
+{
+  "name": "school-pro",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "cd frontend && npm run build",
+    "dev": "concurrently \"cd backend && npm run dev\" \"cd frontend && npm start\"",
+    "postinstall": "cd frontend && npm install && cd ../backend && npm install"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
