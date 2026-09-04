@@ -4,10 +4,13 @@
   "scripts": {
     "ng": "ng",
     "start": "ng serve",
-    "build": "ng build",
-    "build:prod": "ng build --configuration production",
+    "build:backend": "cd ../backend && npm run build",
+    "build:frontend": "ng build",
+    "build": "npm run build:backend && npm run build:frontend",
+    "build:prod": "npm run build:backend && ng build --configuration production",
     "watch": "ng build --watch --configuration development",
-    "test": "ng test"
+    "test": "ng test",
+    "postinstall": "cd ../backend && npm install"
   },
   "private": true,
   "dependencies": {
