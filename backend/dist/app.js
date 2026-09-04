@@ -95,8 +95,23 @@ app.use('/api/reports', reports_routes_1.default);
 app.use('/api/access-control', access_control_routes_1.default);
 app.use('/api/lms', lms_routes_1.default);
 app.use('/webhooks', webhooks_routes_1.default);
-app.use((err, _req, res, _next) => {
-    console.error(err);
+app.use((err, req, res, _next) => {
+    const payload = {
+        name: err?.name,
+        message: err?.message,
+        code: err?.code,
+        url: req.originalUrl,
+        method: req.method,
+        user: req?.user
+            ? {
+                userId: req.user?.userId,
+                role: req.user?.role,
+                email: req.user?.email,
+            }
+            : undefined,
+        stack: err?.stack?.split('\n').slice(0, 6).join('\n'),
+    };
+    console.error('[http:500] request failed:', JSON.stringify(payload, null, 2));
     res.status(500).json({ message: 'Internal server error', error: env_1.env.nodeEnv === 'development' ? err.message : undefined });
 });
 exports.default = app;

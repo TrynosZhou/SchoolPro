@@ -3,7 +3,7 @@
   "framework": null,
   "installCommand": "npm install",
   "buildCommand": "npm run build",
-  "outputDirectory": "frontend/dist",
+  "outputDirectory": "frontend/dist/browser",
   "cleanUrls": true,
   "trailingSlash": false,
   "functions": {

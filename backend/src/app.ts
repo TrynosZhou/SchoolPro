@@ -100,8 +100,23 @@ app.use('/api/access-control', accessControlRoutes);
 app.use('/api/lms', lmsRoutes);
 app.use('/webhooks', webhooksRoutes);
 
-app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  console.error(err);
+app.use((err: Error, req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  const payload: Record<string, unknown> = {
+    name: err?.name,
+    message: err?.message,
+    code: (err as { code?: string })?.code,
+    url: req.originalUrl,
+    method: req.method,
+    user: (req as { user?: { userId?: string; role?: string; email?: string } })?.user
+      ? {
+          userId: (req as { user?: { userId?: string } }).user?.userId,
+          role: (req as { user?: { role?: string } }).user?.role,
+          email: (req as { user?: { email?: string } }).user?.email,
+        }
+      : undefined,
+    stack: err?.stack?.split('\n').slice(0, 6).join('\n'),
+  };
+  console.error('[http:500] request failed:', JSON.stringify(payload, null, 2));
   res.status(500).json({ message: 'Internal server error', error: env.nodeEnv === 'development' ? err.message : undefined });
 });
 
