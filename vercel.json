@@ -1,24 +1,11 @@
 {
-  "version": 2,
-  "buildCommand": "cd frontend && npm ci && npm run build:prod",
+  "buildCommand": "cd frontend && npm run build:prod",
   "outputDirectory": "frontend/dist/frontend",
-  "installCommand": "cd frontend && npm ci",
   "framework": null,
   "rewrites": [
     {
       "source": "/(.*)",
       "destination": "/index.html"
-    }
-  ],
-  "headers": [
-    {
-      "source": "/(.*)",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=0, must-revalidate"
-        }
-      ]
     }
   ]
 }
