@@ -6,6 +6,7 @@
     "build:backend": "cd backend && npm run build",
     "build:frontend": "cd frontend && npm run build",
     "build": "npm run build:backend && npm run build:frontend",
+    "postbuild:frontend": "echo === frontend/dist tree === ; node -e \"require('fs').readdirSync('frontend/dist',{withFileTypes:true}).forEach(d=>{console.log((d.isDirectory()?'[DIR]  ':'[FILE] ')+d.name);try{if(d.isDirectory())require('fs').readdirSync('frontend/dist/'+d.name).forEach(f=>console.log('       '+d.name+'/'+f))}catch(e){}})\"",
     "dev": "concurrently \"cd backend && npm run dev\" \"cd frontend && npm start\"",
     "postinstall": "cd frontend && npm install && cd ../backend && npm install"
   },

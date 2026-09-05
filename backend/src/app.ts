@@ -67,12 +67,14 @@ app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 app.use((req, res, next) => {
   const state = getStartupState();
   if (state.ok) return next();
-  const url = req.originalUrl;
+  const path = req.path.endsWith('/') && req.path.length > 1
+    ? req.path.slice(0, -1)
+    : req.path;
   const isPublicSafe =
-    url === '/api/health' ||
-    url.startsWith('/api/public/') ||
-    url === '/api/auth/password-policy' ||
-    url.startsWith('/webhooks/');
+    path === '/api/health' ||
+    path.startsWith('/api/public') ||
+    path === '/api/auth/password-policy' ||
+    path.startsWith('/webhooks');
   if (isPublicSafe) return next();
   res.setHeader('Retry-After', '30');
   return res.status(503).json({

@@ -4,8 +4,6 @@
   "installCommand": "npm install",
   "buildCommand": "npm run build",
   "outputDirectory": "frontend/dist/browser",
-  "cleanUrls": true,
-  "trailingSlash": false,
   "functions": {
     "api/index.js": {
       "includeFiles": "backend/dist/**"
@@ -25,7 +23,7 @@
       "destination": "/api/index"
     },
     {
-      "source": "/((?!assets/|api/|uploads/|webhooks/|.*\\..*).*)",
+      "source": "/((?!assets/|.*\\..*).*)",
       "destination": "/index.html"
     }
   ],

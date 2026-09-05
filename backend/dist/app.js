@@ -66,11 +66,13 @@ app.use((req, res, next) => {
     const state = (0, server_1.getStartupState)();
     if (state.ok)
         return next();
-    const url = req.originalUrl;
-    const isPublicSafe = url === '/api/health' ||
-        url.startsWith('/api/public/') ||
-        url === '/api/auth/password-policy' ||
-        url.startsWith('/webhooks/');
+    const path = req.path.endsWith('/') && req.path.length > 1
+        ? req.path.slice(0, -1)
+        : req.path;
+    const isPublicSafe = path === '/api/health' ||
+        path.startsWith('/api/public') ||
+        path === '/api/auth/password-policy' ||
+        path.startsWith('/webhooks');
     if (isPublicSafe)
         return next();
     res.setHeader('Retry-After', '30');
