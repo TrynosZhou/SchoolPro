@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import fs from 'fs';
 import path from 'path';
 import { env } from './config/env';
 import { getStartupState } from './server';
@@ -119,6 +120,62 @@ app.use('/api/reports', reportsRoutes);
 app.use('/api/access-control', accessControlRoutes);
 app.use('/api/lms', lmsRoutes);
 app.use('/webhooks', webhooksRoutes);
+
+function resolveFrontendBrowserDir(): string | null {
+  const candidates = [
+    path.resolve(process.cwd(), '..', 'frontend', 'dist', 'browser'),
+    path.resolve(process.cwd(), 'frontend', 'dist', 'browser'),
+    path.resolve(__dirname, '..', '..', 'frontend', 'dist', 'browser'),
+    path.resolve(__dirname, '..', '..', '..', 'frontend', 'dist', 'browser'),
+  ];
+  for (const candidate of candidates) {
+    try {
+      const indexHtml = path.join(candidate, 'index.html');
+      if (fs.existsSync(indexHtml)) return candidate;
+    } catch {
+      /* ignore */
+    }
+  }
+  return null;
+}
+
+const frontendDir = resolveFrontendBrowserDir();
+if (frontendDir) {
+  app.use(
+    express.static(frontendDir, {
+      maxAge: env.nodeEnv === 'production' ? '1y' : 0,
+      setHeaders: (res, filePath) => {
+        if (filePath.endsWith('index.html')) {
+          res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        }
+      },
+    }),
+  );
+  app.use((req, res, next) => {
+    if (req.method !== 'GET') return next();
+    const pathname = req.path;
+    if (
+      pathname.startsWith('/api/') ||
+      pathname.startsWith('/uploads/') ||
+      pathname.startsWith('/webhooks/') ||
+      pathname === '/api/health'
+    ) {
+      return next();
+    }
+    const indexHtml = path.join(frontendDir, 'index.html');
+    if (fs.existsSync(indexHtml)) {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      return res.sendFile(indexHtml);
+    }
+    next();
+  });
+} else {
+  console.warn(
+    '[app] Frontend build (frontend/dist/browser/index.html) not found — ' +
+      'SPA routes like /login will 404. Run `npm run build:frontend` from the monorepo root ' +
+      'or serve the Angular dev server separately via `cd frontend && npm start`.',
+  );
+}
 
 app.use((err: Error, req: express.Request, res: express.Response, _next: express.NextFunction) => {
   const payload: Record<string, unknown> = {

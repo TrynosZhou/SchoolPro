@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
 const helmet_1 = __importDefault(require("helmet"));
+const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
 const env_1 = require("./config/env");
 const server_1 = require("./server");
@@ -115,6 +116,58 @@ app.use('/api/reports', reports_routes_1.default);
 app.use('/api/access-control', access_control_routes_1.default);
 app.use('/api/lms', lms_routes_1.default);
 app.use('/webhooks', webhooks_routes_1.default);
+function resolveFrontendBrowserDir() {
+    const candidates = [
+        path_1.default.resolve(process.cwd(), '..', 'frontend', 'dist', 'browser'),
+        path_1.default.resolve(process.cwd(), 'frontend', 'dist', 'browser'),
+        path_1.default.resolve(__dirname, '..', '..', 'frontend', 'dist', 'browser'),
+        path_1.default.resolve(__dirname, '..', '..', '..', 'frontend', 'dist', 'browser'),
+    ];
+    for (const candidate of candidates) {
+        try {
+            const indexHtml = path_1.default.join(candidate, 'index.html');
+            if (fs_1.default.existsSync(indexHtml))
+                return candidate;
+        }
+        catch {
+            /* ignore */
+        }
+    }
+    return null;
+}
+const frontendDir = resolveFrontendBrowserDir();
+if (frontendDir) {
+    app.use(express_1.default.static(frontendDir, {
+        maxAge: env_1.env.nodeEnv === 'production' ? '1y' : 0,
+        setHeaders: (res, filePath) => {
+            if (filePath.endsWith('index.html')) {
+                res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+            }
+        },
+    }));
+    app.use((req, res, next) => {
+        if (req.method !== 'GET')
+            return next();
+        const pathname = req.path;
+        if (pathname.startsWith('/api/') ||
+            pathname.startsWith('/uploads/') ||
+            pathname.startsWith('/webhooks/') ||
+            pathname === '/api/health') {
+            return next();
+        }
+        const indexHtml = path_1.default.join(frontendDir, 'index.html');
+        if (fs_1.default.existsSync(indexHtml)) {
+            res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+            return res.sendFile(indexHtml);
+        }
+        next();
+    });
+}
+else {
+    console.warn('[app] Frontend build (frontend/dist/browser/index.html) not found — ' +
+        'SPA routes like /login will 404. Run `npm run build:frontend` from the monorepo root ' +
+        'or serve the Angular dev server separately via `cd frontend && npm start`.');
+}
 app.use((err, req, res, _next) => {
     const payload = {
         name: err?.name,
