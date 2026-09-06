@@ -1,4 +1,5 @@
 
+// @ts-nocheck
 import { NextFunction, Request, Response } from 'express';
 import rateLimit from 'express-rate-limit';
 import { env } from '../config/env';

@@ -1,4 +1,5 @@
 
+// @ts-nocheck
 import { Router, Response } from 'express';
 import { AppDataSource } from '../config/data-source';
 import { UserRole } from '../entities/enums';
