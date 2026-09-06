@@ -41,7 +41,19 @@ function contactMatchesApplication(app: Application, contact: string): boolean {
   return supplied.length >= 6 && supplied === stored;
 }
 
-type UploadedFiles = Record<string, Express.Multer.File[]>;
+type MulterFile = {
+  fieldname?: string;
+  originalname: string;
+  encoding?: string;
+  mimetype: string;
+  buffer: Buffer;
+  size: number;
+  destination?: string;
+  filename?: string;
+  path?: string;
+  stream?: NodeJS.ReadableStream;
+};
+type UploadedFiles = Record<string, MulterFile[]>;
 
 /** Public metadata shape (never exposes stored file names / disk paths). */
 function toPublicTracking(app: Application) {

@@ -1,5 +1,4 @@
 import { Request, Response, NextFunction } from 'express';
-import type { ParamsDictionary, Query } from 'express-serve-static-core';
 import jwt from 'jsonwebtoken';
 import { env } from '../config/env';
 import { UserRole } from '../entities/enums';
@@ -17,20 +16,24 @@ export interface AuthPayload {
   demo?: boolean;
 }
 
-declare module 'express-serve-static-core' {
-  interface Request {
-    user?: AuthPayload;
+declare global {
+  namespace Express {
+    interface Request {
+      user?: AuthPayload;
+      demoUser?: AuthPayload;
+    }
   }
 }
 
 export interface AuthRequest<
-  P = ParamsDictionary,
+  P = any,
   ResBody = any,
   ReqBody = any,
-  ReqQuery = Query,
+  ReqQuery = any,
   Locals extends Record<string, any> = Record<string, any>,
 > extends Request<P, ResBody, ReqBody, ReqQuery, Locals> {
   user?: AuthPayload;
+  demoUser?: AuthPayload;
 }
 
 export function authenticate(req: AuthRequest, res: Response, next: NextFunction) {
@@ -75,4 +78,3 @@ export function authorizePermission(...required: string[]) {
     return res.status(403).json({ message: 'Insufficient permissions' });
   };
 }
-
