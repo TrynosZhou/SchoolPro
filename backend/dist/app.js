@@ -76,6 +76,32 @@ app.use((req, res, next) => {
         path.startsWith('/webhooks');
     if (isPublicSafe)
         return next();
+    // #region debug-point H2:middleware-503
+    (() => { try {
+        const f = require('fs'), p = require('path');
+        let rp = '.dbg/db-warming-503.env';
+        const roots = [process.cwd(), p.resolve(__dirname, '..', '..'), p.resolve(__dirname, '..', '..', '..')];
+        let found = null;
+        for (const r of roots) {
+            const cand = p.join(r, rp);
+            if (f.existsSync(cand)) {
+                found = cand;
+                break;
+            }
+        }
+        let u = 'http://127.0.0.1:7777/event', s = 'db-warming-503';
+        try {
+            if (found) {
+                const e = f.readFileSync(found, 'utf8');
+                u = e.match(/DEBUG_SERVER_URL=(.+)/)?.[1] || u;
+                s = e.match(/DEBUG_SESSION_ID=(.+)/)?.[1] || s;
+            }
+        }
+        catch { }
+        require('http').request({ method: 'POST', host: new URL(u).hostname, port: new URL(u).port, path: new URL(u).pathname, headers: { 'Content-Type': 'application/json' } }, () => { }).on('error', () => { }).end(JSON.stringify({ sessionId: s, runId: 'pre', hypothesisId: 'H2', location: 'app.ts:startup-middleware-503', msg: '[DEBUG] Startup middleware serving 503 for request URL', data: { method: req.method, reqPath: req.path, originalUrl: req.originalUrl, query: req.query, stateOk: state.ok, startedAt: state.startedAt, publicSafe: false, ipHeader: req.headers['x-forwarded-for'] || '' }, ts: Date.now() }));
+    }
+    catch { } })();
+    // #endregion
     res.setHeader('Retry-After', '30');
     return res.status(503).json({
         message: 'Database is warming up or unreachable — please retry in a moment.',
@@ -169,6 +195,33 @@ else {
         'or serve the Angular dev server separately via `cd frontend && npm start`.');
 }
 app.use((err, req, res, _next) => {
+    // #region debug-point H5:global-error-middleware
+    (() => { try {
+        const f = require('fs'), p = require('path');
+        let rp = '.dbg/db-warming-503.env';
+        const roots = [process.cwd(), p.resolve(__dirname, '..', '..'), p.resolve(__dirname, '..', '..', '..')];
+        let found = null;
+        for (const r of roots) {
+            const cand = p.join(r, rp);
+            if (f.existsSync(cand)) {
+                found = cand;
+                break;
+            }
+        }
+        let u = 'http://127.0.0.1:7777/event', s = 'db-warming-503';
+        try {
+            if (found) {
+                const e = f.readFileSync(found, 'utf8');
+                u = e.match(/DEBUG_SERVER_URL=(.+)/)?.[1] || u;
+                s = e.match(/DEBUG_SESSION_ID=(.+)/)?.[1] || s;
+            }
+        }
+        catch { }
+        const s2 = (0, server_1.getStartupState)();
+        require('http').request({ method: 'POST', host: new URL(u).hostname, port: new URL(u).port, path: new URL(u).pathname, headers: { 'Content-Type': 'application/json' } }, () => { }).on('error', () => { }).end(JSON.stringify({ sessionId: s, runId: 'pre', hypothesisId: 'H5', location: 'app.ts:global-error-middleware', msg: '[DEBUG] Global error middleware triggered', data: { errName: err?.name, errMessage: err?.message, errCode: err?.code, url: req.originalUrl, method: req.method, headersSent: res.headersSent, statusCodeNow: res.statusCode, stateOk: s2.ok, stackSnippet: err?.stack?.split('\n').slice(0, 4).join('|'), user: typeof req.user ? { userId: req.user?.userId, role: req.user?.role, email: req.user?.email } : undefined }, ts: Date.now() }));
+    }
+    catch { } })();
+    // #endregion
     const payload = {
         name: err?.name,
         message: err?.message,

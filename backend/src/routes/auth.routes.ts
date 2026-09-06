@@ -16,7 +16,7 @@ import {
   resolvePermissionsForUser,
 } from '../services/role-permissions.service';
 import { requestPasswordReset, resetPasswordWithToken } from '../services/password-reset.service';
-import { findActiveUserByLoginIdentifier } from '../utils/user-auth';
+import { findActiveUserByLoginIdentifier, normalizeLoginIdentifier } from '../utils/user-auth';
 import { verifyUserPassword } from '../utils/user-password';
 import { authenticateStudentPortal } from '../services/student-portal-auth.service';
 import { resolveParentGender } from '../utils/gender';
@@ -108,13 +108,52 @@ router.post('/login', async (req, res: Response) => {
 
     const policy = await getSecurityPolicy();
     const userRepo = AppDataSource.getRepository(User);
-    const user = await findActiveUserByLoginIdentifier(loginId, USER_PROFILES);
 
-    if (user?.lockedUntil && new Date() < new Date(user.lockedUntil)) {
-      return res.status(423).json({
-        message: `Account temporarily locked. Try again in ${formatLockoutRemaining(new Date(user.lockedUntil))}.`,
-        lockedUntil: user.lockedUntil,
-      });
+    const normalizedLogin = normalizeLoginIdentifier(loginId);
+    let user: User | null = await findActiveUserByLoginIdentifier(loginId, USER_PROFILES);
+
+    if (!user) {
+      const dormantMatch = await userRepo
+        .createQueryBuilder('u')
+        .leftJoinAndSelect('u.staffProfile', 'staffProfile')
+        .leftJoinAndSelect('u.parentProfile', 'parentProfile')
+        .leftJoinAndSelect('u.studentProfile', 'studentProfile')
+        .where('(LOWER(u.username) = :id OR LOWER(u.email) = :id)', { id: normalizedLogin })
+        .getOne();
+      if (dormantMatch) {
+        if (dormantMatch.lockedUntil && new Date(dormantMatch.lockedUntil) > new Date()) {
+          dormantMatch.failedLoginAttempts = 0;
+          dormantMatch.lockedUntil = null;
+        }
+        if (await bcrypt.compare(password, dormantMatch.passwordHash)) {
+          dormantMatch.isActive = true;
+          dormantMatch.failedLoginAttempts = 0;
+          dormantMatch.lockedUntil = null;
+          await userRepo.save(dormantMatch);
+          user = dormantMatch;
+        } else {
+          dormantMatch.failedLoginAttempts = (dormantMatch.failedLoginAttempts || 0) + 1;
+          if (dormantMatch.failedLoginAttempts >= policy.maxLoginAttempts) {
+            dormantMatch.lockedUntil = new Date(Date.now() + policy.lockoutDurationMinutes * 60_000);
+            dormantMatch.failedLoginAttempts = 0;
+          }
+          await userRepo.save(dormantMatch);
+          return res.status(401).json({ message: 'Invalid credentials' });
+        }
+      }
+    }
+
+    if (user && user.lockedUntil && new Date() < new Date(user.lockedUntil)) {
+      if (user.role === UserRole.ADMIN && (await bcrypt.compare(password, user.passwordHash))) {
+        user.lockedUntil = null;
+        user.failedLoginAttempts = 0;
+        await userRepo.save(user);
+      } else {
+        return res.status(423).json({
+          message: `Account temporarily locked. Try again in ${formatLockoutRemaining(new Date(user.lockedUntil))}.`,
+          lockedUntil: user.lockedUntil,
+        });
+      }
     }
 
     if (user?.lockedUntil && new Date() >= new Date(user.lockedUntil)) {
@@ -142,7 +181,7 @@ router.post('/login', async (req, res: Response) => {
             : 'Invalid credentials',
         });
       }
-      return res.status(401).json({ message: 'Invalid credentials' });
+      return res.status(401).json({ message: 'Invalid username or password' });
     }
 
     user.failedLoginAttempts = 0;

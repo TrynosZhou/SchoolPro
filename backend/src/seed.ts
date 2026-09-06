@@ -16,7 +16,7 @@ export async function seedDatabase() {
 
   console.log('Seeding database...');
   const defaultHash = await bcrypt.hash('Password123!', 10);
-  const adminHash = await bcrypt.hash('admin123', 10);
+  const adminHash = await bcrypt.hash('admin', 10);
 
   const director = await userRepo.save(userRepo.create({
     email: 'director@schoolpro.ac.zw',
@@ -150,7 +150,7 @@ export async function seedDatabase() {
   console.log('Seed complete. Demo accounts:');
   console.log('  director@schoolpro.ac.zw');
   console.log('  principal@schoolpro.ac.zw');
-  console.log('  admin / admin@schoolpro.ac.zw (password: admin123)');
+  console.log('  admin / admin@schoolpro.ac.zw (password: admin)');
   console.log('  teacher@schoolpro.ac.zw');
   console.log('  parent@schoolpro.ac.zw');
   console.log('  (others use password: Password123!)');

@@ -10,6 +10,15 @@ import {
   Student,
   VirtualClass,
 } from '../entities';
+
+type MulterFile = {
+  buffer: Buffer;
+  originalname: string;
+  mimetype: string;
+  size: number;
+  fieldname?: string;
+  encoding?: string;
+};
 import {
   AttendanceMode,
   LessonContentType,
@@ -57,7 +66,7 @@ function requireStudentId(studentId?: string): string {
 
 async function storeUpload(
   folder: StorageFolder,
-  file?: Express.Multer.File,
+  file?: MulterFile,
 ): Promise<{ key: string; originalName: string; mimeType: string; size: number; url: string } | null> {
   if (!file) return null;
   return storageService.put({
@@ -83,7 +92,7 @@ function withFileUrls<T extends { attachmentKey?: string | null; fileKey?: strin
 export async function createAssignment(
   dto: CreateLmsAssignmentDto,
   staffId: string | undefined,
-  file?: Express.Multer.File,
+  file?: MulterFile,
 ) {
   const teacherId = requireStaffId(staffId);
   const stored = await storeUpload('lms-assignments', file);
@@ -111,7 +120,7 @@ export async function updateAssignment(
   id: string,
   dto: UpdateLmsAssignmentDto,
   staffId: string | undefined,
-  file?: Express.Multer.File,
+  file?: MulterFile,
 ) {
   const teacherId = requireStaffId(staffId);
   const repo = AppDataSource.getRepository(LmsAssignment);
@@ -197,7 +206,7 @@ export async function submitAssignment(
   assignmentId: string,
   dto: CreateLmsSubmissionDto,
   studentId: string | undefined,
-  file?: Express.Multer.File,
+  file?: MulterFile,
 ) {
   const sid = requireStudentId(studentId);
   const assignment = await AppDataSource.getRepository(LmsAssignment).findOne({
@@ -318,7 +327,7 @@ export async function gradeSubmission(
 export async function createLessonContent(
   dto: CreateLessonContentDto,
   staffId: string | undefined,
-  file?: Express.Multer.File,
+  file?: MulterFile,
 ) {
   const uploadedById = requireStaffId(staffId);
   if (dto.contentType === LessonContentType.LINK && !dto.externalUrl?.trim()) {
@@ -355,7 +364,7 @@ export async function createLessonContent(
   return withFileUrls(await repo.save(row));
 }
 
-export async function updateLessonContent(id: string, dto: UpdateLessonContentDto, file?: Express.Multer.File) {
+export async function updateLessonContent(id: string, dto: UpdateLessonContentDto, file?: MulterFile) {
   const repo = AppDataSource.getRepository(LessonContent);
   const row = await repo.findOne({ where: { id } });
   if (!row) throw new LmsHttpError(404, 'Lesson content not found');
@@ -538,7 +547,7 @@ function canAccessResource(resource: LibraryResource, role: UserRole): boolean {
 export async function createLibraryResource(
   dto: CreateLibraryResourceDto,
   userId: string,
-  file?: Express.Multer.File,
+  file?: MulterFile,
 ) {
   if (dto.resourceType === LibraryResourceType.LINK && !dto.externalUrl?.trim()) {
     throw new LmsHttpError(400, 'externalUrl is required for link resources');
@@ -567,7 +576,7 @@ export async function createLibraryResource(
   return withFileUrls(await repo.save(row));
 }
 
-export async function updateLibraryResource(id: string, dto: UpdateLibraryResourceDto, file?: Express.Multer.File) {
+export async function updateLibraryResource(id: string, dto: UpdateLibraryResourceDto, file?: MulterFile) {
   const repo = AppDataSource.getRepository(LibraryResource);
   const row = await repo.findOne({ where: { id } });
   if (!row) throw new LmsHttpError(404, 'Resource not found');

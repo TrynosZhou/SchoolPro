@@ -1,5 +1,5 @@
 /**
- * Ensures the default admin can sign in with username `admin` / password `admin123`.
+ * Ensures the default admin can sign in with username `admin` / password `admin`.
  * Run: npx ts-node src/scripts/set-admin-login.ts
  */
 import bcrypt from 'bcryptjs';
@@ -10,7 +10,7 @@ import { UserRole } from '../entities/enums';
 async function main() {
   await AppDataSource.initialize();
   const userRepo = AppDataSource.getRepository(User);
-  const hash = await bcrypt.hash('admin123', 10);
+  const hash = await bcrypt.hash('admin', 10);
 
   let admin =
     (await userRepo.findOne({ where: { username: 'admin' } })) ||
@@ -27,18 +27,21 @@ async function main() {
       lastName: 'Admin',
       role: UserRole.ADMIN,
       isActive: true,
+      failedLoginAttempts: 0,
+      lockedUntil: null,
     });
     await userRepo.save(admin);
-    console.log('Created admin user: admin / admin123');
+    console.log('Created admin user: admin / admin');
   } else {
     admin.username = 'admin';
     admin.email = 'admin@schoolpro.ac.zw';
     admin.passwordHash = hash;
+    admin.role = UserRole.ADMIN;
     admin.isActive = true;
     admin.failedLoginAttempts = 0;
     admin.lockedUntil = null;
     await userRepo.save(admin);
-    console.log('Updated admin user: username admin, password admin123');
+    console.log('Updated admin user: username admin, password admin');
   }
 
   await AppDataSource.destroy();

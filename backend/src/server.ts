@@ -83,6 +83,9 @@ async function sleep(ms: number) {
 }
 
 export async function initializeServer(): Promise<void> {
+  // #region debug-point H3:init-server-entry
+  (()=>{try{const f=require('fs'),p=require('path');let rp='.dbg/db-warming-503.env';const roots=[process.cwd(),p.resolve(__dirname,'..','..'),p.resolve(__dirname,'..','..','..')];let found=null;for(const r of roots){const cand=p.join(r,rp);if(f.existsSync(cand)){found=cand;break;}}let u='http://127.0.0.1:7777/event',s='db-warming-503';try{if(found){const e=f.readFileSync(found,'utf8');u=e.match(/DEBUG_SERVER_URL=(.+)/)?.[1]||u;s=e.match(/DEBUG_SESSION_ID=(.+)/)?.[1]||s;}}catch{}require('http').request({method:'POST',host:new URL(u).hostname,port:new URL(u).port,path:new URL(u).pathname,headers:{'Content-Type':'application/json'}},()=>{}).on('error',()=>{}).end(JSON.stringify({sessionId:s,runId:'pre',hypothesisId:'H3',location:'server.ts:initializeServer-entry',msg:'[DEBUG] initializeServer called',data:{okBeforeCall:_startupState.ok,startedAtBefore:_startupState.startedAt,sslModeBefore:_startupState.sslMode,mainModule:require.main===module},ts:Date.now()}));}catch{}})();
+  // #endregion
   if (_startupState.ok) return;
   try {
     try {
@@ -127,6 +130,9 @@ export async function initializeServer(): Promise<void> {
         _startupState.sslMode = sslMode;
         _startupState.startedAt = Date.now();
         lastDbErr = undefined;
+        // #region debug-point H1:ok-flag-set
+        (()=>{try{const f=require('fs'),p=require('path');let rp='.dbg/db-warming-503.env';const roots=[process.cwd(),p.resolve(__dirname,'..','..'),p.resolve(__dirname,'..','..','..')];let found=null;for(const r of roots){const cand=p.join(r,rp);if(f.existsSync(cand)){found=cand;break;}}let u='http://127.0.0.1:7777/event',s='db-warming-503';try{if(found){const e=f.readFileSync(found,'utf8');u=e.match(/DEBUG_SERVER_URL=(.+)/)?.[1]||u;s=e.match(/DEBUG_SESSION_ID=(.+)/)?.[1]||s;}}catch{}require('http').request({method:'POST',host:new URL(u).hostname,port:new URL(u).port,path:new URL(u).pathname,headers:{'Content-Type':'application/json'}},()=>{}).on('error',()=>{}).end(JSON.stringify({sessionId:s,runId:'pre',hypothesisId:'H1',location:'server.ts:startup-ok-set',msg:'[DEBUG] _startupState.ok set to TRUE after DB ping',data:{sslMode,attempt:attempt+1,nowMs:Date.now()},ts:Date.now()}));}catch{}})();
+        // #endregion
         break;
       } catch (err) {
         lastDbErr = err;
@@ -139,6 +145,9 @@ export async function initializeServer(): Promise<void> {
 
     if (!_startupState.ok) {
       const msg = lastDbErr instanceof Error ? lastDbErr.message : String(lastDbErr);
+      // #region debug-point H4:degraded-mode-final
+      (()=>{try{const f=require('fs'),p=require('path');let rp='.dbg/db-warming-503.env';const roots=[process.cwd(),p.resolve(__dirname,'..','..'),p.resolve(__dirname,'..','..','..')];let found=null;for(const r of roots){const cand=p.join(r,rp);if(f.existsSync(cand)){found=cand;break;}}let u='http://127.0.0.1:7777/event',s='db-warming-503';try{if(found){const e=f.readFileSync(found,'utf8');u=e.match(/DEBUG_SERVER_URL=(.+)/)?.[1]||u;s=e.match(/DEBUG_SESSION_ID=(.+)/)?.[1]||s;}}catch{}require('http').request({method:'POST',host:new URL(u).hostname,port:new URL(u).port,path:new URL(u).pathname,headers:{'Content-Type':'application/json'}},()=>{}).on('error',()=>{}).end(JSON.stringify({sessionId:s,runId:'pre',hypothesisId:'H4',location:'server.ts:degraded-mode',msg:'[DEBUG] Boot finished in DEGRADED mode - DB unreachable',data:{errMsg:msg,errName:lastDbErr instanceof Error?lastDbErr.name:typeof lastDbErr,attempts:4,dbHost:env.db.host,dbPort:env.db.port,dbUser:env.db.username,dbDatabase:env.db.database,sslMode:env.db.sslMode,nodeEnv:env.nodeEnv},ts:Date.now()}));}catch{}})();
+      // #endregion
       console.error(
         `[startup] Cannot connect to the database after ${attempts} attempts — continuing in "degraded" mode. ` +
           `Public endpoints (health, branding, password-policy) will return defaults. ` +

@@ -208,7 +208,7 @@ function computeColSpans(
 }
 
 function drawVerticalLabel(
-  doc: PDFKit.PDFDocument,
+  doc: InstanceType<typeof PDFDocument>,
   text: string,
   x: number,
   y: number,
@@ -225,7 +225,7 @@ function drawVerticalLabel(
   doc.restore();
 }
 
-function fitSingleLine(doc: PDFKit.PDFDocument, text: string, maxWidth: number): string {
+function fitSingleLine(doc: InstanceType<typeof PDFDocument>, text: string, maxWidth: number): string {
   let value = String(text || '').trim();
   if (!value) return '—';
   while (value.length > 1 && doc.widthOfString(value) > maxWidth) {
@@ -257,7 +257,7 @@ function spanColumnWidth(widths: number[], start: number, span: number): number 
 }
 
 function drawTeacherCell(
-  doc: PDFKit.PDFDocument,
+  doc: InstanceType<typeof PDFDocument>,
   slot: ClassicTeacherSlot,
   x: number,
   y: number,
@@ -291,7 +291,7 @@ function drawTeacherCell(
 }
 
 function drawClassCell(
-  doc: PDFKit.PDFDocument,
+  doc: InstanceType<typeof PDFDocument>,
   slot: ClassicClassSlot,
   x: number,
   y: number,

@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import type { ParamsDictionary, Query } from 'express-serve-static-core';
 import jwt from 'jsonwebtoken';
 import { env } from '../config/env';
 import { UserRole } from '../entities/enums';
@@ -16,7 +17,19 @@ export interface AuthPayload {
   demo?: boolean;
 }
 
-export interface AuthRequest extends Request {
+declare module 'express-serve-static-core' {
+  interface Request {
+    user?: AuthPayload;
+  }
+}
+
+export interface AuthRequest<
+  P = ParamsDictionary,
+  ResBody = any,
+  ReqBody = any,
+  ReqQuery = Query,
+  Locals extends Record<string, any> = Record<string, any>,
+> extends Request<P, ResBody, ReqBody, ReqQuery, Locals> {
   user?: AuthPayload;
 }
 
