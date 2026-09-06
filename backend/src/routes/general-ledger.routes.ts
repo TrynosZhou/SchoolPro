@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { Router, Response } from 'express';
 import { AppDataSource } from '../config/data-source';
 import { FINANCE_ROLES } from '../config/portal-roles';

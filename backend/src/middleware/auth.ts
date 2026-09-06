@@ -30,13 +30,13 @@ export interface AuthRequest<
   ResBody = any,
   ReqBody = any,
   ReqQuery = any,
-  Locals extends Record<string, any> = Record<string, any>,
+  Locals extends Record<string, any> = Record<string, any>
 > extends Request<P, ResBody, ReqBody, ReqQuery, Locals> {
   user?: AuthPayload;
   demoUser?: AuthPayload;
 }
 
-export function authenticate(req: AuthRequest, res: Response, next: NextFunction) {
+export function authenticate(req: Request, res: Response, next: NextFunction) {
   const header = req.headers.authorization;
   if (!header?.startsWith('Bearer ')) {
     return res.status(401).json({ message: 'Authentication required' });
@@ -52,7 +52,7 @@ export function authenticate(req: AuthRequest, res: Response, next: NextFunction
 }
 
 export function authorize(...roles: UserRole[]) {
-  return (req: AuthRequest, res: Response, next: NextFunction) => {
+  return (req: Request, res: Response, next: NextFunction) => {
     if (!req.user) {
       return res.status(401).json({ message: 'Authentication required' });
     }
@@ -64,7 +64,7 @@ export function authorize(...roles: UserRole[]) {
 }
 
 export function authorizePermission(...required: string[]) {
-  return (req: AuthRequest, res: Response, next: NextFunction) => {
+  return (req: Request, res: Response, next: NextFunction) => {
     if (!req.user) {
       return res.status(401).json({ message: 'Authentication required' });
     }

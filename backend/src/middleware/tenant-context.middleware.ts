@@ -4,8 +4,13 @@ import { env } from '../config/env';
 import { tenantContext } from '../config/tenant-context';
 import { AuthPayload } from './auth';
 
-export interface DemoAwareRequest extends Request {
-  /** Set only when the request carries a valid JWT with `demo: true`. */
+export interface DemoAwareRequest<
+  P = any,
+  ResBody = any,
+  ReqBody = any,
+  ReqQuery = any,
+  Locals extends Record<string, any> = Record<string, any>
+> extends Request<P, ResBody, ReqBody, ReqQuery, Locals> {
   demoUser?: AuthPayload;
 }
 
@@ -17,7 +22,7 @@ export interface DemoAwareRequest extends Request {
  * invalid/expired tokens). This separation means demo detection never changes the
  * auth behaviour of a single existing route.
  */
-export function tenantContextMiddleware(req: DemoAwareRequest, res: Response, next: NextFunction) {
+export function tenantContextMiddleware(req: Request, res: Response, next: NextFunction) {
   let isDemo = false;
 
   const header = req.headers.authorization;

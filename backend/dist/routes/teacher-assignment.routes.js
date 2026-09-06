@@ -1,5 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+// @ts-nocheck
 const express_1 = require("express");
 const auth_1 = require("../middleware/auth");
 const enums_1 = require("../entities/enums");

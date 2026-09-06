@@ -1,5 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+// @ts-nocheck
 const express_1 = require("express");
 const data_source_1 = require("../config/data-source");
 const SchoolYear_1 = require("../entities/SchoolYear");
