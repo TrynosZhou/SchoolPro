@@ -420,30 +420,36 @@ body {
    entire app, floating below the top navigation bar so it never
    collides with or hides behind the Balance enquiry / Messages bar.
    ============================================================ */
+:root {
+  --portal-appbar-h: 4rem;
+}
+
 body .toast {
   position: fixed !important;
-  top: calc(var(--topbar-height, 56px) + 0.75rem + var(--safe-top, 0px)) !important;
-  right: calc(0.75rem + var(--safe-right, 0px)) !important;
+  top: calc(var(--portal-appbar-h, 4rem) + var(--appbar-extra, 1.25rem) + var(--safe-top, 0px)) !important;
+  right: calc(1rem + var(--safe-right, 0px)) !important;
   left: auto !important;
   bottom: auto !important;
-  z-index: 99999 !important;
-  max-width: min(560px, calc(100vw - 1.5rem - var(--safe-left) - var(--safe-right))) !important;
+  z-index: 2147483646 !important;
+  max-width: min(620px, calc(100vw - 2rem - var(--safe-left) - var(--safe-right))) !important;
   width: auto !important;
-  min-width: 260px !important;
-  padding: 0.85rem 1.1rem !important;
-  border-radius: 12px !important;
+  min-width: 280px !important;
+  padding: 0.95rem 1.15rem !important;
+  border-radius: 14px !important;
   font-size: 0.88rem !important;
   font-weight: 500 !important;
-  line-height: 1.45 !important;
+  line-height: 1.5 !important;
   word-break: break-word !important;
   overflow-wrap: anywhere !important;
-  box-shadow: 0 14px 40px rgba(15, 23, 42, 0.16), 0 4px 12px rgba(15, 23, 42, 0.08) !important;
+  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.22), 0 6px 18px rgba(15, 23, 42, 0.10) !important;
   border: 1px solid transparent !important;
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
-  animation: toast-in 220ms cubic-bezier(0.22, 1, 0.36, 1);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  animation: toast-in 240ms cubic-bezier(0.22, 1, 0.36, 1);
+  transform: translate3d(0, 0, 0);
+  will-change: transform, opacity;
   color: #0b5b2c;
-  background: color-mix(in srgb, #16a34a 10%, rgba(255, 255, 255, 0.96));
+  background: color-mix(in srgb, #16a34a 10%, rgba(255, 255, 255, 0.98));
   border-color: color-mix(in srgb, #16a34a 40%, transparent) !important;
 }
 
@@ -485,6 +491,7 @@ body .toast.error {
 
 @media (max-width: 640px) {
   body .toast {
+    top: calc(var(--portal-appbar-h, 4rem) + var(--appbar-extra, 1rem) + var(--safe-top, 0px)) !important;
     right: calc(0.5rem + var(--safe-right, 0px)) !important;
     left: calc(0.5rem + var(--safe-left, 0px)) !important;
     max-width: none !important;

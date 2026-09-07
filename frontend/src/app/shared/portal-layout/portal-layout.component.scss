@@ -1768,6 +1768,23 @@ $sidebar-transition: 0.15s ease;
   }
 }
 
+.layout,
+.sidebar,
+.topbar,
+.content,
+.page-body {
+  /* Ensure descendant position:fixed elements (toasts) anchor to the viewport and are never clipped. */
+  overflow: visible;
+  transform: none;
+  contain: none;
+  perspective: none;
+  filter: none;
+  clip-path: none;
+  -webkit-mask: none;
+          mask: none;
+  will-change: auto;
+}
+
 .content {
   grid-area: content;
   min-width: 0;
