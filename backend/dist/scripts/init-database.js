@@ -52,15 +52,23 @@ CREATE INDEX IF NOT EXISTS idx_gl_entry_reference_type ON general_ledger_entries
 CREATE INDEX IF NOT EXISTS idx_gl_entry_journal_batch ON general_ledger_entries ("journalBatchId");
 CREATE INDEX IF NOT EXISTS idx_chart_of_accounts_type ON chart_of_accounts ("accountType");
 `;
+function pickSslForMaintenanceDb(mode) {
+    if (mode === 'require')
+        return { rejectUnauthorized: false };
+    if (mode === 'disable')
+        return false;
+    return env_1.env.nodeEnv === 'production' || env_1.env.onRender ? { rejectUnauthorized: false } : false;
+}
 async function ensureDatabaseExists() {
+    const ssl = pickSslForMaintenanceDb(env_1.env.db.sslMode);
     const client = new pg_1.Client({
         host: env_1.env.db.host,
         port: env_1.env.db.port,
         user: env_1.env.db.username,
         password: env_1.env.db.password,
         database: 'postgres',
-        /** Neon (and most managed Postgres) requires SSL; local dev Postgres does not. */
-        ssl: env_1.env.nodeEnv === 'production' ? { rejectUnauthorized: false } : false,
+        ssl,
+        connectionTimeoutMillis: 10000,
     });
     await client.connect();
     const res = await client.query('SELECT 1 FROM pg_database WHERE datname = $1', [env_1.env.db.database]);

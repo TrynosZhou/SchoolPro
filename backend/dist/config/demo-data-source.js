@@ -11,6 +11,17 @@ const env_1 = require("./env");
 const entities_1 = require("../entities");
 /** ts-node (CLI/dev) loads .ts migrations; compiled dist/server.js loads .js migrations. */
 const migrationsGlob = path_1.default.join(__dirname, '..', 'migrations', __filename.endsWith('.ts') ? '*.ts' : '*.js');
+function demoSslConfig() {
+    switch (env_1.env.demo.db.sslMode) {
+        case 'require':
+            return { rejectUnauthorized: false };
+        case 'disable':
+            return false;
+        case 'auto':
+        default:
+            return env_1.env.nodeEnv === 'production' ? { rejectUnauthorized: false } : false;
+    }
+}
 /**
  * A fully separate Postgres database dedicated to demo accounts. It reuses the exact
  * same entity classes/migrations as production, so structurally it is always in sync
@@ -30,6 +41,7 @@ exports.DemoDataSource = new typeorm_1.DataSource({
     username: env_1.env.demo.db.username,
     password: env_1.env.demo.db.password,
     database: env_1.env.demo.db.database,
+    ssl: demoSslConfig(),
     synchronize: false,
     /** Demo DB is bootstrapped from entities on first use; incremental migrations target prod upgrades. */
     migrationsRun: false,

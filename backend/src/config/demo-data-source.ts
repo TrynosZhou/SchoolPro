@@ -12,6 +12,18 @@ const migrationsGlob = path.join(
   __filename.endsWith('.ts') ? '*.ts' : '*.js',
 );
 
+function demoSslConfig() {
+  switch (env.demo.db.sslMode) {
+    case 'require':
+      return { rejectUnauthorized: false };
+    case 'disable':
+      return false;
+    case 'auto':
+    default:
+      return env.nodeEnv === 'production' ? { rejectUnauthorized: false } : false;
+  }
+}
+
 /**
  * A fully separate Postgres database dedicated to demo accounts. It reuses the exact
  * same entity classes/migrations as production, so structurally it is always in sync
@@ -31,6 +43,7 @@ export const DemoDataSource = new DataSource({
   username: env.demo.db.username,
   password: env.demo.db.password,
   database: env.demo.db.database,
+  ssl: demoSslConfig(),
   synchronize: false,
   /** Demo DB is bootstrapped from entities on first use; incremental migrations target prod upgrades. */
   migrationsRun: false,
