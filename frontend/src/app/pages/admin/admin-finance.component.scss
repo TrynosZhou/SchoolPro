@@ -44,9 +44,11 @@
   gap: 1.25rem;
   padding: 1.35rem 1.45rem;
   border-radius: 18px;
-  background: linear-gradient(135deg, #0f172a 0%, #312e81 45%, #6366f1 100%);
-  color: #fff;
-  box-shadow: 0 18px 40px rgba(99, 102, 241, 0.2);
+  background: #ffffff !important;
+  background-image: none !important;
+  color: #0f172a !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06) !important;
 
   @media (max-width: 960px) {
     grid-template-columns: 1fr;
@@ -60,24 +62,25 @@
     font-weight: 700;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    color: #c7d2fe;
+    color: #64748b !important;
   }
 
   h2 {
     margin: 0 0 0.45rem;
     font-size: 1.65rem;
     line-height: 1.2;
+    color: #0f172a !important;
   }
 
   .hero-sub {
     margin: 0;
     max-width: 38rem;
-    color: #e0e7ff;
+    color: #64748b !important;
     font-size: 0.95rem;
     line-height: 1.55;
 
     a {
-      color: #fff;
+      color: #2563eb;
       font-weight: 600;
     }
   }
@@ -95,19 +98,19 @@
   align-items: center;
   border-radius: 999px;
   padding: 0.55rem 0.95rem;
-  background: #fff;
-  color: #4338ca;
+  background: var(--color-accent, #4f46e5);
+  color: #fff;
   font-size: 0.88rem;
   font-weight: 700;
   text-decoration: none;
 }
 
 .refresh-action {
-  border: 1px solid rgba(255, 255, 255, 0.28);
+  border: 1px solid #e2e8f0;
   border-radius: 999px;
   padding: 0.55rem 0.9rem;
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
+  background: #ffffff;
+  color: #334155;
   font-size: 0.86rem;
   font-weight: 600;
   cursor: pointer;
@@ -130,24 +133,25 @@
   gap: 0.65rem;
   padding: 0.75rem 0.85rem;
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
 
   strong {
     display: block;
     font-size: 1.25rem;
     line-height: 1.1;
+    color: #0f172a;
   }
 
   span:not(.kpi-icon) {
     display: block;
     font-size: 0.72rem;
-    color: #e0e7ff;
+    color: #475569;
     margin-top: 0.1rem;
   }
 
   &.ok strong { color: #bbf7d0; }
-  &.accent { background: rgba(255, 255, 255, 0.16); }
+  &.accent { background: #ffffff; }
   &.warn strong { color: #fef08a; }
   &.warn.bad {
     background: rgba(254, 226, 226, 0.15);

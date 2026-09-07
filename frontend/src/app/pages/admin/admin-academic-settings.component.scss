@@ -317,8 +317,9 @@
   margin-bottom: 1.25rem;
   padding: 1.5rem 1.75rem;
   border-radius: 16px;
-  background: linear-gradient(135deg, #312e81 0%, #4338ca 45%, #1e40af 100%);
-  color: #fff;
+  background: #f8fafc;
+  color: #0f172a;
+  border: 1px solid #e2e8f0;
 
   h1 {
     margin: 0.25rem 0;
@@ -330,7 +331,7 @@
     font-size: 0.72rem;
     text-transform: uppercase;
     letter-spacing: 0.1em;
-    opacity: 0.85;
+    color: #475569;
   }
 
   .sub {
@@ -338,17 +339,17 @@
     max-width: 42rem;
     font-size: 0.9rem;
     line-height: 1.5;
-    opacity: 0.92;
+    color: #475569;
   }
 
   .hero-link {
-    color: #e0e7ff;
+    color: #2563eb;
     text-decoration: none;
     font-size: 0.88rem;
     font-weight: 600;
 
     &:hover {
-      color: #fff;
+      color: #2563eb;
       text-decoration: underline;
     }
   }

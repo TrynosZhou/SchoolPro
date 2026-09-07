@@ -38,9 +38,9 @@
   gap: 1.25rem;
   padding: 1.35rem 1.45rem;
   border-radius: 18px;
-  background: linear-gradient(135deg, #0f172a 0%, #312e81 45%, #6366f1 100%);
-  color: #fff;
-  box-shadow: 0 18px 40px rgba(99, 102, 241, 0.2);
+  background: #f8fafc;
+  color: #0f172a;
+  border: 1px solid #e2e8f0;
 
   @media (max-width: 960px) {
     grid-template-columns: 1fr;
@@ -54,7 +54,7 @@
     font-weight: 700;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    color: #c7d2fe;
+    color: #475569;
   }
 
   h2 {
@@ -66,12 +66,12 @@
   .hero-sub {
     margin: 0 0 0.85rem;
     max-width: 38rem;
-    color: #e0e7ff;
+    color: #475569;
     font-size: 0.95rem;
     line-height: 1.55;
 
     a {
-      color: #fff;
+      color: #2563eb;
       font-weight: 600;
     }
   }
@@ -344,8 +344,8 @@
   cursor: pointer;
 
   .hero-actions & {
-    background: #fff;
-    color: #4338ca;
+    background: var(--color-accent, #4f46e5);
+    color: #fff;
   }
 
   &:disabled {
@@ -355,11 +355,11 @@
 }
 
 .btn-outline {
-  border: 1px solid rgba(255, 255, 255, 0.35);
+  border: 1px solid #e2e8f0;
   border-radius: 10px;
   padding: 0.55rem 0.9rem;
-  background: rgba(255, 255, 255, 0.12);
-  color: #fff;
+  background: #ffffff;
+  color: #334155;
   font-weight: 600;
   cursor: pointer;
 
@@ -385,9 +385,9 @@
   cursor: pointer;
 
   .hero-actions & {
-    border-color: rgba(255, 255, 255, 0.35);
-    background: transparent;
-    color: #fff;
+    border-color: #e2e8f0;
+    background: #ffffff;
+    color: #334155;
   }
 }
 

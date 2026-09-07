@@ -38,9 +38,11 @@
   gap: 1.25rem;
   padding: 1.35rem 1.45rem;
   border-radius: 18px;
-  background: linear-gradient(135deg, #0f172a 0%, #312e81 45%, #6366f1 100%);
-  color: #fff;
-  box-shadow: 0 18px 40px rgba(99, 102, 241, 0.2);
+  background: #ffffff !important;
+  background-image: none !important;
+  color: #0f172a !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06) !important;
 
   @media (max-width: 960px) {
     grid-template-columns: 1fr;
@@ -54,24 +56,25 @@
     font-weight: 700;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    color: #c7d2fe;
+    color: #64748b !important;
   }
 
   h2 {
     margin: 0 0 0.45rem;
     font-size: 1.65rem;
     line-height: 1.2;
+    color: #0f172a !important;
   }
 
   .hero-sub {
     margin: 0;
     max-width: 38rem;
-    color: #e0e7ff;
+    color: #64748b !important;
     font-size: 0.95rem;
     line-height: 1.55;
 
     a {
-      color: #fff;
+      color: #2563eb;
       font-weight: 600;
     }
   }
