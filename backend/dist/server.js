@@ -295,11 +295,24 @@ async function initializeServer() {
     }
 }
 async function bootstrap() {
+    // Bind the HTTP server FIRST, BEFORE any async DB / startup work.
+    // Render's deployment port-scan probe requires 0.0.0.0:<PORT> to be open within its timeout window.
+    // Health endpoints will return 503 while startup in-flight; authenticated routes return 503 until ready.
+    const host = process.env.HOST || '0.0.0.0';
+    try {
+        await new Promise((resolve, reject) => {
+            const server = app_1.default.listen(env_1.env.port, host, () => resolve());
+            server.once('error', (err) => reject(err));
+        });
+        console.log(`[startup] HTTP listener bound on ${host}:${env_1.env.port} ` +
+            `(public: ${env_1.env.apiPublicUrl} ; nodeEnv=${env_1.env.nodeEnv})`);
+    }
+    catch (err) {
+        console.error(`[startup] FATAL: failed to bind HTTP listener on ${host}:${env_1.env.port}:`, err);
+        process.exit(1);
+    }
     try {
         await initializeServer();
-        app_1.default.listen(env_1.env.port, () => {
-            console.log(`School Pro API running on http://localhost:${env_1.env.port}`);
-        });
         const { startScheduler } = await Promise.resolve().then(() => __importStar(require('./services/scheduler.service')));
         startScheduler();
         try {
@@ -324,8 +337,7 @@ async function bootstrap() {
         void startDemoTenant();
     }
     catch (err) {
-        console.error('Failed to start server:', err);
-        process.exit(1);
+        console.error('bootstrap startup tasks failed (HTTP listener already up, running degraded):', err);
     }
 }
 if (require.main === module) {

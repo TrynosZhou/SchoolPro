@@ -50,6 +50,7 @@
             "allowedCommonJsDependencies": [
               "html2canvas",
               "canvg",
+              "raf",
               "rgbcolor",
               "core-js/modules/es.object.assign.js",
               "core-js/modules/es.string.includes.js",
