@@ -1,7 +1,7 @@
-import { Component, inject, OnInit, signal, computed } from '@angular/core';
+import { Component, inject, OnInit, signal, computed, AfterViewChecked, effect, untracked } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Router, RouterLink } from '@angular/router';
+import { Router, RouterLink, ActivatedRoute } from '@angular/router';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
 import { buildTeacherNavSections } from '../../core/config/teacher-nav';
@@ -30,9 +30,10 @@ type EnrolledViewMode = 'table' | 'cards';
   templateUrl: './admin-enrollment.component.html',
   styleUrl: './admin-enrollment.component.scss',
 })
-export class AdminEnrollmentComponent implements OnInit {
+export class AdminEnrollmentComponent implements OnInit, AfterViewChecked {
   private api = inject(ApiService);
   private router = inject(Router);
+  private route = inject(ActivatedRoute);
   private auth = inject(AuthService);
 
   portalTitle = 'Admin Portal';
@@ -62,6 +63,11 @@ export class AdminEnrollmentComponent implements OnInit {
   loading = signal(true);
   refreshing = signal(false);
   toast = signal<{ type: 'success' | 'error'; msg: string } | null>(null);
+
+  targetedStudentId = signal<string | null>(null);
+  targetedStudentName = signal<string | null>(null);
+  private pendingScrollId: string | null = null;
+  private hasScrolledForId: string | null = null;
 
   stats = computed(() => {
     const classRows = this.classRows();
@@ -115,10 +121,46 @@ export class AdminEnrollmentComponent implements OnInit {
         },
       });
     }
+
+    const qp = this.route.snapshot.queryParams;
+    if (qp['studentId']) {
+      this.targetedStudentId.set(qp['studentId'] as string);
+      this.targetedStudentName.set((qp['studentName'] as string) || null);
+      this.view.set('pending');
+      this.pendingScrollId = qp['studentId'] as string;
+    }
+
     this.load();
     this.api.get<ClassOption[]>('/admin/classes').subscribe({
       next: (c) => this.classes.set(this.asClassArray(c)),
       error: () => this.showToast('error', 'Could not load classes'),
+    });
+  }
+
+  ngAfterViewChecked(): void {
+    const id = this.pendingScrollId;
+    if (!id || this.hasScrolledForId === id) return;
+    const el = document.querySelector<HTMLElement>(`[data-student-id="${CSS.escape(id)}"]`);
+    if (el) {
+      this.hasScrolledForId = id;
+      this.pendingScrollId = null;
+      requestAnimationFrame(() => {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+        el.classList.add('flash-highlight');
+        setTimeout(() => el.classList.remove('flash-highlight'), 2500);
+      });
+    }
+  }
+
+  clearTargetedStudent(): void {
+    this.targetedStudentId.set(null);
+    this.targetedStudentName.set(null);
+    this.hasScrolledForId = null;
+    this.pendingScrollId = null;
+    this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { studentId: null, studentName: null },
+      queryParamsHandling: 'merge',
     });
   }
 
@@ -221,6 +263,9 @@ export class AdminEnrollmentComponent implements OnInit {
       next: () => {
         this.submitting.set(null);
         this.showToast('success', `${student.firstName} enrolled successfully`);
+        if (this.targetedStudentId() === student.id) {
+          this.clearTargetedStudent();
+        }
         this.load(true);
         const map = { ...this.selectedClassId() };
         delete map[student.id];

@@ -281,12 +281,29 @@
         <span>{{ selectedClassLabel() }} · {{ selectedTermLabel() }}</span>
       </div>
       <div class="pdf-toolbar-actions">
+        <button type="button" class="btn-pdf btn-download" (click)="openPreviewInNewTab()" [disabled]="pdfLoading()">
+          Open
+        </button>
         <button type="button" class="btn-pdf btn-download" (click)="downloadPdf()" [disabled]="pdfLoading()">
           Download PDF
         </button>
         <button type="button" class="btn-pdf btn-close" (click)="closePdfPreview()">Close</button>
       </div>
     </header>
-    <iframe class="pdf-frame" [src]="pdfPreviewUrl()!" title="Class list PDF preview"></iframe>
+    <div class="pdf-stage">
+      <iframe class="pdf-frame" [src]="pdfPreviewUrl()!" title="Class list PDF preview" loading="eager" referrerpolicy="no-referrer" sandbox="allow-scripts allow-same-origin allow-popups allow-forms"></iframe>
+      <embed class="pdf-embed" [src]="pdfPreviewUrl()!" type="application/pdf" title="Class list PDF preview" />
+      <div class="pdf-mobile-fallback">
+        <p class="mobile-fallback-title">PDF is ready</p>
+        <p class="mobile-fallback-hint">
+          On your device the preview is best viewed in a new tab. Tap "Open PDF" to see the class list with the system viewer, or download it directly.
+        </p>
+        <div class="mobile-fallback-actions">
+          <button type="button" class="btn-pdf btn-download" (click)="openPreviewInNewTab()">Open PDF</button>
+          <button type="button" class="btn-pdf btn-download" (click)="downloadPdf()">Download PDF</button>
+          <button type="button" class="btn-pdf btn-close" (click)="closePdfPreview()">Close</button>
+        </div>
+      </div>
+    </div>
   </div>
 }

@@ -1,7 +1,7 @@
 import { Component, inject, OnInit, signal, computed } from '@angular/core';
 import { NgTemplateOutlet, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Router, RouterLink } from '@angular/router';
+import { Router, RouterLink, NavigationExtras } from '@angular/router';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
 import { ApiService } from '../../core/services/api.service';
@@ -372,18 +372,12 @@ export class AdminStudentsComponent implements OnInit {
           this.lastInvoiceInfo.set(
             `Invoice ${student.registrationInvoice.invoiceNumber} created ($${amt.toFixed(2)}).`,
           );
-          this.showToast(
-            'success',
-            `${student.admissionNumber} registered. Registration invoice ${student.registrationInvoice.invoiceNumber} created.`,
-          );
         } else if (student.registrationInvoiceError) {
           this.lastInvoiceInfo.set('');
           this.showToast(
             'error',
             `Student registered but invoice failed: ${student.registrationInvoiceError}`,
           );
-        } else {
-          this.showToast('success', `Student ${student.admissionNumber} registered.`);
         }
         this.load(true);
         this.resetForm();
@@ -494,6 +488,22 @@ export class AdminStudentsComponent implements OnInit {
 
   enrollmentStatus(s: Student): 'pending' | 'enrolled' {
     return s.classId || s.schoolClass ? 'enrolled' : 'pending';
+  }
+
+  goToEnrollment(student: Student, event?: Event): void {
+    event?.stopPropagation();
+    if (this.enrollmentStatus(student) !== 'pending') return;
+    if (this.isAccountant) {
+      this.showToast('error', 'Only administrators or class teachers can enroll students.');
+      return;
+    }
+    const target = this.router.url.startsWith('/teacher') ? '/teacher/enrollment' : `${this.basePath}/enrollment`;
+    this.router.navigate([target], {
+      queryParams: {
+        studentId: student.id,
+        studentName: `${student.firstName} ${student.lastName}`,
+      },
+    });
   }
 
   private showToast(type: 'success' | 'error', msg: string) {

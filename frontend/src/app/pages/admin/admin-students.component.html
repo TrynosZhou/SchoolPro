@@ -177,7 +177,12 @@
                 @if (enrollmentStatus(s) === 'enrolled') {
                   <span class="status enrolled">Enrolled</span>
                 } @else {
-                  <span class="status pending">Awaiting class</span>
+                  <button
+                    type="button"
+                    class="status pending actionable"
+                    (click)="goToEnrollment(s, $event)"
+                    title="Go to enrollment to assign a class"
+                  >Awaiting class</button>
                 }
               </div>
 
@@ -250,7 +255,12 @@
                     @if (enrollmentStatus(s) === 'enrolled') {
                       <span class="status enrolled">Enrolled</span>
                     } @else {
-                      <span class="status pending">Awaiting class</span>
+                      <button
+                        type="button"
+                        class="status pending actionable"
+                        (click)="goToEnrollment(s, $event)"
+                        title="Go to enrollment to assign a class"
+                      >Awaiting class</button>
                     }
                   </td>
                   <td class="col-actions">
@@ -418,7 +428,12 @@
             @if (enrollmentStatus(student) === 'enrolled') {
               <span class="status enrolled">Enrolled</span>
             } @else {
-              <span class="status pending">Awaiting class</span>
+              <button
+                type="button"
+                class="status pending actionable"
+                (click)="goToEnrollment(student, $event); closeStudentDetail()"
+                title="Go to enrollment to assign a class"
+              >Awaiting class</button>
             }
           </dd>
         </div>

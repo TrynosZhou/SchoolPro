@@ -168,6 +168,58 @@
   font-size: 0.88rem;
 }
 
+.targeted-banner {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.9rem 1rem;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #eff6ff 0%, #eef2ff 100%);
+  border: 1px solid #bfdbfe;
+  color: #1e3a8a;
+  margin-bottom: 0.75rem;
+  box-shadow: 0 1px 0 rgba(30, 58, 138, 0.04);
+
+  .eyebrow {
+    display: inline-block;
+    font-size: 0.68rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #3730a3;
+    font-weight: 700;
+    margin-bottom: 0.15rem;
+  }
+
+  p {
+    margin: 0;
+    font-size: 0.86rem;
+    line-height: 1.45;
+  }
+
+  strong {
+    color: #1e3a8a;
+  }
+
+  .targeted-dismiss {
+    flex: 0 0 auto;
+    border: 1px solid #c7d2fe;
+    background: #fff;
+    color: #3730a3;
+    padding: 0.35rem 0.7rem;
+    border-radius: 8px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 120ms ease, border-color 120ms ease;
+
+    &:hover {
+      background: #eef2ff;
+      border-color: #a5b4fc;
+    }
+  }
+}
+
 .list-shell {
   background: #fff;
   border: 1px solid #e2e8f0;
@@ -390,11 +442,44 @@
   border-radius: 14px;
   background: #fafbfc;
   flex-wrap: wrap;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition: border-color 0.15s, box-shadow 0.15s, background 0.2s;
 
   &:hover {
     border-color: #99f6e4;
     box-shadow: 0 8px 20px rgba(13, 148, 136, 0.06);
+  }
+
+  &.is-targeted {
+    border-color: #818cf8;
+    background: linear-gradient(180deg, #f5f3ff 0%, #eef2ff 100%);
+    box-shadow:
+      0 0 0 2px rgba(129, 140, 248, 0.2),
+      0 8px 22px rgba(79, 70, 229, 0.1);
+  }
+
+  &.flash-highlight {
+    animation: flash-pulse 2.5s ease-out;
+  }
+}
+
+@keyframes flash-pulse {
+  0% {
+    border-color: #6366f1;
+    box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.28);
+  }
+  25% {
+    border-color: #818cf8;
+    box-shadow: 0 0 0 3px rgba(129, 140, 248, 0.2);
+  }
+  60% {
+    border-color: #a5b4fc;
+    box-shadow: 0 0 0 2px rgba(165, 180, 252, 0.18);
+  }
+  100% {
+    border-color: #818cf8;
+    box-shadow:
+      0 0 0 2px rgba(129, 140, 248, 0.2),
+      0 8px 22px rgba(79, 70, 229, 0.1);
   }
 }
 

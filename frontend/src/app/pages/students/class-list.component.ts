@@ -245,7 +245,43 @@ export class ClassListComponent implements OnInit, OnDestroy {
       this.pdfObjectUrl = URL.createObjectURL(blob);
       this.pdfPreviewUrl.set(this.sanitizer.bypassSecurityTrustResourceUrl(this.pdfObjectUrl));
       this.pdfPreviewOpen.set(true);
+      if (this.isMobileDevice()) {
+        try {
+          const w = window.open(this.pdfObjectUrl, '_blank', 'noopener,noreferrer');
+          if (!w) {
+            const a = document.createElement('a');
+            a.href = this.pdfObjectUrl;
+            a.target = '_blank';
+            a.rel = 'noopener noreferrer';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+          }
+        } catch {
+          /* swallow — modal fallback is still open */
+        }
+      }
     });
+  }
+
+  openPreviewInNewTab(): void {
+    const url = this.pdfObjectUrl;
+    if (!url) {
+      this.previewPdf();
+      return;
+    }
+    try {
+      const w = window.open(url, '_blank', 'noopener,noreferrer');
+      if (!w) throw new Error('blocked');
+    } catch {
+      const a = document.createElement('a');
+      a.href = url;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    }
   }
 
   downloadPdf(): void {
@@ -255,8 +291,10 @@ export class ClassListComponent implements OnInit, OnDestroy {
       const a = document.createElement('a');
       a.href = url;
       a.download = this.pdfFilename();
+      document.body.appendChild(a);
       a.click();
-      URL.revokeObjectURL(url);
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1500);
       this.showToast('success', 'Class list PDF downloaded.');
     });
   }
@@ -264,6 +302,15 @@ export class ClassListComponent implements OnInit, OnDestroy {
   closePdfPreview(): void {
     this.pdfPreviewOpen.set(false);
     this.revokePdfUrl();
+  }
+
+  private isMobileDevice(): boolean {
+    if (typeof navigator === 'undefined') return false;
+    const ua = navigator.userAgent || '';
+    const touchCoarse = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+    const mobileUa = /iPhone|iPod|iPad|Android|BlackBerry|IEMobile|Mobile|Silk|Opera Mini|Windows Phone/i.test(ua);
+    const smallScreen = typeof window !== 'undefined' && Math.min(window.innerWidth || 0, window.innerHeight || 0) <= 900;
+    return mobileUa || touchCoarse || smallScreen;
   }
 
   onTermChange(): void {

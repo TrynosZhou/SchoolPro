@@ -69,6 +69,18 @@
     </header>
 
     @if (portalTitle !== 'Teacher Portal' || isClassTeacher()) {
+    @if (targetedStudentId()) {
+      <div class="targeted-banner" role="region" aria-label="Selected student">
+        <div class="targeted-copy">
+          <span class="eyebrow">Selected student</span>
+          <p>
+            <strong>{{ targetedStudentName() || 'This student' }}</strong> needs a class assignment.
+            Their row is highlighted below — pick a class and choose <strong>Enroll</strong>.
+          </p>
+        </div>
+        <button type="button" class="targeted-dismiss" (click)="clearTargetedStudent()" aria-label="Clear selection">Dismiss</button>
+      </div>
+    }
     @if (stats().fullClasses) {
       <div class="alert-banner">
         {{ stats().fullClasses }} class{{ stats().fullClasses === 1 ? '' : 'es' }} at full capacity.
@@ -159,7 +171,11 @@
         @if (visiblePending().length) {
           <div class="student-list">
             @for (s of visiblePending(); track s.id) {
-              <article class="enroll-card">
+              <article
+                class="enroll-card"
+                [class.is-targeted]="targetedStudentId() === s.id"
+                [attr.data-student-id]="s.id"
+              >
                 <div class="student-main">
                   <span class="avatar">{{ initials(s) }}</span>
                   <div class="student-meta">
