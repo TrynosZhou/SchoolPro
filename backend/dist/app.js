@@ -38,42 +38,107 @@ const app = (0, express_1.default)();
 app.use((0, helmet_1.default)({
     crossOriginResourcePolicy: { policy: 'cross-origin' },
 }));
-function stripTrailingSlash(s) {
-    return s.endsWith('/') ? s.slice(0, -1) : s;
+function resolveFrontendBrowserDir() {
+    const candidates = [
+        path_1.default.resolve(process.cwd(), '..', 'frontend', 'dist', 'browser'),
+        path_1.default.resolve(process.cwd(), 'frontend', 'dist', 'browser'),
+        path_1.default.resolve(__dirname, '..', '..', 'frontend', 'dist', 'browser'),
+        path_1.default.resolve(__dirname, '..', '..', '..', 'frontend', 'dist', 'browser'),
+    ];
+    for (const candidate of candidates) {
+        try {
+            const indexHtml = path_1.default.join(candidate, 'index.html');
+            if (fs_1.default.existsSync(indexHtml))
+                return candidate;
+        }
+        catch {
+            /* ignore */
+        }
+    }
+    return null;
+}
+const frontendDir = resolveFrontendBrowserDir();
+app.use('/uploads', express_1.default.static(path_1.default.join(process.cwd(), 'uploads')));
+if (frontendDir) {
+    app.use(express_1.default.static(frontendDir, {
+        maxAge: env_1.env.nodeEnv === 'production' ? '1y' : 0,
+        setHeaders: (res, filePath) => {
+            if (filePath.endsWith('index.html')) {
+                res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+            }
+        },
+    }));
+}
+function normalizeOrigin(s) {
+    let out = String(s);
+    out = out.replace(/[\x00-\x1F\x7F]/g, '');
+    out = out.replace(/^\s+|\s+$/g, '');
+    out = out.replace(/\/+$/, '');
+    return out;
 }
 const allowedOrigins = env_1.env.frontendUrl
     .split(',')
-    .map((v) => stripTrailingSlash(v.trim()))
+    .map((v) => normalizeOrigin(v))
     .filter(Boolean);
-app.use((0, cors_1.default)({
-    origin: (origin, callback) => {
-        if (!origin)
-            return callback(null, true);
-        const normalizedOrigin = stripTrailingSlash(origin);
-        if (allowedOrigins.includes(normalizedOrigin))
-            return callback(null, true);
-        if (allowedOrigins.includes('*'))
-            return callback(null, true);
-        if (env_1.env.nodeEnv === 'development' && /^http:\/\/localhost:\d+$/.test(normalizedOrigin)) {
-            return callback(null, true);
-        }
-        return callback(new Error(`CORS blocked for origin: ${origin}`));
-    },
-    credentials: true,
-}));
-app.use(express_1.default.json());
-app.use('/uploads', express_1.default.static(path_1.default.join(process.cwd(), 'uploads')));
+function startsWithAny(p, prefixes) {
+    for (const prefix of prefixes)
+        if (p.startsWith(prefix))
+            return true;
+    return false;
+}
+const API_PREFIXES = ['/api/', '/webhooks/', '/uploads/'];
+const HEALTH_PATH = '/api/health';
+function isApiOrProtectedPath(pathname) {
+    if (pathname === HEALTH_PATH)
+        return true;
+    return startsWithAny(pathname, API_PREFIXES);
+}
 app.use((req, res, next) => {
+    const method = (req.method || 'GET').toUpperCase();
+    if (!isApiOrProtectedPath(req.path)) {
+        if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') {
+            return next();
+        }
+    }
+    const corsHandler = (0, cors_1.default)({
+        origin: (origin, callback) => {
+            if (!origin)
+                return callback(null, true);
+            const normalizedOrigin = normalizeOrigin(origin);
+            if (allowedOrigins.includes(normalizedOrigin))
+                return callback(null, true);
+            if (allowedOrigins.includes('*'))
+                return callback(null, true);
+            if (env_1.env.nodeEnv === 'development' && /^http:\/\/localhost:\d+$/.test(normalizedOrigin)) {
+                return callback(null, true);
+            }
+            return callback(new Error(`CORS blocked for origin: \`${origin}\``));
+        },
+        credentials: true,
+    });
+    corsHandler(req, res, next);
+});
+app.use((req, res, next) => {
+    if (!isApiOrProtectedPath(req.path))
+        return next();
+    if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS')
+        return next();
+    express_1.default.json()(req, res, next);
+});
+app.use(express_1.default.json());
+app.use((req, res, next) => {
+    if (!isApiOrProtectedPath(req.path))
+        return next();
     const state = (0, server_1.getStartupState)();
     if (state.ok)
         return next();
-    const path = req.path.endsWith('/') && req.path.length > 1
+    const trimmedPath = req.path.endsWith('/') && req.path.length > 1
         ? req.path.slice(0, -1)
         : req.path;
-    const isPublicSafe = path === '/api/health' ||
-        path.startsWith('/api/public') ||
-        path === '/api/auth/password-policy' ||
-        path.startsWith('/webhooks');
+    const isPublicSafe = trimmedPath === '/api/health' ||
+        trimmedPath.startsWith('/api/public') ||
+        trimmedPath === '/api/auth/password-policy' ||
+        trimmedPath.startsWith('/webhooks');
     if (isPublicSafe)
         return next();
     // #region debug-point H2:middleware-503
@@ -107,9 +172,11 @@ app.use((req, res, next) => {
         message: 'Database is warming up or unreachable — please retry in a moment.',
     });
 });
-app.use(tenant_context_middleware_1.tenantContextMiddleware);
-app.use(demo_guard_middleware_1.demoWriteRateLimiter);
-app.use(demo_guard_middleware_1.demoGlobalWriteGuard);
+app.use((req, res, next) => {
+    if (!isApiOrProtectedPath(req.path))
+        return next();
+    (0, tenant_context_middleware_1.tenantContextMiddleware)(req, res, next);
+}, demo_guard_middleware_1.demoWriteRateLimiter, demo_guard_middleware_1.demoGlobalWriteGuard);
 app.get('/api/health', (_req, res) => {
     const state = (0, server_1.getStartupState)();
     res.json({
@@ -142,35 +209,7 @@ app.use('/api/reports', reports_routes_1.default);
 app.use('/api/access-control', access_control_routes_1.default);
 app.use('/api/lms', lms_routes_1.default);
 app.use('/webhooks', webhooks_routes_1.default);
-function resolveFrontendBrowserDir() {
-    const candidates = [
-        path_1.default.resolve(process.cwd(), '..', 'frontend', 'dist', 'browser'),
-        path_1.default.resolve(process.cwd(), 'frontend', 'dist', 'browser'),
-        path_1.default.resolve(__dirname, '..', '..', 'frontend', 'dist', 'browser'),
-        path_1.default.resolve(__dirname, '..', '..', '..', 'frontend', 'dist', 'browser'),
-    ];
-    for (const candidate of candidates) {
-        try {
-            const indexHtml = path_1.default.join(candidate, 'index.html');
-            if (fs_1.default.existsSync(indexHtml))
-                return candidate;
-        }
-        catch {
-            /* ignore */
-        }
-    }
-    return null;
-}
-const frontendDir = resolveFrontendBrowserDir();
 if (frontendDir) {
-    app.use(express_1.default.static(frontendDir, {
-        maxAge: env_1.env.nodeEnv === 'production' ? '1y' : 0,
-        setHeaders: (res, filePath) => {
-            if (filePath.endsWith('index.html')) {
-                res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-            }
-        },
-    }));
     app.use((req, res, next) => {
         if (req.method !== 'GET')
             return next();

@@ -175,9 +175,16 @@ export async function initializeRealAppDataSourceWithSslFallback(): Promise<{
   const candidates: Array<{ sslMode: string; ssl: boolean | { rejectUnauthorized: boolean } }> =
     [];
   const mode = env.db.sslMode || 'auto';
-  if (mode === 'auto') {
+  const onRenderOrProd = env.onRender || env.nodeEnv === 'production';
+
+  if (onRenderOrProd) {
     candidates.push({ sslMode: 'require', ssl: { rejectUnauthorized: false } });
+    if (mode === 'disable') {
+      candidates.push({ sslMode: 'disable', ssl: false });
+    }
+  } else if (mode === 'auto') {
     candidates.push({ sslMode: 'disable', ssl: false });
+    candidates.push({ sslMode: 'require', ssl: { rejectUnauthorized: false } });
   } else if (mode === 'require') {
     candidates.push({ sslMode: 'require', ssl: { rejectUnauthorized: false } });
   } else if (mode === 'disable') {

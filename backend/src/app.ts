@@ -38,44 +38,112 @@ app.use(
     crossOriginResourcePolicy: { policy: 'cross-origin' },
   }),
 );
-function stripTrailingSlash(s: string): string {
-  return s.endsWith('/') ? s.slice(0, -1) : s;
+
+function resolveFrontendBrowserDir(): string | null {
+  const candidates = [
+    path.resolve(process.cwd(), '..', 'frontend', 'dist', 'browser'),
+    path.resolve(process.cwd(), 'frontend', 'dist', 'browser'),
+    path.resolve(__dirname, '..', '..', 'frontend', 'dist', 'browser'),
+    path.resolve(__dirname, '..', '..', '..', 'frontend', 'dist', 'browser'),
+  ];
+  for (const candidate of candidates) {
+    try {
+      const indexHtml = path.join(candidate, 'index.html');
+      if (fs.existsSync(indexHtml)) return candidate;
+    } catch {
+      /* ignore */
+    }
+  }
+  return null;
+}
+
+const frontendDir = resolveFrontendBrowserDir();
+
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+
+if (frontendDir) {
+  app.use(
+    express.static(frontendDir, {
+      maxAge: env.nodeEnv === 'production' ? '1y' : 0,
+      setHeaders: (res, filePath) => {
+        if (filePath.endsWith('index.html')) {
+          res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        }
+      },
+    }),
+  );
+}
+
+function normalizeOrigin(s: string): string {
+  let out = String(s);
+  out = out.replace(/[\x00-\x1F\x7F]/g, '');
+  out = out.replace(/^\s+|\s+$/g, '');
+  out = out.replace(/\/+$/, '');
+  return out;
 }
 
 const allowedOrigins = env.frontendUrl
   .split(',')
-  .map((v) => stripTrailingSlash(v.trim()))
+  .map((v) => normalizeOrigin(v))
   .filter(Boolean);
 
-app.use(
-  cors({
+function startsWithAny(p: string, prefixes: string[]): boolean {
+  for (const prefix of prefixes) if (p.startsWith(prefix)) return true;
+  return false;
+}
+
+const API_PREFIXES = ['/api/', '/webhooks/', '/uploads/'];
+const HEALTH_PATH = '/api/health';
+
+function isApiOrProtectedPath(pathname: string): boolean {
+  if (pathname === HEALTH_PATH) return true;
+  return startsWithAny(pathname, API_PREFIXES);
+}
+
+app.use((req, res, next) => {
+  const method = (req.method || 'GET').toUpperCase();
+  if (!isApiOrProtectedPath(req.path)) {
+    if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') {
+      return next();
+    }
+  }
+
+  const corsHandler = cors({
     origin: (origin, callback) => {
       if (!origin) return callback(null, true);
-      const normalizedOrigin = stripTrailingSlash(origin);
+      const normalizedOrigin = normalizeOrigin(origin);
       if (allowedOrigins.includes(normalizedOrigin)) return callback(null, true);
       if (allowedOrigins.includes('*')) return callback(null, true);
       if (env.nodeEnv === 'development' && /^http:\/\/localhost:\d+$/.test(normalizedOrigin)) {
         return callback(null, true);
       }
-      return callback(new Error(`CORS blocked for origin: ${origin}`));
+      return callback(new Error(`CORS blocked for origin: \`${origin}\``));
     },
     credentials: true,
-  }),
-);
-app.use(express.json());
-app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+  });
+  corsHandler(req, res, next);
+});
 
 app.use((req, res, next) => {
+  if (!isApiOrProtectedPath(req.path)) return next();
+  if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') return next();
+  express.json()(req, res, next);
+});
+
+app.use(express.json());
+
+app.use((req, res, next) => {
+  if (!isApiOrProtectedPath(req.path)) return next();
   const state = getStartupState();
   if (state.ok) return next();
-  const path = req.path.endsWith('/') && req.path.length > 1
+  const trimmedPath = req.path.endsWith('/') && req.path.length > 1
     ? req.path.slice(0, -1)
     : req.path;
   const isPublicSafe =
-    path === '/api/health' ||
-    path.startsWith('/api/public') ||
-    path === '/api/auth/password-policy' ||
-    path.startsWith('/webhooks');
+    trimmedPath === '/api/health' ||
+    trimmedPath.startsWith('/api/public') ||
+    trimmedPath === '/api/auth/password-policy' ||
+    trimmedPath.startsWith('/webhooks');
   if (isPublicSafe) return next();
   // #region debug-point H2:middleware-503
   (()=>{try{const f=require('fs'),p=require('path');let rp='.dbg/db-warming-503.env';const roots=[process.cwd(),p.resolve(__dirname,'..','..'),p.resolve(__dirname,'..','..','..')];let found=null;for(const r of roots){const cand=p.join(r,rp);if(f.existsSync(cand)){found=cand;break;}}let u='http://127.0.0.1:7777/event',s='db-warming-503';try{if(found){const e=f.readFileSync(found,'utf8');u=e.match(/DEBUG_SERVER_URL=(.+)/)?.[1]||u;s=e.match(/DEBUG_SESSION_ID=(.+)/)?.[1]||s;}}catch{}require('http').request({method:'POST',host:new URL(u).hostname,port:new URL(u).port,path:new URL(u).pathname,headers:{'Content-Type':'application/json'}},()=>{}).on('error',()=>{}).end(JSON.stringify({sessionId:s,runId:'pre',hypothesisId:'H2',location:'app.ts:startup-middleware-503',msg:'[DEBUG] Startup middleware serving 503 for request URL',data:{method:req.method,reqPath:req.path,originalUrl:req.originalUrl,query:req.query,stateOk:state.ok,startedAt:state.startedAt,publicSafe:false,ipHeader:req.headers['x-forwarded-for']||''},ts:Date.now()}));}catch{}})();
@@ -86,9 +154,10 @@ app.use((req, res, next) => {
   });
 });
 
-app.use(tenantContextMiddleware);
-app.use(demoWriteRateLimiter);
-app.use(demoGlobalWriteGuard);
+app.use((req, res, next) => {
+  if (!isApiOrProtectedPath(req.path)) return next();
+  tenantContextMiddleware(req, res, next);
+}, demoWriteRateLimiter, demoGlobalWriteGuard);
 
 app.get('/api/health', (_req, res) => {
   const state = getStartupState();
@@ -124,36 +193,7 @@ app.use('/api/access-control', accessControlRoutes);
 app.use('/api/lms', lmsRoutes);
 app.use('/webhooks', webhooksRoutes);
 
-function resolveFrontendBrowserDir(): string | null {
-  const candidates = [
-    path.resolve(process.cwd(), '..', 'frontend', 'dist', 'browser'),
-    path.resolve(process.cwd(), 'frontend', 'dist', 'browser'),
-    path.resolve(__dirname, '..', '..', 'frontend', 'dist', 'browser'),
-    path.resolve(__dirname, '..', '..', '..', 'frontend', 'dist', 'browser'),
-  ];
-  for (const candidate of candidates) {
-    try {
-      const indexHtml = path.join(candidate, 'index.html');
-      if (fs.existsSync(indexHtml)) return candidate;
-    } catch {
-      /* ignore */
-    }
-  }
-  return null;
-}
-
-const frontendDir = resolveFrontendBrowserDir();
 if (frontendDir) {
-  app.use(
-    express.static(frontendDir, {
-      maxAge: env.nodeEnv === 'production' ? '1y' : 0,
-      setHeaders: (res, filePath) => {
-        if (filePath.endsWith('index.html')) {
-          res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-        }
-      },
-    }),
-  );
   app.use((req, res, next) => {
     if (req.method !== 'GET') return next();
     const pathname = req.path;

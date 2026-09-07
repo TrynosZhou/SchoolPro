@@ -163,9 +163,16 @@ async function initializeRealAppDataSourceWithSslFallback() {
     }
     const candidates = [];
     const mode = env_1.env.db.sslMode || 'auto';
-    if (mode === 'auto') {
+    const onRenderOrProd = env_1.env.onRender || env_1.env.nodeEnv === 'production';
+    if (onRenderOrProd) {
         candidates.push({ sslMode: 'require', ssl: { rejectUnauthorized: false } });
+        if (mode === 'disable') {
+            candidates.push({ sslMode: 'disable', ssl: false });
+        }
+    }
+    else if (mode === 'auto') {
         candidates.push({ sslMode: 'disable', ssl: false });
+        candidates.push({ sslMode: 'require', ssl: { rejectUnauthorized: false } });
     }
     else if (mode === 'require') {
         candidates.push({ sslMode: 'require', ssl: { rejectUnauthorized: false } });

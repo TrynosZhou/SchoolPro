@@ -1,82 +1,137 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
+function cleanStr(value: string | undefined | null): string | undefined {
+  if (value === undefined || value === null) return undefined;
+  const s = String(value).replace(/^\s+|\s+$/g, '');
+  return s === '' ? undefined : s;
+}
+
 function safeInt(value: string | undefined, fallback: number): number {
-  if (value === undefined || value === null || value.trim() === '') return fallback;
-  const n = parseInt(value, 10);
+  const s = cleanStr(value);
+  if (s === undefined) return fallback;
+  const n = parseInt(s, 10);
   return Number.isFinite(n) ? n : fallback;
 }
 
+const envRender = cleanStr(process.env.RENDER);
+const envRenderServiceId = cleanStr(process.env.RENDER_SERVICE_ID);
+const envRenderExternalUrl = cleanStr(process.env.RENDER_EXTERNAL_URL);
+
 const ON_RENDER =
-  typeof process.env.RENDER === 'string' && process.env.RENDER.trim().toLowerCase() === 'true'
+  (typeof envRender === 'string' && envRender.toLowerCase() === 'true')
     ? true
-    : !!process.env.RENDER_SERVICE_ID || !!process.env.RENDER_EXTERNAL_URL;
+    : !!envRenderServiceId || !!envRenderExternalUrl;
 
 const RENDER_PUBLIC_URL = (() => {
-  const u = process.env.RENDER_EXTERNAL_URL;
-  if (!u || u.trim() === '') return undefined;
+  const u = envRenderExternalUrl;
+  if (!u) return undefined;
   return u.replace(/\/+$/, '');
 })();
 
+const envNodeEnv = cleanStr(process.env.NODE_ENV);
+const envDbHost = cleanStr(process.env.DB_HOST);
+const envDbUsername = cleanStr(process.env.DB_USERNAME);
+const envDbPassword = cleanStr(process.env.DB_PASSWORD);
+const envDbDatabase = cleanStr(process.env.DB_DATABASE);
+const envDbSslMode = cleanStr(process.env.DB_SSL_MODE);
+
+const envJwtSecret = cleanStr(process.env.JWT_SECRET);
+const envJwtExpiresIn = cleanStr(process.env.JWT_EXPIRES_IN);
+
+const envFrontendUrl = cleanStr(process.env.FRONTEND_URL);
+const envApiPublicUrl = cleanStr(process.env.API_PUBLIC_URL);
+
+const envRedisUrl = cleanStr(process.env.REDIS_URL);
+const envRedisEnabled = cleanStr(process.env.REDIS_ENABLED);
+
+const envDemoFeatureEnabled = cleanStr(process.env.DEMO_FEATURE_ENABLED);
+const envDemoDbHost = cleanStr(process.env.DEMO_DB_HOST);
+const envDemoDbUsername = cleanStr(process.env.DEMO_DB_USERNAME);
+const envDemoDbPassword = cleanStr(process.env.DEMO_DB_PASSWORD);
+const envDemoDbDatabase = cleanStr(process.env.DEMO_DB_DATABASE);
+const envDemoDbSslMode = cleanStr(process.env.DEMO_DB_SSL_MODE);
+const envDemoResetCron = cleanStr(process.env.DEMO_RESET_CRON);
+const envDemoResetOnBoot = cleanStr(process.env.DEMO_RESET_ON_BOOT);
+
+const envWhatsappEnabled = cleanStr(process.env.WHATSAPP_ENABLED);
+const envTwilioAccountSid = cleanStr(process.env.TWILIO_ACCOUNT_SID);
+const envTwilioAuthToken = cleanStr(process.env.TWILIO_AUTH_TOKEN);
+const envTwilioWhatsappFrom = cleanStr(process.env.TWILIO_WHATSAPP_FROM);
+const envWhatsappUseTemplate = cleanStr(process.env.WHATSAPP_USE_TEMPLATE);
+const envTwilioContentSid = cleanStr(process.env.TWILIO_CONTENT_SID);
+const envTwilioStatusCallbackUrl = cleanStr(process.env.TWILIO_STATUS_CALLBACK_URL);
+const envTwilioSmsFrom = cleanStr(process.env.TWILIO_SMS_FROM);
+
+const envStorageDriver = cleanStr(process.env.STORAGE_DRIVER);
+const envS3Bucket = cleanStr(process.env.S3_BUCKET);
+const envS3Region = cleanStr(process.env.S3_REGION);
+const envS3AccessKeyId = cleanStr(process.env.S3_ACCESS_KEY_ID);
+const envS3SecretAccessKey = cleanStr(process.env.S3_SECRET_ACCESS_KEY);
+const envS3Endpoint = cleanStr(process.env.S3_ENDPOINT);
+const envS3PublicBaseUrl = cleanStr(process.env.S3_PUBLIC_BASE_URL);
+
+const DEFAULT_DB_SSL_MODE = ON_RENDER ? 'require' : 'auto';
+
 export const env = {
   port: safeInt(process.env.PORT, 3000),
-  nodeEnv: process.env.NODE_ENV || (ON_RENDER ? 'production' : 'development'),
+  nodeEnv: envNodeEnv || (ON_RENDER ? 'production' : 'development'),
   onRender: ON_RENDER,
   db: {
-    host: process.env.DB_HOST || 'localhost',
+    host: envDbHost || 'localhost',
     port: safeInt(process.env.DB_PORT, 5432),
-    username: process.env.DB_USERNAME || 'postgres',
-    password: process.env.DB_PASSWORD || 'postgres',
-    database: process.env.DB_DATABASE || 'schoolpro',
-    sslMode: process.env.DB_SSL_MODE || (ON_RENDER ? 'require' : 'auto'),
+    username: envDbUsername || 'postgres',
+    password: envDbPassword || 'postgres',
+    database: envDbDatabase || 'schoolpro',
+    sslMode: envDbSslMode || DEFAULT_DB_SSL_MODE,
   },
   jwt: {
-    secret: process.env.JWT_SECRET || 'dev-secret-change-in-production',
-    expiresIn: process.env.JWT_EXPIRES_IN || '7d',
+    secret: envJwtSecret || 'dev-secret-change-in-production',
+    expiresIn: envJwtExpiresIn || '7d',
   },
-  frontendUrl: process.env.FRONTEND_URL || RENDER_PUBLIC_URL || 'https://schoolproedu.vercel.app/',
-  apiPublicUrl: process.env.API_PUBLIC_URL || RENDER_PUBLIC_URL || 'https://school-pro-lgbk.vercel.app/',
+  frontendUrl: envFrontendUrl || RENDER_PUBLIC_URL || 'https://schoolproedu.vercel.app/',
+  apiPublicUrl: envApiPublicUrl || RENDER_PUBLIC_URL || 'https://school-pro-lgbk.vercel.app/',
   redis: {
-    url: process.env.REDIS_URL || 'redis://127.0.0.1:6379',
-    enabled: process.env.REDIS_ENABLED !== 'false',
+    url: envRedisUrl || 'redis://127.0.0.1:6379',
+    enabled: envRedisEnabled !== 'false',
   },
   whatsapp: {
-    enabled: process.env.WHATSAPP_ENABLED === 'true',
-    accountSid: process.env.TWILIO_ACCOUNT_SID || '',
-    authToken: process.env.TWILIO_AUTH_TOKEN || '',
-    from: process.env.TWILIO_WHATSAPP_FROM || '',
-    useTemplate: process.env.WHATSAPP_USE_TEMPLATE === 'true',
-    contentSid: process.env.TWILIO_CONTENT_SID || '',
-    statusCallbackUrl: process.env.TWILIO_STATUS_CALLBACK_URL || '',
+    enabled: envWhatsappEnabled === 'true',
+    accountSid: envTwilioAccountSid || '',
+    authToken: envTwilioAuthToken || '',
+    from: envTwilioWhatsappFrom || '',
+    useTemplate: envWhatsappUseTemplate === 'true',
+    contentSid: envTwilioContentSid || '',
+    statusCallbackUrl: envTwilioStatusCallbackUrl || '',
   },
   sms: {
-    from: process.env.TWILIO_SMS_FROM || '',
+    from: envTwilioSmsFrom || '',
   },
   demo: {
-    enabled: process.env.DEMO_FEATURE_ENABLED !== 'false',
+    enabled: envDemoFeatureEnabled !== 'false',
     db: {
-      host: process.env.DEMO_DB_HOST || process.env.DB_HOST || 'localhost',
+      host: envDemoDbHost || envDbHost || 'localhost',
       port: safeInt(process.env.DEMO_DB_PORT ?? process.env.DB_PORT, 5432),
-      username: process.env.DEMO_DB_USERNAME || process.env.DB_USERNAME || 'postgres',
-      password: process.env.DEMO_DB_PASSWORD || process.env.DB_PASSWORD || 'postgres',
-      database: process.env.DEMO_DB_DATABASE || 'school_pro_demo',
-      sslMode: process.env.DEMO_DB_SSL_MODE || process.env.DB_SSL_MODE || (ON_RENDER ? 'require' : 'auto'),
+      username: envDemoDbUsername || envDbUsername || 'postgres',
+      password: envDemoDbPassword || envDbPassword || 'postgres',
+      database: envDemoDbDatabase || 'school_pro_demo',
+      sslMode: envDemoDbSslMode || envDbSslMode || DEFAULT_DB_SSL_MODE,
     },
     jwtTtlMinutes: safeInt(process.env.DEMO_JWT_TTL_MINUTES, 45),
-    resetCron: process.env.DEMO_RESET_CRON || '0 0 */1 * *',
-    resetOnBoot: process.env.DEMO_RESET_ON_BOOT === 'true',
+    resetCron: envDemoResetCron || '0 0 */1 * *',
+    resetOnBoot: envDemoResetOnBoot === 'true',
     writeRateLimitPerMinute: safeInt(process.env.DEMO_WRITE_RATE_LIMIT_PER_MINUTE, 20),
   },
   storage: {
-    driver: (process.env.STORAGE_DRIVER === 's3' ? 's3' : 'local') as 'local' | 's3',
+    driver: (envStorageDriver === 's3' ? 's3' : 'local') as 'local' | 's3',
     maxUploadMb: safeInt(process.env.UPLOAD_MAX_MB, 25),
     s3: {
-      bucket: process.env.S3_BUCKET || '',
-      region: process.env.S3_REGION || 'us-east-1',
-      accessKeyId: process.env.S3_ACCESS_KEY_ID || '',
-      secretAccessKey: process.env.S3_SECRET_ACCESS_KEY || '',
-      endpoint: process.env.S3_ENDPOINT || '',
-      publicBaseUrl: process.env.S3_PUBLIC_BASE_URL || '',
+      bucket: envS3Bucket || '',
+      region: envS3Region || 'us-east-1',
+      accessKeyId: envS3AccessKeyId || '',
+      secretAccessKey: envS3SecretAccessKey || '',
+      endpoint: envS3Endpoint || '',
+      publicBaseUrl: envS3PublicBaseUrl || '',
     },
   },
 };

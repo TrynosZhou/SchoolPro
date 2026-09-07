@@ -412,3 +412,146 @@ body {
     min-height: var(--touch-min);
   }
 }
+
+/* ============================================================
+   GLOBAL TOAST / FLASH MESSAGES
+   All pages render a <div class="toast success|error"> via signals.
+   These rules position / size the toast consistently across the
+   entire app, floating below the top navigation bar so it never
+   collides with or hides behind the Balance enquiry / Messages bar.
+   ============================================================ */
+body .toast {
+  position: fixed !important;
+  top: calc(var(--topbar-height, 56px) + 0.75rem + var(--safe-top, 0px)) !important;
+  right: calc(0.75rem + var(--safe-right, 0px)) !important;
+  left: auto !important;
+  bottom: auto !important;
+  z-index: 99999 !important;
+  max-width: min(560px, calc(100vw - 1.5rem - var(--safe-left) - var(--safe-right))) !important;
+  width: auto !important;
+  min-width: 260px !important;
+  padding: 0.85rem 1.1rem !important;
+  border-radius: 12px !important;
+  font-size: 0.88rem !important;
+  font-weight: 500 !important;
+  line-height: 1.45 !important;
+  word-break: break-word !important;
+  overflow-wrap: anywhere !important;
+  box-shadow: 0 14px 40px rgba(15, 23, 42, 0.16), 0 4px 12px rgba(15, 23, 42, 0.08) !important;
+  border: 1px solid transparent !important;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  animation: toast-in 220ms cubic-bezier(0.22, 1, 0.36, 1);
+  color: #0b5b2c;
+  background: color-mix(in srgb, #16a34a 10%, rgba(255, 255, 255, 0.96));
+  border-color: color-mix(in srgb, #16a34a 40%, transparent) !important;
+}
+
+body .toast.success {
+  color: #0b5b2c;
+  background: color-mix(in srgb, var(--color-positive, #16a34a) 10%, rgba(255, 255, 255, 0.96));
+  border-color: color-mix(in srgb, var(--color-positive, #16a34a) 40%, transparent) !important;
+}
+
+body .toast.error {
+  color: #841a1a;
+  background: color-mix(in srgb, var(--color-negative, #dc2626) 10%, rgba(255, 255, 255, 0.96));
+  border-color: color-mix(in srgb, var(--color-negative, #dc2626) 40%, transparent) !important;
+}
+
+[data-theme='dark'] body .toast,
+[data-theme='dark'] body .toast.success {
+  color: #86efac;
+  background: color-mix(in srgb, var(--color-positive, #4ade80) 14%, rgba(15, 15, 16, 0.92));
+  border-color: color-mix(in srgb, var(--color-positive, #4ade80) 45%, transparent) !important;
+}
+
+[data-theme='dark'] body .toast.error {
+  color: #fecaca;
+  background: color-mix(in srgb, var(--color-negative, #f87171) 14%, rgba(15, 15, 16, 0.92));
+  border-color: color-mix(in srgb, var(--color-negative, #f87171) 45%, transparent) !important;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (max-width: 640px) {
+  body .toast {
+    right: calc(0.5rem + var(--safe-right, 0px)) !important;
+    left: calc(0.5rem + var(--safe-left, 0px)) !important;
+    max-width: none !important;
+    min-width: 0 !important;
+  }
+}
+
+/* ============================================================
+   GLOBAL FORM CONTROLS — Slightly tighter fonts + padding
+   so labels and values fit cleanly inside inputs, selects,
+   textareas, and dropdown menus across all pages.
+   ============================================================ */
+html {
+  --input-font-size: 0.84rem;
+  --input-padding-y: 0.52rem;
+  --input-padding-x: 0.7rem;
+}
+
+body input:not([type='checkbox']):not([type='radio']),
+body select,
+body textarea,
+body input[type='date'],
+body input[type='search'],
+body input[type='file'],
+body input[type='email'],
+body input[type='password'],
+body input[type='number'],
+body input[type='tel'],
+body input[type='text'],
+body input[type='url'],
+body .form-grid input,
+body .form-grid select,
+body .form-grid textarea,
+body .toolbar input[type='search'] {
+  font-size: var(--input-font-size) !important;
+  line-height: 1.35;
+}
+
+body input:not([type='checkbox']):not([type='radio']),
+body select,
+body input[type='date'],
+body input[type='search'],
+body .form-grid input,
+body .form-grid select,
+body .toolbar input[type='search'] {
+  padding-top: var(--input-padding-y) !important;
+  padding-bottom: var(--input-padding-y) !important;
+  padding-left: var(--input-padding-x) !important;
+  padding-right: var(--input-padding-x) !important;
+}
+
+body textarea,
+body .form-grid textarea {
+  padding-top: var(--input-padding-y) !important;
+  padding-bottom: var(--input-padding-y) !important;
+  padding-left: var(--input-padding-x) !important;
+  padding-right: var(--input-padding-x) !important;
+}
+
+/* dropdown option text size (native selects) */
+body select option,
+body select optgroup {
+  font-size: var(--input-font-size);
+  padding: 0.25rem 0.5rem;
+}
+
+body label,
+body .form-grid label {
+  font-size: 0.82rem !important;
+}
