@@ -1,49 +1,39 @@
 {
-  "version": 2,
+  "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
   "installCommand": "npm install",
   "buildCommand": "npm run build",
   "outputDirectory": "frontend/dist/browser",
+  "cleanUrls": true,
   "functions": {
-    "api/index.js": {
-      "includeFiles": "backend/dist/**"
+    "api/**/*.ts": {
+      "includeFiles": "backend/dist/**",
+      "memory": 1024,
+      "maxDuration": 30
     }
   },
   "rewrites": [
-    {
-      "source": "/api/:match*",
-      "destination": "/api/index"
-    },
-    {
-      "source": "/uploads/:match*",
-      "destination": "/api/index"
-    },
-    {
-      "source": "/webhooks/:match*",
-      "destination": "/api/index"
-    },
-    {
-      "source": "/((?!assets/|.*\\..*).*)",
-      "destination": "/index.html"
-    }
+    { "source": "/(.*\\.(?:js|css|map|ico|png|jpg|jpeg|gif|svg|webp|woff|woff2|ttf|eot|webmanifest|json))$", "destination": "/$1" },
+    { "source": "/api/:path*", "destination": "/api/[...all]" },
+    { "source": "/((?!ngsw-worker\\.js|safety-worker\\.js|worker-basic\\.min\\.js).)*", "destination": "/index.html" }
   ],
   "headers": [
     {
-      "source": "/api/health",
+      "source": "/(.*)\\.js",
       "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "no-store, no-cache, must-revalidate"
-        }
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
       ]
     },
     {
-      "source": "/assets/(.*)",
+      "source": "/(.*)\\.css",
       "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=31536000, immutable"
-        }
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+      ]
+    },
+    {
+      "source": "/(ngsw-worker\\.js|ngsw\\.json|manifest\\.webmanifest|safety-worker\\.js|worker-basic\\.min\\.js)$",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }
       ]
     }
   ]
