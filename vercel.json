@@ -2,12 +2,12 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
   "installCommand": "npm install",
-  "buildCommand": "npm run build:frontend",
-  "outputDirectory": "frontend/dist",
+  "buildCommand": "npm run build",
+  "outputDirectory": "frontend/dist/browser",
   "cleanUrls": true,
   "functions": {
     "api/**/*.ts": {
-      "includeFiles": "backend/dist/**",
+      "includeFiles": "{backend/dist/**,frontend/dist/browser/**}",
       "memory": 1024,
       "maxDuration": 30
     }
