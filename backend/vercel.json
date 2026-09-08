@@ -3,10 +3,10 @@
   "framework": null,
   "installCommand": "npm install",
   "buildCommand": "npm run build",
-  "outputDirectory": "dist",
+  "outputDirectory": "frontend/dist/browser",
   "functions": {
     "api/index.js": {
-      "includeFiles": "dist/**"
+      "includeFiles": "{backend/dist/**,frontend/dist/browser/**}"
     }
   },
   "rewrites": [
