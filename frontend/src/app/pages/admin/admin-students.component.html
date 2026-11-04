@@ -1,0 +1,580 @@
+<app-portal-layout [portalTitle]="portalTitle" [pageTitle]="'students.pageTitle' | t" [navSections]="navSections">
+  <div class="students-page">
+    @if (toast(); as toastMsg) {
+      <div class="toast" role="status" aria-live="polite" [class.success]="toastMsg.type === 'success'" [class.error]="toastMsg.type === 'error'">{{ toastMsg.msg }}</div>
+    }
+
+    <header class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">{{ 'students.eyebrow' | t }}</p>
+        <h2>{{ 'students.heroTitle' | t }}</h2>
+        <p class="hero-sub">
+          {{ 'students.heroSub' | t }}
+          <a [routerLink]="basePath + '/manage-fees'">{{ 'nav.Manage Fees' | t }}</a>.
+        </p>
+        <div class="hero-actions">
+          <button type="button" class="primary-action" (click)="openRegister()">
+            <span>+</span>
+            {{ 'students.register' | t }}
+          </button>
+          @if (!isAccountant) {
+            <a [routerLink]="basePath + '/enrollment'" class="secondary-action">{{ 'students.enrollment' | t }}</a>
+          }
+          <button type="button" class="refresh-action" (click)="load(true)" [disabled]="refreshing() || loading()">
+            {{ refreshing() ? ('students.refreshing' | t) : ('students.refresh' | t) }}
+          </button>
+        </div>
+        @if (!isAccountant && stats().pending) {
+          <a [routerLink]="basePath + '/enrollment'" class="pending-banner">
+            {{ stats().pending }} student{{ stats().pending === 1 ? '' : 's' }} awaiting class enrollment →
+          </a>
+        }
+      </div>
+      <div class="kpi-grid">
+        <article class="kpi">
+          <span class="kpi-icon">👥</span>
+          <div>
+            <strong>{{ stats().total }}</strong>
+            <span>{{ 'students.kpiTotal' | t }}</span>
+          </div>
+        </article>
+        <article class="kpi accent">
+          <span class="kpi-icon">✅</span>
+          <div>
+            <strong>{{ stats().enrolled }}</strong>
+            <span>{{ 'students.kpiEnrolled' | t }}</span>
+          </div>
+        </article>
+        <article class="kpi warn">
+          <span class="kpi-icon">⏳</span>
+          <div>
+            <strong>{{ stats().pending }}</strong>
+            <span>{{ 'students.kpiPending' | t }}</span>
+          </div>
+        </article>
+        <article class="kpi">
+          <span class="kpi-icon">🏠</span>
+          <div>
+            <strong>{{ stats().dayScholars }}</strong>
+            <span>{{ 'students.kpiDay' | t }}</span>
+          </div>
+        </article>
+      </div>
+    </header>
+
+    @if (lastCreatedId()) {
+      <div class="success-banner">
+        <strong>{{ lastCreatedId() }}</strong> registered successfully.
+        @if (lastInvoiceInfo()) {
+          <span class="invoice-note">{{ lastInvoiceInfo() }}</span>
+        }
+        <div class="success-links">
+          <a routerLink="/admin/payment">Record payment</a>
+          <a routerLink="/admin/enrollment">Enroll in a class</a>
+        </div>
+      </div>
+    }
+
+    <section class="list-shell">
+      <div class="list-toolbar">
+        <div class="search-wrap">
+          <span class="search-icon" aria-hidden="true">🔍</span>
+          <label class="sr-only" for="studentsSearch">{{ 'students.search' | t }}</label>
+          <input
+            id="studentsSearch"
+            type="search"
+            class="search-input"
+            [placeholder]="'students.searchPlaceholder' | t"
+            [ngModel]="search()"
+            (ngModelChange)="search.set($event)"
+            name="search"
+          />
+          @if (search()) {
+            <button type="button" class="clear-search" (click)="search.set('')" aria-label="Clear search">×</button>
+          }
+        </div>
+
+        <div class="toolbar-row">
+          <div class="filter-chips" role="group" aria-label="Filter students">
+            <button type="button" class="chip" [class.active]="enrollmentFilter() === 'all'" [attr.aria-pressed]="enrollmentFilter() === 'all'" (click)="enrollmentFilter.set('all')">
+              {{ 'students.filterAll' | t }}
+            </button>
+            <button type="button" class="chip" [class.active]="enrollmentFilter() === 'enrolled'" [attr.aria-pressed]="enrollmentFilter() === 'enrolled'" (click)="enrollmentFilter.set('enrolled')">
+              {{ 'students.filterEnrolled' | t }}
+            </button>
+            <button type="button" class="chip" [class.active]="enrollmentFilter() === 'pending'" [attr.aria-pressed]="enrollmentFilter() === 'pending'" (click)="enrollmentFilter.set('pending')">
+              {{ 'students.filterPending' | t }}
+            </button>
+            <span class="chip-divider" aria-hidden="true"></span>
+            <button type="button" class="chip" [class.active]="typeFilter() === 'day_scholar'" [attr.aria-pressed]="typeFilter() === 'day_scholar'" (click)="typeFilter.set('day_scholar')">
+              {{ 'students.dayScholar' | t }}
+            </button>
+            <button type="button" class="chip" [class.active]="typeFilter() === 'boarder'" [attr.aria-pressed]="typeFilter() === 'boarder'" (click)="typeFilter.set('boarder')">
+              {{ 'students.boarder' | t }}
+            </button>
+            @if (forms().length) {
+              <span class="chip-divider" aria-hidden="true"></span>
+              <label class="sr-only" for="formFilter">Filter by form</label>
+              <select id="formFilter" class="form-filter" [ngModel]="formFilter()" (ngModelChange)="formFilter.set($event)" name="formFilter">
+                <option value="all">All forms</option>
+                @for (f of forms(); track f.id) {
+                  <option [value]="f.id">{{ f.name }}</option>
+                }
+              </select>
+            }
+          </div>
+
+          <div class="toolbar-actions">
+            <label class="sr-only" for="sortOrder">Sort students</label>
+            <select id="sortOrder" [ngModel]="sortOrder()" (ngModelChange)="sortOrder.set($event)" name="sortOrder" class="sort-select">
+              <option value="name-asc">Name A–Z</option>
+              <option value="name-desc">Name Z–A</option>
+              <option value="id-asc">Student ID A–Z</option>
+              <option value="id-desc">Student ID Z–A</option>
+            </select>
+            <div class="view-toggle" role="group" aria-label="View mode">
+              <button type="button" class="view-btn" [class.active]="viewMode() === 'table'" [attr.aria-pressed]="viewMode() === 'table'" (click)="viewMode.set('table')" aria-label="Table view">☰</button>
+              <button type="button" class="view-btn" [class.active]="viewMode() === 'cards'" [attr.aria-pressed]="viewMode() === 'cards'" (click)="viewMode.set('cards')" aria-label="Card view">▦</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="results-meta" aria-live="polite">
+          <span>{{ 'students.showing' | t:{ visible: visibleStudents().length, total: students().length } }}</span>
+          @if (hasActiveFilters()) {
+            <button type="button" class="clear-filters" (click)="clearFilters()">Clear filters</button>
+          }
+        </div>
+      </div>
+
+      @if (loading()) {
+        <div class="loading-panel">
+          <div class="spinner"></div>
+          <p>Loading students…</p>
+        </div>
+      } @else if (!visibleStudents().length) {
+        <div class="empty-state">
+          <span class="empty-icon">🎓</span>
+          <h3>No students found</h3>
+          @if (hasActiveFilters()) {
+            <p>Try adjusting your search or filters.</p>
+            <button type="button" class="btn-secondary" (click)="clearFilters()">Clear filters</button>
+          } @else {
+            <p>Register the first student to start building your registry.</p>
+            <button type="button" class="btn-primary" (click)="openRegister()">+ Register student</button>
+          }
+        </div>
+      } @else if (viewMode() === 'cards') {
+        <div class="card-grid">
+          @for (s of visibleStudents(); track s.id) {
+            <article class="student-card">
+              <div class="card-head">
+                <span class="avatar">{{ initials(s) }}</span>
+                <div class="card-title">
+                  <strong>{{ s.firstName }} {{ s.lastName }}</strong>
+                  <code class="sid">{{ s.admissionNumber }}</code>
+                </div>
+                @if (enrollmentStatus(s) === 'enrolled') {
+                  <span class="status enrolled">Enrolled</span>
+                } @else {
+                  <button
+                    type="button"
+                    class="status pending actionable"
+                    (click)="goToEnrollment(s, $event)"
+                    title="Go to enrollment to assign a class"
+                  >Awaiting class</button>
+                }
+              </div>
+
+              <div class="card-meta">
+                <div><span>Form</span><strong>{{ formLabel(s) }}</strong></div>
+                <div><strong>{{ classLabel(s) }}</strong></div>
+                <div><span>Gender</span><strong>{{ genderLabel(s) }}</strong></div>
+                <div><span>Type</span><strong>{{ studentTypeLabel(s.studentType) }}</strong></div>
+              </div>
+
+              <div class="card-guardian">
+                <span class="label">Guardian</span>
+                <strong>{{ s.guardians?.[0]?.fullName || '—' }}</strong>
+                @if (s.guardians?.[0]?.phone) {
+                  <span class="muted">{{ s.guardians?.[0]?.phone }}</span>
+                }
+              </div>
+
+              <div class="card-badges">
+                <span class="type-tag" [class.boarder]="s.studentType === 'boarder'">{{ studentTypeLabel(s.studentType) }}</span>
+                @if (s.gender) {
+                  <span class="gender-tag">{{ genderLabel(s) }}</span>
+                }
+              </div>
+
+              <div class="card-actions">
+                <button type="button" class="btn-icon" (click)="openEdit(s)">Edit</button>
+                @if (enrollmentStatus(s) === 'pending') {
+                  <a routerLink="/admin/enrollment" class="btn-link">Enroll</a>
+                }
+                <button *appUnlessDemo type="button" class="btn-icon danger" (click)="confirmDelete(s, $event)">Delete</button>
+              </div>
+            </article>
+          }
+        </div>
+      } @else {
+        <div class="table-wrap">
+          <p class="table-hint">Double-click a row to view student details and guardian contact.</p>
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Student ID</th>
+                <th>Last Name</th>
+                <th>First Name</th>
+                <th>Gender</th>
+                <th>Class</th>
+                <th>Type</th>
+                <th>Status</th>
+                <th class="col-actions">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (s of visibleStudents(); track s.id) {
+                <tr class="clickable-row" (dblclick)="openStudentDetail(s)" title="Double-click to view details">
+                  <td><code class="sid">{{ s.admissionNumber }}</code></td>
+                  <td>{{ s.lastName }}</td>
+                  <td>{{ s.firstName }}</td>
+                  <td>
+                    @if (s.gender) {
+                      <span class="gender-tag">{{ genderLabel(s) }}</span>
+                    } @else {
+                      <span class="muted">—</span>
+                    }
+                  </td>
+                  <td>{{ classLabel(s) }}</td>
+                  <td>
+                    <span class="type-tag" [class.boarder]="s.studentType === 'boarder'">{{ studentTypeLabel(s.studentType) }}</span>
+                  </td>
+                  <td>
+                    @if (enrollmentStatus(s) === 'enrolled') {
+                      <span class="status enrolled">Enrolled</span>
+                    } @else {
+                      <button
+                        type="button"
+                        class="status pending actionable"
+                        (click)="goToEnrollment(s, $event)"
+                        title="Go to enrollment to assign a class"
+                      >Awaiting class</button>
+                    }
+                  </td>
+                  <td class="col-actions">
+                    <div class="action-btns">
+                      <button
+                        type="button"
+                        class="icon-btn id-card"
+                        (click)="previewStudentIdPdf(s, $event)"
+                        [disabled]="idCardPdfLoading() === s.id"
+                        title="Preview Student ID PDF"
+                        aria-label="Preview Student ID PDF"
+                      >
+                        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                          <path fill="currentColor" d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm-1 2l5 5h-5V4zM8 12.5h8v1.5H8v-1.5zm0 3h8v1.5H8V15.5zm0 3h5v1.5H8V18.5z"/>
+                        </svg>
+                      </button>
+                      <button type="button" class="icon-btn edit" (click)="openEdit(s); $event.stopPropagation()" title="Edit student" aria-label="Edit student">
+                        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                          <path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1.003 1.003 0 0 0 0-1.42l-2.34-2.34a1.003 1.003 0 0 0-1.42 0l-1.83 1.83 3.75 3.75 1.84-1.82z"/>
+                        </svg>
+                      </button>
+                      <button *appUnlessDemo type="button" class="icon-btn delete" (click)="confirmDelete(s, $event)" title="Delete student" aria-label="Delete student">
+                        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                          <path fill="currentColor" d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+                        </svg>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </section>
+  </div>
+</app-portal-layout>
+
+@if (registerDrawerOpen()) {
+  <div class="drawer-backdrop" (click)="closeRegister()"></div>
+  <aside class="drawer" role="dialog" aria-modal="true" aria-labelledby="register-title">
+    <div class="drawer-head">
+      <div>
+        <p class="eyebrow">New student</p>
+        <h2 id="register-title">Register student</h2>
+        <p class="drawer-sub">Required fields are marked with *</p>
+      </div>
+      <button type="button" class="drawer-close" (click)="closeRegister()" aria-label="Close">×</button>
+    </div>
+
+    <form class="drawer-body" (ngSubmit)="saveStudent()">
+      <div class="reg-progress" aria-label="Registration completion progress">
+        <div class="progress-meta">
+          <span>Completion</span>
+          <strong>{{ registrationProgress() }}%</strong>
+        </div>
+        <div class="progress-track" role="presentation">
+          <div class="progress-fill" [style.width.%]="registrationProgress()"></div>
+        </div>
+      </div>
+
+      <div class="student-id-preview">
+        <label>Student ID (auto-generated)</label>
+        <div class="id-badge">{{ nextStudentId() || '—' }}</div>
+        <small class="id-hint">Uses settings prefix + 4 random digits + DOB month + registration year (10 digits).</small>
+      </div>
+
+      <ng-container *ngTemplateOutlet="studentFields"></ng-container>
+
+      <div class="drawer-foot">
+        <button type="button" class="btn-secondary" (click)="closeRegister()">Cancel</button>
+        <button type="submit" class="btn-primary" [disabled]="saving()">
+          {{ saving() ? 'Registering…' : 'Register student' }}
+        </button>
+      </div>
+    </form>
+  </aside>
+}
+
+@if (editingStudent(); as student) {
+  <div class="drawer-backdrop" (click)="closeEdit()"></div>
+  <aside class="drawer" role="dialog" aria-modal="true" aria-labelledby="edit-title">
+    <div class="drawer-head">
+      <div>
+        <p class="eyebrow">Edit student</p>
+        <h2 id="edit-title">{{ student.firstName }} {{ student.lastName }}</h2>
+        <p class="drawer-sub"><code class="sid">{{ student.admissionNumber }}</code></p>
+      </div>
+      <button type="button" class="drawer-close" (click)="closeEdit()" aria-label="Close">×</button>
+    </div>
+
+    <form class="drawer-body" (ngSubmit)="updateStudent()">
+      <ng-container *ngTemplateOutlet="studentFields"></ng-container>
+      <div class="drawer-foot">
+        <button type="button" class="btn-secondary" (click)="closeEdit()">Cancel</button>
+        <button type="submit" class="btn-primary" [disabled]="saving()">
+          {{ saving() ? 'Saving…' : 'Save changes' }}
+        </button>
+      </div>
+    </form>
+  </aside>
+}
+
+@if (deleteTarget(); as target) {
+  <div class="modal-backdrop" (click)="cancelDelete()">
+    <div class="modal modal-sm" role="alertdialog" (click)="$event.stopPropagation()">
+      <h2>Delete student?</h2>
+      <p>
+        Remove <strong>{{ target.firstName }} {{ target.lastName }}</strong>
+        (<code>{{ target.admissionNumber }}</code>)? This deactivates the record in the system.
+      </p>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" (click)="cancelDelete()">Cancel</button>
+        <button type="button" class="btn-danger" [disabled]="saving()" (click)="deleteStudent()">
+          {{ saving() ? 'Deleting…' : 'Delete' }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+@if (detailStudent(); as student) {
+  <div class="modal-backdrop" (click)="closeStudentDetail()">
+    <div class="modal detail-modal" role="dialog" aria-labelledby="student-detail-title" (click)="$event.stopPropagation()">
+      <div class="detail-head">
+        <div>
+          <p class="eyebrow">Student details</p>
+          <h2 id="student-detail-title">{{ student.firstName }} {{ student.lastName }}</h2>
+          <code class="sid">{{ student.admissionNumber }}</code>
+        </div>
+        <button type="button" class="drawer-close" (click)="closeStudentDetail()" aria-label="Close">×</button>
+      </div>
+
+      <dl class="detail-grid">
+        <div>
+          <dt>Student ID</dt>
+          <dd><code class="sid">{{ student.admissionNumber }}</code></dd>
+        </div>
+        <div>
+          <dt>Last name</dt>
+          <dd>{{ student.lastName }}</dd>
+        </div>
+        <div>
+          <dt>First name</dt>
+          <dd>{{ student.firstName }}</dd>
+        </div>
+        <div>
+          <dt>Gender</dt>
+          <dd>{{ genderLabel(student) }}</dd>
+        </div>
+        <div>
+          <dt>Form</dt>
+          <dd>{{ formLabel(student) }}</dd>
+        </div>
+                <div>
+                  <dd>{{ classLabel(student) }}</dd>
+                </div>
+        <div>
+          <dt>Type</dt>
+          <dd>{{ studentTypeLabel(student.studentType) }}</dd>
+        </div>
+        <div>
+          <dt>Status</dt>
+          <dd>
+            @if (enrollmentStatus(student) === 'enrolled') {
+              <span class="status enrolled">Enrolled</span>
+            } @else {
+              <button
+                type="button"
+                class="status pending actionable"
+                (click)="goToEnrollment(student, $event); closeStudentDetail()"
+                title="Go to enrollment to assign a class"
+              >Awaiting class</button>
+            }
+          </dd>
+        </div>
+        @if (student.dateOfBirth) {
+          <div>
+            <dt>Date of birth</dt>
+            <dd>{{ student.dateOfBirth | date: 'mediumDate' }}</dd>
+          </div>
+        }
+        @if (student.address) {
+          <div class="span-2">
+            <dt>Address</dt>
+            <dd>{{ student.address }}</dd>
+          </div>
+        }
+      </dl>
+
+      <section class="detail-guardian">
+        <h3>Guardian / parent</h3>
+        @if (student.guardians?.[0]; as guardian) {
+          <dl class="detail-grid">
+            <div>
+              <dt>Name</dt>
+              <dd>{{ guardian.fullName || '—' }}</dd>
+            </div>
+            <div>
+              <dt>Phone</dt>
+              <dd>{{ guardian.guardianPhone || guardian.phone || '—' }}</dd>
+            </div>
+            <div>
+              <dt>WhatsApp notifications</dt>
+              <dd>{{ guardian.guardianWhatsappConsent ? 'Opted in' : 'Not opted in' }}</dd>
+            </div>
+            <div>
+              <dt>Relationship</dt>
+              <dd>{{ guardian.relationship || '—' }}</dd>
+            </div>
+          </dl>
+        } @else {
+          <p class="muted">No guardian contact on file.</p>
+        }
+      </section>
+
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" (click)="closeStudentDetail()">Close</button>
+        <button type="button" class="btn-primary" (click)="openEdit(student); closeStudentDetail()">Edit student</button>
+      </div>
+    </div>
+  </div>
+}
+
+<ng-template #studentFields>
+  <div class="section-title">
+    <h3>Student details</h3>
+    <p>{{ selectedFormHint() }}</p>
+  </div>
+  <div class="form-grid">
+    <div class="field">
+      <label for="stuFirstName">First name *</label>
+      <input id="stuFirstName" [(ngModel)]="form.firstName" name="fn" required placeholder="Enter first name" autocomplete="given-name" />
+    </div>
+    <div class="field">
+      <label for="stuLastName">Last name *</label>
+      <input id="stuLastName" [(ngModel)]="form.lastName" name="ln" required placeholder="Enter last name" autocomplete="family-name" />
+    </div>
+    <div class="field">
+      <label for="stuDob">Date of birth *</label>
+      <input
+        id="stuDob"
+        type="date"
+        [(ngModel)]="form.dateOfBirth"
+        (ngModelChange)="onDateOfBirthChange()"
+        name="dob"
+        required
+      />
+    </div>
+    <div class="field">
+      <label for="stuGender">Gender *</label>
+      <select id="stuGender" [(ngModel)]="form.gender" name="gender" required>
+        <option value="">— Select gender —</option>
+        <option value="Male">Male</option>
+        <option value="Female">Female</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="stuType">Student type *</label>
+      <select id="stuType" [(ngModel)]="form.studentType" name="studentType" required>
+        <option value="day_scholar">Day scholar</option>
+        <option value="boarder">Boarder</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="stuForm">Form *</label>
+      <select id="stuForm" [(ngModel)]="form.formId" name="formId" required>
+        <option value="">— Select form —</option>
+        @for (f of forms(); track f.id) {
+          <option [value]="f.id">{{ f.name }}</option>
+        }
+      </select>
+    </div>
+    <div class="field span-2">
+      <label for="stuAddress">Address</label>
+      <input id="stuAddress" [(ngModel)]="form.address" name="addr" placeholder="Residential address" autocomplete="street-address" />
+    </div>
+    <div class="field span-2">
+      <label for="stuPrevSchool">Previous school</label>
+      <input id="stuPrevSchool" [(ngModel)]="form.previousSchool" name="prev" placeholder="Last school attended (optional)" />
+    </div>
+  </div>
+
+  <fieldset class="guardian-box">
+    <legend>Guardian / parent contact</legend>
+    <div class="form-grid">
+      <div class="field">
+        <label for="guardianName">Full name</label>
+        <input id="guardianName" [(ngModel)]="guardian.fullName" name="gname" placeholder="Primary guardian full name" autocomplete="name" />
+      </div>
+      <div class="field">
+        <label for="guardianPhone">Phone</label>
+        <input id="guardianPhone" [(ngModel)]="guardian.phone" name="gphone" placeholder="+263..." autocomplete="tel" />
+      </div>
+      <div class="field">
+        <label for="guardianRel">Relationship</label>
+        <select id="guardianRel" [(ngModel)]="guardian.relationship" name="grel">
+          <option value="Parent">Parent</option>
+          <option value="Guardian">Guardian</option>
+        </select>
+      </div>
+      <div class="field span-2 consent-field">
+        <label class="consent-label">
+          <input
+            type="checkbox"
+            [(ngModel)]="guardian.guardianWhatsappConsent"
+            name="gwhatsapp"
+          />
+          <span>
+            I agree to receive WhatsApp notifications about my child's academic results and school updates.
+          </span>
+        </label>
+        <p class="consent-hint muted">Unchecked by default. SMS may still be used when WhatsApp is not available.</p>
+      </div>
+    </div>
+  </fieldset>
+</ng-template>

@@ -1,0 +1,122 @@
+<app-portal-layout portalTitle="Admin Portal" pageTitle="Notification Settings" [navSections]="adminNav">
+  @if (toast(); as t) {
+    <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">
+      {{ t.msg }}
+    </div>
+  }
+
+  <header class="hero">
+    <p class="eyebrow">Communication</p>
+    <h2>Automated Notifications</h2>
+    <p class="hero-sub">
+      Choose which events notify parents automatically, on which channels, and customise the wording.
+      Use placeholders like <code>{{ '{' }}student{{ '}' }}</code>, <code>{{ '{' }}amount{{ '}' }}</code>,
+      <code>{{ '{' }}dueDate{{ '}' }}</code>, <code>{{ '{' }}date{{ '}' }}</code>, <code>{{ '{' }}school{{ '}' }}</code>.
+    </p>
+  </header>
+
+  @if (loading()) {
+    <p class="muted">Loading…</p>
+  }
+  @if (model(); as m) {
+    <!-- Absence alerts -->
+    <section class="card">
+      <div class="card-head">
+        <h3>🚫 Absence alerts</h3>
+        <label class="switch">
+          <input type="checkbox" [(ngModel)]="m.absenceAlerts.enabled" />
+          <span>{{ m.absenceAlerts.enabled ? 'On' : 'Off' }}</span>
+        </label>
+      </div>
+      <p class="card-sub">Notify parents automatically when a student is marked absent for the day.</p>
+      <div class="channels">
+        <span class="ch-label">Channels:</span>
+        <label class="check"><input type="checkbox" [(ngModel)]="m.absenceAlerts.channels.inApp" /> In-app</label>
+        <label class="check"><input type="checkbox" [(ngModel)]="m.absenceAlerts.channels.email" /> Email</label>
+        <label class="check"><input type="checkbox" [(ngModel)]="m.absenceAlerts.channels.sms" /> SMS</label>
+      </div>
+      <label class="field-label">Message template</label>
+      <textarea class="input" rows="2" [(ngModel)]="m.absenceAlerts.template"></textarea>
+    </section>
+
+    <!-- Fee reminders -->
+    <section class="card">
+      <div class="card-head">
+        <h3>💳 Fee reminders</h3>
+        <label class="switch">
+          <input type="checkbox" [(ngModel)]="m.feeReminders.enabled" />
+          <span>{{ m.feeReminders.enabled ? 'On' : 'Off' }}</span>
+        </label>
+      </div>
+      <p class="card-sub">Remind parents ahead of due dates and once a balance is overdue.</p>
+      <div class="channels">
+        <span class="ch-label">Channels:</span>
+        <label class="check"><input type="checkbox" [(ngModel)]="m.feeReminders.channels.inApp" /> In-app</label>
+        <label class="check"><input type="checkbox" [(ngModel)]="m.feeReminders.channels.email" /> Email</label>
+        <label class="check"><input type="checkbox" [(ngModel)]="m.feeReminders.channels.sms" /> SMS</label>
+      </div>
+
+      <div class="grid-2">
+        <div>
+          <label class="field-label">Remind this many days before due date</label>
+          <input class="input" type="text" [(ngModel)]="daysBeforeText" placeholder="e.g. 7, 3, 1" />
+          <small class="muted">Comma-separated list of days.</small>
+        </div>
+        <div>
+          <label class="field-label">Repeat overdue reminders every</label>
+          <div class="inline">
+            <input class="input sm" type="number" min="1" [(ngModel)]="m.feeReminders.overdueEveryDays" /> days
+          </div>
+          <label class="check mt"><input type="checkbox" [(ngModel)]="m.feeReminders.overdueEnabled" /> Send overdue reminders</label>
+        </div>
+      </div>
+
+      <label class="field-label">Upcoming reminder template</label>
+      <textarea class="input" rows="2" [(ngModel)]="m.feeReminders.template"></textarea>
+      <label class="field-label">Overdue reminder template</label>
+      <textarea class="input" rows="2" [(ngModel)]="m.feeReminders.overdueTemplate"></textarea>
+      <small class="muted">Overdue supports the extra placeholder <code>{{ '{' }}daysOverdue{{ '}' }}</code>.</small>
+    </section>
+
+    <!-- Exam results -->
+    <section class="card">
+      <div class="card-head">
+        <h3>🎓 Exam results</h3>
+        <label class="switch">
+          <input type="checkbox" [(ngModel)]="m.examResults.enabled" />
+          <span>{{ m.examResults.enabled ? 'On' : 'Off' }}</span>
+        </label>
+      </div>
+      <p class="card-sub">Notify parents/students when results are published.</p>
+      <div class="channels">
+        <span class="ch-label">Channels:</span>
+        <label class="check"><input type="checkbox" [(ngModel)]="m.examResults.channels.inApp" /> In-app</label>
+        <label class="check"><input type="checkbox" [(ngModel)]="m.examResults.channels.email" /> Email</label>
+        <label class="check"><input type="checkbox" [(ngModel)]="m.examResults.channels.sms" /> SMS</label>
+      </div>
+      <label class="field-label">Message template</label>
+      <textarea class="input" rows="2" [(ngModel)]="m.examResults.template"></textarea>
+      <small class="muted">Supports <code>{{ '{' }}exam{{ '}' }}</code> and <code>{{ '{' }}term{{ '}' }}</code>.</small>
+    </section>
+
+    <!-- Timing -->
+    <section class="card">
+      <div class="card-head"><h3>⏰ Daily run time</h3></div>
+      <p class="card-sub">When the daily fee-reminder scan runs each day (server local time).</p>
+      <select class="input sm" [(ngModel)]="m.dailyRunHour">
+        @for (h of hours; track h) {
+          <option [ngValue]="h">{{ h < 10 ? '0' + h : h }}:00</option>
+        }
+      </select>
+    </section>
+
+    <div class="footer-actions">
+      <button type="button" class="btn-outline" [disabled]="runningReminders()" (click)="runReminders()">
+        {{ runningReminders() ? 'Running…' : 'Run fee reminders now' }}
+      </button>
+      <button type="button" class="btn-primary" [disabled]="saving()" (click)="save()">
+        {{ saving() ? 'Saving…' : 'Save settings' }}
+      </button>
+    </div>
+  }
+</app-portal-layout>

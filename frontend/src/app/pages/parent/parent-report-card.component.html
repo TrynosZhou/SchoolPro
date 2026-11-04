@@ -1,0 +1,163 @@
+<app-portal-layout
+  [portalTitle]="portalTitle()"
+  pageTitle="Report Card"
+  [homePath]="isStudent() ? '/student' : '/parent'"
+  [navSections]="navSections()"
+  [navItems]="navItems()"
+>
+
+  <a [routerLink]="homeLink()" class="back-link">← Back to {{ isStudent() ? 'Report Cards' : 'My Children' }}</a>
+
+  <div class="toolbar card">
+    <label class="term-field">
+      <span>Term</span>
+      <select [value]="selectedTermId()" (change)="onTermChange($any($event.target).value)">
+        @for (t of terms(); track t.id) {
+          <option [value]="t.id">{{ t.name }}</option>
+        }
+      </select>
+    </label>
+    @if (report()) {
+      <button type="button" class="btn-outline" (click)="downloadPdf()">Download PDF</button>
+    }
+  </div>
+
+  @if (loading()) {
+    <div class="empty card"><p>Loading report card…</p></div>
+  } @else if (blockedMessage()) {
+    <div class="empty card locked">
+      <p class="locked-icon" aria-hidden="true">🔒</p>
+      <p class="locked-msg">{{ blockedMessage() }}</p>
+      <a routerLink="/parent/finance" [queryParams]="{ studentId }" class="btn-outline">View financial statement</a>
+    </div>
+  } @else if (notFound()) {
+    <div class="empty card">
+      <p>No report card for this term yet. Marks appear here after teachers enter exam results.</p>
+    </div>
+  } @else if (report()) {
+    <div class="report-card-shell card">
+      <div class="report-school-banner">
+        <div class="banner-top-line" aria-hidden="true"></div>
+        <div class="banner-inner">
+          <div class="banner-left">
+            <h3 class="banner-school-name">{{ schoolName() }}</h3>
+            @if (schoolBranding()?.address) {
+              <p class="banner-line">{{ schoolBranding()!.address }}</p>
+            }
+            @if (schoolBranding()?.tagline) {
+              <p class="banner-line">{{ schoolBranding()!.tagline }}</p>
+            }
+            @if (schoolBranding()?.email) {
+              <p class="banner-line banner-email">
+                <span class="banner-email-label">Email.</span>
+                <span class="banner-email-value">{{ schoolBranding()!.email }}</span>
+              </p>
+            }
+          </div>
+          <div class="banner-right">
+            @if (logoFullUrl()) {
+              <img [src]="logoFullUrl()!" alt="School logo" class="banner-logo" />
+            } @else {
+              <div class="banner-logo placeholder" aria-hidden="true">🏫</div>
+            }
+            @if (websiteDisplay()) {
+              <p class="banner-website">{{ websiteDisplay() }}</p>
+            }
+          </div>
+        </div>
+      </div>
+
+      <div class="report-header">
+        <h2>{{ report()!.student?.firstName }} {{ report()!.student?.lastName }}</h2>
+      <p class="meta">
+        Student ID: <strong>{{ report()!.student?.admissionNumber }}</strong>
+        · Class: <strong>{{ reportCardClassValue(report()!.student?.schoolClass?.name) }}</strong>
+        · Term: {{ report()!.term?.name }}
+      </p>
+      @if (report()!.averageMark != null) {
+        <p class="summary">
+          Average: <strong>{{ report()!.averageMark | number:'1.1-1' }}</strong>
+          @if (report()!.classPosition) {
+            · Class position: <strong>{{ positionOutOfLabel(report()!.classPosition, report()!.classTotal) }}</strong>
+          }
+          @if (report()!.formPosition) {
+            · Form position: <strong>{{ positionOutOfLabel(report()!.formPosition, report()!.formTotal) }}</strong>
+          }
+          @if (report()!.subjectsPassed != null && report()!.totalSubjects) {
+            · Subjects passed: <strong>{{ subjectsPassedLabel(report()!.subjectsPassed, report()!.totalSubjects) }}</strong>
+          }
+        </p>
+      }
+      </div>
+
+      <div class="table-wrap">
+      <table class="results-table">
+        <thead>
+          <tr>
+            <th class="col-subject">Subject</th>
+            <th class="col-code">Code</th>
+            <th class="col-mark">Mark</th>
+            <th class="col-grade">Grade</th>
+            @if (showGradePoints()) {
+              <th class="col-points">Points</th>
+            }
+            <th class="col-rank">Rank</th>
+            <th class="col-avg">Mean</th>
+            <th>Remarks</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of report()!.subjectResults; track row.subject) {
+            <tr>
+              <td class="col-subject">{{ row.subjectName || row.subject }}</td>
+              <td class="col-code">{{ row.subjectCode || '—' }}</td>
+              <td class="mark-cell">{{ row.marks }}</td>
+              <td class="grade-cell"><span class="grade-pill">{{ row.grade }}</span></td>
+              @if (showGradePoints()) {
+                <td class="points-cell col-points">{{ pointsForGrade(row.grade) }}</td>
+              }
+              <td class="col-rank">{{ subjectPositionLabel(row.subjectPosition, row.subjectPositionTotal) }}</td>
+              <td class="col-avg">{{ row.mean != null ? (row.mean | number:'1.1-1') : '—' }}</td>
+              <td class="remarks">{{ row.remarks || '—' }}</td>
+            </tr>
+          } @empty {
+            <tr><td [attr.colspan]="showGradePoints() ? 8 : 7">No subject results recorded.</td></tr>
+          }
+        </tbody>
+        <tfoot>
+          <tr class="average-row">
+            <td colspan="2" class="avg-label-cell">Average Mark</td>
+            <td class="avg-value-cell mark-cell">
+              @if (report()!.averageMark != null) {
+                {{ report()!.averageMark | number:'1.1-1' }}
+              } @else {
+                —
+              }
+            </td>
+            <td class="grade-cell footer-total-label">
+              @if (showGradePoints()) {
+                Total
+              }
+            </td>
+            @if (showGradePoints()) {
+              <td class="points-cell col-points footer-points">{{ totalPointsForReport() }}</td>
+            }
+            <td [attr.colspan]="3"></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+
+    @if (report()!.classTeacherRemarks || hasPrincipalRemarksSection()) {
+      <div class="comments">
+        @if (report()!.classTeacherRemarks) {
+          <p><strong>Class teacher (behaviour &amp; attitude):</strong> {{ report()!.classTeacherRemarks }}</p>
+        }
+        @if (hasPrincipalRemarksSection()) {
+          <p class="principal-remarks"><strong>Principal (academic performance):</strong> {{ principalRemarksForDisplay() }}</p>
+        }
+      </div>
+    }
+    </div>
+  }
+</app-portal-layout>

@@ -1,0 +1,251 @@
+<app-portal-layout portalTitle="Admin Portal" pageTitle="Admissions" [navSections]="adminNav">
+  <div class="admissions-page">
+    @if (toast(); as t) {
+      <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>
+    }
+
+    <header class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">Admissions &amp; Enrollment</p>
+        <h2>Applications</h2>
+        <p class="hero-sub">
+          Review online admission applications, view supporting documents, and move applicants through the
+          pipeline. Applicants are notified by email at every status change.
+        </p>
+        <div class="hero-actions">
+          <button type="button" class="primary-action" (click)="copyApplyLink()">
+            <span>🔗</span> Copy public form link
+          </button>
+          <button type="button" class="refresh-action" (click)="load(true)" [disabled]="refreshing() || loading()">
+            {{ refreshing() ? 'Refreshing…' : 'Refresh' }}
+          </button>
+        </div>
+      </div>
+      <div class="kpi-grid">
+        <article class="kpi">
+          <span class="kpi-icon">📨</span>
+          <div><strong>{{ stats().total }}</strong><span>Total</span></div>
+        </article>
+        <article class="kpi applied">
+          <span class="kpi-icon">📝</span>
+          <div><strong>{{ stats().applied }}</strong><span>Applied</span></div>
+        </article>
+        <article class="kpi shortlisted">
+          <span class="kpi-icon">⭐</span>
+          <div><strong>{{ stats().shortlisted }}</strong><span>Shortlisted</span></div>
+        </article>
+        <article class="kpi admitted">
+          <span class="kpi-icon">✅</span>
+          <div><strong>{{ stats().admitted }}</strong><span>Admitted</span></div>
+        </article>
+        <article class="kpi rejected">
+          <span class="kpi-icon">🚫</span>
+          <div><strong>{{ stats().rejected }}</strong><span>Rejected</span></div>
+        </article>
+      </div>
+    </header>
+
+    <section class="list-shell">
+      <div class="list-toolbar">
+        <div class="search-wrap">
+          <span class="search-icon" aria-hidden="true">🔍</span>
+          <input
+            type="search"
+            class="search-input"
+            placeholder="Search name, reference, guardian, email…"
+            [ngModel]="search()"
+            (ngModelChange)="search.set($event)"
+            name="search"
+          />
+          @if (search()) {
+            <button type="button" class="clear-search" (click)="search.set('')" aria-label="Clear search">×</button>
+          }
+        </div>
+
+        <div class="toolbar-row">
+          <div class="filter-chips">
+            <button type="button" class="chip" [class.active]="statusFilter() === 'all'" (click)="statusFilter.set('all')">All</button>
+            @for (s of statusOrder; track s) {
+              <button type="button" class="chip" [class.active]="statusFilter() === s" (click)="statusFilter.set(s)">
+                {{ statusLabel(s) }}
+              </button>
+            }
+          </div>
+
+          <div class="toolbar-actions">
+            @if (classOptions().length) {
+              <select class="filter-select" [ngModel]="classFilter()" (ngModelChange)="classFilter.set($event)" name="classFilter">
+                <option value="all">All classes</option>
+                @for (c of classOptions(); track c) {
+                  <option [value]="c">{{ c }}</option>
+                }
+              </select>
+            }
+            <label class="date-field">
+              <span>From</span>
+              <input type="date" [ngModel]="dateFrom()" (ngModelChange)="dateFrom.set($event)" name="dateFrom" />
+            </label>
+            <label class="date-field">
+              <span>To</span>
+              <input type="date" [ngModel]="dateTo()" (ngModelChange)="dateTo.set($event)" name="dateTo" />
+            </label>
+          </div>
+        </div>
+
+        <div class="results-meta">
+          <span>Showing <strong>{{ visibleApplications().length }}</strong> of <strong>{{ applications().length }}</strong> applications</span>
+          @if (hasActiveFilters()) {
+            <button type="button" class="clear-filters" (click)="clearFilters()">Clear filters</button>
+          }
+        </div>
+      </div>
+
+      @if (loading()) {
+        <div class="loading-panel">
+          <div class="spinner"></div>
+          <p>Loading applications…</p>
+        </div>
+      } @else if (!visibleApplications().length) {
+        <div class="empty-state">
+          <span class="empty-icon">📭</span>
+          <h3>No applications found</h3>
+          @if (hasActiveFilters()) {
+            <p>Try adjusting your search or filters.</p>
+            <button type="button" class="btn-secondary" (click)="clearFilters()">Clear filters</button>
+          } @else {
+            <p>Applications submitted through the public form will appear here.</p>
+            <button type="button" class="btn-secondary" (click)="copyApplyLink()">Copy public form link</button>
+          }
+        </div>
+      } @else {
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Reference</th>
+                <th>Applicant</th>
+                <th>Class</th>
+                <th>Guardian</th>
+                <th>Submitted</th>
+                <th>Docs</th>
+                <th>Status</th>
+                <th class="col-actions">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (a of visibleApplications(); track a.id) {
+                <tr class="clickable-row" (dblclick)="openDetail(a)" title="Double-click to view">
+                  <td><code class="ref">{{ a.referenceNumber }}</code></td>
+                  <td>
+                    <div class="applicant-cell">
+                      <span class="avatar">{{ initials(a) }}</span>
+                      <span>{{ fullName(a) }}</span>
+                    </div>
+                  </td>
+                  <td>{{ a.classAppliedFor }}</td>
+                  <td>
+                    <div class="guardian-cell">
+                      <strong>{{ a.guardianName }}</strong>
+                      <small>{{ a.contactPhone }}</small>
+                    </div>
+                  </td>
+                  <td>{{ a.submittedAt | date: 'mediumDate' }}</td>
+                  <td><span class="doc-count">{{ a.documents?.length || 0 }}</span></td>
+                  <td><span class="status-badge" [class]="'status-' + a.status">{{ statusLabel(a.status) }}</span></td>
+                  <td class="col-actions">
+                    <button type="button" class="btn-view" (click)="openDetail(a)">View</button>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </section>
+  </div>
+</app-portal-layout>
+
+@if (detail(); as app) {
+  <div class="modal-backdrop" (click)="closeDetail()">
+    <div class="modal detail-modal" role="dialog" aria-labelledby="app-detail-title" (click)="$event.stopPropagation()">
+      <div class="detail-head">
+        <div>
+          <p class="eyebrow">{{ app.referenceNumber }}</p>
+          <h2 id="app-detail-title">{{ fullName(app) }}</h2>
+          <span class="status-badge" [class]="'status-' + app.status">{{ statusLabel(app.status) }}</span>
+        </div>
+        <button type="button" class="drawer-close" (click)="closeDetail()" aria-label="Close">×</button>
+      </div>
+
+      <dl class="detail-grid">
+        <div><dt>Class applying for</dt><dd>{{ app.classAppliedFor }}</dd></div>
+        <div><dt>Date of birth</dt><dd>{{ app.dateOfBirth ? (app.dateOfBirth | date: 'mediumDate') : '—' }}</dd></div>
+        <div><dt>Gender</dt><dd>{{ app.gender || '—' }}</dd></div>
+        <div><dt>Previous school</dt><dd>{{ app.previousSchool || '—' }}</dd></div>
+        <div><dt>Guardian</dt><dd>{{ app.guardianName }} ({{ app.guardianRelationship || 'Guardian' }})</dd></div>
+        <div><dt>Phone</dt><dd>{{ app.contactPhone }}</dd></div>
+        <div><dt>Email</dt><dd>{{ app.contactEmail }}</dd></div>
+        <div><dt>Submitted</dt><dd>{{ app.submittedAt | date: 'medium' }}</dd></div>
+        @if (app.address) {
+          <div class="span-2"><dt>Address</dt><dd>{{ app.address }}</dd></div>
+        }
+      </dl>
+
+      <section class="detail-docs">
+        <h3>Supporting documents</h3>
+        @if (app.documents?.length) {
+          <ul class="doc-links">
+            @for (doc of app.documents; track doc.id) {
+              <li>
+                <button type="button" class="doc-link" (click)="viewDocument(app, doc)" [disabled]="docLoadingId() === doc.id">
+                  <span class="doc-link-icon">📄</span>
+                  <span class="doc-link-text">
+                    <strong>{{ docLabel(doc) }}</strong>
+                    <small>{{ doc.originalName }}</small>
+                  </span>
+                  <span class="doc-link-open">{{ docLoadingId() === doc.id ? 'Opening…' : 'View' }}</span>
+                </button>
+              </li>
+            }
+          </ul>
+        } @else {
+          <p class="muted">No documents were uploaded with this application.</p>
+        }
+      </section>
+
+      <section class="detail-status">
+        <h3>Update status</h3>
+        <div class="status-form">
+          <label class="status-select-field">
+            <span>Status</span>
+            <select [ngModel]="editStatus()" (ngModelChange)="editStatus.set($event)" name="editStatus">
+              @for (s of statusOrder; track s) {
+                <option [value]="s">{{ statusLabel(s) }}</option>
+              }
+            </select>
+          </label>
+          <label class="status-note-field">
+            <span>Note to applicant (optional)</span>
+            <textarea
+              rows="3"
+              [ngModel]="editNote()"
+              (ngModelChange)="editNote.set($event)"
+              name="editNote"
+              placeholder="Included in the email sent to the applicant…"
+            ></textarea>
+          </label>
+        </div>
+        @if (app.reviewedAt) {
+          <p class="reviewed-at">Last updated {{ app.reviewedAt | date: 'medium' }}</p>
+        }
+      </section>
+
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" (click)="closeDetail()">Close</button>
+        <button type="button" class="btn-primary" (click)="updateStatus()" [disabled]="savingStatus()">
+          {{ savingStatus() ? 'Saving…' : 'Update status & notify' }}
+        </button>
+      </div>
+    </div>
+  </div>
+}

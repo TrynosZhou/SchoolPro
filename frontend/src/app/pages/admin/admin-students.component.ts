@@ -1,0 +1,513 @@
+import { Component, inject, OnInit, signal, computed } from '@angular/core';
+import { NgTemplateOutlet, DatePipe } from '@angular/common';
+import { FormsModule } from '@angular/forms';
+import { Router, RouterLink, NavigationExtras } from '@angular/router';
+import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
+import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
+import { ApiService } from '../../core/services/api.service';
+import { AuthService } from '../../core/services/auth.service';
+import { NavSection } from '../../shared/portal-layout/portal-layout.component';
+import { resolveStaffPortalContext } from '../../core/utils/staff-portal.util';
+import { formatGenderLabel, formatStudentClassLabel } from '../../core/utils/class-display';
+import { UnlessDemoDirective } from '../../core/directives/unless-demo.directive';
+import { TranslatePipe } from '../../core/pipes/translate.pipe';
+import { Student } from '../../core/models';
+
+interface FormOption {
+  id: string;
+  name: string;
+  level: number;
+}
+
+type StudentResidenceType = 'day_scholar' | 'boarder';
+type EnrollmentFilter = 'all' | 'enrolled' | 'pending';
+type TypeFilter = 'all' | 'day_scholar' | 'boarder';
+type SortOrder = 'name-asc' | 'name-desc' | 'id-asc' | 'id-desc';
+type ViewMode = 'table' | 'cards';
+
+type StudentForm = {
+  firstName: string;
+  lastName: string;
+  dateOfBirth: string;
+  gender: string;
+  studentType: StudentResidenceType;
+  address: string;
+  previousSchool: string;
+  formId: string;
+};
+
+interface RegisterStudentResponse extends Student {
+  registrationInvoice?: {
+    id: string;
+    invoiceNumber: string;
+    totalAmount: number;
+  };
+  registrationInvoiceError?: string;
+}
+
+@Component({
+  selector: 'app-admin-students',
+  standalone: true,
+  imports: [PortalLayoutComponent, FormsModule, RouterLink, NgTemplateOutlet, DatePipe, UnlessDemoDirective, TranslatePipe],
+  templateUrl: './admin-students.component.html',
+  styleUrl: './admin-students.component.scss',
+})
+export class AdminStudentsComponent implements OnInit {
+  private api = inject(ApiService);
+  private router = inject(Router);
+  private auth = inject(AuthService);
+
+  portalTitle = 'Admin Portal';
+  navSections: NavSection[] = ADMIN_NAV_SECTIONS;
+  basePath = '/admin';
+  isAccountant = false;
+
+  students = signal<Student[]>([]);
+  forms = signal<FormOption[]>([]);
+  nextStudentId = signal('');
+  lastCreatedId = signal('');
+  lastInvoiceInfo = signal('');
+  saving = signal(false);
+  loading = signal(true);
+  refreshing = signal(false);
+  search = signal('');
+  registerDrawerOpen = signal(false);
+  editingStudent = signal<Student | null>(null);
+  deleteTarget = signal<Student | null>(null);
+  detailStudent = signal<Student | null>(null);
+  idCardPdfLoading = signal<string | null>(null);
+  toast = signal<{ type: 'success' | 'error'; msg: string } | null>(null);
+
+  enrollmentFilter = signal<EnrollmentFilter>('all');
+  typeFilter = signal<TypeFilter>('all');
+  formFilter = signal('all');
+  sortOrder = signal<SortOrder>('name-asc');
+  viewMode = signal<ViewMode>('table');
+
+  form: StudentForm = this.emptyForm();
+  guardian = {
+    fullName: '',
+    phone: '',
+    relationship: 'Parent',
+    isPrimary: true,
+    guardianWhatsappConsent: false,
+  };
+
+  readonly adminNav = ADMIN_NAV_SECTIONS;
+
+  stats = computed(() => {
+    const rows = this.studentRows();
+    return {
+      total: rows.length,
+      enrolled: rows.filter((s) => this.enrollmentStatus(s) === 'enrolled').length,
+      pending: rows.filter((s) => this.enrollmentStatus(s) === 'pending').length,
+      boarders: rows.filter((s) => s.studentType === 'boarder').length,
+      dayScholars: rows.filter((s) => s.studentType !== 'boarder').length,
+    };
+  });
+
+  visibleStudents = computed(() => {
+    let rows = [...this.studentRows()];
+    const q = this.search().trim().toLowerCase();
+
+    if (q) {
+      rows = rows.filter((s) =>
+        `${s.firstName} ${s.lastName} ${s.admissionNumber} ${s.schoolClass?.name ?? ''} ${s.guardians?.[0]?.fullName ?? ''}`
+          .toLowerCase()
+          .includes(q),
+      );
+    }
+
+    const enrollment = this.enrollmentFilter();
+    if (enrollment === 'enrolled') rows = rows.filter((s) => this.enrollmentStatus(s) === 'enrolled');
+    else if (enrollment === 'pending') rows = rows.filter((s) => this.enrollmentStatus(s) === 'pending');
+
+    const type = this.typeFilter();
+    if (type === 'day_scholar') rows = rows.filter((s) => s.studentType !== 'boarder');
+    else if (type === 'boarder') rows = rows.filter((s) => s.studentType === 'boarder');
+
+    const formId = this.formFilter();
+    if (formId !== 'all') {
+      rows = rows.filter((s) => (s.formId || s.form?.id) === formId);
+    }
+
+    const sort = this.sortOrder();
+    rows.sort((a, b) => {
+      if (sort === 'id-asc') return a.admissionNumber.localeCompare(b.admissionNumber);
+      if (sort === 'id-desc') return b.admissionNumber.localeCompare(a.admissionNumber);
+      const nameA = `${a.lastName} ${a.firstName}`.toLowerCase();
+      const nameB = `${b.lastName} ${b.firstName}`.toLowerCase();
+      if (sort === 'name-desc') return nameB.localeCompare(nameA);
+      return nameA.localeCompare(nameB);
+    });
+
+    return rows;
+  });
+
+  hasActiveFilters = computed(
+    () =>
+      Boolean(this.search().trim()) ||
+      this.enrollmentFilter() !== 'all' ||
+      this.typeFilter() !== 'all' ||
+      this.formFilter() !== 'all',
+  );
+
+  ngOnInit() {
+    const ctx = resolveStaffPortalContext(this.router.url, this.auth.user()?.role);
+    this.portalTitle = ctx.portalTitle;
+    this.navSections = ctx.navSections;
+    this.basePath = ctx.basePath;
+    this.isAccountant = ctx.isAccountant;
+    this.load();
+    this.api.get<FormOption[]>('/admin/forms').subscribe({
+      next: (f) => {
+        const rows = this.asFormArray(f);
+        this.forms.set(rows.sort((a, b) => a.level - b.level));
+      },
+      error: () => this.showToast('error', 'Could not load forms'),
+    });
+  }
+
+  private studentRows(): Student[] {
+    return this.asStudentArray(this.students());
+  }
+
+  private asStudentArray(value: unknown): Student[] {
+    return Array.isArray(value) ? value : [];
+  }
+
+  private asFormArray(value: unknown): FormOption[] {
+    return Array.isArray(value) ? value : [];
+  }
+
+  private emptyForm(): StudentForm {
+    return {
+      firstName: '',
+      lastName: '',
+      dateOfBirth: '',
+      gender: '',
+      studentType: 'day_scholar',
+      address: '',
+      previousSchool: '',
+      formId: '',
+    };
+  }
+
+  studentTypeLabel(type?: string): string {
+    if (type === 'boarder') return 'Boarder';
+    return 'Day Scholar';
+  }
+
+  formLabel(student: Student): string {
+    return student.form?.name || student.schoolClass?.form?.name || '—';
+  }
+
+  classLabel(student: Student): string {
+    return formatStudentClassLabel(student.schoolClass?.name);
+  }
+
+  genderLabel(student: Student): string {
+    return formatGenderLabel(student.gender);
+  }
+
+  initials(student: Student): string {
+    return `${student.firstName.charAt(0)}${student.lastName.charAt(0)}`.toUpperCase();
+  }
+
+  openRegister() {
+    this.editingStudent.set(null);
+    this.lastCreatedId.set('');
+    this.lastInvoiceInfo.set('');
+    this.resetForm();
+    this.registerDrawerOpen.set(true);
+    this.refreshNextStudentId();
+  }
+
+  onDateOfBirthChange() {
+    if (this.registerDrawerOpen()) this.refreshNextStudentId();
+  }
+
+  private refreshNextStudentId() {
+    const params: Record<string, string> = {};
+    if (this.form.dateOfBirth) params['dateOfBirth'] = this.form.dateOfBirth;
+    this.api.get<{ studentId: string }>('/students/next-student-id', params).subscribe({
+      next: (r) => this.nextStudentId.set(r.studentId),
+      error: () => this.nextStudentId.set(''),
+    });
+  }
+
+  closeRegister() {
+    this.registerDrawerOpen.set(false);
+    this.resetForm();
+  }
+
+  load(refresh = false) {
+    if (refresh) this.refreshing.set(true);
+    else this.loading.set(true);
+
+    this.api.get<Student[]>('/students').subscribe({
+      next: (s) => {
+        this.students.set(this.asStudentArray(s));
+        this.loading.set(false);
+        this.refreshing.set(false);
+      },
+      error: () => {
+        this.students.set([]);
+        this.loading.set(false);
+        this.refreshing.set(false);
+        this.showToast('error', 'Failed to load students');
+      },
+    });
+  }
+
+  clearFilters() {
+    this.search.set('');
+    this.enrollmentFilter.set('all');
+    this.typeFilter.set('all');
+    this.formFilter.set('all');
+    this.sortOrder.set('name-asc');
+  }
+
+  openEdit(student: Student) {
+    this.detailStudent.set(null);
+    this.registerDrawerOpen.set(false);
+    this.editingStudent.set(student);
+    this.form = {
+      firstName: student.firstName,
+      lastName: student.lastName,
+      dateOfBirth: student.dateOfBirth?.toString().slice(0, 10) || '',
+      gender: student.gender || '',
+      studentType: student.studentType === 'boarder' ? 'boarder' : 'day_scholar',
+      address: student.address || '',
+      previousSchool: student.previousSchool || '',
+      formId: student.formId || student.form?.id || '',
+    };
+    const g = student.guardians?.[0];
+    this.guardian = {
+      fullName: g?.fullName || '',
+      phone: g?.phone || g?.guardianPhone || '',
+      relationship: g?.relationship || 'Parent',
+      isPrimary: true,
+      guardianWhatsappConsent: g?.guardianWhatsappConsent === true,
+    };
+  }
+
+  closeEdit() {
+    this.editingStudent.set(null);
+    this.resetForm();
+  }
+
+  confirmDelete(student: Student, event?: Event) {
+    if (this.auth.isDemoSession()) {
+      this.showToast('error', "This action isn't available in demo mode.");
+      return;
+    }
+    event?.stopPropagation();
+    this.deleteTarget.set(student);
+  }
+
+  openStudentDetail(student: Student) {
+    this.detailStudent.set(student);
+  }
+
+  closeStudentDetail() {
+    this.detailStudent.set(null);
+  }
+
+  previewStudentIdPdf(student: Student, event?: Event) {
+    event?.stopPropagation();
+    this.idCardPdfLoading.set(student.id);
+    this.api.getBlob(`/students/${student.id}/id-card/pdf`, { preview: 'true' }).subscribe({
+      next: (blob) => {
+        this.idCardPdfLoading.set(null);
+        if (blob.type && !blob.type.includes('pdf')) {
+          this.showToast('error', 'Server did not return a PDF file');
+          return;
+        }
+        const url = URL.createObjectURL(blob);
+        window.open(url, '_blank', 'noopener,noreferrer');
+        setTimeout(() => URL.revokeObjectURL(url), 90_000);
+      },
+      error: (err) => {
+        this.idCardPdfLoading.set(null);
+        this.showToast('error', err.error?.message || 'Failed to generate student ID PDF');
+      },
+    });
+  }
+
+  cancelDelete() {
+    this.deleteTarget.set(null);
+  }
+
+  deleteStudent() {
+    const student = this.deleteTarget();
+    if (!student) return;
+    this.saving.set(true);
+    this.api.delete<{ message: string }>(`/students/${student.id}`).subscribe({
+      next: () => {
+        this.saving.set(false);
+        this.deleteTarget.set(null);
+        this.showToast('success', `${student.admissionNumber} removed.`);
+        if (this.editingStudent()?.id === student.id) this.closeEdit();
+        this.load(true);
+      },
+      error: () => {
+        this.saving.set(false);
+        this.showToast('error', 'Could not delete student. Try again.');
+      },
+    });
+  }
+
+  saveStudent() {
+    if (!this.validateForm()) return;
+    this.saving.set(true);
+    const body = this.buildPayload();
+    this.api.post<RegisterStudentResponse>('/students', body).subscribe({
+      next: (student) => {
+        this.saving.set(false);
+        this.registerDrawerOpen.set(false);
+        this.lastCreatedId.set(student.admissionNumber);
+        if (student.registrationInvoice) {
+          const amt = student.registrationInvoice.totalAmount;
+          this.lastInvoiceInfo.set(
+            `Invoice ${student.registrationInvoice.invoiceNumber} created ($${amt.toFixed(2)}).`,
+          );
+        } else if (student.registrationInvoiceError) {
+          this.lastInvoiceInfo.set('');
+          this.showToast(
+            'error',
+            `Student registered but invoice failed: ${student.registrationInvoiceError}`,
+          );
+        }
+        this.load(true);
+        this.resetForm();
+      },
+      error: (err) => {
+        this.saving.set(false);
+        this.showToast('error', err.error?.message || 'Registration failed. Check required fields.');
+      },
+    });
+  }
+
+  updateStudent() {
+    const student = this.editingStudent();
+    if (!student || !this.validateForm()) return;
+    this.saving.set(true);
+    const body = this.buildPayload();
+    this.api.put<Student>(`/students/${student.id}`, body).subscribe({
+      next: () => {
+        this.saving.set(false);
+        this.showToast('success', `${student.admissionNumber} updated successfully.`);
+        this.closeEdit();
+        this.load(true);
+      },
+      error: (err) => {
+        this.saving.set(false);
+        this.showToast('error', err.error?.message || 'Update failed. Try again.');
+      },
+    });
+  }
+
+  private buildPayload() {
+    const phone = this.guardian.phone?.trim() || '';
+    const guardianPayload = {
+      ...this.guardian,
+      phone,
+      guardianPhone: phone || undefined,
+      guardianWhatsappConsent: this.guardian.guardianWhatsappConsent === true,
+    };
+
+    return {
+      ...this.form,
+      formId: this.form.formId,
+      gender: this.form.gender,
+      dateOfBirth: this.form.dateOfBirth || undefined,
+      guardians: guardianPayload.fullName
+        ? [guardianPayload]
+        : this.editingStudent()?.guardians?.length
+          ? [guardianPayload]
+          : [],
+    };
+  }
+
+  private validateForm(): boolean {
+    if (!this.form.firstName?.trim() || !this.form.lastName?.trim()) {
+      this.showToast('error', 'First name and last name are required.');
+      return false;
+    }
+    if (!this.form.dateOfBirth) {
+      this.showToast('error', 'Date of birth is required to generate the Student ID.');
+      return false;
+    }
+    if (!this.form.gender) {
+      this.showToast('error', 'Gender is required for every student record.');
+      return false;
+    }
+    if (!this.form.studentType) {
+      this.showToast('error', 'Select Day Scholar or Boarder.');
+      return false;
+    }
+    if (!this.form.formId) {
+      this.showToast('error', 'Form is required (e.g. Form 1).');
+      return false;
+    }
+    return true;
+  }
+
+  resetForm() {
+    this.form = this.emptyForm();
+    this.guardian = {
+      fullName: '',
+      phone: '',
+      relationship: 'Parent',
+      isPrimary: true,
+      guardianWhatsappConsent: false,
+    };
+    this.nextStudentId.set('');
+  }
+
+  registrationProgress(): number {
+    const requiredChecks = [
+      Boolean(this.form.firstName?.trim()),
+      Boolean(this.form.lastName?.trim()),
+      Boolean(this.form.dateOfBirth),
+      Boolean(this.form.gender),
+      Boolean(this.form.studentType),
+      Boolean(this.form.formId),
+    ];
+    const complete = requiredChecks.filter(Boolean).length;
+    return Math.round((complete / requiredChecks.length) * 100);
+  }
+
+  selectedFormHint(): string {
+    const selected = this.forms().find((f) => f.id === this.form.formId);
+    if (!selected) return 'Select a form to auto-apply the correct tuition structure.';
+    if (selected.level <= 4) return 'Ordinary Level selected. Tuition follows O-Level settings.';
+    return 'Advanced Level selected. Tuition follows A-Level settings.';
+  }
+
+  enrollmentStatus(s: Student): 'pending' | 'enrolled' {
+    return s.classId || s.schoolClass ? 'enrolled' : 'pending';
+  }
+
+  goToEnrollment(student: Student, event?: Event): void {
+    event?.stopPropagation();
+    if (this.enrollmentStatus(student) !== 'pending') return;
+    if (this.isAccountant) {
+      this.showToast('error', 'Only administrators or class teachers can enroll students.');
+      return;
+    }
+    const target = this.router.url.startsWith('/teacher') ? '/teacher/enrollment' : `${this.basePath}/enrollment`;
+    this.router.navigate([target], {
+      queryParams: {
+        studentId: student.id,
+        studentName: `${student.firstName} ${student.lastName}`,
+      },
+    });
+  }
+
+  private showToast(type: 'success' | 'error', msg: string) {
+    this.toast.set({ type, msg });
+    setTimeout(() => this.toast.set(null), 5000);
+  }
+}

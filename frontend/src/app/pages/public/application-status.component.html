@@ -1,0 +1,93 @@
+<div class="public-shell">
+  <header class="public-topbar">
+    <div class="brand">
+      <span class="brand-badge">SP</span>
+      <div class="brand-text">
+        <strong>School Pro Academy</strong>
+        <small>Admissions</small>
+      </div>
+    </div>
+    <nav class="public-links">
+      <a routerLink="/apply">New application</a>
+      <a routerLink="/login">Sign in</a>
+    </nav>
+  </header>
+
+  <main class="public-main">
+    <section class="card">
+      <div class="form-head">
+        <p class="eyebrow">Track application</p>
+        <h1>Check your application status</h1>
+        <p class="lead">Enter the reference number from your confirmation and the email or phone number you applied with.</p>
+      </div>
+
+      @if (error()) {
+        <div class="alert error" role="alert">{{ error() }}</div>
+      }
+
+      <form class="track-form" (ngSubmit)="track()" novalidate>
+        <div class="field">
+          <label>Application reference</label>
+          <input [(ngModel)]="reference" name="ref" placeholder="APP-XXXXXX" autocomplete="off" />
+        </div>
+        <div class="field">
+          <label>Email or phone</label>
+          <input [(ngModel)]="contact" name="contact" placeholder="you@example.com or +263…" autocomplete="off" />
+        </div>
+        <button type="submit" class="btn-primary" [disabled]="loading()">
+          {{ loading() ? 'Checking…' : 'Track status' }}
+        </button>
+      </form>
+    </section>
+
+    @if (result(); as app) {
+      <section class="card result-card">
+        <div class="result-head">
+          <div>
+            <p class="eyebrow">{{ app.referenceNumber }}</p>
+            <h2>{{ app.studentName }}</h2>
+            <p class="muted">Applying for {{ app.classAppliedFor }} · Submitted {{ app.submittedAt | date: 'mediumDate' }}</p>
+          </div>
+          <span class="status-pill" [class.rejected]="isRejected()" [class.admitted]="app.status === 'admitted'">
+            {{ statusLabel(app.status) }}
+          </span>
+        </div>
+
+        @if (isRejected()) {
+          <div class="rejected-note">
+            <strong>Application not successful</strong>
+            <p>Unfortunately this application was not successful at this time.</p>
+          </div>
+        } @else {
+          <ol class="tracker" [attr.data-active]="activeStageIndex()">
+            @for (stage of stages; track stage.key; let i = $index) {
+              <li
+                class="tracker-step"
+                [class.done]="i < activeStageIndex()"
+                [class.current]="i === activeStageIndex()"
+              >
+                <span class="dot">
+                  @if (i < activeStageIndex()) { ✓ } @else { {{ i + 1 }} }
+                </span>
+                <span class="step-label">{{ stage.label }}</span>
+              </li>
+            }
+          </ol>
+        }
+
+        @if (app.statusNote) {
+          <div class="status-note">
+            <span class="note-label">Note from the admissions office</span>
+            <p>{{ app.statusNote }}</p>
+          </div>
+        }
+
+        @if (app.reviewedAt) {
+          <p class="reviewed-at">Last updated {{ app.reviewedAt | date: 'medium' }}</p>
+        }
+      </section>
+    }
+
+    <p class="public-foot">© {{ currentYear }} School Pro Academy · <a routerLink="/apply">Start a new application</a></p>
+  </main>
+</div>

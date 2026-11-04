@@ -1,0 +1,168 @@
+<app-portal-layout portalTitle="Admin Portal" pageTitle="Parent Students" [navSections]="adminNav">
+  @if (toast(); as t) {
+    <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>
+  }
+
+  <div class="page-head">
+    <div>
+      <a routerLink="/admin/parents" class="back-link">← All Parents</a>
+      @if (parent(); as p) {
+        <p class="eyebrow">Linked students</p>
+        <h2>{{ p.firstName }} {{ p.lastName }}</h2>
+        <p class="sub">{{ p.email }} · {{ p.phone || 'No phone' }}</p>
+      } @else {
+        <h2>Parent students</h2>
+      }
+    </div>
+  </div>
+
+  @if (loading()) {
+    <p class="loading">Loading parent…</p>
+  } @else if (parent()) {
+    <section class="panel summary">
+      <div class="summary-grid">
+        <div><span>Status</span><strong>{{ parent()!.isActive ? 'Active' : 'Inactive' }}</strong></div>
+        <div><span>Linked students</span><strong>{{ parent()!.linkedStudents.length }}</strong></div>
+        <div><span>Occupation</span><strong>{{ parent()!.occupation || '—' }}</strong></div>
+        <div><span>WhatsApp</span><strong>{{ parent()!.receivesWhatsApp ? 'Enabled' : 'Disabled' }}</strong></div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="section-head">
+        <div>
+          <h3>Linked students</h3>
+          <p>Students currently connected to this parent portal account.</p>
+        </div>
+      </div>
+
+      @if (parent()!.linkedStudents.length) {
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Student</th>
+                <th>Student ID</th>
+                <th>Class</th>
+                <th>Relationship</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (s of parent()!.linkedStudents; track s.studentId) {
+                <tr>
+                  <td><strong>{{ s.firstName }} {{ s.lastName }}</strong></td>
+                  <td>{{ s.admissionNumber }}</td>
+                  <td>{{ classLabel(s) }}</td>
+                  <td>{{ s.relationship }}</td>
+                  <td class="actions-cell">
+                    <button type="button" class="btn-icon danger" (click)="unlinkStudent(s)">Unlink</button>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      } @else {
+        <p class="empty-inline">No students linked yet. Search below to link children to this parent.</p>
+      }
+    </section>
+
+    <section class="panel">
+      <div class="section-head">
+        <div>
+          <h3>Link students</h3>
+          <p>Start typing a first or last name to search. Check a student, then use Link selected on that row.</p>
+        </div>
+      </div>
+
+      <div class="search-bar">
+        <div class="search-input-wrap">
+          <input
+            type="search"
+            class="search-input"
+            placeholder="Enter first name or last name…"
+            [ngModel]="studentSearch()"
+            (ngModelChange)="onStudentSearchInput($event)"
+            name="studentSearch"
+          />
+          @if (searching()) {
+            <span class="search-status">Searching…</span>
+          }
+        </div>
+        <select
+          class="relationship-input"
+          [(ngModel)]="relationship"
+          name="relationship"
+        >
+          <option value="Parent">Parent</option>
+          <option value="Guardian">Guardian</option>
+        </select>
+      </div>
+
+      @if (studentSearch().trim() && !searching() && !searchResults().length) {
+        <p class="empty-inline">No students matched your search.</p>
+      }
+
+      @if (searchResults().length) {
+        <div class="table-wrap">
+          <table class="data-table search-table">
+            <thead>
+              <tr>
+                <th class="check-col">
+                  <input
+                    type="checkbox"
+                    [checked]="linkableResults().length > 0 && selectedCount() === linkableResults().length"
+                    [disabled]="!linkableResults().length"
+                    (change)="toggleSelectAll($any($event.target).checked)"
+                  />
+                </th>
+                <th>Student</th>
+                <th>Student ID</th>
+                <th>Class</th>
+                <th>Status</th>
+                <th class="action-col"></th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (s of searchResults(); track s.id) {
+                <tr [class.linked-row]="s.alreadyLinked">
+                  <td class="check-col">
+                    <input
+                      type="checkbox"
+                      [checked]="isSelected(s.id)"
+                      [disabled]="s.alreadyLinked"
+                      (change)="toggleStudent(s, $any($event.target).checked)"
+                    />
+                  </td>
+                  <td><strong>{{ s.firstName }} {{ s.lastName }}</strong></td>
+                  <td>{{ s.admissionNumber }}</td>
+                  <td>{{ classLabel(s) }}</td>
+                  <td>
+                    @if (s.alreadyLinked) {
+                      <span class="status-pill linked">Already linked</span>
+                    } @else {
+                      <span class="status-pill available">Available</span>
+                    }
+                  </td>
+                  <td class="actions-cell">
+                    @if (!s.alreadyLinked) {
+                      <button
+                        type="button"
+                        class="btn-link-row"
+                        (click)="linkStudent(s)"
+                        [disabled]="!isSelected(s.id) || linkingStudentId() === s.id"
+                      >
+                        {{ linkingStudentId() === s.id ? 'Linking…' : 'Link selected' }}
+                      </button>
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </section>
+  }
+</app-portal-layout>

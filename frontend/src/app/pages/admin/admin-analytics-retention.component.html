@@ -1,0 +1,205 @@
+<app-portal-layout
+  [portalTitle]="portalLayout.portalTitle"
+  pageTitle="Retention & Dropout"
+  [navSections]="portalLayout.navSections || []"
+  [navItems]="portalLayout.navItems || []"
+>
+  <section class="an-head">
+    <div>
+      <h1>Retention &amp; Dropout Tracking</h1>
+      <p class="an-sub">Year-over-year retention rates, term exits, and at-risk student flags.</p>
+    </div>
+  </section>
+
+  @if (loading()) {
+    <div class="card empty">Loading retention data…</div>
+  } @else if (!retention()) {
+    <div class="card empty">Could not load retention data.</div>
+  } @else {
+    @if (!retention()!.summary.hasHistory) {
+      <div class="card notice">
+        <strong>Limited history.</strong>
+        Retention metrics become accurate as students move through academic years.
+        Current-year enrolment snapshots have been created; year-over-year rates will appear once a second year of data exists.
+      </div>
+    }
+
+    <section class="stat-cards">
+      <div class="stat">
+        <span class="stat-label">Retention rate</span>
+        <span class="stat-value">{{ retention()!.summary.currentRetentionRate != null ? (retention()!.summary.currentRetentionRate + '%') : '—' }}</span>
+        @if (retention()!.summary.latestPair) {
+          <span class="stat-pct">{{ retention()!.summary.latestPair }}</span>
+        }
+      </div>
+      <div class="stat stat-warn">
+        <span class="stat-label">Dropout rate</span>
+        <span class="stat-value">{{ retention()!.summary.currentDropoutRate != null ? (retention()!.summary.currentDropoutRate + '%') : '—' }}</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Recent exits</span>
+        <span class="stat-value">{{ retention()!.recentExits.length | number }}</span>
+      </div>
+      <div class="stat stat-risk">
+        <span class="stat-label">At-risk students</span>
+        <span class="stat-value">{{ atRisk()?.counts?.total ?? '—' }}</span>
+        @if (atRisk()) {
+          <span class="stat-pct">{{ atRisk()!.counts.high }} high · {{ atRisk()!.counts.medium }} medium</span>
+        }
+      </div>
+    </section>
+
+    <section class="chart-grid">
+      @if (retention()!.yearOverYear.length) {
+        <div class="card chart-card wide">
+          <h3>Retention &amp; dropout rate over time</h3>
+          <div class="chart-wrap tall"><app-chart type="line" [data]="retentionChart()" [options]="lineOptions"></app-chart></div>
+        </div>
+      }
+      <div class="card chart-card wide">
+        <h3>Enrolment by academic year</h3>
+        <div class="chart-wrap"><app-chart type="bar" [data]="enrollmentChart()"></app-chart></div>
+      </div>
+      @if (hasTermExits()) {
+        <div class="card chart-card wide">
+          <h3>Exits by term</h3>
+          <div class="chart-wrap"><app-chart type="bar" [data]="termExitsChart()" [options]="stackedBarOptions"></app-chart></div>
+        </div>
+      }
+    </section>
+
+    @if (retention()!.yearOverYear.length) {
+      <section class="card table-card">
+        <h3>Year-over-year retention</h3>
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Transition</th><th class="num">Eligible</th><th class="num">Returned</th>
+                <th class="num">Graduated</th><th class="num">Dropped</th>
+                <th class="num">Retention</th><th class="num">Dropout</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of retention()!.yearOverYear; track row.fromYear + row.toYear) {
+                <tr>
+                  <td>{{ row.fromYear }} → {{ row.toYear }}</td>
+                  <td class="num">{{ row.eligible | number }}</td>
+                  <td class="num">{{ row.returned | number }}</td>
+                  <td class="num">{{ row.graduated | number }}</td>
+                  <td class="num">{{ row.dropped | number }}</td>
+                  <td class="num good">{{ row.retentionRate != null ? row.retentionRate + '%' : '—' }}</td>
+                  <td class="num bad">{{ row.dropoutRate != null ? row.dropoutRate + '%' : '—' }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </section>
+    }
+
+    @if (retention()!.recentExits.length) {
+      <section class="card table-card">
+        <h3>Recent withdrawals &amp; transfers</h3>
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr><th>Student ID</th><th>Name</th><th>Grade</th><th>Status</th><th>Exit date</th><th>Reason</th></tr>
+            </thead>
+            <tbody>
+              @for (e of retention()!.recentExits; track e.id) {
+                <tr>
+                  <td>{{ e.admissionNumber }}</td>
+                  <td>{{ e.firstName }} {{ e.lastName }}</td>
+                  <td>{{ e.formName || '—' }}</td>
+                  <td><span class="badge" [class]="e.status">{{ statusLabel(e.status) }}</span></td>
+                  <td>{{ e.exitDate | date:'mediumDate' }}</td>
+                  <td>{{ e.exitReason || '—' }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </section>
+    }
+  }
+
+  <section class="card at-risk-section">
+    <header class="at-risk-head">
+      <div>
+        <h3>At-risk students</h3>
+        <p class="an-sub">Flagged from attendance, academic performance trends and outstanding fees.</p>
+      </div>
+      <div class="filter-grid compact">
+        <label class="fld">
+          <span>Term</span>
+          <select [(ngModel)]="atRiskFilters.termId" (ngModelChange)="loadAtRisk()">
+            <option value="">Current / last 90 days</option>
+            @for (t of options().terms; track t.id) {
+              <option [value]="t.id">{{ t.name }}</option>
+            }
+          </select>
+        </label>
+        <label class="fld">
+          <span>Grade</span>
+          <select [(ngModel)]="atRiskFilters.formId" (ngModelChange)="loadAtRisk()">
+            <option value="">All</option>
+            @for (f of options().forms; track f.id) {
+              <option [value]="f.id">{{ f.name }}</option>
+            }
+          </select>
+        </label>
+        <label class="fld">
+          <span>Class</span>
+          <select [(ngModel)]="atRiskFilters.classId" (ngModelChange)="loadAtRisk()">
+            <option value="">All</option>
+            @for (c of options().classes; track c.id) {
+              <option [value]="c.id">{{ c.name }}</option>
+            }
+          </select>
+        </label>
+      </div>
+    </header>
+
+    @if (atRiskLoading()) {
+      <p class="empty-inline">Loading at-risk list…</p>
+    } @else if (!atRisk()) {
+      <p class="empty-inline">Could not load at-risk data.</p>
+    } @else if (atRisk()!.students.length === 0) {
+      <p class="empty-inline">No at-risk students match the selected filters.</p>
+    } @else {
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Student</th><th>Class</th><th class="num">Attendance</th>
+              <th class="num">Average</th><th class="num">Trend</th><th class="num">Fees owed</th>
+              <th>Risk</th><th>Factors</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (s of atRisk()!.students; track s.studentId) {
+              <tr>
+                <td>
+                  <div class="student-cell">
+                    <strong>{{ s.name }}</strong>
+                    <span class="muted">{{ s.admissionNumber }}</span>
+                  </div>
+                </td>
+                <td>{{ s.className || s.formName || '—' }}</td>
+                <td class="num">{{ s.attendanceRate != null ? s.attendanceRate + '%' : '—' }}</td>
+                <td class="num">{{ s.averageMark != null ? s.averageMark + '%' : '—' }}</td>
+                <td class="num" [class.bad]="s.performanceTrend != null && s.performanceTrend < 0">
+                  {{ s.performanceTrend != null ? (s.performanceTrend > 0 ? '+' : '') + s.performanceTrend : '—' }}
+                </td>
+                <td class="num">{{ s.outstanding > 0 ? ('$' + (s.outstanding | number:'1.2-2')) : '—' }}</td>
+                <td><span class="risk-badge" [class]="s.riskLevel">{{ s.riskLevel }}</span></td>
+                <td class="factors">{{ s.riskFactors.join(' · ') }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </section>
+</app-portal-layout>

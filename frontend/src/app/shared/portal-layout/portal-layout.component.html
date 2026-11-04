@@ -1,0 +1,633 @@
+<div class="layout" [class.sidebar-open]="sidebarOpen()">
+  <a class="skip-link" href="#main-content">{{ 'shell.skipToMain' | t }}</a>
+  @if (sidebarOpen()) {
+    <button type="button" class="sidebar-backdrop no-print" (click)="closeSidebar()" [attr.aria-label]="'shell.closeNav' | t"></button>
+  }
+
+  <header class="topbar" role="banner">
+    <button
+      type="button"
+      class="topbar-nav-toggle"
+      (click)="$event.stopPropagation(); toggleSidebar()"
+      [attr.aria-expanded]="sidebarOpen()"
+      aria-controls="portal-sidebar"
+      [attr.aria-label]="(sidebarOpen() ? 'shell.closeNav' : 'shell.openNav') | t"
+    >
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+      </svg>
+    </button>
+
+    <nav class="topbar-actions" [attr.aria-label]="'shell.quickActions' | t">
+      <a [routerLink]="notificationsPath" class="topbar-action-icon" [attr.aria-label]="'Notifications' | t">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+        <span class="notification-dot"></span>
+      </a>
+
+      <a [routerLink]="calendarPath" class="topbar-action-icon" [attr.aria-label]="'Calendar' | t">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+      </a>
+
+      @if (settingsPath !== '/') {
+        <a [routerLink]="settingsPath" class="topbar-action-icon" [attr.aria-label]="'Settings' | t">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+            <path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </a>
+      }
+
+      <div class="user-profile-wrapper">
+        <div class="user-profile-summary" (click)="toggleUserMenu()">
+          <div class="user-avatar-circle">
+            @if (avatarUrl) {
+              <img [src]="avatarUrl" [alt]="fullName" />
+            } @else {
+              {{ userInitials }}
+            }
+          </div>
+          <div class="user-info-text">
+            <span class="user-name">{{ fullName }}</span>
+            <span class="user-role">{{ userRoleLabel }}</span>
+          </div>
+          <svg class="chevron-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M19 9l-7 7-7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </div>
+
+        @if (userMenuOpen()) {
+          <div class="user-dropdown-menu no-print">
+            <div class="user-dropdown-header">
+              <strong>{{ fullName }}</strong>
+              <span>{{ accountEmail }}</span>
+            </div>
+            <div class="user-dropdown-divider"></div>
+            <a routerLink="/account/profile" class="user-dropdown-item" (click)="closeUserMenu()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+              My Profile
+            </a>
+            @if (changePasswordPath) {
+              <a [routerLink]="changePasswordPath" [queryParams]="changePasswordQueryParams" class="user-dropdown-item" (click)="closeUserMenu()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                Change Password
+              </a>
+            }
+            <div class="user-dropdown-divider"></div>
+            <button type="button" class="user-dropdown-item logout" (click)="logout()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+              Logout
+            </button>
+          </div>
+        }
+      </div>
+    </nav>
+  </header>
+
+  <aside class="sidebar" id="portal-sidebar" [class.open]="sidebarOpen()" aria-label="Main navigation">
+    <div class="sidebar-mobile-bar">
+      <button type="button" class="sidebar-close" (click)="closeSidebar()" [attr.aria-label]="'shell.closeNav' | t">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+        </svg>
+      </button>
+    </div>
+
+    <div class="sidebar-brand">
+      <div class="brand-logo-circle">
+        @if (schoolLogoUrl()) {
+          <img [src]="schoolLogoUrl()" [alt]="schoolName()" class="brand-logo-img" />
+        } @else {
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M12 14l9-5-9-5-9 5 9 5z" fill="currentColor" />
+            <path d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.083 0 01.665-6.479L12 14z" fill="currentColor" opacity="0.8" />
+          </svg>
+        }
+      </div>
+      <span class="brand-name">{{ schoolName() }}</span>
+    </div>
+
+    <nav class="sidebar-nav">
+      @if (!useSections && portalTitle) {
+        <div class="sidebar-portal-title">{{ portalTitle }}</div>
+      }
+      @if (useSections) {
+        @for (group of groupedNav; track group.label) {
+          <div class="nav-group">
+            <div class="nav-group-label">{{ group.label }}</div>
+            @for (section of group.sections; track section.heading) {
+              @if (!section.items.length) {
+                <a
+                  class="nav-item"
+                  [routerLink]="section.path || '/admin'"
+                  routerLinkActive="active"
+                  [routerLinkActiveOptions]="{ exact: true }"
+                >
+                  <span class="nav-item-icon" aria-hidden="true">
+                    <ng-container *ngTemplateOutlet="navIcon; context: { $implicit: sectionIconKey(section.heading) }" />
+                  </span>
+                  <span class="nav-item-label">{{ navLabel(section.heading) }}</span>
+                </a>
+              } @else {
+                <div
+                  class="nav-section"
+                  [class.open]="isExpanded(section.heading)"
+                  [class.has-active]="sectionHasActive(section)"
+                >
+                  <button
+                    type="button"
+                    class="nav-menu-toggle"
+                    [attr.aria-expanded]="isExpanded(section.heading)"
+                    [attr.aria-controls]="'nav-submenu-' + sectionDomId(section.heading)"
+                    (click)="toggleSection(section.heading)"
+                  >
+                    <span class="nav-item-icon" aria-hidden="true">
+                      <ng-container *ngTemplateOutlet="navIcon; context: { $implicit: sectionIconKey(section.heading) }" />
+                    </span>
+                    <span class="nav-item-label">{{ navLabel(section.heading) }}</span>
+                    <svg class="nav-menu-chevron" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                  </button>
+                  @if (isExpanded(section.heading)) {
+                    <div class="nav-submenu" [id]="'nav-submenu-' + sectionDomId(section.heading)">
+                      @for (item of section.items; track item.path + item.label) {
+                        <a
+                          class="nav-subitem"
+                          [routerLink]="item.path"
+                          [queryParams]="item.queryParams ?? null"
+                          routerLinkActive="active"
+                          [routerLinkActiveOptions]="{ exact: true }"
+                        >
+                          <span class="nav-subitem-label">{{ navLabel(item.label) }}</span>
+                          @if (item.badge) {
+                            <span class="nav-badge">{{ item.badge }}</span>
+                          }
+                        </a>
+                      }
+                    </div>
+                  }
+                </div>
+              }
+            }
+          </div>
+        }
+      } @else {
+        @for (item of navItems; track item.path) {
+          <a class="nav-item" [routerLink]="item.path" [queryParams]="item.queryParams ?? null" routerLinkActive="active">
+            @if (item.icon) {
+              <span class="nav-item-icon nav-item-icon--emoji" aria-hidden="true">{{ item.icon }}</span>
+            }
+            <span class="nav-item-label">{{ navLabel(item.label) }}</span>
+          </a>
+        }
+      }
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="user-panel">
+        <button
+          type="button"
+          class="user-identity-card"
+          (click)="toggleUserMenu()"
+        >
+          <div class="user-avatar user-avatar--sidebar">
+            @if (avatarUrl) {
+              <img [src]="avatarUrl" [alt]="fullName" class="user-avatar-image" />
+            } @else {
+              <div class="user-avatar-initials">{{ userInitials }}</div>
+            }
+          </div>
+          <div class="user-meta">
+            <span class="user-name">{{ fullName }}</span>
+            <span class="user-role">{{ userRoleLabel }}</span>
+          </div>
+          <svg class="logout-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+            <polyline points="16 17 21 12 16 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+            <line x1="21" y1="12" x2="9" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <main class="content" id="main-content" tabindex="-1" role="main" [attr.aria-label]="pageTitle">
+    <div class="page-body">
+      <ng-content />
+    </div>
+  </main>
+</div>
+
+<ng-template #navIcon let-key>
+  @switch (key) {
+    @case ('dashboard') {
+      <svg viewBox="0 0 24 24" fill="none">
+        <rect x="3" y="3" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.75" />
+        <rect x="14" y="3" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.75" />
+        <rect x="3" y="14" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.75" />
+        <rect x="14" y="14" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.75" />
+      </svg>
+    }
+    @case ('students') {
+      <svg viewBox="0 0 24 24" fill="none">
+        <path d="M16 19a4 4 0 0 0-8 0" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" />
+        <circle cx="12" cy="8" r="3.25" stroke="currentColor" stroke-width="1.75" />
+        <path d="M19 19a3 3 0 0 0-2.2-2.87M5 19a3 3 0 0 1 2.2-2.87" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" />
+      </svg>
+    }
+    @case ('parents') {
+      <svg viewBox="0 0 24 24" fill="none">
+        <circle cx="9" cy="8" r="2.75" stroke="currentColor" stroke-width="1.75" />
+        <circle cx="17" cy="9" r="2.25" stroke="currentColor" stroke-width="1.75" />
+        <path d="M4 19a5 5 0 0 1 5-4.5M15 19a4 4 0 0 1 4-3.5" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" />
+      </svg>
+    }
+    @case ('attendance') {
+      <svg viewBox="0 0 24 24" fill="none">
+        <rect x="4" y="5" width="16" height="15" rx="2" stroke="currentColor" stroke-width="1.75" />
+        <path d="M8 3v4M16 3v4M4 10h16" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" />
+        <path d="M9.5 14.5l1.75 1.75L15 12.5" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" />
+      </svg>
+    }
+    @case ('staff') {
+      <svg viewBox="0 0 24 24" fill="none">
+        <circle cx="12" cy="8" r="3.5" stroke="currentColor" stroke-width="1.75" />
+        <path d="M6 20a6 6 0 0 1 12 0" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" />
+      </svg>
+    }
+    @case ('classes') {
+      <svg viewBox="0 0 24 24" fill="none">
+        <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" />
+      </svg>
+    }
+    @case ('subjects') {
+      <svg viewBox="0 0 24 24" fill="none">
+        <path d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" />
+      </svg>
+    }
+    @case ('examinations') {
+      <svg viewBox="0 0 24 24" fill="none">
+        <path d="M8 4h8l3 3v13H8V4z" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" />
+        <path d="M16 4v3h3M10 12h6M10 16h6" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" />
+      </svg>
+    }
+    @case ('finance') {
+      <svg viewBox="0 0 24 24" fill="none">
+        <rect x="3" y="6" width="18" height="12" rx="2" stroke="currentColor" stroke-width="1.75" />
+        <path d="M3 10h18" stroke="currentColor" stroke-width="1.75" />
+        <path d="M7 15h4" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" />
+      </svg>
+    }
+    @case ('fin-reports') {
+      <svg viewBox="0 0 24 24" fill="none">
+        <path d="M5 19V9M12 19V5M19 19v-7" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" />
+      </svg>
+    }
+    @case ('communication') {
+      <svg viewBox="0 0 24 24" fill="none">
+        <path d="M5 6.5h14a2 2 0 0 1 2 2v6.5a2 2 0 0 1-2 2H9l-4 3v-3H5a2 2 0 0 1-2-2V8.5a2 2 0 0 1 2-2z" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" />
+      </svg>
+    }
+    @case ('timetable') {
+      <svg viewBox="0 0 24 24" fill="none">
+        <rect x="4" y="5" width="16" height="15" rx="2" stroke="currentColor" stroke-width="1.75" />
+        <path d="M8 3v4M16 3v4M4 10h16" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" />
+        <path d="M8 14h2M14 14h2M8 17h2M14 17h2" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" />
+      </svg>
+    }
+    @case ('system-admin') {
+      <svg viewBox="0 0 24 24" fill="none">
+        <path d="M12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4z" stroke="currentColor" stroke-width="1.75" />
+        <path d="M5.5 8.5a7 7 0 0 1 13 0M4 12a8.5 8.5 0 0 0 16 0M2.5 15.5a10 10 0 0 1 19 0" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" />
+      </svg>
+    }
+    @default {
+      <svg viewBox="0 0 24 24" fill="none">
+        <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.75" />
+        <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" />
+      </svg>
+    }
+  }
+</ng-template>
+
+@if (balanceOpen()) {
+  <div class="help-modal-backdrop" (click)="closeBalanceEnquiry()">
+    <section class="balance-modal" (click)="$event.stopPropagation()" role="dialog" aria-labelledby="balanceModalTitle" aria-modal="true" tabindex="-1">
+      <header class="help-modal-head">
+        <div>
+          <h3 id="balanceModalTitle">{{ 'shell.balanceTitle' | t }}</h3>
+          <p>{{ 'shell.balanceHint' | t }}</p>
+        </div>
+        <button type="button" class="help-close-btn" (click)="closeBalanceEnquiry()" [attr.aria-label]="'shell.close' | t">×</button>
+      </header>
+
+      <div class="help-search-row">
+        <label class="sr-only" for="balanceEnquirySearch">{{ 'shell.balanceSearch' | t }}</label>
+        <input
+          id="balanceEnquirySearch"
+          type="text"
+          class="help-search-input"
+          [placeholder]="'shell.balancePlaceholder' | t"
+          [(ngModel)]="balanceQuery"
+          (keydown.enter)="getBalanceEnquiry()"
+          name="balanceEnquirySearch"
+          autocomplete="off"
+        />
+        <button
+          type="button"
+          class="help-go-btn"
+          (click)="getBalanceEnquiry()"
+          [disabled]="balanceLoading() || !balanceQuery.trim()"
+        >
+          {{ balanceLoading() ? ('shell.loading' | t) : ('shell.getBalance' | t) }}
+        </button>
+      </div>
+
+      <div class="balance-modal-body" aria-live="polite">
+        @if (balanceLoading()) {
+          <p class="balance-status">Searching student balance…</p>
+        } @else if (balanceSearched() && !balanceResults().length) {
+          <p class="balance-status warn">No student found matching "{{ balanceQuery }}".</p>
+        } @else if (balanceResults().length > 1 && !balanceSelected()) {
+          <p class="balance-pick-label">{{ balanceResults().length }} students found — select one:</p>
+          <div class="balance-pick-list">
+            @for (row of balanceResults(); track row.id) {
+              <button type="button" class="balance-pick-card" (click)="selectBalanceResult(row)">
+                <span>
+                  <strong>{{ row.lastName }}, {{ row.firstName }}</strong>
+                  <code>{{ row.admissionNumber }}</code>
+                </span>
+                <span class="balance-pill">${{ formatMoney(row.balance) }}</span>
+              </button>
+            }
+          </div>
+        } @else if (balanceSelected()) {
+          @if (balanceSelected(); as row) {
+            <div class="balance-result-card" [class.clear]="row.balance <= 0">
+              <dl class="balance-details">
+                <div>
+                  <dt>Last name</dt>
+                  <dd>{{ row.lastName }}</dd>
+                </div>
+                <div>
+                  <dt>First name</dt>
+                  <dd>{{ row.firstName }}</dd>
+                </div>
+                <div>
+                  <dt>Gender</dt>
+                  <dd>{{ formatGender(row.gender) }}</dd>
+                </div>
+                <div>
+                  <dd>{{ formatClassName(row.classLabel || row.className) }}</dd>
+                </div>
+                <div class="balance-highlight">
+                  <dt>Current invoice balance</dt>
+                  <dd class="balance-amount-row">
+                    <span class="balance-amount">${{ formatMoney(row.balance) }}</span>
+                    <button
+                      type="button"
+                      class="balance-pay-btn"
+                      (click)="goToRecordPayment(row)"
+                      [attr.aria-label]="'Record payment for ' + row.firstName + ' ' + row.lastName"
+                    >
+                      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <rect x="3" y="6" width="18" height="12" rx="2" stroke="currentColor" stroke-width="1.8" />
+                        <path d="M3 10h18" stroke="currentColor" stroke-width="1.8" />
+                        <path d="M7 15h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+                      </svg>
+                      <span>Pay</span>
+                    </button>
+                  </dd>
+                </div>
+              </dl>
+            </div>
+          }
+        }
+      </div>
+    </section>
+  </div>
+}
+
+@if (helpOpen()) {
+  <div class="help-modal-backdrop" (click)="closeHelp()">
+    <section class="help-modal" (click)="$event.stopPropagation()" role="dialog" aria-labelledby="helpModalTitle" aria-modal="true" tabindex="-1">
+      <header class="help-modal-head">
+        <div>
+          <h3 id="helpModalTitle">{{ 'shell.helpTitle' | t }}</h3>
+          <p>{{ helpTab() === 'manual' ? ('shell.helpHint' | t) : ('shell.developerHint' | t) }}</p>
+        </div>
+        <div class="help-modal-actions">
+          @if (helpTab() === 'manual') {
+            <button
+              type="button"
+              class="help-download-btn"
+              (click)="downloadHelpManual()"
+              [disabled]="helpPdfLoading()"
+            >
+              {{ helpPdfLoading() ? ('shell.helpGenerating' | t) : ('shell.helpDownload' | t) }}
+            </button>
+          }
+          <button type="button" class="help-close-btn" (click)="closeHelp()" [attr.aria-label]="'shell.close' | t">×</button>
+        </div>
+      </header>
+
+      <div class="help-tabs" role="tablist" [attr.aria-label]="'shell.helpTabs' | t">
+        <button
+          type="button"
+          role="tab"
+          class="help-tab"
+          [class.active]="helpTab() === 'manual'"
+          [attr.aria-selected]="helpTab() === 'manual'"
+          id="help-tab-manual"
+          (click)="setHelpTab('manual')"
+        >
+          {{ 'shell.helpTabManual' | t }}
+        </button>
+        <button
+          type="button"
+          role="tab"
+          class="help-tab"
+          [class.active]="helpTab() === 'developer'"
+          [attr.aria-selected]="helpTab() === 'developer'"
+          id="help-tab-developer"
+          (click)="setHelpTab('developer')"
+        >
+          {{ 'shell.helpTabDeveloper' | t }}
+        </button>
+      </div>
+
+      @if (helpTab() === 'manual') {
+        <div class="help-tab-panel" role="tabpanel" aria-labelledby="help-tab-manual">
+          <div class="help-search-row">
+            <label class="sr-only" for="helpSearch">{{ 'shell.helpSearch' | t }}</label>
+            <input
+              id="helpSearch"
+              type="search"
+              class="help-search-input"
+              [placeholder]="'shell.helpPlaceholder' | t"
+              [ngModel]="helpQuery()"
+              (ngModelChange)="onHelpQueryChange($event)"
+              (keydown.enter)="submitHelpSearch()"
+              name="helpSearch"
+              autocomplete="off"
+            />
+            <button type="button" class="help-go-btn" (click)="submitHelpSearch()">{{ 'shell.helpGo' | t }}</button>
+          </div>
+
+          @if (helpNoMatch()) {
+            <p class="help-no-match" role="status">{{ 'shell.helpNoMatch' | t }}</p>
+          }
+
+          <div class="help-manual-body">
+            @for (group of helpSections(); track group.section) {
+              <section class="help-section">
+                <h4>{{ group.section }}</h4>
+                @for (topic of group.items; track topic.id) {
+                  <article class="help-topic">
+                    <div class="help-topic-head">
+                      <div>
+                        <strong>{{ topic.title }}</strong>
+                        <p>{{ topic.summary }}</p>
+                      </div>
+                      <button type="button" class="help-open-btn" (click)="goToHelpTopic(topic)">{{ 'shell.openPage' | t }}</button>
+                    </div>
+                    <ol>
+                      @for (step of topic.steps; track $index) {
+                        <li>{{ step }}</li>
+                      }
+                    </ol>
+                  </article>
+                }
+              </section>
+            }
+          </div>
+        </div>
+      } @else {
+        <div class="help-tab-panel developer-panel" role="tabpanel" aria-labelledby="help-tab-developer">
+          <article class="developer-about">
+            <header class="developer-hero">
+              <div class="developer-photo-wrap">
+                @if (developerPhotoUrl(); as photo) {
+                  <img
+                    class="developer-photo"
+                    [src]="photo"
+                    [alt]="systemDeveloper.name + ' passport photo'"
+                  />
+                } @else {
+                  <div class="developer-avatar" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none">
+                      <circle cx="12" cy="8" r="3.5" stroke="currentColor" stroke-width="1.75" />
+                      <path d="M6 20a6 6 0 0 1 12 0" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" />
+                    </svg>
+                  </div>
+                }
+              </div>
+              <div class="developer-intro">
+                <p class="developer-role">{{ 'shell.developerRole' | t }}</p>
+                <h4>{{ systemDeveloper.name }}</h4>
+                <p class="developer-tagline">{{ 'shell.developerTagline' | t }}</p>
+              </div>
+            </header>
+
+            @if (canManageDeveloperPhoto()) {
+              <section class="developer-section developer-photo-admin" aria-labelledby="dev-photo-heading">
+                <h5 id="dev-photo-heading">{{ 'shell.developerPhotoHeading' | t }}</h5>
+                <p class="developer-photo-hint">{{ 'shell.developerPhotoHint' | t }}</p>
+                @if (developerPhotoToast(); as t) {
+                  <p class="developer-photo-toast" [class.error]="t.type === 'error'" [class.success]="t.type === 'success'" role="status">
+                    {{ t.msg }}
+                  </p>
+                }
+                <div class="developer-photo-actions">
+                  <label class="developer-upload-btn" [class.disabled]="developerPhotoUploading()">
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
+                      [disabled]="developerPhotoUploading()"
+                      (change)="onDeveloperPhotoSelected($event)"
+                    />
+                    {{ developerPhotoUploading() ? ('shell.developerPhotoUploading' | t) : ('shell.developerPhotoUpload' | t) }}
+                  </label>
+                  @if (developerPhotoUrl()) {
+                    <button
+                      type="button"
+                      class="developer-remove-btn"
+                      [disabled]="developerPhotoUploading()"
+                      (click)="removeDeveloperPhoto()"
+                    >
+                      {{ 'shell.developerPhotoRemove' | t }}
+                    </button>
+                  }
+                </div>
+              </section>
+            }
+
+            <section class="developer-section" aria-labelledby="dev-quals-heading">
+              <h5 id="dev-quals-heading">{{ 'shell.developerQualifications' | t }}</h5>
+              <ul class="developer-quals">
+                @for (q of systemDeveloper.qualifications; track q) {
+                  <li>{{ q }}</li>
+                }
+              </ul>
+            </section>
+
+            <section class="developer-section" aria-labelledby="dev-contact-heading">
+              <h5 id="dev-contact-heading">{{ 'shell.developerContactHeading' | t }}</h5>
+              <div class="developer-contacts">
+                @for (c of systemDeveloper.contacts; track c.display) {
+                  <div class="developer-contact-row">
+                    <span class="developer-contact-label">{{ 'shell.developerWhatsAppNumber' | t }}</span>
+                    <div class="developer-contact-actions">
+                      <a class="developer-phone" [href]="c.telHref">{{ c.display }}</a>
+                      <a
+                        class="developer-whatsapp"
+                        [href]="c.whatsappHref"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        [attr.aria-label]="('shell.developerWhatsAppAria' | t) + ' (' + c.display + ')'"
+                        [attr.title]="'shell.developerWhatsApp' | t"
+                      >
+                        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                          <path
+                            fill="currentColor"
+                            d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.76.46 3.45 1.32 4.95L2 22l5.28-1.38a9.86 9.86 0 0 0 4.76 1.21h.01c5.46 0 9.91-4.45 9.91-9.91C21.96 6.45 17.5 2 12.04 2zm5.78 14.05c-.24.68-1.42 1.3-1.96 1.38-.5.08-1.14.11-1.84-.12-.42-.13-.97-.32-1.67-.62-2.94-1.27-4.85-4.24-5-4.44-.14-.2-1.18-1.57-1.18-3 0-1.42.74-2.12 1.01-2.41.26-.28.58-.35.77-.35h.56c.18 0 .42-.07.66.5.24.58.82 2 .89 2.15.07.15.12.32.02.52-.1.2-.15.32-.3.5-.14.17-.3.38-.43.51-.14.14-.29.29-.12.56.16.28.72 1.19 1.55 1.93 1.06.95 1.96 1.24 2.24 1.38.28.14.44.12.6-.07.17-.2.7-.81.88-1.09.19-.28.37-.23.63-.14.26.1 1.66.78 1.95.92.28.14.47.21.54.33.07.12.07.68-.17 1.36z"
+                          />
+                        </svg>
+                        <span>{{ 'shell.developerWhatsApp' | t }}</span>
+                      </a>
+                    </div>
+                  </div>
+                }
+              </div>
+            </section>
+          </article>
+        </div>
+      }
+    </section>
+  </div>
+}
+
+@if (logoutConfirmOpen()) {
+  <div class="logout-modal-backdrop" (click)="cancelLogout()">
+    <section
+      class="logout-modal"
+      (click)="$event.stopPropagation()"
+      role="alertdialog"
+      aria-labelledby="logoutModalTitle"
+      aria-describedby="logoutModalDesc"
+      aria-modal="true"
+      tabindex="-1"
+    >
+      <h3 id="logoutModalTitle">{{ 'shell.signOutTitle' | t:{ school: schoolName() } }}</h3>
+      <p id="logoutModalDesc">{{ 'shell.signOutBody' | t }}</p>
+      <div class="logout-modal-actions">
+        <button type="button" class="btn-outline" (click)="cancelLogout()">{{ 'shell.signOutNo' | t }}</button>
+        <button type="button" class="btn-primary" (click)="confirmLogout()">{{ 'shell.signOutYes' | t }}</button>
+      </div>
+    </section>
+  </div>
+}

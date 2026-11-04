@@ -1,0 +1,666 @@
+@if (isExecutive()) {
+  <app-portal-layout
+    [portalTitle]="execCtx().portalTitle"
+    pageTitle="Payroll"
+    [navItems]="execCtx().nav"
+  >
+    <ng-container *ngTemplateOutlet="payrollBody" />
+  </app-portal-layout>
+} @else {
+  <app-portal-layout portalTitle="Admin Portal" pageTitle="Payroll" [navSections]="adminNav">
+    <ng-container *ngTemplateOutlet="payrollBody" />
+  </app-portal-layout>
+}
+
+<ng-template #payrollBody>
+  <div class="payroll-page">
+    @if (toast(); as t) {
+      <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>
+    }
+
+    <header class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">Human Resources</p>
+        <h2>Staff Payroll</h2>
+        <p class="hero-sub">
+          Configure salaries, generate monthly payroll runs, and manage pay. Leave accrues automatically:
+          <strong>12 days per year</strong> (1 day each month: annual ÷ 12).
+        </p>
+      </div>
+      <div class="hero-actions">
+        <button type="button" class="primary-action" (click)="openNewRun()">+ New payroll run</button>
+        <button type="button" class="refresh-action" (click)="refreshAll()" [disabled]="loading()">Refresh</button>
+      </div>
+    </header>
+
+    @if (summary(); as s) {
+      <div class="kpi-grid">
+        <article class="kpi">
+          <span class="kpi-icon">👥</span>
+          <div>
+            <span class="kpi-value">{{ s.activeStaff }}</span>
+            <span class="kpi-label">Active staff</span>
+          </div>
+        </article>
+        <article class="kpi">
+          <span class="kpi-icon">💼</span>
+          <div>
+            <span class="kpi-value">{{ s.configuredProfiles }}</span>
+            <span class="kpi-label">Pay profiles set</span>
+          </div>
+        </article>
+        <article class="kpi warn">
+          <span class="kpi-icon">⚠</span>
+          <div>
+            <span class="kpi-value">{{ s.unconfiguredStaff }}</span>
+            <span class="kpi-label">Need pay setup</span>
+          </div>
+        </article>
+        <article class="kpi">
+          <span class="kpi-icon">💵</span>
+          <div>
+            <span class="kpi-value">{{ s.ytdNetPaid | number:'1.0-0' }}</span>
+            <span class="kpi-label">YTD net paid</span>
+          </div>
+        </article>
+      </div>
+    }
+
+    <nav class="tabs">
+      <button type="button" [class.active]="activeTab() === 'runs'" (click)="activeTab.set('runs')">Payroll runs</button>
+      <button type="button" [class.active]="activeTab() === 'setup'" (click)="activeTab.set('setup')">Pay setup</button>
+      <button type="button" [class.active]="activeTab() === 'payslips'" (click)="openPayslipsTab()">
+        Payslips
+        @if (selectedRun(); as r) {
+          <span class="tab-badge">{{ r.periodLabel }}</span>
+        }
+      </button>
+    </nav>
+
+    @if (loading()) {
+      <p class="loading-msg">Loading payroll data…</p>
+    } @else {
+      @switch (activeTab()) {
+        @case ('runs') {
+          <section class="panel">
+            <div class="panel-toolbar">
+              <input type="search" placeholder="Search runs…" [ngModel]="runSearch()" (ngModelChange)="runSearch.set($event)" />
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Reference</th>
+                    <th>Period</th>
+                    <th>Staff</th>
+                    <th>Gross</th>
+                    <th>Net</th>
+                    <th>Status</th>
+                    <th>Pay date</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (run of filteredRuns(); track run.id) {
+                    <tr [class.selected]="selectedRunId() === run.id">
+                      <td><strong>{{ run.reference }}</strong></td>
+                      <td>{{ run.periodLabel }}</td>
+                      <td>{{ run.staffCount }}</td>
+                      <td>{{ run.totalGross | number:'1.2-2' }}</td>
+                      <td>{{ run.totalNet | number:'1.2-2' }}</td>
+                      <td><span class="status-pill" [ngClass]="statusClass(run.status)">{{ statusLabel(run.status) }}</span></td>
+                      <td>{{ run.payDate || '—' }}</td>
+                      <td class="actions-cell">
+                        <button type="button" class="link-btn" (click)="selectRun(run)">View</button>
+                        @if (run.status === 'draft') {
+                          <button type="button" class="link-btn" (click)="processRun(run)" [disabled]="submitting()">Process</button>
+                          <button type="button" class="link-btn danger" (click)="cancelRun(run)">Cancel</button>
+                        }
+                        @if (run.status === 'processed') {
+                          <button type="button" class="link-btn" (click)="markPaid(run)" [disabled]="submitting()">Mark paid</button>
+                        }
+                      </td>
+                    </tr>
+                  } @empty {
+                    <tr><td colspan="8" class="empty">No payroll runs yet. Create your first run.</td></tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          </section>
+        }
+
+        @case ('setup') {
+          <section class="panel">
+            <div class="panel-toolbar">
+              <input type="search" placeholder="Search staff…" [ngModel]="setupSearch()" (ngModelChange)="setupSearch.set($event)" />
+              <select [ngModel]="setupFilter()" (ngModelChange)="setupFilter.set($event)">
+                <option value="all">All staff</option>
+                <option value="configured">Configured</option>
+                <option value="unconfigured">Not configured</option>
+              </select>
+            </div>
+            <div class="setup-grid">
+              @for (row of filteredProfiles(); track row.staff.id) {
+                <article class="setup-card" [class.unconfigured]="!row.profile || row.profile.baseSalary <= 0">
+                  <div class="setup-head">
+                    <h3>{{ row.staff.user.firstName }} {{ row.staff.user.lastName }}</h3>
+                    <span class="emp-id">{{ row.staff.employeeNumber }}</span>
+                  </div>
+                  <p class="meta">{{ row.staff.department || 'No department' }} · {{ row.staff.user.role }}</p>
+                  @if (row.profile && row.profile.baseSalary > 0) {
+                    <div class="setup-stats">
+                      <span>Base: <strong>{{ row.profile.baseSalary | number:'1.2-2' }}</strong></span>
+                      <span>Net est.: <strong>{{ (row.profile.baseSalary + row.profile.housingAllowance + row.profile.transportAllowance + row.profile.medicalAllowance + row.profile.otherAllowances - row.profile.payeAmount - row.profile.nssaAmount - row.profile.pensionAmount - row.profile.loanDeduction - row.profile.otherDeductions) | number:'1.2-2' }}</strong></span>
+                      <span>Leave: <strong>{{ formatLeaveDays(row.leave?.balanceDays ?? 0) }}</strong> days
+                        · +{{ formatLeaveDays(row.leave?.monthlyAccrual ?? 1) }}/mo</span>
+                    </div>
+                  } @else {
+                    <p class="setup-warn">Salary not configured</p>
+                  }
+                  <button type="button" class="card-btn" (click)="openProfile(row.staff, row.profile)">
+                    {{ row.profile ? 'Edit pay profile' : 'Set up pay' }}
+                  </button>
+                </article>
+              } @empty {
+                <p class="empty">No active staff found.</p>
+              }
+            </div>
+          </section>
+        }
+
+        @case ('payslips') {
+          <section class="panel payslips-panel">
+            @if (!payslipRuns().length) {
+              <div class="payslips-empty-state">
+                <span class="empty-icon">🧾</span>
+                <h3>No payslips yet</h3>
+                <p>Create a payroll run first, then return here to view and manage staff payslips.</p>
+                <button type="button" class="primary-btn" (click)="openNewRun()">Create payroll run</button>
+              </div>
+            } @else {
+              <div class="payslips-toolbar">
+                <label class="run-picker">
+                  <span>Payroll period</span>
+                  <select
+                    [ngModel]="selectedRunId()"
+                    (ngModelChange)="onPayslipRunChange($event)"
+                  >
+                    @for (r of payslipRuns(); track r.id) {
+                      <option [value]="r.id">
+                        {{ r.periodLabel }} ({{ r.reference }}) — {{ statusLabel(r.status) }}
+                      </option>
+                    }
+                  </select>
+                </label>
+                <input
+                  type="search"
+                  placeholder="Search employee, ID, department…"
+                  [ngModel]="payslipSearch()"
+                  (ngModelChange)="payslipSearch.set($event)"
+                />
+                <select
+                  [ngModel]="payslipStatusFilter()"
+                  (ngModelChange)="payslipStatusFilter.set($event)"
+                >
+                  <option value="all">All statuses</option>
+                  <option value="pending">Pending</option>
+                  <option value="paid">Paid</option>
+                  <option value="excluded">Excluded</option>
+                </select>
+                <label class="toggle-excluded">
+                  <input type="checkbox" [ngModel]="showExcludedPayslips()" (ngModelChange)="showExcludedPayslips.set($event)" />
+                  Show excluded
+                </label>
+                <div class="view-toggle">
+                  <button type="button" [class.active]="payslipViewMode() === 'table'" (click)="payslipViewMode.set('table')">Table</button>
+                  <button type="button" [class.active]="payslipViewMode() === 'cards'" (click)="payslipViewMode.set('cards')">Cards</button>
+                </div>
+              </div>
+
+              @if (selectedRun(); as run) {
+                <div class="run-banner">
+                  <div>
+                    <h3>{{ run.periodLabel }}</h3>
+                    <p>{{ run.reference }} · {{ run.periodStart }} – {{ run.periodEnd }}
+                      @if (run.payDate) { · Pay date {{ run.payDate }} }
+                    </p>
+                  </div>
+                  <div class="run-banner-actions">
+                    <span class="status-pill" [ngClass]="statusClass(run.status)">{{ statusLabel(run.status) }}</span>
+                    @if (run.status === 'draft') {
+                      <button type="button" class="secondary-btn" (click)="processRun(run)" [disabled]="submitting()">Process run</button>
+                    }
+                    @if (run.status === 'processed') {
+                      <button type="button" class="secondary-btn" (click)="markPaid(run)" [disabled]="submitting()">Mark paid</button>
+                    }
+                    <button type="button" class="secondary-btn" (click)="exportPayslipsCsv()" [disabled]="!filteredPayslips().length">Export CSV</button>
+                    <button type="button" class="secondary-btn" (click)="printAllPayslips()" [disabled]="!filteredPayslips().length">Print all</button>
+                  </div>
+                </div>
+
+                @if (payslipsLoading()) {
+                  <p class="loading-msg">Loading payslips…</p>
+                } @else {
+                  <div class="payslip-stats">
+                    <article class="stat-chip">
+                      <span class="stat-value">{{ payslipTabStats().count }}</span>
+                      <span class="stat-label">Showing</span>
+                    </article>
+                    <article class="stat-chip">
+                      <span class="stat-value">{{ payslipTabStats().net | number:'1.2-2' }}</span>
+                      <span class="stat-label">Net (filtered)</span>
+                    </article>
+                    <article class="stat-chip">
+                      <span class="stat-value">{{ payslipTabStats().pending }}</span>
+                      <span class="stat-label">Pending</span>
+                    </article>
+                    <article class="stat-chip">
+                      <span class="stat-value">{{ payslipTabStats().paid }}</span>
+                      <span class="stat-label">Paid</span>
+                    </article>
+                    @if (payslipTabStats().excluded > 0) {
+                      <article class="stat-chip muted">
+                        <span class="stat-value">{{ payslipTabStats().excluded }}</span>
+                        <span class="stat-label">Excluded</span>
+                      </article>
+                    }
+                  </div>
+
+                  @if (payslipViewMode() === 'table') {
+                    <div class="table-wrap">
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Employee</th>
+                            <th>Department</th>
+                            <th>Gross</th>
+                            <th>Deductions</th>
+                            <th>Net</th>
+                            <th>Leave +/−</th>
+                            <th>Leave bal.</th>
+                            <th>Payment</th>
+                            <th>Status</th>
+                            <th></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          @for (p of filteredPayslips(); track p.id) {
+                            <tr [class.excluded]="p.status === 'excluded'">
+                              <td>
+                                <strong>{{ p.staffName }}</strong>
+                                <span class="sub">{{ p.employeeNumber }}</span>
+                              </td>
+                              <td>{{ p.department || '—' }}</td>
+                              <td>{{ p.grossPay | number:'1.2-2' }}</td>
+                              <td>{{ p.totalDeductions | number:'1.2-2' }}</td>
+                              <td class="net-cell">{{ p.netPay | number:'1.2-2' }}</td>
+                              <td>
+                                <span class="leave-accrual">+{{ formatLeaveDays(p.monthlyLeaveAccrual) }}</span>
+                                @if (p.leaveTakenDays > 0) {
+                                  <span class="leave-taken"> −{{ formatLeaveDays(p.leaveTakenDays) }}</span>
+                                }
+                              </td>
+                              <td><strong>{{ formatLeaveDays(p.leaveClosingBalance) }}</strong></td>
+                              <td>{{ paymentMethodLabel(p.paymentMethod) }}</td>
+                              <td>
+                                <span class="status-pill" [ngClass]="payslipStatusClass(p.status)">
+                                  {{ payslipStatusLabel(p.status) }}
+                                </span>
+                              </td>
+                              <td class="actions-cell">
+                                <button type="button" class="link-btn" (click)="openPayslip(p)">View</button>
+                                <button type="button" class="link-btn" (click)="printPayslip(p)">Print</button>
+                                @if (run.status === 'draft' && p.status !== 'excluded') {
+                                  <button type="button" class="link-btn" (click)="startEditPayslip(p)">Edit</button>
+                                  <button type="button" class="link-btn danger" (click)="excludePayslip(p)">Exclude</button>
+                                }
+                                @if (run.status === 'draft' && p.status === 'excluded') {
+                                  <button type="button" class="link-btn" (click)="includePayslip(p)">Include</button>
+                                }
+                              </td>
+                            </tr>
+                          } @empty {
+                            <tr>
+                              <td colspan="10" class="empty">No payslips match your filters.</td>
+                            </tr>
+                          }
+                        </tbody>
+                      </table>
+                    </div>
+                  } @else {
+                    <div class="payslip-cards">
+                      @for (p of filteredPayslips(); track p.id) {
+                        <article class="payslip-card" [class.excluded]="p.status === 'excluded'">
+                          <header class="payslip-card-head">
+                            <div>
+                              <h4>{{ p.staffName }}</h4>
+                              <span class="sub">{{ p.employeeNumber }} · {{ p.department || 'No department' }}</span>
+                            </div>
+                            <span class="status-pill" [ngClass]="payslipStatusClass(p.status)">
+                              {{ payslipStatusLabel(p.status) }}
+                            </span>
+                          </header>
+                          <div class="payslip-card-amounts">
+                            <div><span>Gross</span><strong>{{ p.grossPay | number:'1.2-2' }}</strong></div>
+                            <div><span>Deductions</span><strong>{{ p.totalDeductions | number:'1.2-2' }}</strong></div>
+                            <div class="net"><span>Net pay</span><strong>{{ p.netPay | number:'1.2-2' }}</strong></div>
+                          </div>
+                          <p class="payslip-card-leave">
+                            Leave: +{{ formatLeaveDays(p.monthlyLeaveAccrual) }} this month
+                            @if (p.leaveTakenDays > 0) { · −{{ formatLeaveDays(p.leaveTakenDays) }} taken }
+                            · Balance <strong>{{ formatLeaveDays(p.leaveClosingBalance) }}</strong> days
+                          </p>
+                          <p class="payslip-card-pay">{{ paymentMethodLabel(p.paymentMethod) }}
+                            @if (p.bankAccount) { · {{ p.bankName }} {{ p.bankAccount }} }
+                          </p>
+                          <div class="payslip-card-actions">
+                            <button type="button" class="link-btn" (click)="openPayslip(p)">View</button>
+                            <button type="button" class="link-btn" (click)="printPayslip(p)">Print</button>
+                            @if (run.status === 'draft' && p.status !== 'excluded') {
+                              <button type="button" class="link-btn" (click)="startEditPayslip(p)">Edit</button>
+                            }
+                          </div>
+                        </article>
+                      } @empty {
+                        <p class="empty">No payslips match your filters.</p>
+                      }
+                    </div>
+                  }
+                }
+              }
+            }
+          </section>
+        }
+      }
+    }
+  </div>
+</ng-template>
+
+@if (newRunOpen()) {
+  <div class="modal-backdrop" (click)="closeNewRun()"></div>
+  <div class="modal" role="dialog">
+    <header class="modal-head">
+      <h3>New payroll run</h3>
+      <button type="button" class="icon-close" (click)="closeNewRun()">×</button>
+    </header>
+    <div class="modal-body">
+      <div class="form-row">
+        <label>Year <input type="number" [(ngModel)]="newRunYear" (change)="loadRunPreview()" min="2020" max="2100" /></label>
+        <label>Month
+          <select [(ngModel)]="newRunMonth" (change)="loadRunPreview()">
+            @for (m of [1,2,3,4,5,6,7,8,9,10,11,12]; track m) {
+              <option [value]="m">{{ m }}</option>
+            }
+          </select>
+        </label>
+        <label>Pay date <input type="date" [(ngModel)]="newRunPayDate" /></label>
+      </div>
+      <label class="full">Notes <textarea [(ngModel)]="newRunNotes" rows="2"></textarea></label>
+      @if (previewLoading()) {
+        <p>Calculating preview…</p>
+      } @else {
+        @if (runPreview(); as prev) {
+          <div class="preview-box">
+            <h4>{{ prev.periodLabel }}</h4>
+            @if (prev.existingRun) {
+              <p class="warn-text">A run already exists for this period ({{ prev.existingRun.status }}).</p>
+            }
+            <div class="preview-stats">
+              <span>{{ prev.staffCount }} staff included</span>
+              <span>Net total: {{ prev.totalNet | number:'1.2-2' }}</span>
+              <span>Leave: +1 day accrued per staff (12 ÷ 12)</span>
+            </div>
+            @if (prev.missingCount > 0) {
+              <p class="warn-text">{{ prev.missingCount }} staff skipped (no pay profile).</p>
+            }
+          </div>
+        }
+      }
+    </div>
+    <footer class="modal-foot">
+      <button type="button" class="secondary-btn" (click)="closeNewRun()">Cancel</button>
+      <button type="button" class="primary-btn" (click)="createRun()" [disabled]="submitting() || !runPreview()?.staffCount">
+        Create run
+      </button>
+    </footer>
+  </div>
+}
+
+@if (profileDrawerOpen()) {
+  <div class="drawer-backdrop" (click)="closeProfile()"></div>
+  <aside class="drawer">
+    @if (editingStaff(); as staff) {
+      <header class="drawer-head">
+        <h3>Pay profile — {{ staff.user.firstName }} {{ staff.user.lastName }}</h3>
+        <button type="button" class="icon-close" (click)="closeProfile()">×</button>
+      </header>
+      <div class="drawer-body">
+        @if (profileForm; as f) {
+          <section class="form-section">
+            <h4>Employment</h4>
+            <label>Job title <input [(ngModel)]="f.jobTitle" /></label>
+            <label>Pay frequency
+              <select [(ngModel)]="f.payFrequency">
+                <option value="monthly">Monthly</option>
+                <option value="biweekly">Bi-weekly</option>
+              </select>
+            </label>
+            <label>Annual leave entitlement (days)
+              <input type="number" min="0" step="0.5" [(ngModel)]="f.annualLeaveDays" />
+            </label>
+            <p class="leave-formula-hint">
+              Monthly accrual: <strong>{{ formatLeaveDays(profileMonthlyLeave()) }}</strong> day(s)
+              ({{ f.annualLeaveDays || 12 }} ÷ 12)
+            </p>
+          </section>
+          <section class="form-section">
+            <h4>Earnings</h4>
+            <label>Base salary <input type="number" min="0" step="0.01" [(ngModel)]="f.baseSalary" /></label>
+            <label>Housing allowance <input type="number" min="0" step="0.01" [(ngModel)]="f.housingAllowance" /></label>
+            <label>Transport allowance <input type="number" min="0" step="0.01" [(ngModel)]="f.transportAllowance" /></label>
+            <label>Medical allowance <input type="number" min="0" step="0.01" [(ngModel)]="f.medicalAllowance" /></label>
+            <label>Other allowances <input type="number" min="0" step="0.01" [(ngModel)]="f.otherAllowances" /></label>
+          </section>
+          <section class="form-section">
+            <h4>Deductions</h4>
+            <label>PAYE <input type="number" min="0" step="0.01" [(ngModel)]="f.payeAmount" /></label>
+            <label>NSSA <input type="number" min="0" step="0.01" [(ngModel)]="f.nssaAmount" /></label>
+            <label>Pension <input type="number" min="0" step="0.01" [(ngModel)]="f.pensionAmount" /></label>
+            <label>Loan repayment <input type="number" min="0" step="0.01" [(ngModel)]="f.loanDeduction" /></label>
+            <label>Other deductions <input type="number" min="0" step="0.01" [(ngModel)]="f.otherDeductions" /></label>
+          </section>
+          <section class="form-section">
+            <h4>Payment & tax</h4>
+            <label>Payment method
+              <select [(ngModel)]="f.paymentMethod">
+                <option value="bank_transfer">Bank transfer</option>
+                <option value="cash">Cash</option>
+                <option value="ecocash">EcoCash</option>
+              </select>
+            </label>
+            <label>Bank name <input [(ngModel)]="f.bankName" /></label>
+            <label>Account number <input [(ngModel)]="f.bankAccount" /></label>
+            <label>Branch <input [(ngModel)]="f.bankBranch" /></label>
+            <label>Tax reference <input [(ngModel)]="f.taxReference" /></label>
+            <label>NSSA number <input [(ngModel)]="f.nssaNumber" /></label>
+            <label>Notes <textarea [(ngModel)]="f.notes" rows="2"></textarea></label>
+          </section>
+          <div class="preview-totals">
+            <span>Gross: {{ profilePreviewTotals().gross | number:'1.2-2' }}</span>
+            <span>Deductions: {{ profilePreviewTotals().deductions | number:'1.2-2' }}</span>
+            <span>Net: {{ profilePreviewTotals().net | number:'1.2-2' }}</span>
+          </div>
+        }
+      </div>
+      <footer class="drawer-foot">
+        <button type="button" class="secondary-btn" (click)="closeProfile()">Cancel</button>
+        <button type="button" class="primary-btn" (click)="saveProfile()" [disabled]="submitting()">Save profile</button>
+      </footer>
+    }
+  </aside>
+}
+
+@if (payslipDrawerOpen() && viewingPayslip(); as p) {
+  <div class="drawer-backdrop" (click)="closePayslip()"></div>
+  <aside class="drawer payslip-drawer">
+    <header class="drawer-head">
+      <h3>{{ payslipEditMode() ? 'Edit payslip' : 'Payslip preview' }}</h3>
+      <button type="button" class="icon-close" (click)="closePayslip()">×</button>
+    </header>
+    <div class="drawer-body payslip-detail">
+      @if (payslipEditMode()) {
+        <section class="form-section">
+          <h4>Earnings</h4>
+          <label>Base salary <input type="number" min="0" step="0.01" [(ngModel)]="payslipEditForm.baseSalary" /></label>
+          <label>Housing <input type="number" min="0" step="0.01" [(ngModel)]="payslipEditForm.housingAllowance" /></label>
+          <label>Transport <input type="number" min="0" step="0.01" [(ngModel)]="payslipEditForm.transportAllowance" /></label>
+          <label>Medical <input type="number" min="0" step="0.01" [(ngModel)]="payslipEditForm.medicalAllowance" /></label>
+          <label>Other allowances <input type="number" min="0" step="0.01" [(ngModel)]="payslipEditForm.otherAllowances" /></label>
+        </section>
+        <section class="form-section">
+          <h4>Leave (this period)</h4>
+          <p class="leave-formula-hint">
+            Accrual: +{{ formatLeaveDays(viewingPayslip()?.monthlyLeaveAccrual ?? 1) }} ·
+            Opening: {{ formatLeaveDays(viewingPayslip()?.leaveOpeningBalance ?? 0) }}
+          </p>
+          <label>Leave days taken this month
+            <input type="number" min="0" step="0.5" [(ngModel)]="payslipEditForm.leaveTakenDays" />
+          </label>
+        </section>
+        <section class="form-section">
+          <h4>Deductions</h4>
+          <label>PAYE <input type="number" min="0" step="0.01" [(ngModel)]="payslipEditForm.payeAmount" /></label>
+          <label>NSSA <input type="number" min="0" step="0.01" [(ngModel)]="payslipEditForm.nssaAmount" /></label>
+          <label>Pension <input type="number" min="0" step="0.01" [(ngModel)]="payslipEditForm.pensionAmount" /></label>
+          <label>Loan <input type="number" min="0" step="0.01" [(ngModel)]="payslipEditForm.loanDeduction" /></label>
+          <label>Other <input type="number" min="0" step="0.01" [(ngModel)]="payslipEditForm.otherDeductions" /></label>
+          <label>Notes <textarea [(ngModel)]="payslipEditForm.notes" rows="2"></textarea></label>
+        </section>
+        <div class="preview-totals">
+          <span>Gross: {{ payslipEditPreview().gross | number:'1.2-2' }}</span>
+          <span>Deductions: {{ payslipEditPreview().deductions | number:'1.2-2' }}</span>
+          <span>Net: {{ payslipEditPreview().net | number:'1.2-2' }}</span>
+        </div>
+      } @else {
+        <div class="slip-preview">
+          <div class="slip-preview-header">
+            <div class="slip-preview-brand">
+              @if (brandingLogoUrl(); as logo) {
+                <img [src]="logo" alt="" class="slip-preview-logo" />
+              } @else {
+                <span class="slip-preview-logo-ph">🏫</span>
+              }
+              <div>
+                <strong class="slip-school">{{ schoolBranding().schoolName || 'School' }}</strong>
+                @if (schoolBranding().tagline) {
+                  <span class="slip-tagline">{{ schoolBranding().tagline }}</span>
+                }
+              </div>
+            </div>
+            <div class="slip-preview-badge-wrap">
+              <span class="slip-preview-badge">PAYSLIP</span>
+              @if (selectedRun(); as run) {
+                <span class="slip-period">{{ run.periodLabel }}</span>
+                <span class="slip-ref">{{ run.reference }}</span>
+              }
+            </div>
+          </div>
+
+          <div class="slip-preview-meta">
+            <div>
+              <span class="lbl">Employee</span>
+              <strong>{{ p.staffName }}</strong>
+              <span class="sub">{{ p.employeeNumber }} · {{ p.department || '—' }}</span>
+            </div>
+            <div>
+              <span class="lbl">Status</span>
+              <span class="status-pill" [ngClass]="payslipStatusClass(p.status)">{{ payslipStatusLabel(p.status) }}</span>
+            </div>
+          </div>
+
+          <div class="slip-preview-cols">
+            <div class="slip-col earnings">
+              <h4>Earnings</h4>
+              <ul>
+                <li><span>Basic salary</span><span>{{ formatPayslipMoney(p.baseSalary) }}</span></li>
+                @if (p.housingAllowance > 0) {
+                  <li><span>Housing</span><span>{{ formatPayslipMoney(p.housingAllowance) }}</span></li>
+                }
+                @if (p.transportAllowance > 0) {
+                  <li><span>Transport</span><span>{{ formatPayslipMoney(p.transportAllowance) }}</span></li>
+                }
+                @if (p.medicalAllowance > 0) {
+                  <li><span>Medical</span><span>{{ formatPayslipMoney(p.medicalAllowance) }}</span></li>
+                }
+                @if (p.otherAllowances > 0) {
+                  <li><span>Other</span><span>{{ formatPayslipMoney(p.otherAllowances) }}</span></li>
+                }
+                <li class="total"><span>Gross pay</span><span>{{ formatPayslipMoney(p.grossPay) }}</span></li>
+              </ul>
+            </div>
+            <div class="slip-col deductions">
+              <h4>Deductions</h4>
+              <ul>
+                @if (p.payeAmount > 0) {
+                  <li><span>PAYE</span><span>−{{ formatPayslipMoney(p.payeAmount) }}</span></li>
+                }
+                @if (p.nssaAmount > 0) {
+                  <li><span>NSSA</span><span>−{{ formatPayslipMoney(p.nssaAmount) }}</span></li>
+                }
+                @if (p.pensionAmount > 0) {
+                  <li><span>Pension</span><span>−{{ formatPayslipMoney(p.pensionAmount) }}</span></li>
+                }
+                @if (p.loanDeduction > 0) {
+                  <li><span>Loan</span><span>−{{ formatPayslipMoney(p.loanDeduction) }}</span></li>
+                }
+                @if (p.otherDeductions > 0) {
+                  <li><span>Other</span><span>−{{ formatPayslipMoney(p.otherDeductions) }}</span></li>
+                }
+                <li class="total"><span>Total</span><span>−{{ formatPayslipMoney(p.totalDeductions) }}</span></li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="slip-preview-net">
+            <span>Net pay</span>
+            <strong>{{ formatPayslipMoney(p.netPay) }}</strong>
+          </div>
+
+          <div class="slip-preview-leave">
+            <h4>Annual leave</h4>
+            <p class="leave-formula-hint">{{ formatLeaveDays(p.annualLeaveEntitlement) }} days/year ÷ 12 = +{{ formatLeaveDays(p.monthlyLeaveAccrual) }}/month</p>
+            <div class="slip-leave-rows">
+              <span>Opening <strong>{{ formatLeaveDays(p.leaveOpeningBalance) }}</strong></span>
+              <span>Accrued <strong>+{{ formatLeaveDays(p.monthlyLeaveAccrual) }}</strong></span>
+              <span>Taken <strong>−{{ formatLeaveDays(p.leaveTakenDays) }}</strong></span>
+              <span class="closing">Balance <strong>{{ formatLeaveDays(p.leaveClosingBalance) }}</strong></span>
+            </div>
+          </div>
+
+          <div class="slip-preview-payment">
+            <span>{{ paymentMethodLabel(p.paymentMethod) }}</span>
+            @if (p.bankName) {
+              <span>{{ p.bankName }} · {{ p.bankAccount }}</span>
+            }
+          </div>
+          @if (p.notes) {
+            <p class="payslip-notes"><strong>Notes:</strong> {{ p.notes }}</p>
+          }
+        </div>
+      }
+    </div>
+    <footer class="drawer-foot">
+      @if (payslipEditMode()) {
+        <button type="button" class="secondary-btn" (click)="payslipEditMode.set(false)">Cancel edit</button>
+        <button type="button" class="primary-btn" (click)="savePayslipEdit()" [disabled]="submitting()">Save payslip</button>
+      } @else {
+        <button type="button" class="secondary-btn" (click)="printPayslip(p)">Print</button>
+        @if (selectedRun()?.status === 'draft' && p.status !== 'excluded') {
+          <button type="button" class="primary-btn" (click)="startEditPayslip(p)">Edit amounts</button>
+        }
+        <button type="button" class="secondary-btn" (click)="closePayslip()">Close</button>
+      }
+    </footer>
+  </aside>
+}

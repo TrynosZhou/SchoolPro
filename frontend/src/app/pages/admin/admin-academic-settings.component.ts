@@ -1,0 +1,1197 @@
+import { Component, computed, inject, OnInit, signal } from '@angular/core';
+import { DatePipe } from '@angular/common';
+import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
+import { forkJoin, of } from 'rxjs';
+import { catchError } from 'rxjs/operators';
+import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
+import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
+import { ApiService } from '../../core/services/api.service';
+import { promotionClassLabel } from '../../core/utils/class-display';
+
+const OL_COMPLETE = '__OL_COMPLETE__';
+const AL_COMPLETE = '__AL_COMPLETE__';
+
+const COMPLETION_OPTIONS = [
+  { value: OL_COMPLETE, label: '🎓 Ordinary Level Completed' },
+  { value: AL_COMPLETE, label: '🎓 Advanced Level Completed' },
+] as const;
+
+function sentinelToLabel(sentinel: string): string | undefined {
+  return COMPLETION_OPTIONS.find((o) => o.value === sentinel)?.label.replace('🎓 ', '');
+}
+
+function labelToSentinel(label: string): string | undefined {
+  return COMPLETION_OPTIONS.find((o) => o.label.replace('🎓 ', '') === label)?.value;
+}
+
+type Tab = 'calendar' | 'classes' | 'subjects' | 'classSubjects' | 'departments' | 'exams' | 'promotion' | 'publish';
+
+interface PublicationStatus {
+  termId: string;
+  examTypeId: string;
+  isPublished: boolean;
+  publishedAt?: string;
+  reportCardCount: number;
+  readyReportCardCount: number;
+  publishedByName?: string;
+  whatsappSent?: number;
+  smsSent?: number;
+}
+
+interface NotificationLogSummary {
+  total: number;
+  queued: number;
+  sent: number;
+  delivered: number;
+  failed: number;
+  undelivered: number;
+}
+
+interface ResultNotificationLogRow {
+  id: string;
+  studentId: string;
+  studentName: string;
+  admissionNumber?: string;
+  guardianName?: string | null;
+  phone: string;
+  messageSid?: string;
+  status: string;
+  errorMessage?: string;
+  createdAt: string;
+}
+
+interface ResultNotificationLogsResponse {
+  termId: string;
+  examTypeId: string;
+  summary: NotificationLogSummary;
+  logs: ResultNotificationLogRow[];
+}
+
+interface TermOption {
+  id: string;
+  name: string;
+  isCurrent?: boolean;
+  schoolYearId?: string;
+}
+
+interface GradeBoundaryRow {
+  grade: string;
+  label?: string;
+  minPercent: number;
+  points?: number;
+}
+
+interface SchoolSettings {
+  gradeBoundaries?: GradeBoundaryRow[];
+}
+
+interface SchoolYear {
+  id: string;
+  name: string;
+  startDate: string;
+  endDate: string;
+  isCurrent: boolean;
+  terms?: Term[];
+}
+
+interface Term {
+  id: string;
+  name: string;
+  termNumber: number;
+  startDate: string;
+  endDate: string;
+  isCurrent: boolean;
+  schoolYearId: string;
+}
+
+interface FormRow {
+  id: string;
+  name: string;
+  level: number;
+  classes?: { id: string; name: string; capacity: number }[];
+}
+
+interface ClassRow {
+  id: string;
+  name: string;
+  formId: string;
+  classTeacherId?: string;
+  capacity: number;
+  form?: { id: string; name: string; level: number };
+  students?: { id: string }[];
+}
+
+interface SubjectRow {
+  id: string;
+  code: string;
+  name: string;
+  short?: string | null;
+  description?: string;
+}
+
+interface DepartmentRow {
+  id: string;
+  code: string;
+  name: string;
+  description?: string;
+  isActive: boolean;
+  sortOrder: number;
+}
+
+interface ClassSubjectRow {
+  id: string;
+  classId: string;
+  subjectId: string;
+  teacherId?: string;
+  subject?: { code: string; name: string; short?: string | null };
+  teacher?: { id: string; user?: { firstName: string; lastName: string } };
+}
+
+interface StaffRow {
+  id: string;
+  employeeNumber: string;
+  user?: { firstName: string; lastName: string };
+}
+
+interface ExamTypeRow {
+  id: string;
+  name: string;
+  code: string;
+  weight: number;
+  maxMarks: number;
+}
+
+interface PromotionRuleRow {
+  id: string;
+  fromClassId: string;
+  toClassId?: string;
+  completionLabel?: string;
+  isActive: boolean;
+}
+
+@Component({
+  selector: 'app-admin-academic-settings',
+  standalone: true,
+  imports: [PortalLayoutComponent, FormsModule, RouterLink, DatePipe],
+  templateUrl: './admin-academic-settings.component.html',
+  styleUrls: ['./admin-academic-settings.component.scss', './admin-settings.component.scss'],
+})
+export class AdminAcademicSettingsComponent implements OnInit {
+  private api = inject(ApiService);
+
+  readonly adminNav = ADMIN_NAV_SECTIONS;
+  readonly promotionClassLabel = promotionClassLabel;
+  readonly completionOptions = COMPLETION_OPTIONS;
+
+  readonly tabs: { id: Tab; label: string; icon: string; desc: string }[] = [
+    { id: 'calendar', label: 'Academic Calendar', icon: '📅', desc: 'Years, terms & sessions' },
+    { id: 'classes', label: 'Forms & Classes', icon: '🎓', desc: 'Structure & teachers' },
+    { id: 'subjects', label: 'Subjects', icon: '📖', desc: 'Subject catalogue' },
+    { id: 'classSubjects', label: 'Class & Subjects', icon: '🔗', desc: 'Subjects per class' },
+    { id: 'departments', label: 'Departments', icon: '🏛️', desc: 'School departments & faculties' },
+    { id: 'exams', label: 'Exams & Grades', icon: '📝', desc: 'Weights & grade boundaries' },
+    { id: 'promotion', label: 'Promotion Rules', icon: '🎯', desc: 'Class progression at year-end' },
+    { id: 'publish', label: 'Publish Results', icon: '📢', desc: 'Release results to parents & students' },
+  ];
+
+  activeTab = signal<Tab>('calendar');
+  loading = signal(true);
+  submitting = signal(false);
+  toast = signal<{ type: 'success' | 'error'; msg: string } | null>(null);
+
+  schoolYears = signal<SchoolYear[]>([]);
+  forms = signal<FormRow[]>([]);
+  classes = signal<ClassRow[]>([]);
+  subjects = signal<SubjectRow[]>([]);
+  departments = signal<DepartmentRow[]>([]);
+  classSubjects = signal<ClassSubjectRow[]>([]);
+  staff = signal<StaffRow[]>([]);
+  examTypes = signal<ExamTypeRow[]>([]);
+  gradeBoundaries = signal<GradeBoundaryRow[]>([]);
+  gradePreviewMarks = signal(65);
+  targetsByClass = signal<Record<string, string>>({});
+
+  allTerms = computed<TermOption[]>(() => {
+    const terms: TermOption[] = [];
+    for (const y of this.schoolYears()) {
+      for (const t of y.terms || []) {
+        terms.push({ ...t, schoolYearId: y.id });
+      }
+    }
+    return terms.sort((a, b) => a.name.localeCompare(b.name));
+  });
+
+  publishTermId = '';
+  publishExamTypeId = '';
+  notifyWhatsApp = true;
+  notifySms = true;
+  publicationStatus = signal<PublicationStatus | null>(null);
+  loadingPublication = signal(false);
+  notificationLogs = signal<ResultNotificationLogsResponse | null>(null);
+  loadingNotificationLogs = signal(false);
+
+  newYear = { name: '', startDate: '', endDate: '', isCurrent: false };
+  editingYearId = signal<string | null>(null);
+  editYearData = { name: '', startDate: '', endDate: '', isCurrent: false };
+  newTerm = { name: '', termNumber: 1, startDate: '', endDate: '', schoolYearId: '', isCurrent: false };
+  newForm = { name: '', level: 1 };
+  editingFormId = signal<string | null>(null);
+  editFormData = { name: '', level: 1 };
+  editingClassId = signal<string | null>(null);
+  editClassName = '';
+  editingClassFormName = signal('');
+  editingSubjectId = signal<string | null>(null);
+  editingSubjectField = signal<'name' | 'code' | 'short' | null>(null);
+  editSubjectValue = '';
+  editingSubjectHint = signal('');
+  newClass = { name: '', formId: '', capacity: 40, classTeacherId: '' };
+  newSubject = { code: '', name: '', short: '', description: '' };
+  newDepartment = { code: '', name: '', description: '', isActive: true, sortOrder: 0 };
+  editingDepartmentId = signal<string | null>(null);
+  editDepartmentData = { code: '', name: '', description: '', isActive: true, sortOrder: 0 };
+  newAssignment = { classId: '', subjectId: '' };
+  classSubjectsPickerId = '';
+  loadedClassId = signal('');
+  loadedClassSubjects = signal<ClassSubjectRow[]>([]);
+  classSubjectsLoading = signal(false);
+
+  loadedClass = computed(() => this.classes().find((c) => c.id === this.loadedClassId()) ?? null);
+
+  pageStats = computed(() => ({
+    subjects: this.subjects().length,
+    departments: this.departments().length,
+    classes: this.classes().length,
+    forms: this.forms().length,
+    assignments: this.classSubjects().length,
+    years: this.schoolYears().length,
+    promotionRules: Object.values(this.targetsByClass()).filter((v) => !!v).length,
+  }));
+
+  examWeightTotal = computed(() => this.examTypes().reduce((s, e) => s + Number(e.weight), 0));
+
+  gradeBoundaryRanges = computed(() => {
+    const sorted = [...this.gradeBoundaries()].sort((a, b) => b.minPercent - a.minPercent);
+    return sorted.map((b, i) => {
+      const top = i === 0 ? 100 : sorted[i - 1].minPercent - 1;
+      return {
+        ...b,
+        rangeLabel:
+          i === 0 ? `${b.minPercent}% – 100%` : `${b.minPercent}% – ${Math.max(b.minPercent, top)}%`,
+      };
+    });
+  });
+
+  gradePreviewResult = computed(() => {
+    const pct = this.gradePreviewMarks();
+    const sorted = [...this.gradeBoundaries()].sort((a, b) => b.minPercent - a.minPercent);
+    for (const b of sorted) {
+      if (pct >= Number(b.minPercent)) return b.grade;
+    }
+    return sorted[sorted.length - 1]?.grade ?? '—';
+  });
+
+  gradePreviewPoints = computed(() => {
+    const grade = this.gradePreviewResult();
+    if (!grade || grade === '—') return null;
+    const row = this.gradeBoundaries().find((b) => b.grade.trim().toUpperCase() === grade.trim().toUpperCase());
+    if (row?.points == null || Number.isNaN(Number(row.points))) return null;
+    return Number(row.points);
+  });
+
+  sortedClasses = computed(() =>
+    [...this.classes()].sort((a, b) => {
+      const levelA = a.form?.level ?? 0;
+      const levelB = b.form?.level ?? 0;
+      if (levelA !== levelB) return levelA - levelB;
+      const formCmp = (a.form?.name || '').localeCompare(b.form?.name || '');
+      if (formCmp !== 0) return formCmp;
+      return a.name.localeCompare(b.name);
+    }),
+  );
+
+  activeTabMeta = computed(() => this.tabs.find((t) => t.id === this.activeTab()) ?? this.tabs[0]);
+
+  ngOnInit() {
+    this.loadAll();
+  }
+
+  setTab(tab: Tab) {
+    this.activeTab.set(tab);
+    if (tab === 'publish') {
+      this.initPublishDefaults();
+      this.refreshPublicationStatus();
+    }
+  }
+
+  initPublishDefaults() {
+    if (!this.publishTermId) {
+      const current = this.allTerms().find((t) => t.isCurrent) || this.allTerms()[0];
+      this.publishTermId = current?.id || '';
+    }
+    if (!this.publishExamTypeId && this.examTypes().length) {
+      this.publishExamTypeId = this.examTypes()[0].id;
+    }
+  }
+
+  onPublishFiltersChange() {
+    this.refreshPublicationStatus();
+    this.refreshNotificationLogs();
+  }
+
+  refreshPublicationStatus() {
+    if (!this.publishTermId || !this.publishExamTypeId) {
+      this.publicationStatus.set(null);
+      this.notificationLogs.set(null);
+      return;
+    }
+    this.loadingPublication.set(true);
+    this.api
+      .get<PublicationStatus>('/exams/results-publications/status', {
+        termId: this.publishTermId,
+        examTypeId: this.publishExamTypeId,
+      })
+      .subscribe({
+        next: (status) => {
+          this.publicationStatus.set(status);
+          this.loadingPublication.set(false);
+          this.refreshNotificationLogs();
+        },
+        error: () => {
+          this.publicationStatus.set(null);
+          this.loadingPublication.set(false);
+          this.notificationLogs.set(null);
+        },
+      });
+  }
+
+  refreshNotificationLogs() {
+    if (!this.publishTermId || !this.publishExamTypeId) {
+      this.notificationLogs.set(null);
+      return;
+    }
+    if (!this.publicationStatus()?.isPublished) {
+      this.notificationLogs.set(null);
+      return;
+    }
+
+    this.loadingNotificationLogs.set(true);
+    this.api
+      .get<ResultNotificationLogsResponse>('/exams/results-notifications', {
+        termId: this.publishTermId,
+        examTypeId: this.publishExamTypeId,
+      })
+      .subscribe({
+        next: (data) => {
+          this.notificationLogs.set(data);
+          this.loadingNotificationLogs.set(false);
+        },
+        error: () => {
+          this.notificationLogs.set(null);
+          this.loadingNotificationLogs.set(false);
+        },
+      });
+  }
+
+  notificationStatusLabel(status: string): string {
+    switch (status) {
+      case 'queued':
+        return 'Queued';
+      case 'sent':
+        return 'Sent';
+      case 'delivered':
+        return 'Delivered';
+      case 'failed':
+        return 'Failed';
+      case 'undelivered':
+        return 'Undelivered';
+      default:
+        return status;
+    }
+  }
+
+  publishResults() {
+    if (!this.publishTermId || !this.publishExamTypeId) {
+      this.showToast('error', 'Select a term and exam type.');
+      return;
+    }
+    const term = this.allTerms().find((t) => t.id === this.publishTermId)?.name || 'this term';
+    const exam = this.examTypes().find((e) => e.id === this.publishExamTypeId)?.name || 'this exam';
+    if (
+      !confirm(
+        `Publish ${exam} results for ${term}? Parents and students will be able to view report cards, and notification messages will be sent.`,
+      )
+    ) {
+      return;
+    }
+    this.submitting.set(true);
+    this.api
+      .post<{
+        message: string;
+        reportCardCount: number;
+        whatsappSent: number;
+        smsSent: number;
+        notificationsCreated: number;
+        notificationFailed?: number;
+      }>('/exams/results/publish', {
+        termId: this.publishTermId,
+        examTypeId: this.publishExamTypeId,
+        notifyWhatsApp: this.notifyWhatsApp,
+        notifySms: this.notifySms,
+      })
+      .subscribe({
+        next: (r) => {
+          this.submitting.set(false);
+          const failed = r.notificationFailed ?? 0;
+          const failedPart = failed > 0 ? ` Failed: ${failed}.` : '';
+          this.showToast(
+            failed > 0 && r.whatsappSent === 0 && r.smsSent === 0 ? 'error' : 'success',
+            `${r.message} WhatsApp: ${r.whatsappSent}, SMS: ${r.smsSent}, in-app: ${r.notificationsCreated}.${failedPart}`,
+          );
+          this.refreshPublicationStatus();
+        },
+        error: (e) => {
+          this.submitting.set(false);
+          this.showToast('error', e.error?.message || 'Failed to publish results');
+        },
+      });
+  }
+
+  unpublishResults() {
+    if (!this.publishTermId || !this.publishExamTypeId) {
+      this.showToast('error', 'Select a term and exam type.');
+      return;
+    }
+    if (!this.publicationStatus()?.isPublished) {
+      this.showToast('error', 'These results are not currently published.');
+      return;
+    }
+    const term = this.allTerms().find((t) => t.id === this.publishTermId)?.name || 'this term';
+    const exam = this.examTypes().find((e) => e.id === this.publishExamTypeId)?.name || 'this exam';
+    if (
+      !confirm(
+        `Unpublish ${exam} results for ${term}? Parents and students will lose access until you publish again.`,
+      )
+    ) {
+      return;
+    }
+    this.submitting.set(true);
+    this.api
+      .post<{ message: string; unpublishedReportCards: number }>('/exams/results/unpublish', {
+        termId: this.publishTermId,
+        examTypeId: this.publishExamTypeId,
+      })
+      .subscribe({
+        next: (r) => {
+          this.submitting.set(false);
+          this.showToast('success', r.message);
+          this.refreshPublicationStatus();
+        },
+        error: (e) => {
+          this.submitting.set(false);
+          this.showToast('error', e.error?.message || 'Failed to unpublish results');
+        },
+      });
+  }
+
+  loadAll() {
+    this.loading.set(true);
+    forkJoin({
+      settings: this.api.get<{ school: SchoolSettings }>('/admin/settings'),
+      years: this.api.get<SchoolYear[]>('/admin/school-years'),
+      forms: this.api.get<FormRow[]>('/admin/forms'),
+      classes: this.api.get<ClassRow[]>('/admin/classes'),
+      subjects: this.api.get<SubjectRow[]>('/admin/subjects'),
+      departments: this.api.get<DepartmentRow[]>('/admin/departments'),
+      classSubjects: this.api.get<ClassSubjectRow[]>('/admin/class-subjects'),
+      staff: this.api.get<StaffRow[]>('/admin/staff'),
+      examTypes: this.api.get<ExamTypeRow[]>('/admin/exam-types'),
+      promotionRules: this.api
+        .get<PromotionRuleRow[]>('/admin/promotion-rules')
+        .pipe(catchError(() => of([] as PromotionRuleRow[]))),
+    }).subscribe({
+      next: (data) => {
+        this.gradeBoundaries.set(
+          data.settings.school.gradeBoundaries?.length
+            ? data.settings.school.gradeBoundaries.map((b) => ({ ...b }))
+            : this.defaultGradeBoundaries(),
+        );
+        this.schoolYears.set(data.years);
+        this.forms.set(data.forms);
+        this.classes.set(data.classes);
+        this.subjects.set(data.subjects);
+        this.departments.set(data.departments);
+        this.classSubjects.set(data.classSubjects);
+        this.staff.set(data.staff);
+        this.examTypes.set(data.examTypes);
+        this.applyPromotionRules(data.promotionRules);
+        const currentYear = data.years.find((y) => y.isCurrent) || data.years[0];
+        if (currentYear) this.newTerm.schoolYearId = currentYear.id;
+        if (data.classes[0]) {
+          this.classSubjectsPickerId = data.classes[0].id;
+        }
+        this.loading.set(false);
+      },
+      error: (err) => {
+        this.loading.set(false);
+        if (err?.status === 404) {
+          this.showToast('error', 'Some academic APIs are unavailable — restart the backend.');
+        } else {
+          this.showToast('error', 'Failed to load academic settings');
+        }
+      },
+    });
+  }
+
+  private applyPromotionRules(rules: PromotionRuleRow[]) {
+    const map: Record<string, string> = {};
+    for (const r of rules) {
+      if (r.isActive === false) continue;
+      if (r.completionLabel) {
+        const sentinel = labelToSentinel(r.completionLabel);
+        if (sentinel) map[r.fromClassId] = sentinel;
+      } else if (r.toClassId) {
+        map[r.fromClassId] = r.toClassId;
+      }
+    }
+    this.targetsByClass.set(map);
+  }
+
+  addSchoolYear() {
+    if (!this.newYear.name || !this.newYear.startDate) {
+      this.showToast('error', 'Enter year name and dates');
+      return;
+    }
+    this.submitting.set(true);
+    this.api.post<SchoolYear>('/admin/school-years', this.newYear).subscribe({
+      next: () => {
+        this.newYear = { name: '', startDate: '', endDate: '', isCurrent: false };
+        this.reloadYears();
+        this.submitting.set(false);
+        this.showToast('success', 'School year created');
+      },
+      error: () => {
+        this.submitting.set(false);
+        this.showToast('error', 'Failed to create school year');
+      },
+    });
+  }
+
+  startEditYear(year: SchoolYear) {
+    this.editingYearId.set(year.id);
+    this.editYearData = {
+      name: year.name,
+      startDate: year.startDate,
+      endDate: year.endDate,
+      isCurrent: year.isCurrent,
+    };
+  }
+
+  cancelEditYear() {
+    this.editingYearId.set(null);
+  }
+
+  saveEditYear() {
+    const id = this.editingYearId();
+    if (!id || !this.editYearData.name.trim() || !this.editYearData.startDate || !this.editYearData.endDate) {
+      this.showToast('error', 'Year name, start date, and end date are required');
+      return;
+    }
+    this.submitting.set(true);
+    this.api.patch(`/admin/school-years/${id}`, this.editYearData).subscribe({
+      next: () => {
+        this.editingYearId.set(null);
+        this.reloadYears();
+        this.submitting.set(false);
+        this.showToast('success', 'School year updated');
+      },
+      error: (e) => {
+        this.submitting.set(false);
+        this.showToast('error', e.error?.message || 'Failed to update school year');
+      },
+    });
+  }
+
+  setCurrentYear(year: SchoolYear) {
+    this.api.patch(`/admin/school-years/${year.id}`, { isCurrent: true }).subscribe({
+      next: () => {
+        this.reloadYears();
+        this.showToast('success', `${year.name} set as current year`);
+      },
+      error: () => this.showToast('error', 'Failed to update year'),
+    });
+  }
+
+  addTerm() {
+    if (!this.newTerm.name || !this.newTerm.schoolYearId) {
+      this.showToast('error', 'Select school year and enter term details');
+      return;
+    }
+    this.submitting.set(true);
+    this.api.post<Term>('/admin/terms', this.newTerm).subscribe({
+      next: () => {
+        this.newTerm = {
+          name: '',
+          termNumber: 1,
+          startDate: '',
+          endDate: '',
+          schoolYearId: this.newTerm.schoolYearId,
+          isCurrent: false,
+        };
+        this.reloadYears();
+        this.submitting.set(false);
+        this.showToast('success', 'Term created');
+      },
+      error: () => {
+        this.submitting.set(false);
+        this.showToast('error', 'Failed to create term');
+      },
+    });
+  }
+
+  setCurrentTerm(term: Term) {
+    this.api.patch(`/admin/terms/${term.id}`, { isCurrent: true }).subscribe({
+      next: () => {
+        this.reloadYears();
+        this.showToast('success', `${term.name} set as current term`);
+      },
+      error: () => this.showToast('error', 'Failed to update term'),
+    });
+  }
+
+  addForm() {
+    if (!this.newForm.name) return;
+    this.api.post('/admin/forms', this.newForm).subscribe({
+      next: () => {
+        this.newForm = { name: '', level: 1 };
+        this.reloadForms();
+        this.showToast('success', 'Form added');
+      },
+      error: () => this.showToast('error', 'Failed to add form'),
+    });
+  }
+
+  startEditForm(f: FormRow) {
+    this.editingFormId.set(f.id);
+    this.editFormData = { name: f.name, level: f.level };
+  }
+
+  cancelEditForm() {
+    this.editingFormId.set(null);
+  }
+
+  saveEditForm() {
+    const id = this.editingFormId();
+    if (!id || !this.editFormData.name.trim()) {
+      this.showToast('error', 'Form name is required');
+      return;
+    }
+    this.api.patch(`/admin/forms/${id}`, this.editFormData).subscribe({
+      next: () => {
+        this.editingFormId.set(null);
+        this.reloadForms();
+        this.showToast('success', 'Form updated');
+      },
+      error: (e) => this.showToast('error', e.error?.message || 'Failed to update form'),
+    });
+  }
+
+  deleteForm(f: FormRow) {
+    if (!confirm(`Delete "${f.name}"? This cannot be undone.`)) return;
+    this.api.delete(`/admin/forms/${f.id}`).subscribe({
+      next: () => {
+        this.reloadForms();
+        this.showToast('success', `${f.name} deleted`);
+      },
+      error: (e) => this.showToast('error', e.error?.message || 'Cannot delete this form'),
+    });
+  }
+
+  addClass() {
+    if (!this.newClass.name || !this.newClass.formId) {
+      this.showToast('error', 'Enter class name and select form');
+      return;
+    }
+    this.api
+      .post('/admin/classes', {
+        ...this.newClass,
+        classTeacherId: this.newClass.classTeacherId || undefined,
+      })
+      .subscribe({
+        next: () => {
+          this.newClass = { name: '', formId: '', capacity: 40, classTeacherId: '' };
+          this.reloadClasses();
+          this.showToast('success', 'Class created');
+        },
+        error: () => this.showToast('error', 'Failed to create class'),
+      });
+  }
+
+  updateClassTeacher(cls: ClassRow, teacherId: string) {
+    this.api.patch<ClassRow>(`/admin/classes/${cls.id}`, { classTeacherId: teacherId || null }).subscribe({
+      next: (updated) => {
+        this.classes.update((rows) =>
+          rows.map((row) =>
+            row.id === cls.id
+              ? { ...row, classTeacherId: updated.classTeacherId }
+              : row,
+          ),
+        );
+        this.showToast('success', 'Class teacher updated');
+      },
+      error: (e) => {
+        this.reloadClasses();
+        this.showToast('error', e.error?.message || 'Failed to update class teacher');
+      },
+    });
+  }
+
+  openEditClass(cls: ClassRow) {
+    this.editingClassId.set(cls.id);
+    this.editClassName = cls.name;
+    this.editingClassFormName.set(cls.form?.name || '—');
+  }
+
+  closeEditClass() {
+    this.editingClassId.set(null);
+    this.editClassName = '';
+    this.editingClassFormName.set('');
+  }
+
+  saveEditClass() {
+    const id = this.editingClassId();
+    const name = this.editClassName.trim();
+    if (!id || !name) {
+      this.showToast('error', 'Class name is required');
+      return;
+    }
+    this.submitting.set(true);
+    this.api.patch<ClassRow>(`/admin/classes/${id}`, { name }).subscribe({
+      next: (updated) => {
+        this.classes.update((rows) =>
+          rows.map((c) => (c.id === id ? { ...c, ...updated, name: updated.name } : c)),
+        );
+        this.forms.update((forms) =>
+          forms.map((f) => ({
+            ...f,
+            classes: f.classes?.map((c) => (c.id === id ? { ...c, name: updated.name } : c)),
+          })),
+        );
+        this.closeEditClass();
+        this.submitting.set(false);
+        this.showToast('success', 'Class name updated');
+      },
+      error: (e) => {
+        this.submitting.set(false);
+        this.showToast('error', e.error?.message || 'Failed to update class name');
+      },
+    });
+  }
+
+  addSubject() {
+    if (!this.newSubject.code || !this.newSubject.name) {
+      this.showToast('error', 'Enter subject code and name');
+      return;
+    }
+    this.api.post('/admin/subjects', this.newSubject).subscribe({
+      next: () => {
+        this.newSubject = { code: '', name: '', short: '', description: '' };
+        this.api.get<SubjectRow[]>('/admin/subjects').subscribe((s) => this.subjects.set(s));
+        this.showToast('success', 'Subject added');
+      },
+      error: () => this.showToast('error', 'Failed to add subject'),
+    });
+  }
+
+  openEditSubjectShort(subject: SubjectRow) {
+    this.editingSubjectId.set(subject.id);
+    this.editingSubjectField.set('short');
+    this.editSubjectValue = subject.short || '';
+    this.editingSubjectHint.set(`${subject.name} (${subject.code})`);
+  }
+
+  openEditSubjectName(subject: SubjectRow) {
+    this.editingSubjectId.set(subject.id);
+    this.editingSubjectField.set('name');
+    this.editSubjectValue = subject.name;
+    this.editingSubjectHint.set(`Code: ${subject.code}`);
+  }
+
+  openEditSubjectCode(subject: SubjectRow) {
+    this.editingSubjectId.set(subject.id);
+    this.editingSubjectField.set('code');
+    this.editSubjectValue = subject.code;
+    this.editingSubjectHint.set(`Name: ${subject.name}`);
+  }
+
+  closeEditSubject() {
+    this.editingSubjectId.set(null);
+    this.editingSubjectField.set(null);
+    this.editSubjectValue = '';
+    this.editingSubjectHint.set('');
+  }
+
+  private applySubjectUpdate(updated: SubjectRow) {
+    this.subjects.update((rows) => rows.map((s) => (s.id === updated.id ? { ...s, ...updated } : s)));
+    this.classSubjects.update((rows) =>
+      rows.map((cs) =>
+        cs.subjectId === updated.id && cs.subject
+          ? {
+              ...cs,
+              subject: {
+                ...cs.subject,
+                code: updated.code,
+                name: updated.name,
+                short: updated.short,
+              },
+            }
+          : cs,
+      ),
+    );
+  }
+
+  saveEditSubject() {
+    const id = this.editingSubjectId();
+    const field = this.editingSubjectField();
+    const value = this.editSubjectValue.trim();
+    if (!id || !field) return;
+    if (!value && field !== 'short') {
+      this.showToast('error', field === 'code' ? 'Subject code is required' : 'Subject name is required');
+      return;
+    }
+
+    const body =
+      field === 'code'
+        ? { code: value.toUpperCase() }
+        : field === 'short'
+          ? { short: value || null }
+          : { name: value };
+    this.submitting.set(true);
+    this.api.patch<SubjectRow>(`/admin/subjects/${id}`, body).subscribe({
+      next: (updated) => {
+        this.applySubjectUpdate(updated);
+        this.closeEditSubject();
+        this.submitting.set(false);
+        const msg =
+          field === 'code'
+            ? 'Subject code updated'
+            : field === 'short'
+              ? 'Subject short label updated'
+              : 'Subject name updated';
+        this.showToast('success', msg);
+      },
+      error: (e) => {
+        this.submitting.set(false);
+        this.showToast('error', e.error?.message || 'Failed to update subject');
+      },
+    });
+  }
+
+  addDepartment() {
+    if (!this.newDepartment.code.trim() || !this.newDepartment.name.trim()) {
+      this.showToast('error', 'Enter department code and name');
+      return;
+    }
+    this.api.post<DepartmentRow>('/admin/departments', this.newDepartment).subscribe({
+      next: () => {
+        this.newDepartment = { code: '', name: '', description: '', isActive: true, sortOrder: 0 };
+        this.reloadDepartments();
+        this.showToast('success', 'Department added');
+      },
+      error: (e) => this.showToast('error', e.error?.message || 'Failed to add department'),
+    });
+  }
+
+  startEditDepartment(d: DepartmentRow) {
+    this.editingDepartmentId.set(d.id);
+    this.editDepartmentData = {
+      code: d.code,
+      name: d.name,
+      description: d.description || '',
+      isActive: d.isActive,
+      sortOrder: d.sortOrder,
+    };
+  }
+
+  cancelEditDepartment() {
+    this.editingDepartmentId.set(null);
+  }
+
+  saveEditDepartment() {
+    const id = this.editingDepartmentId();
+    if (!id || !this.editDepartmentData.code.trim() || !this.editDepartmentData.name.trim()) {
+      this.showToast('error', 'Department code and name are required');
+      return;
+    }
+    this.api.patch(`/admin/departments/${id}`, this.editDepartmentData).subscribe({
+      next: () => {
+        this.editingDepartmentId.set(null);
+        this.reloadDepartments();
+        this.showToast('success', 'Department updated');
+      },
+      error: (e) => this.showToast('error', e.error?.message || 'Failed to update department'),
+    });
+  }
+
+  deleteDepartment(d: DepartmentRow) {
+    if (!confirm(`Delete department "${d.name}"? This cannot be undone.`)) return;
+    this.api.delete(`/admin/departments/${d.id}`).subscribe({
+      next: () => {
+        this.reloadDepartments();
+        this.showToast('success', `${d.name} deleted`);
+      },
+      error: (e) => this.showToast('error', e.error?.message || 'Cannot delete this department'),
+    });
+  }
+
+  loadClassSubjects() {
+    const classId = this.classSubjectsPickerId.trim();
+    if (!classId) {
+      this.showToast('error', 'Select a class first');
+      return;
+    }
+    this.classSubjectsLoading.set(true);
+    this.api.get<ClassSubjectRow[]>('/admin/class-subjects', { classId }).subscribe({
+      next: (cs) => {
+        this.loadedClassSubjects.set(cs);
+        this.loadedClassId.set(classId);
+        this.newAssignment.classId = classId;
+        this.classSubjectsLoading.set(false);
+      },
+      error: () => {
+        this.classSubjectsLoading.set(false);
+        this.showToast('error', 'Failed to load subjects for this class');
+      },
+    });
+  }
+
+  private refreshLoadedClassSubjects() {
+    const classId = this.loadedClassId();
+    if (!classId) return;
+    this.api.get<ClassSubjectRow[]>('/admin/class-subjects', { classId }).subscribe({
+      next: (cs) => {
+        this.loadedClassSubjects.set(cs);
+        this.classSubjects.update((rows) => {
+          const other = rows.filter((r) => r.classId !== classId);
+          return [...other, ...cs];
+        });
+      },
+    });
+  }
+
+  assignSubject() {
+    const classId = this.loadedClassId() || this.classSubjectsPickerId;
+    if (!classId || !this.newAssignment.subjectId) {
+      this.showToast('error', 'Load a class and choose a subject');
+      return;
+    }
+    this.api
+      .post('/admin/class-subjects', {
+        classId,
+        subjectId: this.newAssignment.subjectId,
+      })
+      .subscribe({
+        next: () => {
+          this.refreshLoadedClassSubjects();
+          this.newAssignment.subjectId = '';
+          this.showToast('success', 'Subject assigned to class');
+        },
+        error: (e) =>
+          this.showToast('error', e.error?.message || 'Assignment failed (may already exist)'),
+      });
+  }
+
+  updateAssignmentSubject(cs: ClassSubjectRow, subjectId: string) {
+    if (!subjectId || subjectId === cs.subjectId) return;
+    this.api.patch(`/admin/class-subjects/${cs.id}`, { subjectId }).subscribe({
+      next: () => {
+        this.refreshLoadedClassSubjects();
+        this.showToast('success', 'Subject updated');
+      },
+      error: (e) =>
+        this.showToast('error', e.error?.message || 'Failed to update subject (may already exist)'),
+    });
+  }
+
+  removeAssignment(cs: ClassSubjectRow) {
+    if (!confirm(`Remove ${cs.subject?.name || 'this subject'} from the class?`)) return;
+    this.api.delete(`/admin/class-subjects/${cs.id}`).subscribe({
+      next: () => {
+        this.refreshLoadedClassSubjects();
+        this.showToast('success', 'Subject removed from class');
+      },
+      error: () => this.showToast('error', 'Failed to remove assignment'),
+    });
+  }
+
+  addGradeBoundary() {
+    this.gradeBoundaries.update((rows) => [...rows, { grade: '', label: '', minPercent: 0, points: undefined }]);
+  }
+
+  removeGradeBoundary(index: number) {
+    if (this.gradeBoundaries().length <= 1) {
+      this.showToast('error', 'At least one grade boundary is required.');
+      return;
+    }
+    this.gradeBoundaries.update((rows) => rows.filter((_, i) => i !== index));
+  }
+
+  resetGradeBoundaries() {
+    this.gradeBoundaries.set(this.defaultGradeBoundaries());
+    this.showToast('success', 'Restored default grade boundaries (save to apply).');
+  }
+
+  saveGradeBoundaries() {
+    const rows = this.gradeBoundaries().map((b) => ({
+      grade: b.grade.trim(),
+      label: b.label?.trim() || undefined,
+      minPercent: Number(b.minPercent),
+      points:
+        b.points !== undefined && b.points !== null && !Number.isNaN(Number(b.points))
+          ? Number(b.points)
+          : undefined,
+    }));
+    if (!rows.every((b) => b.grade)) {
+      this.showToast('error', 'Every row needs a grade code.');
+      return;
+    }
+    if (!rows.some((b) => b.minPercent === 0)) {
+      this.showToast('error', 'Include one boundary at 0% for the lowest band.');
+      return;
+    }
+    this.submitting.set(true);
+    this.api.patch<SchoolSettings>('/admin/settings', { gradeBoundaries: rows }).subscribe({
+      next: (s) => {
+        this.gradeBoundaries.set(s.gradeBoundaries?.map((b) => ({ ...b })) ?? rows);
+        this.submitting.set(false);
+        this.showToast('success', 'Grade boundaries saved');
+      },
+      error: (e) => {
+        this.submitting.set(false);
+        this.showToast('error', e.error?.message || 'Failed to save grade boundaries');
+      },
+    });
+  }
+
+  saveExamType(et: ExamTypeRow) {
+    this.api
+      .patch(`/admin/exam-types/${et.id}`, {
+        weight: Number(et.weight),
+        maxMarks: Number(et.maxMarks),
+      })
+      .subscribe({
+        next: () => this.showToast('success', `${et.name} weights saved`),
+        error: () => this.showToast('error', 'Failed to save exam type'),
+      });
+  }
+
+  targetOptions(fromClassId: string): ClassRow[] {
+    return this.sortedClasses().filter((c) => c.id !== fromClassId);
+  }
+
+  setTarget(fromClassId: string, value: string) {
+    this.targetsByClass.update((prev) => {
+      const next = { ...prev };
+      if (!value) delete next[fromClassId];
+      else next[fromClassId] = value;
+      return next;
+    });
+  }
+
+  getTarget(fromClassId: string): string {
+    return this.targetsByClass()[fromClassId] || '';
+  }
+
+  isSentinel(value: string): boolean {
+    return value === OL_COMPLETE || value === AL_COMPLETE;
+  }
+
+  completionBadgeLabel(fromClassId: string): string {
+    return sentinelToLabel(this.getTarget(fromClassId)) ?? '';
+  }
+
+  saveRules() {
+    const rules = Object.entries(this.targetsByClass())
+      .filter(([, value]) => !!value)
+      .map(([fromClassId, value]) => {
+        if (value === OL_COMPLETE) {
+          return { fromClassId, completionLabel: 'Ordinary Level Completed', isActive: true };
+        }
+        if (value === AL_COMPLETE) {
+          return { fromClassId, completionLabel: 'Advanced Level Completed', isActive: true };
+        }
+        return { fromClassId, toClassId: value, isActive: true };
+      });
+
+    this.submitting.set(true);
+    this.api.put<PromotionRuleRow[]>('/admin/promotion-rules', { rules }).subscribe({
+      next: (saved) => {
+        this.applyPromotionRules(saved);
+        this.submitting.set(false);
+        this.showToast('success', 'Promotion rules saved');
+      },
+      error: (err) => {
+        this.submitting.set(false);
+        this.showToast('error', err?.error?.message || 'Failed to save promotion rules');
+      },
+    });
+  }
+
+  staffName(s: StaffRow): string {
+    if (s.user) return `${s.user.firstName} ${s.user.lastName}`;
+    return s.employeeNumber;
+  }
+
+  /** Staff available as class teacher for this class (one teacher per class). */
+  classTeacherOptions(forClass: ClassRow): StaffRow[] {
+    const takenElsewhere = new Set(
+      this.classes()
+        .filter((c) => c.id !== forClass.id && c.classTeacherId)
+        .map((c) => c.classTeacherId as string),
+    );
+    return this.staff().filter((s) => s.id === forClass.classTeacherId || !takenElsewhere.has(s.id));
+  }
+
+  subjectHue(code: string): string {
+    const hues = ['#1e40af', '#7c3aed', '#059669', '#d97706', '#dc2626', '#0891b2'];
+    let hash = 0;
+    for (let i = 0; i < code.length; i++) hash = code.charCodeAt(i) + ((hash << 5) - hash);
+    return hues[Math.abs(hash) % hues.length];
+  }
+
+  classStudentCount(cls: ClassRow): number {
+    return cls.students?.length ?? 0;
+  }
+
+  private defaultGradeBoundaries(): GradeBoundaryRow[] {
+    return [
+      { grade: 'A', label: 'Excellent', minPercent: 80 },
+      { grade: 'B', label: 'Very Good', minPercent: 70 },
+      { grade: 'C', label: 'Good', minPercent: 60 },
+      { grade: 'D', label: 'Pass', minPercent: 50 },
+      { grade: 'E', label: 'Weak Pass', minPercent: 40 },
+      { grade: 'U', label: 'Ungraded', minPercent: 0 },
+    ];
+  }
+
+  private reloadYears() {
+    this.api.get<SchoolYear[]>('/admin/school-years').subscribe((y) => this.schoolYears.set(y));
+  }
+
+  private reloadForms() {
+    this.api.get<FormRow[]>('/admin/forms').subscribe((f) => this.forms.set(f));
+  }
+
+  private reloadClasses() {
+    this.api.get<ClassRow[]>('/admin/classes').subscribe((c) => this.classes.set(c));
+  }
+
+  private reloadDepartments() {
+    this.api.get<DepartmentRow[]>('/admin/departments').subscribe((d) => this.departments.set(d));
+  }
+
+  private showToast(type: 'success' | 'error', msg: string) {
+    this.toast.set({ type, msg });
+    setTimeout(() => this.toast.set(null), 4500);
+  }
+}

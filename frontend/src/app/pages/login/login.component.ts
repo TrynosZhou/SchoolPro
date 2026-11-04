@@ -1,0 +1,354 @@
+import { Component, inject, OnInit, signal, computed } from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { AuthService } from '../../core/services/auth.service';
+import { ApiService } from '../../core/services/api.service';
+import { environment } from '../../../environments/environment';
+
+type AuthMode = 'signin' | 'signup' | 'forgot' | 'reset';
+type SignInRole = 'staff' | 'parent' | 'student';
+
+interface PasswordPolicy {
+  minPasswordLength: number;
+  requireUppercase: boolean;
+  requireLowercase: boolean;
+  requireNumber: boolean;
+  requireSpecialChar: boolean;
+}
+
+@Component({
+  selector: 'app-login',
+  standalone: true,
+  imports: [FormsModule, RouterLink],
+  templateUrl: './login.component.html',
+  styleUrl: './login.component.scss',
+})
+export class LoginComponent implements OnInit {
+  private auth = inject(AuthService);
+  private api = inject(ApiService);
+  private router = inject(Router);
+  private route = inject(ActivatedRoute);
+
+  private readonly rememberKey = 'school_pro_remember_username';
+
+  mode = signal<AuthMode>('signin');
+  signInRole = signal<SignInRole>('staff');
+
+  readonly isStudentRole = computed(() => this.signInRole() === 'student');
+  readonly isStaffRole = computed(() => this.signInRole() === 'staff');
+  readonly isParentRole = computed(() => this.signInRole() === 'parent');
+
+  schoolName = signal('School Pro Academy');
+  schoolTagline = signal('School Management System');
+  schoolLogoUrl = signal<string | null>(null);
+
+  username = '';
+  signupEmail = '';
+  password = '';
+  rememberMe = true;
+  showPassword = signal(false);
+  loading = signal(false);
+  error = signal('');
+  success = signal('');
+
+  resetToken = '';
+  resetConfirmPassword = '';
+  devResetUrl = signal('');
+
+  signup = {
+    firstName: '',
+    lastName: '',
+    phone: '',
+    gender: '',
+    confirmPassword: '',
+    admissionNumber: '',
+    dateOfBirth: '',
+    linkAdmissionNumber: '',
+    relationship: 'Parent',
+  };
+
+  passwordPolicy = signal<PasswordPolicy>({
+    minPasswordLength: 8,
+    requireUppercase: true,
+    requireLowercase: true,
+    requireNumber: true,
+    requireSpecialChar: false,
+  });
+
+  readonly features = [
+    { icon: '🎓', title: 'Student lifecycle', text: 'Registration, enrollment & report cards' },
+    { icon: '📊', title: 'Exams & academics', text: 'Marks entry with auto-save to report cards' },
+    { icon: '💳', title: 'Finance & billing', text: 'Invoices, payments, and debt tracking' },
+    { icon: '👩‍🏫', title: 'Staff & attendance', text: 'Directory, roles, and daily attendance' },
+    { icon: '💬', title: 'Communication', text: 'School–parent updates and teacher–student messaging' },
+  ];
+
+  readonly currentYear = new Date().getFullYear();
+
+  schoolInitials = computed(() => {
+    const words = this.schoolName().trim().split(/\s+/).filter(Boolean);
+    if (!words.length) return 'SP';
+    const initials = words.slice(0, 2).map((w) => w[0]).join('');
+    return initials.toUpperCase();
+  });
+
+  private toAssetUrl(path: string | null | undefined): string | null {
+    const value = path?.trim();
+    if (!value) return null;
+    if (/^https?:\/\//i.test(value)) return value;
+    const origin = environment.apiUrl.replace(/\/api$/, '');
+    return `${origin}${value.startsWith('/') ? value : `/${value}`}`;
+  }
+
+  passwordRules = computed(() => {
+    const p = this.passwordPolicy();
+    const rules: string[] = [`At least ${p.minPasswordLength} characters`];
+    if (p.requireUppercase) rules.push('One uppercase letter');
+    if (p.requireLowercase) rules.push('One lowercase letter');
+    if (p.requireNumber) rules.push('One number');
+    if (p.requireSpecialChar) rules.push('One special character');
+    return rules;
+  });
+
+  ngOnInit() {
+    const saved = localStorage.getItem(this.rememberKey);
+    if (saved) {
+      this.username = saved;
+      this.rememberMe = true;
+    }
+
+    this.api.get<PasswordPolicy>('/auth/password-policy').subscribe({
+      next: (policy) => this.passwordPolicy.set(policy),
+      error: () => {},
+    });
+
+    this.api
+      .get<{ schoolName: string | null; tagline: string | null; logoUrl: string | null }>('/public/branding')
+      .subscribe({
+        next: (data) => {
+          if (data.schoolName) this.schoolName.set(data.schoolName);
+          if (data.tagline) this.schoolTagline.set(data.tagline);
+          this.schoolLogoUrl.set(this.toAssetUrl(data.logoUrl));
+        },
+        error: () => {},
+      });
+
+    this.route.queryParamMap.subscribe((params) => {
+      const token = params.get('reset')?.trim();
+      if (token) {
+        this.resetToken = token;
+        this.mode.set('reset');
+        this.error.set('');
+        this.success.set('');
+      }
+    });
+  }
+
+  setSignInRole(role: SignInRole) {
+    this.signInRole.set(role);
+    this.error.set('');
+    this.password = '';
+    this.showPassword.set(false);
+  }
+
+  setMode(next: AuthMode) {
+    this.mode.set(next);
+    this.error.set('');
+    this.success.set('');
+    this.devResetUrl.set('');
+    if (next === 'signin') {
+      this.signInRole.set('staff');
+    }
+    if (next !== 'reset') {
+      this.resetToken = '';
+      this.password = '';
+      this.resetConfirmPassword = '';
+      void this.router.navigate([], {
+        queryParams: { reset: null },
+        queryParamsHandling: 'merge',
+        replaceUrl: true,
+      });
+    }
+  }
+
+  togglePassword() {
+    this.showPassword.update((v) => !v);
+  }
+
+  onSubmit() {
+    const m = this.mode();
+    if (m === 'signin') {
+      this.submitSignIn();
+    } else if (m === 'signup') {
+      this.submitSignUp();
+    } else if (m === 'forgot') {
+      this.submitForgotPassword();
+    } else {
+      this.submitResetPassword();
+    }
+  }
+
+  submitForgotPassword() {
+    if (!this.username.trim()) {
+      this.error.set('Enter your username or email address.');
+      return;
+    }
+
+    this.loading.set(true);
+    this.error.set('');
+    this.success.set('');
+    this.devResetUrl.set('');
+
+    this.auth.forgotPassword(this.username.trim()).subscribe({
+      next: (res) => {
+        this.success.set(res.message);
+        if (res.resetUrl) {
+          this.devResetUrl.set(res.resetUrl);
+        }
+        this.loading.set(false);
+      },
+      error: (e) => {
+        this.error.set(e.error?.message || 'Could not send reset instructions. Please try again.');
+        this.loading.set(false);
+      },
+    });
+  }
+
+  submitResetPassword() {
+    this.error.set('');
+    this.success.set('');
+
+    if (!this.resetToken.trim()) {
+      this.error.set('This reset link is invalid. Request a new password reset.');
+      return;
+    }
+    if (!this.password) {
+      this.error.set('Enter a new password.');
+      return;
+    }
+    if (this.password !== this.resetConfirmPassword) {
+      this.error.set('Passwords do not match.');
+      return;
+    }
+
+    this.loading.set(true);
+
+    this.auth.resetPassword(this.resetToken.trim(), this.password).subscribe({
+      next: (res) => {
+        this.success.set(res.message);
+        this.password = '';
+        this.resetConfirmPassword = '';
+        this.resetToken = '';
+        this.loading.set(false);
+        setTimeout(() => this.setMode('signin'), 2000);
+      },
+      error: (e) => {
+        this.error.set(e.error?.message || 'Could not reset password. The link may have expired.');
+        this.loading.set(false);
+      },
+    });
+  }
+
+  private submitSignIn() {
+    if (this.isStudentRole()) {
+      this.submitStudentSignIn();
+      return;
+    }
+
+    if (!this.username.trim() || !this.password) {
+      this.error.set('Enter your username and password.');
+      return;
+    }
+
+    this.loading.set(true);
+    this.error.set('');
+    this.success.set('');
+
+    if (this.rememberMe) {
+      localStorage.setItem(this.rememberKey, this.username.trim());
+    } else {
+      localStorage.removeItem(this.rememberKey);
+    }
+
+    this.auth.login(this.username.trim(), this.password).subscribe({
+      next: () => this.router.navigate([this.auth.getPortalRoute()]),
+      error: (e) => {
+        this.error.set(e.error?.message || 'Invalid username or password. Please try again.');
+        this.loading.set(false);
+      },
+      complete: () => this.loading.set(false),
+    });
+  }
+
+  private submitStudentSignIn() {
+    const id = this.username.trim().toUpperCase();
+    if (!id || !this.password) {
+      this.error.set('Enter your Student ID and date of birth or password.');
+      return;
+    }
+
+    this.loading.set(true);
+    this.error.set('');
+    this.success.set('');
+
+    if (this.rememberMe) {
+      localStorage.setItem(this.rememberKey, id);
+    } else {
+      localStorage.removeItem(this.rememberKey);
+    }
+
+    this.auth.studentLogin(id, this.password).subscribe({
+      next: () => this.router.navigate([this.auth.getPortalRoute()]),
+      error: (e) => {
+        this.error.set(e.error?.message || 'Invalid Student ID or credentials.');
+        this.loading.set(false);
+      },
+      complete: () => this.loading.set(false),
+    });
+  }
+
+  private submitSignUp() {
+    this.error.set('');
+    this.success.set('');
+
+    if (!this.signup.firstName.trim() || !this.signup.lastName.trim()) {
+      this.error.set('Enter your first and last name.');
+      return;
+    }
+    if (!this.signupEmail.trim()) {
+      this.error.set('Enter your email address.');
+      return;
+    }
+    if (!this.password) {
+      this.error.set('Choose a password.');
+      return;
+    }
+    if (this.password !== this.signup.confirmPassword) {
+      this.error.set('Passwords do not match.');
+      return;
+    }
+
+    this.loading.set(true);
+
+    this.auth.register({
+      email: this.signupEmail.trim(),
+      password: this.password,
+      firstName: this.signup.firstName.trim(),
+      lastName: this.signup.lastName.trim(),
+      role: 'parent',
+      phone: this.signup.phone.trim() || undefined,
+      gender: this.signup.gender.trim() || undefined,
+      linkAdmissionNumber: this.signup.linkAdmissionNumber.trim()
+        ? this.signup.linkAdmissionNumber.trim().toUpperCase()
+        : undefined,
+      relationship: this.signup.relationship.trim() || 'Parent',
+    }).subscribe({
+      next: () => this.router.navigate([this.auth.getPortalRoute()]),
+      error: (e) => {
+        this.error.set(e.error?.message || 'Could not create account. Please try again.');
+        this.loading.set(false);
+      },
+      complete: () => this.loading.set(false),
+    });
+  }
+}

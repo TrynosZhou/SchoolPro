@@ -1,0 +1,143 @@
+<app-portal-layout
+  portalTitle="Admin Portal"
+  pageTitle="Admin Dashboard"
+  homePath="/admin"
+  [navSections]="adminNav"
+>
+  <div class="admin-dashboard">
+    <header class="dashboard-header">
+      <div class="header-content">
+        <h1>Admin Dashboard</h1>
+        <p class="subtitle">{{ schoolName() }} • {{ academicYear() }} • {{ todayLabel }}</p>
+      </div>
+    </header>
+
+    <div class="dashboard-body">
+      <div class="stats-grid">
+      @for (stat of statCardsRow1(); track stat.title) {
+        <div class="stat-card" [attr.data-tone]="stat.tone">
+          <div class="stat-header">
+            <div class="stat-icon-wrap">
+              @switch (stat.icon) {
+                @case ('students') { <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg> }
+                @case ('staff') { <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><polyline points="17 11 19 13 23 9"></polyline></svg> }
+                @case ('classes') { <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg> }
+                @case ('attendance') { <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg> }
+              }
+            </div>
+            <div class="stat-trend-badge" [attr.data-tone]="stat.trendTone">{{ stat.trend }}</div>
+          </div>
+          <div class="stat-body">
+            <h2 class="stat-value">{{ stat.value }}</h2>
+            <p class="stat-label">{{ stat.title }}</p>
+          </div>
+        </div>
+      }
+    </div>
+
+    <div class="stats-grid second-row">
+      @for (stat of statCardsRow2(); track stat.title) {
+        <div class="stat-card" [attr.data-tone]="stat.tone">
+          <div class="stat-header">
+            <div class="stat-icon-wrap">
+              @switch (stat.icon) {
+                @case ('finance') { <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg> }
+                @case ('pending-fees') { <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg> }
+                @case ('leaves') { <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg> }
+                @case ('notices') { <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg> }
+              }
+            </div>
+            <div class="stat-trend-badge" [attr.data-tone]="stat.trendTone">{{ stat.trend }}</div>
+          </div>
+          <div class="stat-body">
+            <h2 class="stat-value">{{ stat.value }}</h2>
+            <p class="stat-label">{{ stat.title }}</p>
+          </div>
+        </div>
+      }
+    </div>
+
+    <div class="charts-row">
+      <div class="chart-panel attendance-trend">
+        <div class="panel-header">
+          <h3>Attendance Trend</h3>
+          <span class="badge">Last 7 school days</span>
+        </div>
+        <div class="chart-container">
+          <!-- Placeholder for Bar Chart -->
+          <div class="bar-chart-mock">
+            @for (day of ['Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri']; track $index) {
+              <div class="bar-col">
+                <div class="bar-value">{{ [87, 80, 97, 90, 97, 90, 83][$index] }}%</div>
+                <div class="bar" [style.height.%]="[87, 80, 97, 90, 97, 90, 83][$index]"></div>
+                <div class="bar-label">{{ day }}</div>
+              </div>
+            }
+          </div>
+        </div>
+      </div>
+      <div class="chart-panel gender-dist">
+        <div class="panel-header">
+          <h3>Gender Distribution</h3>
+        </div>
+        <div class="chart-container donut-container">
+          <div class="donut-mock">
+            <div class="donut-center">
+              <span class="total">30</span>
+              <span class="label">TOTAL</span>
+            </div>
+            <svg viewBox="0 0 36 36" class="circular-chart">
+              <path class="circle-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+              <path class="circle blue" stroke-dasharray="53, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+              <path class="circle pink" stroke-dasharray="47, 100" stroke-dashoffset="-53" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+            </svg>
+          </div>
+          <div class="chart-legend">
+            <div class="legend-item">
+              <span class="dot blue"></span>
+              <span class="label">Male</span>
+              <span class="value">16 (53%)</span>
+            </div>
+            <div class="legend-item">
+              <span class="dot pink"></span>
+              <span class="label">Female</span>
+              <span class="value">14 (47%)</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="charts-row">
+      <div class="chart-panel students-class">
+        <div class="panel-header">
+          <h3>Students per Class</h3>
+          <button class="btn-text">View all</button>
+        </div>
+        <div class="chart-container">
+          <!-- Placeholder for Students per Class -->
+          <div class="bar-chart-mock students-per-class">
+             @for (c of ['S', 'S', 'S', 'S', 'S', 'S', 'S', 'S', 'S']; track $index) {
+              <div class="bar-col">
+                <div class="bar" [style.height.%]="[40, 60, 30, 80, 50, 70, 45, 90, 35][$index]"></div>
+              </div>
+            }
+          </div>
+        </div>
+      </div>
+      <div class="chart-panel fee-status">
+        <div class="panel-header">
+          <h3>Fee Status</h3>
+        </div>
+        <div class="chart-container pie-container">
+          <svg viewBox="0 0 36 36" class="circular-chart pie">
+            <path class="circle-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+            <path class="circle yellow" stroke-dasharray="65, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+            <path class="circle green" stroke-dasharray="35, 100" stroke-dashoffset="-65" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+          </svg>
+        </div>
+      </div>
+      </div>
+    </div>
+  </div>
+</app-portal-layout>

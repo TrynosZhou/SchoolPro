@@ -1,0 +1,126 @@
+<app-portal-layout
+  [portalTitle]="portalLayout.portalTitle"
+  pageTitle="Assignments"
+  homePath="/teacher"
+  [navSections]="portalLayout.navSections || []"
+  [navItems]="portalLayout.navItems || []"
+>
+  <header class="page-hero">
+    <p class="eyebrow">Academics · Class work</p>
+    <h1>Assignments</h1>
+    <p class="hero-sub">
+      Select a class, enter the assignment details, upload a file, and send it to every student in that class.
+    </p>
+  </header>
+
+  <section class="upload-card card">
+    <h2>Send assignment</h2>
+
+    @if (loading()) {
+      <p class="muted">Loading your classes…</p>
+    } @else {
+      <div class="form-grid">
+        <label class="field">
+          <span>Class <span class="req">*</span></span>
+          <select
+            [(ngModel)]="selectedClassId"
+            name="classId"
+            (ngModelChange)="onClassChange()"
+            [disabled]="!classes().length"
+          >
+            <option value="">Select class…</option>
+            @for (c of classes(); track c.id) {
+              <option [value]="c.id">{{ formatStudentClassLabel(c.name) }}</option>
+            }
+          </select>
+          @if (!classes().length) {
+            <small class="hint error">No classes assigned. Contact the administrator.</small>
+          }
+        </label>
+
+        <label class="field full">
+          <span>Title <span class="req">*</span></span>
+          <input
+            type="text"
+            [(ngModel)]="title"
+            name="title"
+            placeholder="e.g. Week 3 Algebra worksheet"
+            maxlength="200"
+          />
+        </label>
+
+        <label class="field full">
+          <span>Instructions</span>
+          <textarea
+            [(ngModel)]="instructions"
+            name="instructions"
+            rows="4"
+            placeholder="Optional notes or directions for students"
+          ></textarea>
+        </label>
+
+        <label class="field full file-field">
+          <span>File <span class="req">*</span></span>
+          <input
+            type="file"
+            #fileInput
+            (change)="onFileSelected($event)"
+            accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.png,.jpg,.jpeg,.webp"
+          />
+          <small class="hint">PDF, Word, Excel, PowerPoint, images, or text — max 10 MB</small>
+          @if (selectedFileName) {
+            <small class="file-name">Selected: {{ selectedFileName }}</small>
+          }
+        </label>
+      </div>
+
+      @if (statusMessage()) {
+        <p class="status" [class.error]="statusError()">{{ statusMessage() }}</p>
+      }
+
+      <button type="button" class="btn-primary" (click)="submitAssignment()" [disabled]="submitting() || !classes().length">
+        {{ submitting() ? 'Sending…' : 'Send to class' }}
+      </button>
+    }
+  </section>
+
+  @if (selectedClassId) {
+    <section class="list-card card">
+      <div class="list-head">
+        <h2>Posted for {{ selectedClassLabel() }}</h2>
+        <button type="button" class="btn-ghost" (click)="loadAssignments()" [disabled]="loadingList()">Refresh</button>
+      </div>
+
+      @if (loadingList()) {
+        <p class="muted">Loading…</p>
+      } @else if (!assignments().length) {
+        <div class="empty-state">
+          <span class="empty-icon">📤</span>
+          <p>No assignments posted yet for this class.</p>
+        </div>
+      } @else {
+        <ul class="assignment-list">
+          @for (a of assignments(); track a.id) {
+            <li>
+              <div class="assignment-main">
+                <strong>{{ a.title }}</strong>
+                @if (a.subjectName) {
+                  <span class="tag">{{ a.subjectName }}</span>
+                }
+                @if (a.instructions) {
+                  <p class="instructions">{{ a.instructions }}</p>
+                }
+              </div>
+              <div class="assignment-meta">
+                <span>Posted {{ formatDate(a.createdAt) }}</span>
+                <a class="file-link" [href]="fileDownloadUrl(a.fileUrl)" target="_blank" rel="noopener">
+                  {{ a.originalFileName }} ({{ formatFileSize(a.fileSize) }})
+                </a>
+              </div>
+            </li>
+          }
+        </ul>
+      }
+    </section>
+  }
+</app-portal-layout>

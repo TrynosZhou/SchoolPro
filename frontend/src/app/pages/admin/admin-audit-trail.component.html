@@ -1,0 +1,148 @@
+<app-portal-layout portalTitle="Admin Portal" pageTitle="Audit Trail" [navSections]="adminNav">
+  <section class="audit-head">
+    <div>
+      <h1>Audit trail</h1>
+      <p class="audit-sub">Read-only activity history for student records, messaging, and other audited actions.</p>
+    </div>
+    <button type="button" class="btn-ghost" (click)="load()" [disabled]="loading()">Refresh</button>
+  </section>
+
+  <section class="card filter-bar">
+    <div class="filter-grid">
+      <label class="fld">
+        <span>Module</span>
+        <select [(ngModel)]="filters.module">
+          <option value="">All modules</option>
+          @for (m of meta()?.modules ?? []; track m.id) {
+            <option [value]="m.id">{{ m.label }}</option>
+          }
+        </select>
+      </label>
+      <label class="fld">
+        <span>Action</span>
+        <select [(ngModel)]="filters.action">
+          <option value="">All actions</option>
+          @for (a of meta()?.actions ?? []; track a.id) {
+            <option [value]="a.id">{{ a.label }}</option>
+          }
+        </select>
+      </label>
+      <label class="fld">
+        <span>User email</span>
+        <input type="text" [(ngModel)]="filters.userEmail" placeholder="Search by email" />
+      </label>
+      <label class="fld">
+        <span>Record ID</span>
+        <input type="text" [(ngModel)]="filters.recordId" placeholder="Student / record UUID" />
+      </label>
+      <label class="fld">
+        <span>From</span>
+        <input type="date" [(ngModel)]="filters.dateFrom" />
+      </label>
+      <label class="fld">
+        <span>To</span>
+        <input type="date" [(ngModel)]="filters.dateTo" />
+      </label>
+      <button type="button" class="btn-primary" (click)="applyFilters()">Apply</button>
+      <button type="button" class="btn-ghost" (click)="resetFilters()">Reset</button>
+    </div>
+  </section>
+
+  @if (error(); as msg) {
+    <div class="card error-banner">{{ msg }}</div>
+  }
+
+  @if (loading()) {
+    <div class="card empty">Loading audit trail…</div>
+  } @else if (!rows().length) {
+    <div class="card empty">
+      @if (hasActiveFilters()) {
+        <p>No audit entries match your filters.</p>
+        <button type="button" class="btn-ghost" (click)="resetFilters()">Clear filters</button>
+      } @else {
+        <p><strong>No activity recorded yet.</strong></p>
+        <p class="empty-hint">
+          The audit trail logs actions as they happen — it does not include history from before auditing was enabled.
+          Create or edit a student, send a message, or run a bulk SMS, then click <strong>Refresh</strong>.
+        </p>
+      }
+    </div>
+  } @else {
+    <section class="card table-wrap">
+      <div class="table-scroll">
+        <table class="audit-table">
+          <thead>
+            <tr>
+              <th>When</th>
+              <th>User</th>
+              <th>Action</th>
+              <th>Module</th>
+              <th>Record</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of rows(); track row.id) {
+              <tr [class.expanded]="expandedId() === row.id">
+                <td class="when">{{ row.createdAt | date: 'medium' }}</td>
+                <td class="user">
+                  <span class="email">{{ row.userEmail || 'Unknown user' }}</span>
+                  <span class="role">{{ row.userRole }}</span>
+                </td>
+                <td>
+                  <span class="pill" [class]="actionClass(row.action)">{{ actionLabel(row.action) }}</span>
+                </td>
+                <td>{{ moduleLabel(row.module) }}</td>
+                <td class="record">
+                  @if (row.recordLabel) {
+                    <span class="label">{{ row.recordLabel }}</span>
+                  }
+                  <span class="id">{{ row.recordId }}</span>
+                </td>
+                <td class="actions">
+                  @if (hasChanges(row)) {
+                    <button type="button" class="link-btn" (click)="toggleExpand(row.id)">
+                      {{ expandedId() === row.id ? 'Hide' : 'Changes' }}
+                    </button>
+                  }
+                </td>
+              </tr>
+              @if (expandedId() === row.id && hasChanges(row)) {
+                <tr class="detail-row">
+                  <td colspan="6">
+                    <table class="changes-table">
+                      <thead>
+                        <tr>
+                          <th>Field</th>
+                          <th>Before</th>
+                          <th>After</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        @for (c of row.changes ?? []; track c.field) {
+                          <tr>
+                            <td>{{ c.field }}</td>
+                            <td>{{ formatValue(c.before) }}</td>
+                            <td>{{ formatValue(c.after) }}</td>
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
+                  </td>
+                </tr>
+              }
+            }
+          </tbody>
+        </table>
+      </div>
+
+      <footer class="pager">
+        <span>{{ pageInfo() }}</span>
+        <div class="pager-btns">
+          <button type="button" class="btn-ghost" (click)="prevPage()" [disabled]="!hasPrev()">Previous</button>
+          <button type="button" class="btn-ghost" (click)="nextPage()" [disabled]="!hasNext()">Next</button>
+        </div>
+      </footer>
+    </section>
+  }
+</app-portal-layout>

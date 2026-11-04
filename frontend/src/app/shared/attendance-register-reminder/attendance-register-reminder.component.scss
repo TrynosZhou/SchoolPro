@@ -1,0 +1,128 @@
+.register-reminder {
+  position: fixed;
+  right: 1.25rem;
+  bottom: 1.25rem;
+  z-index: 12000;
+  width: min(22rem, calc(100vw - 2rem));
+  padding: 1rem 1rem 0.9rem;
+  border-radius: 14px;
+  border: 1px solid #fecaca;
+  background: #fff;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.18);
+  color: #0f172a;
+}
+
+.register-reminder-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+
+  strong {
+    display: block;
+    font-size: 0.95rem;
+    margin-bottom: 0.2rem;
+  }
+
+  p {
+    margin: 0;
+    font-size: 0.82rem;
+    color: #64748b;
+    line-height: 1.4;
+  }
+}
+
+.dismiss-btn {
+  border: none;
+  background: transparent;
+  color: #64748b;
+  font-size: 1.35rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0.1rem 0.25rem;
+
+  &:hover {
+    color: #0f172a;
+  }
+}
+
+.class-list {
+  list-style: none;
+  margin: 0 0 0.85rem;
+  padding: 0;
+  max-height: 11rem;
+  overflow: auto;
+
+  li {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.45rem 0;
+    border-top: 1px solid #f1f5f9;
+    font-size: 0.84rem;
+
+    small {
+      color: #b45309;
+      white-space: nowrap;
+      font-weight: 600;
+      flex-shrink: 0;
+      padding-top: 0.1rem;
+    }
+  }
+}
+
+.class-row-info {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.class-name {
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.class-teacher {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.78rem;
+  color: #64748b;
+}
+
+.teacher-name {
+  min-width: 0;
+}
+
+.whatsapp-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 999px;
+  color: #16a34a;
+  background: #dcfce7;
+  text-decoration: none;
+  transition: background 0.15s ease, color 0.15s ease;
+
+  &:hover {
+    background: #bbf7d0;
+    color: #15803d;
+  }
+}
+
+.action-link {
+  display: inline-block;
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: #4338ca;
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
