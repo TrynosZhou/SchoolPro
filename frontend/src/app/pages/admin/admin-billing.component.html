@@ -34,50 +34,51 @@
           </p>
         }
       </div>
-      <div class="kpi-grid">
-        @if (isPaymentMode()) {
-          <article class="kpi ok">
-            <span class="kpi-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
-            </span>
-            <div>
-              <strong>{{ summary() ? ('$' + (summary()!.todayCollections | number:'1.0-0')) : '—' }}</strong>
-              <span>Today</span>
-              <small>{{ summary()?.todayPaymentCount || 0 }} payments</small>
-            </div>
-          </article>
-          <article class="kpi warn">
-            <span class="kpi-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-            </span>
-            <div>
-              <strong>{{ summary() ? ('$' + (summary()!.totalDebtors | number:'1.0-0')) : '—' }}</strong>
-              <span>Outstanding</span>
-              <small>{{ debtors().length }} debtors</small>
-            </div>
-          </article>
-        } @else {
-          <article class="kpi warn">
-            <span class="kpi-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-            </span>
-            <div>
-              <strong>{{ invoices().length }}</strong>
-              <span>Total invoices</span>
-            </div>
-          </article>
-          <article class="kpi ok">
-            <span class="kpi-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>
-            </span>
-            <div>
-              <strong>{{ invoiceStatusCounts().sent + invoiceStatusCounts().partial + invoiceStatusCounts().overdue }}</strong>
-              <span>Awaiting payment</span>
-            </div>
-          </article>
-        }
-      </div>
     </header>
+
+    <section class="kpi-grid" aria-label="Finance summary">
+      @if (isPaymentMode()) {
+        <article class="kpi kpi--mint">
+          <span class="kpi-icon-badge" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+          </span>
+          <div class="kpi-meta">
+            <strong>{{ summary() ? ('$' + (summary()!.todayCollections | number:'1.0-0')) : '—' }}</strong>
+            <span>Today</span>
+            <small>{{ summary()?.todayPaymentCount || 0 }} payments</small>
+          </div>
+        </article>
+        <article class="kpi kpi--peach">
+          <span class="kpi-icon-badge" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          </span>
+          <div class="kpi-meta">
+            <strong>{{ summary() ? ('$' + (summary()!.totalDebtors | number:'1.0-0')) : '—' }}</strong>
+            <span>Outstanding</span>
+            <small>{{ debtors().length }} debtors</small>
+          </div>
+        </article>
+      } @else {
+        <article class="kpi kpi--lavender">
+          <span class="kpi-icon-badge" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>
+          </span>
+          <div class="kpi-meta">
+            <strong>{{ invoices().length }}</strong>
+            <span>Total invoices</span>
+          </div>
+        </article>
+        <article class="kpi kpi--peach">
+          <span class="kpi-icon-badge" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          </span>
+          <div class="kpi-meta">
+            <strong>{{ invoiceStatusCounts().sent + invoiceStatusCounts().partial + invoiceStatusCounts().overdue }}</strong>
+            <span>Awaiting payment</span>
+          </div>
+        </article>
+      }
+    </section>
     }
 
     @if (isPaymentMode() && debtors().length) {
@@ -307,7 +308,9 @@
           <aside class="side-panel">
             @if (lastReceipt(); as rcpt) {
               <div class="success-card">
-                <div class="success-icon">✓</div>
+                <div class="success-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+                </div>
                 <h3>Payment successful</h3>
                 <p class="rcpt-no">{{ rcpt.receiptNumber }}</p>
                 <p class="rcpt-amt">{{ '$' + (rcpt.amount | number:'1.2-2') }}</p>
@@ -541,7 +544,9 @@
         <div class="invoices-panel">
         <div class="list-toolbar">
           <div class="search-wrap">
-            <span class="search-icon" aria-hidden="true">🔍</span>
+            <span class="search-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            </span>
             <label class="sr-only" for="invoiceSearch">Search invoices</label>
             <input
               id="invoiceSearch"
@@ -575,8 +580,12 @@
               </button>
             </div>
             <div class="view-toggle" role="group" aria-label="View mode">
-              <button type="button" class="view-btn" [class.active]="viewMode() === 'table'" (click)="viewMode.set('table')">☰</button>
-              <button type="button" class="view-btn" [class.active]="viewMode() === 'cards'" (click)="viewMode.set('cards')">▦</button>
+              <button type="button" class="view-btn" [class.active]="viewMode() === 'table'" [attr.aria-pressed]="viewMode() === 'table'" (click)="viewMode.set('table')" aria-label="Table view">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+              </button>
+              <button type="button" class="view-btn" [class.active]="viewMode() === 'cards'" [attr.aria-pressed]="viewMode() === 'cards'" (click)="viewMode.set('cards')" aria-label="Card view">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>
+              </button>
             </div>
           </div>
           <div class="results-meta">
@@ -917,7 +926,9 @@
       } @else if (isPaymentMode() && activeTab() === 'receipts') {
         <div class="list-toolbar">
           <div class="search-wrap">
-            <span class="search-icon" aria-hidden="true">🔍</span>
+            <span class="search-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            </span>
             <label class="sr-only" for="receiptSearch">Search receipts</label>
             <input
               id="receiptSearch"
@@ -935,8 +946,12 @@
           <div class="results-meta standalone" aria-live="polite">
             <span>Showing <strong>{{ filteredPayments().length }}</strong> of <strong>{{ payments().length }}</strong> receipts</span>
             <div class="view-toggle" role="group" aria-label="View mode">
-              <button type="button" class="view-btn" [class.active]="viewMode() === 'table'" [attr.aria-pressed]="viewMode() === 'table'" (click)="viewMode.set('table')" aria-label="Table view">☰</button>
-              <button type="button" class="view-btn" [class.active]="viewMode() === 'cards'" [attr.aria-pressed]="viewMode() === 'cards'" (click)="viewMode.set('cards')" aria-label="Card view">▦</button>
+              <button type="button" class="view-btn" [class.active]="viewMode() === 'table'" [attr.aria-pressed]="viewMode() === 'table'" (click)="viewMode.set('table')" aria-label="Table view">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+              </button>
+              <button type="button" class="view-btn" [class.active]="viewMode() === 'cards'" [attr.aria-pressed]="viewMode() === 'cards'" (click)="viewMode.set('cards')" aria-label="Card view">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>
+              </button>
             </div>
           </div>
         </div>
@@ -1014,7 +1029,9 @@
       } @else if (isPaymentMode() && activeTab() === 'debtors') {
         <div class="list-toolbar">
           <div class="search-wrap">
-            <span class="search-icon" aria-hidden="true">🔍</span>
+            <span class="search-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            </span>
             <label class="sr-only" for="debtorSearch">Search debtors</label>
             <input
               id="debtorSearch"
@@ -1034,8 +1051,12 @@
             <div class="toolbar-actions">
               <button type="button" class="btn-outline btn-sm" (click)="sendReminders()">Send WhatsApp reminders</button>
               <div class="view-toggle" role="group" aria-label="View mode">
-                <button type="button" class="view-btn" [class.active]="viewMode() === 'table'" [attr.aria-pressed]="viewMode() === 'table'" (click)="viewMode.set('table')" aria-label="Table view">☰</button>
-                <button type="button" class="view-btn" [class.active]="viewMode() === 'cards'" [attr.aria-pressed]="viewMode() === 'cards'" (click)="viewMode.set('cards')" aria-label="Card view">▦</button>
+                <button type="button" class="view-btn" [class.active]="viewMode() === 'table'" [attr.aria-pressed]="viewMode() === 'table'" (click)="viewMode.set('table')" aria-label="Table view">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+                </button>
+                <button type="button" class="view-btn" [class.active]="viewMode() === 'cards'" [attr.aria-pressed]="viewMode() === 'cards'" (click)="viewMode.set('cards')" aria-label="Card view">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>
+                </button>
               </div>
             </div>
           </div>

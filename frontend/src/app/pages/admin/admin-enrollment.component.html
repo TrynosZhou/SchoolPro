@@ -5,7 +5,7 @@
 >
   <div class="enrollment-page">
     @if (toast(); as t) {
-      <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>
+      <div class="toast" role="status" aria-live="polite" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>
     }
 
     <header class="hero">
@@ -15,60 +15,92 @@
           <p>Only class teachers can enroll students into their homeroom classes. Contact an administrator if you need a class assignment.</p>
         </div>
       } @else {
-      <div class="hero-copy">
-        <p class="eyebrow">Enrollment</p>
-        <h2>Class enrollment</h2>
-        <p class="hero-sub">
-          Assign registered students to classes and manage class changes.
-          @if (studentsLink === '/admin/students') {
-            New learners are registered on the <a [routerLink]="studentsLink">Students</a> page first.
-          } @else {
-            Students must be registered by an administrator before you can enroll them.
-          }
-        </p>
-        <div class="hero-actions">
-          @if (studentsLink === '/admin/students') {
-            <a [routerLink]="studentsLink" class="secondary-action">Register student</a>
-          }
-          <button type="button" class="refresh-action" (click)="load(true)" [disabled]="refreshing() || loading()">
-            {{ refreshing() ? 'Refreshing…' : 'Refresh data' }}
-          </button>
+        <div class="hero-copy">
+          <p class="eyebrow">Enrollment</p>
+          <h2>Class enrollment</h2>
+          <p class="hero-sub">
+            Assign registered students to classes and manage class changes.
+            @if (studentsLink === '/admin/students') {
+              New learners are registered on the <a [routerLink]="studentsLink">Students</a> page first.
+            } @else {
+              Students must be registered by an administrator before you can enroll them.
+            }
+          </p>
+          <div class="hero-actions">
+            @if (studentsLink === '/admin/students') {
+              <a [routerLink]="studentsLink" class="secondary-action">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+                  <circle cx="9" cy="7" r="4"></circle>
+                  <line x1="19" y1="8" x2="19" y2="14"></line>
+                  <line x1="22" y1="11" x2="16" y2="11"></line>
+                </svg>
+                Register student
+              </a>
+            }
+            <button type="button" class="refresh-action" (click)="load(true)" [disabled]="refreshing() || loading()">
+              {{ refreshing() ? 'Refreshing…' : 'Refresh data' }}
+            </button>
+          </div>
         </div>
-      </div>
-      <div class="kpi-grid">
-        <article class="kpi warn">
-          <span class="kpi-icon">⏳</span>
-          <div>
-            <strong>{{ stats().pending }}</strong>
-            <span>Awaiting class</span>
-          </div>
-        </article>
-        <article class="kpi accent">
-          <span class="kpi-icon">✅</span>
-          <div>
-            <strong>{{ stats().enrolled }}</strong>
-            <span>Enrolled</span>
-          </div>
-        </article>
-        <article class="kpi">
-          <span class="kpi-icon">🏫</span>
-          <div>
-            <strong>{{ stats().classes }}</strong>
-            <span>Classes</span>
-          </div>
-        </article>
-        <article class="kpi">
-          <span class="kpi-icon">💺</span>
-          <div>
-            <strong>{{ stats().openSeats }}</strong>
-            <span>Open seats</span>
-          </div>
-        </article>
-      </div>
       }
     </header>
 
     @if (portalTitle !== 'Teacher Portal' || isClassTeacher()) {
+    <section class="kpi-grid" aria-label="Enrollment summary">
+      <article class="kpi kpi--peach">
+        <span class="kpi-icon-badge" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <polyline points="12 6 12 12 16 14"></polyline>
+          </svg>
+        </span>
+        <div class="kpi-meta">
+          <strong>{{ stats().pending }}</strong>
+          <span>Awaiting class</span>
+        </div>
+      </article>
+      <article class="kpi kpi--mint">
+        <span class="kpi-icon-badge" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+            <polyline points="22 4 12 14.01 9 11.01"></polyline>
+          </svg>
+        </span>
+        <div class="kpi-meta">
+          <strong>{{ stats().enrolled }}</strong>
+          <span>Enrolled</span>
+        </div>
+      </article>
+      <article class="kpi kpi--lavender">
+        <span class="kpi-icon-badge" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+            <polyline points="2 17 12 22 22 17"></polyline>
+            <polyline points="2 12 12 17 22 12"></polyline>
+          </svg>
+        </span>
+        <div class="kpi-meta">
+          <strong>{{ stats().classes }}</strong>
+          <span>Classes</span>
+        </div>
+      </article>
+      <article class="kpi kpi--sky">
+        <span class="kpi-icon-badge" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="7" height="7" rx="1"></rect>
+            <rect x="14" y="3" width="7" height="7" rx="1"></rect>
+            <rect x="3" y="14" width="7" height="7" rx="1"></rect>
+            <rect x="14" y="14" width="7" height="7" rx="1"></rect>
+          </svg>
+        </span>
+        <div class="kpi-meta">
+          <strong>{{ stats().openSeats }}</strong>
+          <span>Open seats</span>
+        </div>
+      </article>
+    </section>
+
     @if (targetedStudentId()) {
       <div class="targeted-banner" role="region" aria-label="Selected student">
         <div class="targeted-copy">
@@ -90,22 +122,29 @@
 
     <section class="list-shell">
       <div class="list-toolbar">
-        <div class="view-tabs">
-          <button type="button" [class.active]="view() === 'pending'" (click)="setView('pending')">
+        <div class="view-tabs" role="group" aria-label="Enrollment view">
+          <button type="button" [class.active]="view() === 'pending'" [attr.aria-pressed]="view() === 'pending'" (click)="setView('pending')">
             Pending enrollment
             @if (stats().pending) {
               <span class="count">{{ stats().pending }}</span>
             }
           </button>
-          <button type="button" [class.active]="view() === 'enrolled'" (click)="setView('enrolled')">
+          <button type="button" [class.active]="view() === 'enrolled'" [attr.aria-pressed]="view() === 'enrolled'" (click)="setView('enrolled')">
             Enrolled students
             <span class="count muted">{{ stats().enrolled }}</span>
           </button>
         </div>
 
         <div class="search-wrap">
-          <span class="search-icon" aria-hidden="true">🔍</span>
+          <span class="search-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+          </span>
+          <label class="sr-only" for="enrollmentSearch">Search students</label>
           <input
+            id="enrollmentSearch"
             type="search"
             class="search-input"
             placeholder="Search name, student ID, class, form…"
@@ -121,7 +160,8 @@
         <div class="toolbar-row">
           <div class="filter-chips">
             @if (formOptions().length) {
-              <select class="form-filter" [ngModel]="formFilter()" (ngModelChange)="formFilter.set($event)" name="formFilter">
+              <label class="sr-only" for="formFilter">Filter by form</label>
+              <select id="formFilter" class="form-filter" [ngModel]="formFilter()" (ngModelChange)="formFilter.set($event)" name="formFilter">
                 <option value="all">All forms</option>
                 @for (f of formOptions(); track f) {
                   <option [value]="f">{{ f }}</option>
@@ -131,7 +171,8 @@
           </div>
 
           <div class="toolbar-actions">
-            <select [ngModel]="sortOrder()" (ngModelChange)="sortOrder.set($event)" name="sortOrder" class="sort-select">
+            <label class="sr-only" for="sortOrder">Sort students</label>
+            <select id="sortOrder" [ngModel]="sortOrder()" (ngModelChange)="sortOrder.set($event)" name="sortOrder" class="sort-select">
               <option value="name-asc">Name A–Z</option>
               <option value="name-desc">Name Z–A</option>
               <option value="id-asc">Student ID A–Z</option>
@@ -141,14 +182,30 @@
             </select>
             @if (view() === 'enrolled') {
               <div class="view-toggle" role="group" aria-label="View mode">
-                <button type="button" class="view-btn" [class.active]="enrolledViewMode() === 'table'" (click)="enrolledViewMode.set('table')" title="Table view">☰</button>
-                <button type="button" class="view-btn" [class.active]="enrolledViewMode() === 'cards'" (click)="enrolledViewMode.set('cards')" title="Card view">▦</button>
+                <button type="button" class="view-btn" [class.active]="enrolledViewMode() === 'table'" [attr.aria-pressed]="enrolledViewMode() === 'table'" (click)="enrolledViewMode.set('table')" aria-label="Table view">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <line x1="8" y1="6" x2="21" y2="6"></line>
+                    <line x1="8" y1="12" x2="21" y2="12"></line>
+                    <line x1="8" y1="18" x2="21" y2="18"></line>
+                    <line x1="3" y1="6" x2="3.01" y2="6"></line>
+                    <line x1="3" y1="12" x2="3.01" y2="12"></line>
+                    <line x1="3" y1="18" x2="3.01" y2="18"></line>
+                  </svg>
+                </button>
+                <button type="button" class="view-btn" [class.active]="enrolledViewMode() === 'cards'" [attr.aria-pressed]="enrolledViewMode() === 'cards'" (click)="enrolledViewMode.set('cards')" aria-label="Card view">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <rect x="3" y="3" width="7" height="7" rx="1"></rect>
+                    <rect x="14" y="3" width="7" height="7" rx="1"></rect>
+                    <rect x="3" y="14" width="7" height="7" rx="1"></rect>
+                    <rect x="14" y="14" width="7" height="7" rx="1"></rect>
+                  </svg>
+                </button>
               </div>
             }
           </div>
         </div>
 
-        <div class="results-meta">
+        <div class="results-meta" aria-live="polite">
           <span>
             @if (view() === 'pending') {
               Showing <strong>{{ visiblePending().length }}</strong> of <strong>{{ pendingStudents().length }}</strong> pending
@@ -203,6 +260,7 @@
                     [ngModel]="selectedClassId()[s.id] || ''"
                     (ngModelChange)="onClassPick(s.id, $event)"
                     [name]="'cls' + s.id"
+                    [attr.aria-label]="'Select class for ' + s.firstName + ' ' + s.lastName"
                   >
                     <option value="">Select class…</option>
                     @for (c of classesForStudent(s); track c.id) {
@@ -223,7 +281,12 @@
           </div>
         } @else {
           <div class="empty-state">
-            <span class="empty-icon">✓</span>
+            <span class="empty-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                <polyline points="22 4 12 14.01 9 11.01"></polyline>
+              </svg>
+            </span>
             <h3>@if (hasActiveFilters()) { No matching students } @else { All students are enrolled }</h3>
             <p>
               @if (hasActiveFilters()) {
@@ -241,7 +304,12 @@
         }
       } @else if (!visibleEnrolled().length) {
         <div class="empty-state">
-          <span class="empty-icon">🎓</span>
+          <span class="empty-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M22 10 12 5 2 10l10 5 10-5z"></path>
+              <path d="M6 12v5c0 1 2.5 3 6 3s6-2 6-3v-5"></path>
+            </svg>
+          </span>
           <h3>@if (hasActiveFilters()) { No matching students } @else { No enrolled students yet }</h3>
           <p>
             @if (hasActiveFilters()) {
@@ -281,6 +349,7 @@
                   (ngModelChange)="changeClass(s, $event)"
                   [disabled]="submitting() === s.id"
                   [name]="'chg-card' + s.id"
+                  [attr.aria-label]="'Change class for ' + s.firstName + ' ' + s.lastName"
                 >
                   @for (c of classes(); track c.id) {
                     <option [value]="c.id" [disabled]="classUsage(c).isFull && c.id !== s.classId">{{ classLabel(c) }}</option>
@@ -331,6 +400,7 @@
                       (ngModelChange)="changeClass(s, $event)"
                       [disabled]="submitting() === s.id"
                       [name]="'chg' + s.id"
+                      [attr.aria-label]="'Change class for ' + s.firstName + ' ' + s.lastName"
                     >
                       @for (c of classes(); track c.id) {
                         <option [value]="c.id" [disabled]="classUsage(c).isFull && c.id !== s.classId">{{ classLabel(c) }}</option>

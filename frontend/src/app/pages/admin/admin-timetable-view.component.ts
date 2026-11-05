@@ -7,8 +7,11 @@ import { ApiService } from '../../core/services/api.service';
 import { TimetablePeriod, TimetablePeriodsService } from '../../core/services/timetable-periods.service';
 import { classHeaderLabel, classHeaderLabelById } from '../../core/utils/class-display';
 import { buildTimetableTermVersionLabel } from '../../core/utils/timetable-term-label';
+import { environment } from '../../../environments/environment';
 import {
   breakPeriodLabel,
+  breakColumnVerticalLabel,
+  compactClassGridLabel,
   dayGridLabel,
   formatPeriodRange,
   isBreakPeriod,
@@ -17,6 +20,7 @@ import {
   teacherInitials,
   timetableSubjectShort,
 } from '../../core/utils/timetable-grid-display';
+import { downloadTimetablePdf, TimetablePdfCell, TimetablePdfColumn, TimetablePdfRow } from '../../core/utils/timetable-pdf.util';
 
 interface ClassRow { id: string; name: string; form?: { name: string }; }
 interface TimetableEntry {
@@ -29,8 +33,53 @@ interface TimetableEntry {
   teacher?: { user?: { firstName: string; lastName: string } };
 }
 
+interface SnapshotSlot {
+  id: string;
+  dayOfWeek: number;
+  startTime: string;
+  endTime: string;
+  classId: string;
+  className: string;
+  subjectName: string;
+  subjectCode: string | null;
+  subjectShort: string | null;
+  room: string | null;
+  teacherId: string;
+  teacherName: string;
+  employeeNumber: string;
+}
+
+interface SnapshotTeacher {
+  teacherId: string;
+  teacherName: string;
+  employeeNumber: string;
+  slotCount: number;
+  classCount: number;
+  subjectCount: number;
+  slots: SnapshotSlot[];
+}
+
+interface SnapshotClass {
+  classId: string;
+  className: string;
+  slotCount: number;
+  subjectCount: number;
+  slots: SnapshotSlot[];
+}
+
+interface TimetableSnapshot {
+  success: boolean;
+  teachers: SnapshotTeacher[];
+  classes: SnapshotClass[];
+}
+
+type MainTab = 'class' | 'teacher';
+type TeacherView = 'individual' | 'all' | 'summary';
 type ViewMode = 'grid' | 'days' | 'table' | 'cards';
 type DayFilter = 'all' | number;
+
+/** Sentinel used by the class/teacher pickers to select "All". */
+const ALL_SELECTION = '__all__';
 
 const DAYS = [
   { value: 1, label: 'Monday', short: 'Mon' },
@@ -60,9 +109,18 @@ export class AdminTimetableViewComponent implements OnInit {
   readonly teacherInitials = teacherInitials;
   readonly isBreakPeriod = isBreakPeriod;
   readonly breakPeriodLabel = breakPeriodLabel;
+  readonly breakColumnVerticalLabel = breakColumnVerticalLabel;
   readonly lessonPeriodNumber = lessonPeriodNumber;
 
   periods = signal<TimetablePeriod[]>([]);
+  termVersionLabel = signal(buildTimetableTermVersionLabel());
+  schoolName = signal('School Pro Academy');
+  schoolLogoUrl = signal<string | null>(null);
+  mainTab = signal<MainTab>('class');
+
+  // ── Class schedule ──
+  readonly classAllValue = ALL_SELECTION;
+  readonly teacherAllValue = ALL_SELECTION;
   classes = signal<ClassRow[]>([]);
   entries = signal<TimetableEntry[]>([]);
   loadingClasses = signal(true);
@@ -70,13 +128,29 @@ export class AdminTimetableViewComponent implements OnInit {
   viewMode = signal<ViewMode>('grid');
   dayFilter = signal<DayFilter>('all');
   entriesSearch = signal('');
-  termVersionLabel = signal(buildTimetableTermVersionLabel());
+  classId = signal('');
 
-  classId = '';
+  allClassesMode = computed(() => this.classId() === ALL_SELECTION);
+  classBusy = computed(() => (this.allClassesMode() ? this.loadingSnapshot() : this.loading()));
 
-  selectedClassLabel = computed(() => classHeaderLabelById(this.classes(), this.classId));
+  selectedClassLabel = computed(() => classHeaderLabelById(this.classes(), this.classId()));
 
   classLabel = (c: ClassRow) => classHeaderLabel(c);
+
+  snapshotClasses = computed(() => this.snapshot()?.classes ?? []);
+
+  classSnapshotStats = computed(() => {
+    const rows = this.snapshotClasses();
+    const subjects = new Set<string>();
+    let slotCount = 0;
+    for (const c of rows) {
+      for (const s of c.slots) {
+        slotCount += 1;
+        subjects.add(s.subjectName);
+      }
+    }
+    return { classCount: rows.length, slotCount, subjectCount: subjects.size };
+  });
 
   stats = computed(() => {
     const entries = this.entries();
@@ -106,16 +180,65 @@ export class AdminTimetableViewComponent implements OnInit {
     });
   });
 
+  // ── Teacher schedule ──
+  teacherView = signal<TeacherView>('individual');
+  snapshot = signal<TimetableSnapshot | null>(null);
+  loadingSnapshot = signal(false);
+  snapshotLoaded = signal(false);
+  teacherSearch = signal('');
+  teacherId = signal('');
+
+  snapshotTeachers = computed(() => this.snapshot()?.teachers ?? []);
+
+  filteredTeachers = computed(() => {
+    const q = this.teacherSearch().trim().toLowerCase();
+    const rows = this.snapshotTeachers();
+    if (!q) return rows;
+    return rows.filter((t) => `${t.teacherName} ${t.employeeNumber}`.toLowerCase().includes(q));
+  });
+
+  selectedTeacher = computed(
+    () => this.snapshotTeachers().find((t) => t.teacherId === this.teacherId()) || null,
+  );
+
+  teacherStats = computed(() => {
+    const rows = this.snapshotTeachers();
+    const classes = new Set<string>();
+    const subjects = new Set<string>();
+    const days = new Set<number>();
+    let slotCount = 0;
+    for (const t of rows) {
+      for (const s of t.slots) {
+        slotCount += 1;
+        classes.add(s.classId);
+        subjects.add(s.subjectName);
+        days.add(s.dayOfWeek);
+      }
+    }
+    return {
+      teacherCount: rows.length,
+      slotCount,
+      classCount: classes.size,
+      subjectCount: subjects.size,
+      daysFilled: days.size,
+    };
+  });
+
   ngOnInit() {
     this.periods.set(this.periodsSvc.load());
     this.loadTimetableContext();
+    this.loadSchoolName();
+    const tab = this.route.snapshot.queryParamMap.get('tab');
+    if (tab === 'teacher') {
+      this.setMainTab('teacher');
+    }
     this.api.get<ClassRow[]>('/admin/classes').subscribe({
       next: (rows) => {
         this.classes.set(rows);
         this.loadingClasses.set(false);
         const pre = this.route.snapshot.queryParamMap.get('class');
         if (pre && rows.some((c) => c.id === pre)) {
-          this.classId = pre;
+          this.classId.set(pre);
           this.loadTimetable();
         }
       },
@@ -126,9 +249,30 @@ export class AdminTimetableViewComponent implements OnInit {
     });
   }
 
-  onClassChange() {
+  setMainTab(tab: MainTab) {
+    this.mainTab.set(tab);
+    if (tab === 'teacher') {
+      this.loadSnapshot();
+    }
+  }
+
+  onClassIdChange(value: string) {
+    this.classId.set(value);
     this.entriesSearch.set('');
     this.dayFilter.set('all');
+    if (value === ALL_SELECTION) {
+      this.entries.set([]);
+      this.loadSnapshot();
+      return;
+    }
+    this.loadTimetable();
+  }
+
+  refreshClasses() {
+    if (this.allClassesMode()) {
+      this.loadSnapshot(true);
+      return;
+    }
     this.loadTimetable();
   }
 
@@ -145,13 +289,34 @@ export class AdminTimetableViewComponent implements OnInit {
     });
   }
 
+  private loadSchoolName() {
+    this.api.get<{ schoolName: string | null; logoUrl: string | null }>('/dashboard/school-links').subscribe({
+      next: (data) => {
+        if (data.schoolName) this.schoolName.set(data.schoolName);
+        this.schoolLogoUrl.set(this.toAssetUrl(data.logoUrl));
+      },
+      error: () => {
+        /* keep default school name */
+      },
+    });
+  }
+
+  private toAssetUrl(path: string | null | undefined): string | null {
+    const value = path?.trim();
+    if (!value) return null;
+    if (/^https?:\/\//i.test(value)) return value;
+    const origin = environment.apiUrl.replace(/\/api$/, '');
+    return `${origin}${value.startsWith('/') ? value : `/${value}`}`;
+  }
+
   loadTimetable() {
-    if (!this.classId) {
+    const classId = this.classId();
+    if (!classId || classId === ALL_SELECTION) {
       this.entries.set([]);
       return;
     }
     this.loading.set(true);
-    this.api.get<TimetableEntry[]>('/academics/timetable', { classId: this.classId }).subscribe({
+    this.api.get<TimetableEntry[]>('/academics/timetable', { classId }).subscribe({
       next: (rows) => {
         this.entries.set(rows);
         this.loading.set(false);
@@ -211,5 +376,184 @@ export class AdminTimetableViewComponent implements OnInit {
 
   clearEntriesSearch() {
     this.entriesSearch.set('');
+  }
+
+  // ── Teacher schedule helpers ──
+  loadSnapshot(force = false) {
+    if (this.loadingSnapshot()) return;
+    if (this.snapshotLoaded() && !force) return;
+    this.loadingSnapshot.set(true);
+    this.api.get<TimetableSnapshot>('/timetable/generate/snapshot').subscribe({
+      next: (data) => {
+        this.snapshot.set(data);
+        this.loadingSnapshot.set(false);
+        this.snapshotLoaded.set(true);
+        this.ensureTeacherSelection();
+      },
+      error: () => {
+        this.snapshot.set(null);
+        this.loadingSnapshot.set(false);
+        this.snapshotLoaded.set(true);
+      },
+    });
+  }
+
+  refreshTeachers() {
+    this.loadSnapshot(true);
+  }
+
+  onTeacherChange(id: string) {
+    if (id === ALL_SELECTION) {
+      this.teacherView.set('all');
+      return;
+    }
+    this.teacherView.set('individual');
+    this.teacherId.set(id);
+  }
+
+  private ensureTeacherSelection() {
+    const rows = this.snapshotTeachers();
+    if (!rows.length) {
+      this.teacherId.set('');
+      return;
+    }
+    if (!rows.some((t) => t.teacherId === this.teacherId())) {
+      this.teacherId.set(rows[0].teacherId);
+    }
+  }
+
+  setTeacherView(view: TeacherView) {
+    this.teacherView.set(view);
+  }
+
+  clearTeacherSearch() {
+    this.teacherSearch.set('');
+  }
+
+  teacherSlotAt(teacher: SnapshotTeacher, day: number, period: TimetablePeriod): SnapshotSlot | undefined {
+    return teacher.slots.find(
+      (s) => s.dayOfWeek === day && s.startTime === period.startTime && s.endTime === period.endTime,
+    );
+  }
+
+  teacherSlotSubject(slot: SnapshotSlot): string {
+    return timetableSubjectShort(slot.subjectCode, slot.subjectName, slot.subjectShort);
+  }
+
+  teacherSlotClass(slot: SnapshotSlot): string {
+    return compactClassGridLabel(slot.className);
+  }
+
+  classSlotAt(klass: SnapshotClass, day: number, period: TimetablePeriod): SnapshotSlot | undefined {
+    return klass.slots.find(
+      (s) => s.dayOfWeek === day && s.startTime === period.startTime && s.endTime === period.endTime,
+    );
+  }
+
+  classSlotSubject(slot: SnapshotSlot): string {
+    return timetableSubjectShort(slot.subjectCode, slot.subjectName, slot.subjectShort);
+  }
+
+  summarySlots(teacher: SnapshotTeacher, day: number): SnapshotSlot[] {
+    return teacher.slots
+      .filter((s) => s.dayOfWeek === day)
+      .sort((a, b) => a.startTime.localeCompare(b.startTime));
+  }
+
+  // ── Download (PDF) ──
+  private pdfColumns(): TimetablePdfColumn[] {
+    const periods = this.periods();
+    return periods.map((p, i) => {
+      const isBreak = isBreakPeriod(p);
+      return {
+        header: isBreak ? breakPeriodLabel(p) : String(lessonPeriodNumber(periods, i) ?? ''),
+        time: formatPeriodRange(p),
+        isBreak,
+      };
+    });
+  }
+
+  private pdfRows(
+    cellFor: (day: number, period: TimetablePeriod) => TimetablePdfCell,
+  ): TimetablePdfRow[] {
+    const periods = this.periods();
+    return DAYS.map((d) => ({
+      label: dayGridLabel(d.value),
+      cells: periods.map((p) => {
+        if (isBreakPeriod(p)) {
+          return { isBreak: true, breakLabel: breakColumnVerticalLabel(p) };
+        }
+        return cellFor(d.value, p);
+      }),
+    }));
+  }
+
+  private pdfFileName(label: string, suffix: string): string {
+    const slug = String(label || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+    return `${slug || 'timetable'}-${suffix}.pdf`;
+  }
+
+  downloadClassTimetable() {
+    const label = this.selectedClassLabel();
+    if (!label || !this.periods().length) return;
+    const short = this.shortClassCode(label);
+    downloadTimetablePdf({
+      title: this.schoolName(),
+      subtitle: `${this.termVersionLabel()}`,
+      classTeacher: '—',
+      columns: this.pdfColumns(),
+      rows: this.pdfRows((day, period) => {
+        const e = this.entryAt(day, period);
+        if (!e) return {};
+        return {
+          topRight: e.room || 'Boys',
+          main: timetableSubjectShort(e.subject?.code, e.subject?.name || 'Subject', e.subject?.short),
+          bottomRight: this.teacherName(e)
+        };
+      }),
+      fileName: this.pdfFileName(short, 'class-timetable'),
+    });
+  }
+
+  downloadSnapshotClass(klass: SnapshotClass) {
+    if (!this.periods().length) return;
+    downloadTimetablePdf({
+      title: this.schoolName(),
+      subtitle: `${this.termVersionLabel()}`,
+      classTeacher: '—',
+      columns: this.pdfColumns(),
+      rows: this.pdfRows((day, period) => {
+        const s = this.classSlotAt(klass, day, period);
+        if (!s) return {};
+        return {
+          topRight: s.room || 'Boys',
+          main: this.classSlotSubject(s),
+          bottomRight: s.teacherName
+        };
+      }),
+      fileName: this.pdfFileName(klass.className, 'class-timetable'),
+    });
+  }
+
+  downloadTeacherTimetable(teacher: SnapshotTeacher) {
+    if (!this.periods().length) return;
+    downloadTimetablePdf({
+      title: this.schoolName(),
+      subtitle: `${this.termVersionLabel()}`,
+      columns: this.pdfColumns(),
+      rows: this.pdfRows((day, period) => {
+        const s = this.teacherSlotAt(teacher, day, period);
+        if (!s) return {};
+        return {
+          topLeft: this.teacherSlotSubject(s),
+          main: this.teacherSlotClass(s),
+          bottomCenter: s.room || 'Boys'
+        };
+      }),
+      fileName: this.pdfFileName(teacher.teacherName, 'teacher-timetable'),
+    });
   }
 }

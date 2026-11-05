@@ -5,139 +5,249 @@
   [navSections]="adminNav"
 >
   <div class="admin-dashboard">
-    <header class="dashboard-header">
-      <div class="header-content">
-        <h1>Admin Dashboard</h1>
-        <p class="subtitle">{{ schoolName() }} • {{ academicYear() }} • {{ todayLabel }}</p>
+    <header class="dash-intro">
+      <div class="intro-copy">
+        <p class="eyebrow">Administration Overview</p>
+        <h1>{{ greeting() }}@if (adminName()) {, {{ adminName() }}}</h1>
+        <p class="intro-meta">
+          <span>{{ schoolName() }}</span>
+          <span class="dot" aria-hidden="true"></span>
+          <span>{{ academicYear() }}</span>
+          <span class="dot" aria-hidden="true"></span>
+          <span>{{ todayLabel }}</span>
+        </p>
+      </div>
+      <div class="intro-actions">
+        <a class="action-btn solid" routerLink="/admin/admissions">New Admission</a>
+        <a class="action-btn" routerLink="/admin/payment">Record Payment</a>
+        <a class="action-btn" routerLink="/admin/report-cards">Report Cards</a>
       </div>
     </header>
 
-    <div class="dashboard-body">
-      <div class="stats-grid">
-      @for (stat of statCardsRow1(); track stat.title) {
-        <div class="stat-card" [attr.data-tone]="stat.tone">
-          <div class="stat-header">
-            <div class="stat-icon-wrap">
-              @switch (stat.icon) {
-                @case ('students') { <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg> }
-                @case ('staff') { <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><polyline points="17 11 19 13 23 9"></polyline></svg> }
-                @case ('classes') { <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg> }
-                @case ('attendance') { <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg> }
+    <section class="kpi-grid" aria-label="Key metrics">
+      @for (card of kpis(); track card.key) {
+        <a class="kpi-card" [attr.data-tone]="card.tone" [routerLink]="card.link">
+          <div class="kpi-top">
+            <span class="kpi-icon" aria-hidden="true">
+              @switch (card.icon) {
+                @case ('students') {
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="9" cy="7" r="4"></circle>
+                    <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                    <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                  </svg>
+                }
+                @case ('staff') {
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="8.5" cy="7" r="4"></circle>
+                    <polyline points="17 11 19 13 23 9"></polyline>
+                  </svg>
+                }
+                @case ('attendance') {
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                    <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                  </svg>
+                }
+                @case ('finance') {
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="12" y1="1" x2="12" y2="23"></line>
+                    <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                  </svg>
+                }
               }
-            </div>
-            <div class="stat-trend-badge" [attr.data-tone]="stat.trendTone">{{ stat.trend }}</div>
-          </div>
-          <div class="stat-body">
-            <h2 class="stat-value">{{ stat.value }}</h2>
-            <p class="stat-label">{{ stat.title }}</p>
-          </div>
-        </div>
-      }
-    </div>
-
-    <div class="stats-grid second-row">
-      @for (stat of statCardsRow2(); track stat.title) {
-        <div class="stat-card" [attr.data-tone]="stat.tone">
-          <div class="stat-header">
-            <div class="stat-icon-wrap">
-              @switch (stat.icon) {
-                @case ('finance') { <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg> }
-                @case ('pending-fees') { <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg> }
-                @case ('leaves') { <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg> }
-                @case ('notices') { <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg> }
-              }
-            </div>
-            <div class="stat-trend-badge" [attr.data-tone]="stat.trendTone">{{ stat.trend }}</div>
-          </div>
-          <div class="stat-body">
-            <h2 class="stat-value">{{ stat.value }}</h2>
-            <p class="stat-label">{{ stat.title }}</p>
-          </div>
-        </div>
-      }
-    </div>
-
-    <div class="charts-row">
-      <div class="chart-panel attendance-trend">
-        <div class="panel-header">
-          <h3>Attendance Trend</h3>
-          <span class="badge">Last 7 school days</span>
-        </div>
-        <div class="chart-container">
-          <!-- Placeholder for Bar Chart -->
-          <div class="bar-chart-mock">
-            @for (day of ['Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri']; track $index) {
-              <div class="bar-col">
-                <div class="bar-value">{{ [87, 80, 97, 90, 97, 90, 83][$index] }}%</div>
-                <div class="bar" [style.height.%]="[87, 80, 97, 90, 97, 90, 83][$index]"></div>
-                <div class="bar-label">{{ day }}</div>
-              </div>
-            }
-          </div>
-        </div>
-      </div>
-      <div class="chart-panel gender-dist">
-        <div class="panel-header">
-          <h3>Gender Distribution</h3>
-        </div>
-        <div class="chart-container donut-container">
-          <div class="donut-mock">
-            <div class="donut-center">
-              <span class="total">30</span>
-              <span class="label">TOTAL</span>
-            </div>
-            <svg viewBox="0 0 36 36" class="circular-chart">
-              <path class="circle-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
-              <path class="circle blue" stroke-dasharray="53, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
-              <path class="circle pink" stroke-dasharray="47, 100" stroke-dashoffset="-53" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+            </span>
+            <svg class="kpi-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <line x1="7" y1="17" x2="17" y2="7"></line>
+              <polyline points="7 7 17 7 17 17"></polyline>
             </svg>
           </div>
-          <div class="chart-legend">
-            <div class="legend-item">
-              <span class="dot blue"></span>
-              <span class="label">Male</span>
-              <span class="value">16 (53%)</span>
-            </div>
-            <div class="legend-item">
-              <span class="dot pink"></span>
-              <span class="label">Female</span>
-              <span class="value">14 (47%)</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="charts-row">
-      <div class="chart-panel students-class">
-        <div class="panel-header">
-          <h3>Students per Class</h3>
-          <button class="btn-text">View all</button>
-        </div>
-        <div class="chart-container">
-          <!-- Placeholder for Students per Class -->
-          <div class="bar-chart-mock students-per-class">
-             @for (c of ['S', 'S', 'S', 'S', 'S', 'S', 'S', 'S', 'S']; track $index) {
-              <div class="bar-col">
-                <div class="bar" [style.height.%]="[40, 60, 30, 80, 50, 70, 45, 90, 35][$index]"></div>
-              </div>
+          <p class="kpi-title">{{ card.title }}</p>
+          <div class="kpi-body">
+            @if (loading()) {
+              <span class="skeleton skeleton-value"></span>
+              <span class="skeleton skeleton-caption"></span>
+            } @else {
+              <p class="kpi-value">{{ card.value }}</p>
+              <p class="kpi-caption">{{ card.caption }}</p>
             }
           </div>
+        </a>
+      }
+    </section>
+
+    @if (!loading() && lowStock() > 0) {
+      <div class="alert-strip" role="status">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+          <line x1="12" y1="9" x2="12" y2="13"></line>
+          <line x1="12" y1="17" x2="12.01" y2="17"></line>
+        </svg>
+        <span>
+          <strong>{{ lowStock() }}</strong> tuckshop item{{ lowStock() === 1 ? '' : 's' }} at or below the reorder level.
+        </span>
+      </div>
+    }
+
+    <section class="panel-grid">
+      <article class="panel">
+        <header class="panel-head">
+          <div>
+            <h3>Today's Attendance</h3>
+            <p class="panel-sub">Live register for {{ todayLabel }}</p>
+          </div>
+          @if (!loading() && attendance().rate !== null) {
+            <span class="panel-badge tone-sky">{{ attendance().rate }}% present</span>
+          }
+        </header>
+
+        @if (loading()) {
+          <div class="skeleton skeleton-block"></div>
+        } @else if (attendance().total === 0) {
+          <p class="empty-state">Attendance has not been marked yet today.</p>
+        } @else {
+          <div class="attendance-figure">
+            <span class="big-number">{{ attendance().present }}</span>
+            <span class="big-of">of {{ attendance().total }} students present</span>
+          </div>
+          <div class="stack-bar" role="img" aria-label="Attendance breakdown">
+            <span class="seg present" [style.width.%]="attendance().presentPct"></span>
+            <span class="seg late" [style.width.%]="attendance().latePct"></span>
+            <span class="seg absent" [style.width.%]="attendance().absentPct"></span>
+          </div>
+          <ul class="legend-list">
+            <li><span class="dot present" aria-hidden="true"></span><span class="legend-label">Present</span><strong>{{ attendance().present }}</strong></li>
+            <li><span class="dot late" aria-hidden="true"></span><span class="legend-label">Late</span><strong>{{ attendance().late }}</strong></li>
+            <li><span class="dot absent" aria-hidden="true"></span><span class="legend-label">Absent</span><strong>{{ attendance().absent }}</strong></li>
+          </ul>
+        }
+      </article>
+
+      <article class="panel">
+        <header class="panel-head">
+          <div>
+            <h3>Student Enrolment</h3>
+            <p class="panel-sub">Boarders vs day scholars</p>
+          </div>
+        </header>
+
+        @if (loading()) {
+          <div class="skeleton skeleton-block"></div>
+        } @else {
+          <div class="donut-wrap">
+            <div class="donut">
+              <svg viewBox="0 0 42 42" class="donut-svg" aria-hidden="true">
+                <circle class="donut-track" cx="21" cy="21" r="15.9155"></circle>
+                <circle
+                  class="donut-seg boarder"
+                  cx="21"
+                  cy="21"
+                  r="15.9155"
+                  [attr.stroke-dasharray]="enrolment().boarderPct + ' ' + enrolment().dayPct"
+                  stroke-dashoffset="25"
+                ></circle>
+                <circle
+                  class="donut-seg day"
+                  cx="21"
+                  cy="21"
+                  r="15.9155"
+                  [attr.stroke-dasharray]="enrolment().dayPct + ' ' + enrolment().boarderPct"
+                  [attr.stroke-dashoffset]="25 - enrolment().boarderPct"
+                ></circle>
+              </svg>
+              <div class="donut-center">
+                <span class="donut-total">{{ enrolment().total }}</span>
+                <span class="donut-label">Students</span>
+              </div>
+            </div>
+            <ul class="legend-list">
+              <li>
+                <span class="dot boarder" aria-hidden="true"></span><span class="legend-label">Boarders</span><strong>{{ enrolment().boarders }} · {{ enrolment().boarderPct }}%</strong>
+              </li>
+              <li>
+                <span class="dot day" aria-hidden="true"></span><span class="legend-label">Day scholars</span><strong>{{ enrolment().dayScholars }} · {{ enrolment().dayPct }}%</strong>
+              </li>
+            </ul>
+          </div>
+        }
+      </article>
+
+      <article class="panel">
+        <header class="panel-head">
+          <div>
+            <h3>Staff Composition</h3>
+            <p class="panel-sub">{{ staffSplit().total }} active staff members</p>
+          </div>
+        </header>
+
+        @if (loading()) {
+          <div class="skeleton skeleton-block"></div>
+        } @else if (staffSplit().total === 0) {
+          <p class="empty-state">No active staff records found.</p>
+        } @else {
+          <div class="split-rows">
+            <div class="split-row">
+              <div class="split-row-head">
+                <span>Male</span>
+                <strong>{{ staffSplit().male }} · {{ staffSplit().malePct }}%</strong>
+              </div>
+              <div class="track"><span class="fill tone-sky" [style.width.%]="staffSplit().malePct"></span></div>
+            </div>
+            <div class="split-row">
+              <div class="split-row-head">
+                <span>Female</span>
+                <strong>{{ staffSplit().female }} · {{ staffSplit().femalePct }}%</strong>
+              </div>
+              <div class="track"><span class="fill tone-rose" [style.width.%]="staffSplit().femalePct"></span></div>
+            </div>
+          </div>
+        }
+      </article>
+    </section>
+
+    <section class="panel finance-panel">
+      <header class="panel-head">
+        <div>
+          <h3>Financial Overview</h3>
+          <p class="panel-sub">Fee collection for the current month</p>
+        </div>
+        @if (!loading()) {
+          <span class="panel-badge tone-mint">{{ finance().rate }}% collected</span>
+        }
+      </header>
+
+      <div class="finance-grid">
+        <div class="finance-stat">
+          <span class="fs-label">Collected</span>
+          @if (loading()) {
+            <span class="skeleton skeleton-value"></span>
+          } @else {
+            <span class="fs-value tone-positive">{{ finance().collectedLabel }}</span>
+          }
+        </div>
+        <div class="finance-stat">
+          <span class="fs-label">Outstanding</span>
+          @if (loading()) {
+            <span class="skeleton skeleton-value"></span>
+          } @else {
+            <span class="fs-value tone-negative">{{ finance().outstandingLabel }}</span>
+          }
+        </div>
+        <div class="finance-stat">
+          <span class="fs-label">Collection rate</span>
+          @if (loading()) {
+            <span class="skeleton skeleton-value"></span>
+          } @else {
+            <span class="fs-value">{{ finance().rate }}%</span>
+          }
         </div>
       </div>
-      <div class="chart-panel fee-status">
-        <div class="panel-header">
-          <h3>Fee Status</h3>
-        </div>
-        <div class="chart-container pie-container">
-          <svg viewBox="0 0 36 36" class="circular-chart pie">
-            <path class="circle-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
-            <path class="circle yellow" stroke-dasharray="65, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
-            <path class="circle green" stroke-dasharray="35, 100" stroke-dashoffset="-65" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
-          </svg>
-        </div>
+
+      <div class="progress-track" role="img" [attr.aria-label]="'Collection rate ' + finance().rate + ' percent'">
+        <span class="progress-fill" [style.width.%]="finance().rate"></span>
       </div>
-      </div>
-    </div>
+    </section>
   </div>
 </app-portal-layout>

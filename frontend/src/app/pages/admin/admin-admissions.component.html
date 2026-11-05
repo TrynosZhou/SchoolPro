@@ -1,7 +1,7 @@
 <app-portal-layout portalTitle="Admin Portal" pageTitle="Admissions" [navSections]="adminNav">
   <div class="admissions-page">
     @if (toast(); as t) {
-      <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>
+      <div class="toast" role="status" aria-live="polite" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>
     }
 
     <header class="hero">
@@ -14,42 +14,97 @@
         </p>
         <div class="hero-actions">
           <button type="button" class="primary-action" (click)="copyApplyLink()">
-            <span>🔗</span> Copy public form link
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+            </svg>
+            Copy public form link
           </button>
           <button type="button" class="refresh-action" (click)="load(true)" [disabled]="refreshing() || loading()">
             {{ refreshing() ? 'Refreshing…' : 'Refresh' }}
           </button>
         </div>
       </div>
-      <div class="kpi-grid">
-        <article class="kpi">
-          <span class="kpi-icon">📨</span>
-          <div><strong>{{ stats().total }}</strong><span>Total</span></div>
-        </article>
-        <article class="kpi applied">
-          <span class="kpi-icon">📝</span>
-          <div><strong>{{ stats().applied }}</strong><span>Applied</span></div>
-        </article>
-        <article class="kpi shortlisted">
-          <span class="kpi-icon">⭐</span>
-          <div><strong>{{ stats().shortlisted }}</strong><span>Shortlisted</span></div>
-        </article>
-        <article class="kpi admitted">
-          <span class="kpi-icon">✅</span>
-          <div><strong>{{ stats().admitted }}</strong><span>Admitted</span></div>
-        </article>
-        <article class="kpi rejected">
-          <span class="kpi-icon">🚫</span>
-          <div><strong>{{ stats().rejected }}</strong><span>Rejected</span></div>
-        </article>
-      </div>
     </header>
+
+    <section class="kpi-grid" aria-label="Admissions summary">
+      <article class="kpi kpi--lavender">
+        <span class="kpi-icon-badge" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 12h-6l-2 3h-4l-2-3H2"></path>
+            <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path>
+          </svg>
+        </span>
+        <div class="kpi-meta">
+          <strong>{{ stats().total }}</strong>
+          <span>Total</span>
+        </div>
+      </article>
+      <article class="kpi kpi--sky">
+        <span class="kpi-icon-badge" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+            <line x1="16" y1="13" x2="8" y2="13"></line>
+            <line x1="16" y1="17" x2="8" y2="17"></line>
+            <line x1="10" y1="9" x2="8" y2="9"></line>
+          </svg>
+        </span>
+        <div class="kpi-meta">
+          <strong>{{ stats().applied }}</strong>
+          <span>Applied</span>
+        </div>
+      </article>
+      <article class="kpi kpi--peach">
+        <span class="kpi-icon-badge" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+          </svg>
+        </span>
+        <div class="kpi-meta">
+          <strong>{{ stats().shortlisted }}</strong>
+          <span>Shortlisted</span>
+        </div>
+      </article>
+      <article class="kpi kpi--mint">
+        <span class="kpi-icon-badge" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+            <polyline points="22 4 12 14.01 9 11.01"></polyline>
+          </svg>
+        </span>
+        <div class="kpi-meta">
+          <strong>{{ stats().admitted }}</strong>
+          <span>Admitted</span>
+        </div>
+      </article>
+      <article class="kpi kpi--rose">
+        <span class="kpi-icon-badge" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="15" y1="9" x2="9" y2="15"></line>
+            <line x1="9" y1="9" x2="15" y2="15"></line>
+          </svg>
+        </span>
+        <div class="kpi-meta">
+          <strong>{{ stats().rejected }}</strong>
+          <span>Rejected</span>
+        </div>
+      </article>
+    </section>
 
     <section class="list-shell">
       <div class="list-toolbar">
         <div class="search-wrap">
-          <span class="search-icon" aria-hidden="true">🔍</span>
+          <span class="search-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+          </span>
+          <label class="sr-only" for="admissionsSearch">Search applications</label>
           <input
+            id="admissionsSearch"
             type="search"
             class="search-input"
             placeholder="Search name, reference, guardian, email…"
@@ -63,10 +118,10 @@
         </div>
 
         <div class="toolbar-row">
-          <div class="filter-chips">
-            <button type="button" class="chip" [class.active]="statusFilter() === 'all'" (click)="statusFilter.set('all')">All</button>
+          <div class="filter-chips" role="group" aria-label="Filter by status">
+            <button type="button" class="chip" [class.active]="statusFilter() === 'all'" [attr.aria-pressed]="statusFilter() === 'all'" (click)="statusFilter.set('all')">All</button>
             @for (s of statusOrder; track s) {
-              <button type="button" class="chip" [class.active]="statusFilter() === s" (click)="statusFilter.set(s)">
+              <button type="button" class="chip" [class.active]="statusFilter() === s" [attr.aria-pressed]="statusFilter() === s" (click)="statusFilter.set(s)">
                 {{ statusLabel(s) }}
               </button>
             }
@@ -74,7 +129,8 @@
 
           <div class="toolbar-actions">
             @if (classOptions().length) {
-              <select class="filter-select" [ngModel]="classFilter()" (ngModelChange)="classFilter.set($event)" name="classFilter">
+              <label class="sr-only" for="classFilter">Filter by class</label>
+              <select id="classFilter" class="filter-select" [ngModel]="classFilter()" (ngModelChange)="classFilter.set($event)" name="classFilter">
                 <option value="all">All classes</option>
                 @for (c of classOptions(); track c) {
                   <option [value]="c">{{ c }}</option>
@@ -92,7 +148,7 @@
           </div>
         </div>
 
-        <div class="results-meta">
+        <div class="results-meta" aria-live="polite">
           <span>Showing <strong>{{ visibleApplications().length }}</strong> of <strong>{{ applications().length }}</strong> applications</span>
           @if (hasActiveFilters()) {
             <button type="button" class="clear-filters" (click)="clearFilters()">Clear filters</button>
@@ -107,7 +163,12 @@
         </div>
       } @else if (!visibleApplications().length) {
         <div class="empty-state">
-          <span class="empty-icon">📭</span>
+          <span class="empty-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M22 12h-6l-2 3h-4l-2-3H2"></path>
+              <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path>
+            </svg>
+          </span>
           <h3>No applications found</h3>
           @if (hasActiveFilters()) {
             <p>Try adjusting your search or filters.</p>
@@ -119,6 +180,7 @@
         </div>
       } @else {
         <div class="table-wrap">
+          <p class="table-hint">Double-click a row to review the application and update its status.</p>
           <table class="data-table">
             <thead>
               <tr>
@@ -198,7 +260,12 @@
             @for (doc of app.documents; track doc.id) {
               <li>
                 <button type="button" class="doc-link" (click)="viewDocument(app, doc)" [disabled]="docLoadingId() === doc.id">
-                  <span class="doc-link-icon">📄</span>
+                  <span class="doc-link-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                      <polyline points="14 2 14 8 20 8"></polyline>
+                    </svg>
+                  </span>
                   <span class="doc-link-text">
                     <strong>{{ docLabel(doc) }}</strong>
                     <small>{{ doc.originalName }}</small>
