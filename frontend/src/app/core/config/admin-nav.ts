@@ -31,7 +31,7 @@ export const ADMIN_NAV_SECTIONS: NavSection[] = [
     heading: 'Academics',
     items: [
       { label: 'Class List', path: '/admin/class-list' },
-      { label: 'Subjects', path: '/admin/academic-settings' },
+      { label: 'Subjects', path: '/admin/academic-settings', queryParams: { tab: 'subjects' } },
     ],
   },
   {
@@ -113,6 +113,7 @@ export const ADMIN_NAV_SECTIONS: NavSection[] = [
     heading: 'System Admin',
     items: [
       { label: 'School Settings', path: '/admin/settings' },
+      { label: 'Academic Settings', path: '/admin/academic-settings' },
       { label: 'User Management', path: '/admin/user-management' },
       { label: 'User Permissions', path: '/admin/user-permissions' },
       { label: 'Integrations', path: '/admin/integrations' },

@@ -1,7 +1,7 @@
 import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { forkJoin, of } from 'rxjs';
 import { catchError } from 'rxjs/operators';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
@@ -179,6 +179,7 @@ interface PromotionRuleRow {
 })
 export class AdminAcademicSettingsComponent implements OnInit {
   private api = inject(ApiService);
+  private route = inject(ActivatedRoute);
 
   readonly adminNav = ADMIN_NAV_SECTIONS;
   readonly promotionClassLabel = promotionClassLabel;
@@ -196,6 +197,8 @@ export class AdminAcademicSettingsComponent implements OnInit {
   ];
 
   activeTab = signal<Tab>('calendar');
+  /** When true, page is focused on subjects only (e.g. via ?tab=subjects from Subjects menu). */
+  subjectsOnly = signal(false);
   loading = signal(true);
   submitting = signal(false);
   toast = signal<{ type: 'success' | 'error'; msg: string } | null>(null);
@@ -313,6 +316,15 @@ export class AdminAcademicSettingsComponent implements OnInit {
   activeTabMeta = computed(() => this.tabs.find((t) => t.id === this.activeTab()) ?? this.tabs[0]);
 
   ngOnInit() {
+    const tabParam = this.route.snapshot.queryParamMap.get('tab') as Tab | null;
+    const validTabs: Tab[] = ['calendar', 'classes', 'subjects', 'classSubjects', 'departments', 'exams', 'promotion', 'publish'];
+    if (tabParam && validTabs.includes(tabParam)) {
+      this.activeTab.set(tabParam);
+    }
+    // Subjects menu uses ?tab=subjects — show a focused subjects-only page
+    if (tabParam === 'subjects') {
+      this.subjectsOnly.set(true);
+    }
     this.loadAll();
   }
 
