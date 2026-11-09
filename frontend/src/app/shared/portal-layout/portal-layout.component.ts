@@ -688,7 +688,7 @@ export class PortalLayoutComponent implements OnInit, OnChanges, OnDestroy {
     subjects: 'subjects',
     attendance: 'attendance',
     'attendance report': 'attendance',
-    academics: 'attendance',
+    academics: 'classes',
     timetable: 'timetable',
     'exams & results': 'examinations',
     'report cards': 'examinations',

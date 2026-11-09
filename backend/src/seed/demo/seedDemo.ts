@@ -52,7 +52,7 @@ const CORE_SUBJECTS = [
 ];
 
 const FEE_CATEGORIES = [
-  { code: 'tuition', name: 'Tuition', defaultAmount: 450, icon: '🎓' },
+  { code: 'tuition', name: 'Tuition', defaultAmount: 450, dayScholarAmount: 350, boarderAmount: 650, icon: '🎓' },
   { code: 'bus_levy', name: 'Transport', defaultAmount: 60, icon: '🚌' },
   { code: 'uniform', name: 'Uniform', defaultAmount: 45, icon: '👕' },
   { code: 'exam', name: 'Exam Fees', defaultAmount: 25, icon: '📝' },
@@ -563,7 +563,12 @@ export async function seedDemoDatabase(opts: { force?: boolean } = {}): Promise<
         // --- Billing: tuition + transport invoices for the current term ---
         for (const feeCode of ['tuition', 'bus_levy']) {
           const fee = feeByCode.get(feeCode)!;
-          const totalAmount = Number(fee.defaultAmount);
+          const totalAmount =
+            feeCode === 'tuition'
+              ? student.studentType === 'boarder'
+                ? Number(fee.boarderAmount || fee.defaultAmount)
+                : Number(fee.dayScholarAmount || fee.defaultAmount)
+              : Number(fee.defaultAmount);
           const roll = Math.random();
           // ~30% fully paid, ~40% partially paid, ~30% unpaid — a realistic spread.
           const paidFraction = roll < 0.3 ? 1 : roll < 0.7 ? Math.random() * 0.7 + 0.1 : 0;

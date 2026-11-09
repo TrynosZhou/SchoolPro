@@ -230,7 +230,6 @@
     <div class="table-panel card">
       <div class="table-toolbar">
         <div class="search-wrap">
-          <span class="search-icon">🔍</span>
           <input
             type="search"
             class="search-input"
@@ -290,14 +289,14 @@
                 <th>Student ID</th>
                 <th>Last Name</th>
                 <th>First Name</th>
-                <th>Gender</th>
-                <th>Marks (0–{{ maxMarks() }})</th>
-                <th>Grade</th>
+                <th class="col-center">Gender</th>
+                <th class="col-center">Marks (0–{{ maxMarks() }})</th>
+                <th class="col-center">Grade</th>
                 @if (showGradePoints()) {
-                  <th>Points</th>
+                  <th class="col-center">Points</th>
                 }
                 <th>Remarks</th>
-                <th>Status</th>
+                <th class="col-center">Status</th>
               </tr>
             </thead>
             <tbody>
@@ -306,7 +305,7 @@
                   <td class="mono">{{ row.studentNumber }}</td>
                   <td>{{ row.lastName }}</td>
                   <td>{{ row.firstName }}</td>
-                  <td><span class="gender-pill">{{ row.gender }}</span></td>
+                  <td class="col-center"><span class="gender-pill">{{ row.gender }}</span></td>
                   <td class="marks-cell">
                     <input
                       type="number"

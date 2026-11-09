@@ -47,6 +47,8 @@ interface SchoolFeeRow {
   name: string;
   description?: string;
   defaultAmount: number;
+  dayScholarAmount?: number;
+  boarderAmount?: number;
   icon?: string;
   isActive: boolean;
   sortOrder: number;
@@ -57,6 +59,8 @@ interface FeePreset {
   label: string;
   icon: string;
   defaultAmount: number;
+  dayScholarAmount?: number;
+  boarderAmount?: number;
 }
 
 interface PaymentRow {
@@ -105,6 +109,18 @@ interface BulkTuitionResult extends BulkTuitionPreview {
   skippedStudents: Array<{ id: string; name: string; reason: string }>;
   totalBilled: number;
   message?: string;
+}
+
+interface TuitionQuote {
+  level: number;
+  levelLabel: string;
+  studentType: 'day_scholar' | 'boarder';
+  studentTypeLabel: string;
+  feeCode: string | null;
+  feeName: string | null;
+  amount: number;
+  description: string;
+  error?: string;
 }
 
 interface AdjustmentStudentRow {
@@ -305,6 +321,8 @@ export class AdminBillingComponent implements OnInit {
   };
 
   fees = signal<SchoolFeeRow[]>([]);
+  tuitionQuote = signal<TuitionQuote | null>(null);
+  tuitionQuoteLoading = signal(false);
   private prefillStudentId = '';
   private prefillAmount: number | null = null;
   private prefillInvoiceId = '';
@@ -317,6 +335,8 @@ export class AdminBillingComponent implements OnInit {
         label: f.name,
         icon: f.icon || '📋',
         defaultAmount: Number(f.defaultAmount) || 0,
+        dayScholarAmount: Number(f.dayScholarAmount) || 0,
+        boarderAmount: Number(f.boarderAmount) || 0,
       })),
   );
 
@@ -458,6 +478,143 @@ export class AdminBillingComponent implements OnInit {
   pickStudentForInvoice(studentId: string) {
     this.setInvoiceStudentId(studentId);
     this.invoiceStudentSearch.set('');
+    this.refreshInvoicePricing();
+  }
+
+  isTuitionCode(code: string | null | undefined): boolean {
+    const value = String(code || '').toLowerCase();
+    return !value || value === 'tuition' || value.includes('tuition');
+  }
+
+  onInvoiceFeeTypeChange(code: string) {
+    this.newInvoice.feeType = code;
+    this.refreshInvoicePricing();
+  }
+
+  tuitionAmountLocked(): boolean {
+    return this.isTuitionCode(this.newInvoice.feeType) && (this.tuitionQuote()?.amount || 0) > 0;
+  }
+
+  refreshInvoicePricing() {
+    const student = this.selectedInvoiceStudent();
+    if (this.isTuitionCode(this.newInvoice.feeType)) {
+      if (!student) {
+        this.tuitionQuote.set(null);
+        return;
+      }
+      this.tuitionQuoteLoading.set(true);
+      this.api.get<TuitionQuote>('/billing/invoices/tuition-quote', { studentId: student.id }).subscribe({
+        next: (quote) => {
+          this.tuitionQuote.set(quote);
+          this.tuitionQuoteLoading.set(false);
+          if (quote.amount > 0) {
+            this.newInvoice.description = quote.description;
+            this.newInvoice.totalAmount = quote.amount;
+            this.newInvoice.lines = [{
+              description: quote.description,
+              quantity: 1,
+              unitPrice: quote.amount,
+              amount: quote.amount,
+            }];
+          } else {
+            this.newInvoice.totalAmount = 0;
+            this.newInvoice.lines = [{ description: quote.description, quantity: 1, unitPrice: 0, amount: 0 }];
+          }
+        },
+        error: (e) => {
+          this.tuitionQuoteLoading.set(false);
+          this.tuitionQuote.set(null);
+          this.showToast('error', e.error?.message || 'Could not load tuition amount');
+        },
+      });
+      return;
+    }
+
+    this.tuitionQuote.set(null);
+    const fee = this.fees().find((f) => f.code === this.newInvoice.feeType);
+    if (!fee) return;
+    let amount = Number(fee.defaultAmount) || 0;
+    if (student?.studentType === 'boarder' && Number(fee.boarderAmount) > 0) {
+      amount = Number(fee.boarderAmount);
+    } else if (student && student.studentType !== 'boarder' && Number(fee.dayScholarAmount) > 0) {
+      amount = Number(fee.dayScholarAmount);
+    }
+    this.newInvoice.description = fee.name;
+    this.newInvoice.totalAmount = amount;
+    this.newInvoice.lines = [{
+      description: fee.name,
+      quantity: 1,
+      unitPrice: amount,
+      amount,
+    }];
+  }
+
+  resolveTuitionForStudent(
+    student: Student,
+    fees: SchoolFeeRow[],
+  ): { fee: SchoolFeeRow | null; amount: number; name: string } {
+    const isBoarder = student.studentType === 'boarder';
+    const formLevel =
+      student.form?.level ||
+      (student.schoolClass?.form?.name ? parseInt(student.schoolClass.form.name.replace(/\D/g, '') || '1', 10) : 1);
+    const norm = (v: string) => String(v || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+    const activeFees = fees.filter((f) => f.isActive);
+    const byCode = (code: string) => activeFees.find((f) => norm(f.code) === norm(code));
+    const byNameHint = (hints: string[]) =>
+      activeFees.find((f) => hints.some((h) => norm(f.name).includes(norm(h)) || norm(f.code).includes(norm(h))));
+
+    let matchedFee: SchoolFeeRow | undefined;
+    if (isBoarder) {
+      matchedFee =
+        formLevel >= 5
+          ? byCode('advanced_level_tuition_boarder') || byNameHint(['advanced level boarder tuition', 'advanced boarder tuition'])
+          : byCode('ordinary_level_tuition_boarder') || byNameHint(['ordinary level boarder tuition', 'ordinary boarder tuition']);
+      if (!matchedFee) {
+        matchedFee = byCode('boarder_tuition') || byNameHint(['boarder tuition', 'boarding tuition', 'boarding fees']);
+      }
+    } else {
+      matchedFee =
+        formLevel >= 5
+          ? byCode('advanced_level_tuition_day_scholar') || byNameHint(['advanced level day scholar tuition', 'advanced day scholar tuition'])
+          : byCode('ordinary_level_tuition_day_scholar') || byNameHint(['ordinary level day scholar tuition', 'ordinary day scholar tuition']);
+      if (!matchedFee) {
+        matchedFee = byCode('day_scholar_tuition') || byNameHint(['day scholar tuition', 'day tuition']);
+      }
+    }
+
+    if (!matchedFee) {
+      matchedFee =
+        formLevel >= 5
+          ? byCode('advanced_level_tuition') || byNameHint(['advanced level tuition', 'advanced tuition', 'a level tuition'])
+          : byCode('ordinary_level_tuition') || byNameHint(['ordinary level tuition', 'ordinary tuition', 'o level tuition']);
+      if (!matchedFee) {
+        matchedFee = byCode('tuition') || byNameHint(['tuition fees', 'tuition']);
+      }
+    }
+
+    if (!matchedFee) {
+      return { fee: null, amount: 0, name: 'Tuition' };
+    }
+
+    let amount = Number(matchedFee.defaultAmount) || 0;
+    if (isBoarder && matchedFee.boarderAmount && Number(matchedFee.boarderAmount) > 0) {
+      amount = Number(matchedFee.boarderAmount);
+    } else if (!isBoarder && matchedFee.dayScholarAmount && Number(matchedFee.dayScholarAmount) > 0) {
+      amount = Number(matchedFee.dayScholarAmount);
+    }
+
+    const typeSuffix = isBoarder ? 'Boarder' : 'Day scholar';
+    const name =
+      matchedFee.name.toLowerCase().includes('boarder') || matchedFee.name.toLowerCase().includes('day')
+        ? matchedFee.name
+        : `${matchedFee.name} (${typeSuffix})`;
+
+    return { fee: matchedFee, amount, name };
+  }
+
+  autoFillTuitionForInvoice() {
+    this.refreshInvoicePricing();
   }
 
   clearPaymentStudent() {
@@ -490,6 +647,12 @@ export class AdminBillingComponent implements OnInit {
   clearInvoiceStudent() {
     this.setInvoiceStudentId('');
     this.invoiceStudentSearch.set('');
+    this.tuitionQuote.set(null);
+    if (this.isTuitionCode(this.newInvoice.feeType)) {
+      this.newInvoice.totalAmount = 0;
+      this.newInvoice.description = 'Term fees';
+      this.newInvoice.lines = [{ description: 'Tuition', quantity: 1, unitPrice: 0, amount: 0 }];
+    }
   }
 
   pickStudentForGetInvoice(studentId: string) {
@@ -585,11 +748,12 @@ export class AdminBillingComponent implements OnInit {
         this.terms.set(terms);
         const current = terms.find((t) => t.isCurrent);
         if (current) this.newInvoice.termId = current.id;
-        const firstFee = data.fees[0];
-        if (firstFee) {
-          this.payment.feeType = firstFee.code;
-          this.newInvoice.feeType = firstFee.code;
+        const tuitionFee = data.fees.find((f) => this.isTuitionCode(f.code)) || data.fees[0];
+        if (tuitionFee) {
+          this.payment.feeType = tuitionFee.code;
+          this.newInvoice.feeType = tuitionFee.code;
         }
+        this.refreshInvoicePricing();
         this.applyPaymentPrefill();
         this.loading.set(false);
         this.schedulePaymentSearchFocus();
@@ -644,12 +808,26 @@ export class AdminBillingComponent implements OnInit {
   applyFeePreset(preset: FeePreset) {
     this.payment.feeType = preset.type;
     this.payment.label = preset.label;
+    this.newInvoice.feeType = preset.type;
+    this.newInvoice.description = preset.label;
+
+    if (this.isTuitionCode(preset.type)) {
+      this.refreshInvoicePricing();
+      return;
+    }
+
     if (preset.defaultAmount > 0) {
       this.payment.amount = preset.defaultAmount;
       this.newInvoice.totalAmount = preset.defaultAmount;
+      this.newInvoice.lines = [
+        {
+          description: preset.label,
+          quantity: 1,
+          unitPrice: preset.defaultAmount,
+          amount: preset.defaultAmount,
+        },
+      ];
     }
-    this.newInvoice.feeType = preset.type;
-    this.newInvoice.description = preset.label;
   }
 
   recordPayment() {
@@ -698,25 +876,36 @@ export class AdminBillingComponent implements OnInit {
   }
 
   createInvoice() {
-    if (!this.newInvoice.studentId || !this.newInvoice.totalAmount) {
-      this.showToast('error', 'Select student and enter amount');
+    const quote = this.tuitionQuote();
+    const tuition = this.isTuitionCode(this.newInvoice.feeType);
+    if (!this.newInvoice.studentId) {
+      this.showToast('error', 'Select a student');
+      return;
+    }
+    if (tuition && quote?.error) {
+      this.showToast('error', quote.error);
+      return;
+    }
+    if (!this.newInvoice.totalAmount) {
+      this.showToast('error', tuition ? 'No tuition amount is set for this student on Manage Fees' : 'Enter an amount');
       return;
     }
     this.submitting.set(true);
-    const lines = this.newInvoice.lines.length && this.newInvoice.lines[0].amount
-      ? this.newInvoice.lines
-      : [{
-          description: this.newInvoice.description,
-          quantity: 1,
-          unitPrice: this.newInvoice.totalAmount,
-          amount: this.newInvoice.totalAmount,
-        }];
+    const description = tuition && quote?.description ? quote.description : this.newInvoice.description;
+    const amount = tuition && quote?.amount ? quote.amount : Number(this.newInvoice.totalAmount);
+    const feeType = tuition && quote?.feeCode ? quote.feeCode : this.newInvoice.feeType;
+    const lines = [{
+      description,
+      quantity: 1,
+      unitPrice: amount,
+      amount,
+    }];
     this.api.post<InvoiceRow>('/billing/invoices', {
       studentId: this.newInvoice.studentId,
       termId: this.newInvoice.termId || undefined,
-      feeType: this.newInvoice.feeType,
-      description: this.newInvoice.description,
-      totalAmount: Number(this.newInvoice.totalAmount),
+      feeType,
+      description,
+      totalAmount: amount,
       dueDate: this.newInvoice.dueDate,
       lines,
     }).subscribe({
@@ -735,9 +924,9 @@ export class AdminBillingComponent implements OnInit {
         this.api.get<InvoiceRow[]>('/billing/invoices').subscribe((i) => this.invoices.set(i));
         this.api.get<BillingSummary>('/billing/summary').subscribe((s) => this.summary.set(s));
       },
-      error: () => {
+      error: (e) => {
         this.submitting.set(false);
-        this.showToast('error', 'Failed to create invoice');
+        this.showToast('error', e.error?.message || 'Failed to create invoice');
       },
     });
   }

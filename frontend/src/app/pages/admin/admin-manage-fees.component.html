@@ -174,7 +174,6 @@
       <ng-container *ngIf="!loading()">
         <div class="records-toolbar">
           <div class="search-wrap">
-            <span class="search-icon" aria-hidden="true">🔍</span>
             <input
               type="search"
               class="search-input"
@@ -472,8 +471,36 @@
 
     @if (activeTab() === 'structure') {
       <section class="structure-panel">
+        <form class="tuition-rates" (ngSubmit)="saveTuitionRates()">
+          <div class="tuition-rates-head">
+            <div>
+              <h3>Tuition rates</h3>
+              <p>Invoices charge these amounts by student level and by day scholar or boarder.</p>
+            </div>
+            <button type="submit" class="btn-primary btn-sm" [disabled]="savingTuitionRates()">
+              {{ savingTuitionRates() ? 'Saving…' : 'Save tuition rates' }}
+            </button>
+          </div>
+          <div class="tuition-rates-grid">
+            <div class="tuition-level">
+              <h4>Ordinary level</h4>
+              <label>Day scholar ($)</label>
+              <input type="number" [(ngModel)]="tuitionRates.ordinaryDay" name="ordDay" min="0" step="0.01" />
+              <label>Boarder ($)</label>
+              <input type="number" [(ngModel)]="tuitionRates.ordinaryBoarder" name="ordBoard" min="0" step="0.01" />
+            </div>
+            <div class="tuition-level">
+              <h4>Advanced level</h4>
+              <label>Day scholar ($)</label>
+              <input type="number" [(ngModel)]="tuitionRates.advancedDay" name="advDay" min="0" step="0.01" />
+              <label>Boarder ($)</label>
+              <input type="number" [(ngModel)]="tuitionRates.advancedBoarder" name="advBoard" min="0" step="0.01" />
+            </div>
+          </div>
+        </form>
+
         <div class="structure-toolbar">
-          <p>Custom fee categories for your school. Used when creating charges and bulk invoices.</p>
+          <p>Other fee categories. Day scholar and boarder amounts are used when that category is invoiced.</p>
           <button type="button" class="btn-primary btn-sm" (click)="openAddCategory()">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
             Add category
@@ -506,6 +533,12 @@
                 </div>
                 <h3>{{ fee.name }}</h3>
                 <p class="category-amount">{{ displayAmount(fee) }}</p>
+                @if (fee.dayScholarAmount || fee.boarderAmount) {
+                  <div class="category-rates-split">
+                    <span class="rate-tag day" title="Rate for Day Scholars">Day: {{ fee.dayScholarAmount ? (fee.dayScholarAmount | currency:'USD':'symbol':'1.0-0') : displayAmount(fee) }}</span>
+                    <span class="rate-tag boarder" title="Rate for Boarders">Boarder: {{ fee.boarderAmount ? (fee.boarderAmount | currency:'USD':'symbol':'1.0-0') : displayAmount(fee) }}</span>
+                  </div>
+                }
                 <p class="category-frequency">Per term</p>
                 <p class="category-charges">{{ chargeLabel(fee.chargeCount) }}</p>
               </article>
@@ -534,10 +567,21 @@
               <input [(ngModel)]="categoryForm.code" name="catCode" placeholder="Auto from name" />
             </div>
             <div class="field">
-              <label>Default amount</label>
+              <label>Default amount ($)</label>
               <input type="number" [(ngModel)]="categoryForm.defaultAmount" name="catAmt" min="0" step="0.01" />
             </div>
           </div>
+          <div class="field-row tuition-rates-row">
+            <div class="field">
+              <label>Day scholar amount ($)</label>
+              <input type="number" [(ngModel)]="categoryForm.dayScholarAmount" name="catDayAmt" min="0" step="0.01" placeholder="Leave 0 for default" />
+            </div>
+            <div class="field">
+              <label>Boarder amount ($)</label>
+              <input type="number" [(ngModel)]="categoryForm.boarderAmount" name="catBoardAmt" min="0" step="0.01" placeholder="Leave 0 for default" />
+            </div>
+          </div>
+          <p class="field-note">For tuition, use the Tuition rates panel. Ordinary and Advanced level each have their own day scholar and boarder amounts.</p>
           <div class="field">
             <label>Description</label>
             <input [(ngModel)]="categoryForm.description" name="catDesc" placeholder="Optional" />

@@ -24,6 +24,12 @@ export class SchoolFee {
   @Column({ type: 'decimal', precision: 12, scale: 2, default: 0 })
   defaultAmount!: number;
 
+  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0, nullable: true })
+  dayScholarAmount?: number;
+
+  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0, nullable: true })
+  boarderAmount?: number;
+
   @Column({ nullable: true, length: 16 })
   icon?: string;
 

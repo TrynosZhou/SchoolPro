@@ -11,7 +11,10 @@ import { generateNumber, today, invoiceDescriptionWithTerm } from '../utils/help
 import { formatGenderLabel, formatStudentClassLabel } from '../utils/class-display';
 import { generateInvoicePdf, generateReceiptPdf, SchoolBranding } from '../utils/pdf';
 import { ensureDefaultSchoolFees, countFeeCodeUsage, isFeeCodeInUse, normalizeFeeCode } from '../services/fee-catalog.service';
-import { ensureRegistrationSchoolFees } from '../services/registration-invoice.service';
+import {
+  ensureRegistrationSchoolFees,
+  quoteTuitionForStudent,
+} from '../services/registration-invoice.service';
 import { FINANCE_ROLES, FINANCE_WRITE_ROLES } from '../config/portal-roles';
 import { loadSchoolBranding } from '../services/school-branding.service';
 import { sendWhatsAppReminder } from '../services/whatsapp.service';
@@ -217,7 +220,7 @@ router.get('/fees', authorize(...FINANCE_ROLES, UserRole.TEACHER), async (req, r
 router.post('/fees', authorize(...FINANCE_WRITE_ROLES), async (req, res: Response) => {
   await ensureRegistrationSchoolFees();
   const repo = AppDataSource.getRepository(SchoolFee);
-  const { name, code, description, defaultAmount, icon, isActive, sortOrder } = req.body;
+  const { name, code, description, defaultAmount, dayScholarAmount, boarderAmount, icon, isActive, sortOrder } = req.body;
   if (!name?.trim()) {
     return res.status(400).json({ message: 'Fee name is required' });
   }
@@ -235,6 +238,8 @@ router.post('/fees', authorize(...FINANCE_WRITE_ROLES), async (req, res: Respons
       name: String(name).trim(),
       description: description?.trim() || undefined,
       defaultAmount: Number(defaultAmount) || 0,
+      dayScholarAmount: dayScholarAmount !== undefined && dayScholarAmount !== null ? Number(dayScholarAmount) : 0,
+      boarderAmount: boarderAmount !== undefined && boarderAmount !== null ? Number(boarderAmount) : 0,
       icon: icon?.trim() || undefined,
       isActive: isActive !== false,
       sortOrder: Number(sortOrder) || 0,
@@ -248,10 +253,12 @@ router.patch('/fees/:id', authorize(...FINANCE_WRITE_ROLES), async (req, res: Re
   const fee = await repo.findOne({ where: { id: req.params.id } });
   if (!fee) return res.status(404).json({ message: 'Fee not found' });
 
-  const { name, code, description, defaultAmount, icon, isActive, sortOrder } = req.body;
+  const { name, code, description, defaultAmount, dayScholarAmount, boarderAmount, icon, isActive, sortOrder } = req.body;
   if (name !== undefined) fee.name = String(name).trim();
   if (description !== undefined) fee.description = description?.trim() || undefined;
   if (defaultAmount !== undefined) fee.defaultAmount = Number(defaultAmount) || 0;
+  if (dayScholarAmount !== undefined) fee.dayScholarAmount = dayScholarAmount !== null ? Number(dayScholarAmount) : 0;
+  if (boarderAmount !== undefined) fee.boarderAmount = boarderAmount !== null ? Number(boarderAmount) : 0;
   if (icon !== undefined) fee.icon = icon?.trim() || undefined;
   if (isActive !== undefined) fee.isActive = Boolean(isActive);
   if (sortOrder !== undefined) fee.sortOrder = Number(sortOrder) || 0;
@@ -578,17 +585,52 @@ router.post('/invoice-adjustments/debit-note', authorize(...financeStaff), async
   }
 });
 
+router.get('/invoices/tuition-quote', authorize(...FINANCE_ROLES), finView, async (req, res: Response) => {
+  const studentId = String(req.query.studentId || '').trim();
+  if (!studentId) return res.status(400).json({ message: 'studentId is required' });
+
+  const student = await AppDataSource.getRepository(Student).findOne({
+    where: { id: studentId },
+    relations: relations('schoolClass', 'schoolClass.form', 'form'),
+  });
+  if (!student) return res.status(404).json({ message: 'Student not found' });
+
+  const quote = await quoteTuitionForStudent(student);
+  res.json(quote);
+});
+
 router.post('/invoices', authorize(...FINANCE_WRITE_ROLES), finCreate, async (req, res: Response) => {
   const repo = AppDataSource.getRepository(Invoice);
   const ledgerRepo = AppDataSource.getRepository(LedgerEntry);
   const studentRepo = AppDataSource.getRepository(Student);
-  const { lines, ...data } = req.body;
+  let { lines, ...data } = req.body;
 
   const student = await studentRepo.findOne({
     where: { id: data.studentId },
-    relations: relations('schoolClass'),
+    relations: relations('schoolClass', 'schoolClass.form', 'form'),
   });
   if (!student) return res.status(404).json({ message: 'Student not found' });
+
+  const feeType = String(data.feeType || '');
+  const isTuitionFee = !feeType || feeType === 'tuition' || feeType.includes('tuition');
+
+  if (isTuitionFee) {
+    const quote = await quoteTuitionForStudent(student);
+    if (quote.error || quote.amount <= 0) {
+      return res.status(400).json({
+        message: quote.error || 'No tuition amount is configured for this student on Manage Fees.',
+      });
+    }
+    data.feeType = quote.feeCode || data.feeType;
+    data.description = quote.description;
+    data.totalAmount = quote.amount;
+    lines = [{
+      description: quote.description,
+      quantity: 1,
+      unitPrice: quote.amount,
+      amount: quote.amount,
+    }];
+  }
 
   let termName: string | undefined;
   if (data.termId) {

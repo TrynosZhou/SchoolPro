@@ -55,6 +55,8 @@ export interface SchoolFeeRow {
   name: string;
   description?: string;
   defaultAmount: number;
+  dayScholarAmount?: number;
+  boarderAmount?: number;
   icon?: string;
   isActive: boolean;
   sortOrder: number;
@@ -103,11 +105,21 @@ export class AdminManageFeesComponent implements OnInit {
   recordStatus = signal<'all' | 'paid' | 'unpaid' | 'partial' | 'cancelled'>('all');
   recordCategory = signal<'all' | 'uncategorized' | string>('all');
 
+  savingTuitionRates = signal(false);
+  tuitionRates = {
+    ordinaryDay: 0,
+    ordinaryBoarder: 0,
+    advancedDay: 0,
+    advancedBoarder: 0,
+  };
+
   categoryForm = {
     code: '',
     name: '',
     description: '',
     defaultAmount: 0,
+    dayScholarAmount: 0,
+    boarderAmount: 0,
     icon: '📋',
     isActive: true,
     sortOrder: 0,
@@ -382,12 +394,65 @@ export class AdminManageFeesComponent implements OnInit {
     this.api.get<SchoolFeeRow[]>('/billing/fees', { includeUsage: 'true' }).subscribe({
       next: (list) => {
         this.fees.set(list);
+        this.syncTuitionRates();
         this.loading.set(false);
       },
       error: () => {
         this.loading.set(false);
         this.showToast('error', 'Failed to load fees');
       },
+    });
+  }
+
+  saveTuitionRates() {
+    this.savingTuitionRates.set(true);
+    forkJoin([
+      this.saveLevelRate('ordinary_level_tuition', 'Ordinary Level Tuition', this.tuitionRates.ordinaryDay, this.tuitionRates.ordinaryBoarder, 12),
+      this.saveLevelRate('advanced_level_tuition', 'Advanced Level Tuition', this.tuitionRates.advancedDay, this.tuitionRates.advancedBoarder, 13),
+    ]).subscribe({
+      next: () => {
+        this.savingTuitionRates.set(false);
+        this.showToast('success', 'Tuition rates saved. Invoices will use these amounts.');
+        this.loadFees();
+      },
+      error: (err) => {
+        this.savingTuitionRates.set(false);
+        this.showToast('error', err.error?.message || 'Failed to save tuition rates');
+      },
+    });
+  }
+
+  private syncTuitionRates() {
+    const ordinary = this.fees().find((f) => f.code === 'ordinary_level_tuition');
+    const advanced = this.fees().find((f) => f.code === 'advanced_level_tuition');
+    this.tuitionRates = {
+      ordinaryDay: Number(ordinary?.dayScholarAmount) || 0,
+      ordinaryBoarder: Number(ordinary?.boarderAmount) || 0,
+      advancedDay: Number(advanced?.dayScholarAmount) || 0,
+      advancedBoarder: Number(advanced?.boarderAmount) || 0,
+    };
+  }
+
+  private saveLevelRate(code: string, name: string, day: number, boarder: number, sortOrder: number) {
+    const existing = this.fees().find((f) => f.code === code);
+    const dayScholarAmount = Number(day) || 0;
+    const boarderAmount = Number(boarder) || 0;
+    if (existing) {
+      return this.api.patch<SchoolFeeRow>(`/billing/fees/${existing.id}`, {
+        dayScholarAmount,
+        boarderAmount,
+        isActive: true,
+      });
+    }
+    return this.api.post<SchoolFeeRow>('/billing/fees', {
+      code,
+      name,
+      dayScholarAmount,
+      boarderAmount,
+      defaultAmount: 0,
+      isActive: true,
+      sortOrder,
+      icon: '🎓',
     });
   }
 
@@ -398,6 +463,8 @@ export class AdminManageFeesComponent implements OnInit {
       name: '',
       description: '',
       defaultAmount: 0,
+      dayScholarAmount: 0,
+      boarderAmount: 0,
       icon: '📋',
       isActive: true,
       sortOrder: this.fees().length,
@@ -411,7 +478,9 @@ export class AdminManageFeesComponent implements OnInit {
       code: fee.code,
       name: fee.name,
       description: fee.description || '',
-      defaultAmount: Number(fee.defaultAmount),
+      defaultAmount: Number(fee.defaultAmount) || 0,
+      dayScholarAmount: Number(fee.dayScholarAmount) || 0,
+      boarderAmount: Number(fee.boarderAmount) || 0,
       icon: fee.icon || '📋',
       isActive: fee.isActive,
       sortOrder: fee.sortOrder,
@@ -434,6 +503,9 @@ export class AdminManageFeesComponent implements OnInit {
     const id = this.editingId();
     const payload = {
       ...this.categoryForm,
+      defaultAmount: Number(this.categoryForm.defaultAmount) || 0,
+      dayScholarAmount: Number(this.categoryForm.dayScholarAmount) || 0,
+      boarderAmount: Number(this.categoryForm.boarderAmount) || 0,
       name: this.categoryForm.name.trim(),
       code: this.categoryForm.code.trim() || undefined,
     };

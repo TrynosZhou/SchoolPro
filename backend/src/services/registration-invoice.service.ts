@@ -1,6 +1,6 @@
 import { AppDataSource } from '../config/data-source';
 import { Form, Invoice, LedgerEntry, SchoolFee, Student, Term } from '../entities';
-import { InvoiceStatus } from '../entities/enums';
+import { InvoiceStatus, StudentType } from '../entities/enums';
 import { generateNumber, today, invoiceDescriptionWithTerm } from '../utils/helpers';
 import { generateInvoicePdf } from '../utils/pdf';
 import {
@@ -90,8 +90,107 @@ export async function getCurrentTermId(): Promise<string | undefined> {
   return term?.id;
 }
 
-/** Resolve the tuition fee catalog row for a student's form level (O-Level vs A-Level). */
-export async function resolveTuitionFeeForFormLevel(level: number): Promise<SchoolFee | null> {
+export function isBoarderStudent(studentType?: string | null): boolean {
+  return String(studentType || '').toLowerCase() === StudentType.BOARDER;
+}
+
+export function resolveTuitionAmountForStudent(
+  tuitionFee: SchoolFee,
+  studentType?: string | null,
+): number {
+  const isBoarder = isBoarderStudent(studentType);
+  if (isBoarder) {
+    if (
+      tuitionFee.boarderAmount !== undefined &&
+      tuitionFee.boarderAmount !== null &&
+      Number(tuitionFee.boarderAmount) > 0
+    ) {
+      return Number(tuitionFee.boarderAmount);
+    }
+  } else {
+    if (
+      tuitionFee.dayScholarAmount !== undefined &&
+      tuitionFee.dayScholarAmount !== null &&
+      Number(tuitionFee.dayScholarAmount) > 0
+    ) {
+      return Number(tuitionFee.dayScholarAmount);
+    }
+  }
+  return Number(tuitionFee.defaultAmount || 0);
+}
+
+export function tuitionLevelLabel(level: number): string {
+  return level >= 5 ? 'Advanced level' : 'Ordinary level';
+}
+
+export interface TuitionQuote {
+  level: number;
+  levelLabel: string;
+  studentType: 'day_scholar' | 'boarder';
+  studentTypeLabel: string;
+  feeCode: string | null;
+  feeName: string | null;
+  amount: number;
+  description: string;
+  error?: string;
+}
+
+/** Tuition charged on an invoice: Ordinary vs Advanced level, then day scholar vs boarder, from Manage Fees. */
+export async function quoteTuitionForStudent(student: Student): Promise<TuitionQuote> {
+  const isBoarder = isBoarderStudent(student.studentType);
+  const studentTypeLabel = isBoarder ? 'Boarder' : 'Day scholar';
+  const studentType = isBoarder ? 'boarder' : 'day_scholar';
+  const form = student.form || student.schoolClass?.form || null;
+
+  if (!form) {
+    return {
+      level: 0,
+      levelLabel: 'Unknown level',
+      studentType,
+      studentTypeLabel,
+      feeCode: null,
+      feeName: null,
+      amount: 0,
+      description: `Tuition (${studentTypeLabel})`,
+      error: 'This student has no form or class, so Ordinary vs Advanced level tuition cannot be determined.',
+    };
+  }
+
+  const level = resolveFormLevel(form);
+  const levelLabel = tuitionLevelLabel(level);
+  const tuitionFee = await resolveTuitionFeeForFormLevel(level, student.studentType);
+  const amount = tuitionFee
+    ? Math.round(resolveTuitionAmountForStudent(tuitionFee, student.studentType) * 100) / 100
+    : 0;
+  const feeName = tuitionFee?.name || 'Tuition';
+  const lower = feeName.toLowerCase();
+  const description =
+    lower.includes('boarder') || lower.includes('day') ? feeName : `${feeName} (${studentTypeLabel})`;
+
+  const quote: TuitionQuote = {
+    level,
+    levelLabel,
+    studentType,
+    studentTypeLabel,
+    feeCode: tuitionFee?.code || null,
+    feeName: tuitionFee?.name || null,
+    amount,
+    description,
+  };
+
+  if (amount <= 0) {
+    const typeWord = isBoarder ? 'boarders' : 'day scholars';
+    quote.error = `No tuition amount is set for ${levelLabel} ${typeWord}. Set it under Tuition rates on Manage Fees.`;
+  }
+
+  return quote;
+}
+
+/** Resolve the tuition fee catalog row for a student's form level (O-Level vs A-Level) and student type (Day Scholar vs Boarder). */
+export async function resolveTuitionFeeForFormLevel(
+  level: number,
+  studentType?: string | null,
+): Promise<SchoolFee | null> {
   await ensureRegistrationSchoolFees();
 
   const feeRepo = AppDataSource.getRepository(SchoolFee);
@@ -102,6 +201,8 @@ export async function resolveTuitionFeeForFormLevel(level: number): Promise<Scho
   const byCode = (pool: SchoolFee[], code: string) => pool.find((f) => norm(f.code) === norm(code));
   const byNameHint = (pool: SchoolFee[], hints: string[]) =>
     pool.find((f) => hints.some((h) => norm(f.name).includes(norm(h)) || norm(f.code).includes(norm(h))));
+
+  const isBoarder = isBoarderStudent(studentType);
 
   const resolveFee = (
     preferredCode: string,
@@ -125,42 +226,73 @@ export async function resolveTuitionFeeForFormLevel(level: number): Promise<Scho
       if (filtered.length) candidates = filtered;
     }
     if (opts?.preferNonZeroAmount) {
-      const nonZero = candidates.find((f) => Number(f.defaultAmount) > 0);
+      const nonZero = candidates.find((f) => resolveTuitionAmountForStudent(f, studentType) > 0);
       if (nonZero) return nonZero;
     }
     return candidates[0];
   };
 
-  const tuitionCode = tuitionFeeCodeForFormLevel(level);
-  let tuitionFee = resolveFee(
-    tuitionCode,
-    level >= 5
-      ? ['advanced level tuition', 'a level tuition', 'advanced tuition', 'tuition fees', 'tuition']
-      : ['ordinary level tuition', 'o level tuition', 'ordinary tuition', 'tuition fees', 'tuition'],
-    {
-      preferNonZeroAmount: true,
-      rejectHints: level >= 5 ? ['ordinary', 'o level', 'olevel'] : ['advanced', 'a level', 'alevel'],
-    },
-  );
-  if (level < 5 && (!tuitionFee || Number(tuitionFee.defaultAmount) <= 0)) {
-    const ordinaryFallback = resolveFee(
-      'tuition',
-      ['ordinary level tuition fees', 'ordinary tuition', 'tuition fees', 'tuition'],
-      { preferNonZeroAmount: true, rejectHints: ['advanced', 'a level', 'alevel'] },
-    );
-    if (ordinaryFallback) tuitionFee = ordinaryFallback;
+  // 1. Try to find student-type specific tuition fee if configured in Manage Fees
+  let tuitionFee: SchoolFee | undefined;
+  if (isBoarder) {
+    const boarderLevelCode = level >= 5 ? 'advanced_level_tuition_boarder' : 'ordinary_level_tuition_boarder';
+    const boarderLevelAliases = level >= 5
+      ? ['advanced level boarder tuition', 'advanced level tuition boarder', 'a level boarder tuition']
+      : ['ordinary level boarder tuition', 'ordinary level tuition boarder', 'o level boarder tuition'];
+    tuitionFee = resolveFee(boarderLevelCode, boarderLevelAliases, { preferNonZeroAmount: true });
+
+    if (!tuitionFee) {
+      tuitionFee = resolveFee('boarder_tuition', ['boarder tuition', 'boarding tuition', 'boarding fees', 'boarders tuition'], {
+        preferNonZeroAmount: true,
+      });
+    }
+  } else if (studentType) {
+    const dayLevelCode = level >= 5 ? 'advanced_level_tuition_day_scholar' : 'ordinary_level_tuition_day_scholar';
+    const dayLevelAliases = level >= 5
+      ? ['advanced level day scholar tuition', 'advanced level tuition day scholar', 'a level day scholar tuition']
+      : ['ordinary level day scholar tuition', 'ordinary level tuition day scholar', 'o level day scholar tuition'];
+    tuitionFee = resolveFee(dayLevelCode, dayLevelAliases, { preferNonZeroAmount: true });
+
+    if (!tuitionFee) {
+      tuitionFee = resolveFee('day_scholar_tuition', ['day scholar tuition', 'day scholar fees', 'day tuition'], {
+        preferNonZeroAmount: true,
+      });
+    }
   }
 
+  // 2. Standard resolution by form level (evaluating dayScholarAmount / boarderAmount)
   if (!tuitionFee) {
-    const def = REGISTRATION_FEE_DEFINITIONS.find((d) => d.code === tuitionCode);
-    if (def) {
-      tuitionFee = await feeRepo.save(
-        feeRepo.create({
-          ...def,
-          isActive: true,
-          defaultAmount: Number(def.defaultAmount || 0),
-        }),
+    const tuitionCode = tuitionFeeCodeForFormLevel(level);
+    tuitionFee = resolveFee(
+      tuitionCode,
+      level >= 5
+        ? ['advanced level tuition', 'a level tuition', 'advanced tuition', 'tuition fees', 'tuition']
+        : ['ordinary level tuition', 'o level tuition', 'ordinary tuition', 'tuition fees', 'tuition'],
+      {
+        preferNonZeroAmount: true,
+        rejectHints: level >= 5 ? ['ordinary', 'o level', 'olevel'] : ['advanced', 'a level', 'alevel'],
+      },
+    );
+    if (level < 5 && (!tuitionFee || resolveTuitionAmountForStudent(tuitionFee, studentType) <= 0)) {
+      const ordinaryFallback = resolveFee(
+        'tuition',
+        ['ordinary level tuition fees', 'ordinary tuition', 'tuition fees', 'tuition'],
+        { preferNonZeroAmount: true, rejectHints: ['advanced', 'a level', 'alevel'] },
       );
+      if (ordinaryFallback) tuitionFee = ordinaryFallback;
+    }
+
+    if (!tuitionFee) {
+      const def = REGISTRATION_FEE_DEFINITIONS.find((d) => d.code === tuitionCode);
+      if (def) {
+        tuitionFee = await feeRepo.save(
+          feeRepo.create({
+            ...def,
+            isActive: true,
+            defaultAmount: Number(def.defaultAmount || 0),
+          }),
+        );
+      }
     }
   }
 
@@ -229,24 +361,7 @@ export async function createRegistrationInvoiceForStudent(
 
   let deskFee = resolveFee(REGISTRATION_FEE_CODES.desk, ['desk fee', 'desk']);
   let registrationFee = resolveFee(REGISTRATION_FEE_CODES.registration, ['registration fee', 'registration']);
-  let tuitionFee = resolveFee(
-    tuitionCode,
-    level >= 5
-      ? ['advanced level tuition', 'a level tuition', 'advanced tuition', 'tuition fees', 'tuition']
-      : ['ordinary level tuition', 'o level tuition', 'ordinary tuition', 'tuition fees', 'tuition'],
-    {
-      preferNonZeroAmount: true,
-      rejectHints: level >= 5 ? ['ordinary', 'o level', 'olevel'] : ['advanced', 'a level', 'alevel'],
-    },
-  );
-  if (level < 5 && (!tuitionFee || Number(tuitionFee.defaultAmount) <= 0)) {
-    const ordinaryFallback = resolveFee(
-      'tuition',
-      ['ordinary level tuition fees', 'ordinary tuition', 'tuition fees', 'tuition'],
-      { preferNonZeroAmount: true, rejectHints: ['advanced', 'a level', 'alevel'] },
-    );
-    if (ordinaryFallback) tuitionFee = ordinaryFallback;
-  }
+  let tuitionFee = await resolveTuitionFeeForFormLevel(level, student.studentType);
 
   // Ensure required registration fee rows exist if still unresolved.
   const missingCodes: string[] = [];
@@ -280,10 +395,17 @@ export async function createRegistrationInvoiceForStudent(
   const termRepo = AppDataSource.getRepository(Term);
   const term = termId ? await termRepo.findOne({ where: { id: termId } }) : null;
   const tuitionExemption = await getActiveExemptionForStudent(student.id);
+  const tuitionAmount = resolveTuitionAmountForStudent(tuitionFee, student.studentType);
+  const isBoarder = isBoarderStudent(student.studentType);
+  const tuitionLineName =
+    tuitionFee.name.toLowerCase().includes('boarder') || tuitionFee.name.toLowerCase().includes('day')
+      ? tuitionFee.name
+      : `${tuitionFee.name} (${isBoarder ? 'Boarder' : 'Day scholar'})`;
+
   const tuitionLines = buildTuitionInvoiceLines(
-    tuitionFee.name,
+    tuitionLineName,
     term?.name || 'Current term',
-    Number(tuitionFee.defaultAmount),
+    tuitionAmount,
     tuitionExemption,
   );
 

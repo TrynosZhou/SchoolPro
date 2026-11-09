@@ -221,9 +221,6 @@
                   <!-- Search row with Get Balance button -->
                   <div class="search-row">
                     <div class="search-wrap">
-                      <span class="search-icon" aria-hidden="true">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                      </span>
                       <input
                         #paymentStudentSearch
                         type="text"
@@ -342,7 +339,7 @@
           <div class="panel-head">
             <div>
               <h3>Create invoice</h3>
-              <p class="subtitle">Bill a student for tuition, levies, uniform, or other fees.</p>
+              <p class="subtitle">Tuition is taken from Manage Fees by level (Ordinary or Advanced) and by day scholar or boarder.</p>
             </div>
           </div>
 
@@ -368,6 +365,7 @@
                   <div class="stu-info">
                     <strong>{{ stu.firstName }} {{ stu.lastName }}</strong>
                     <code class="sid">{{ stu.admissionNumber }}</code>
+                    <span class="sid">{{ stu.studentType === 'boarder' ? 'Boarder' : 'Day scholar' }} · {{ stu.form?.name || stu.schoolClass?.form?.name || 'No form' }}</span>
                   </div>
                   <button type="button" class="remove-student-btn" (click)="clearInvoiceStudent()" aria-label="Remove student">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -375,9 +373,6 @@
                 </div>
               } @else {
                 <div class="search-wrap">
-                  <span class="search-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                  </span>
                   <input
                     type="text"
                     class="search-input"
@@ -419,14 +414,29 @@
                 }
               </select>
             </div>
+            <div class="field">
+              <label>Fee category</label>
+              <select [ngModel]="newInvoice.feeType" (ngModelChange)="onInvoiceFeeTypeChange($event)" name="invFee">
+                @for (f of fees(); track f.id) {
+                  <option [value]="f.code">{{ f.name }}</option>
+                }
+              </select>
+            </div>
             <div class="form-row">
               <div class="field">
                 <label>Description *</label>
-                <input [(ngModel)]="newInvoice.description" name="invDesc" required />
+                <input [(ngModel)]="newInvoice.description" name="invDesc" [readonly]="tuitionAmountLocked()" required />
               </div>
               <div class="field">
                 <label>Amount *</label>
-                <input type="number" [(ngModel)]="newInvoice.totalAmount" name="invAmt" min="0" step="0.01" required />
+                <input type="number" [(ngModel)]="newInvoice.totalAmount" name="invAmt" min="0" step="0.01" [readonly]="tuitionAmountLocked()" required />
+                @if (tuitionQuoteLoading()) {
+                  <p class="field-hint">Looking up the tuition rate…</p>
+                } @else if ((tuitionQuote()?.amount || 0) > 0) {
+                  <p class="field-hint">{{ tuitionQuote()!.levelLabel }} · {{ tuitionQuote()!.studentTypeLabel }} — ${{ tuitionQuote()!.amount | number:'1.2-2' }} from Manage Fees.</p>
+                } @else if (tuitionQuote()?.error) {
+                  <p class="field-hint">{{ tuitionQuote()!.error }}</p>
+                }
               </div>
               <div class="field">
                 <label>Due date</label>
@@ -444,8 +454,7 @@
             <div>
               <h3>Bulk invoice</h3>
               <p class="subtitle">
-                Invoice tuition for all registered students. Adds next-term tuition to each student's invoice balance
-                for the current term. Amounts come from <a [routerLink]="basePath + '/manage-fees'">Manage Fees</a> (O-Level vs A-Level tuition).
+                Invoice tuition for all registered students. Each student is charged the Ordinary or Advanced level rate for day scholars or boarders from <a [routerLink]="basePath + '/manage-fees'">Manage Fees</a>.
               </p>
             </div>
             <button type="button" class="btn-outline btn-sm" (click)="refreshBulkPreview()" [disabled]="bulkPreviewLoading()">
@@ -544,9 +553,6 @@
         <div class="invoices-panel">
         <div class="list-toolbar">
           <div class="search-wrap">
-            <span class="search-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            </span>
             <label class="sr-only" for="invoiceSearch">Search invoices</label>
             <input
               id="invoiceSearch"
@@ -716,9 +722,6 @@
             } @else {
               <div class="search-row">
                 <div class="search-wrap">
-                  <span class="search-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                  </span>
                   <input
                     type="text"
                     class="search-input"
@@ -867,9 +870,6 @@
             } @else {
               <div class="search-row">
                 <div class="search-wrap">
-                  <span class="search-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                  </span>
                   <input
                     type="text"
                     class="search-input"
@@ -926,9 +926,6 @@
       } @else if (isPaymentMode() && activeTab() === 'receipts') {
         <div class="list-toolbar">
           <div class="search-wrap">
-            <span class="search-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            </span>
             <label class="sr-only" for="receiptSearch">Search receipts</label>
             <input
               id="receiptSearch"
@@ -1029,9 +1026,6 @@
       } @else if (isPaymentMode() && activeTab() === 'debtors') {
         <div class="list-toolbar">
           <div class="search-wrap">
-            <span class="search-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            </span>
             <label class="sr-only" for="debtorSearch">Search debtors</label>
             <input
               id="debtorSearch"

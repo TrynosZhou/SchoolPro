@@ -127,7 +127,6 @@
           </div>
 
           <div class="search-wrap">
-            <span class="search-icon" aria-hidden="true">🔍</span>
             <input type="search" class="search-input" placeholder="Search student…" [ngModel]="search()" (ngModelChange)="search.set($event)" name="q" />
             @if (search()) {
               <button type="button" class="clear-search" (click)="search.set('')" aria-label="Clear search">×</button>

@@ -19,6 +19,7 @@ router.get('/school-links', async (_req, res) => {
         website: settings?.website?.trim() || null,
         facebookPageUrl: settings?.facebookPageUrl?.trim() || null,
         developerPhotoUrl: settings?.developerPhotoUrl?.trim() || null,
+        currency: settings?.currency || 'USD',
     });
 });
 router.get('/overview', (0, auth_1.authorize)(enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.ADMIN), async (_req, res) => {

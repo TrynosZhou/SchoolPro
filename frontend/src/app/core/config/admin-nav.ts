@@ -28,7 +28,7 @@ export const ADMIN_NAV_SECTIONS: NavSection[] = [
 
   // ACADEMICS — teaching and learning
   {
-    heading: 'Classes & Subjects',
+    heading: 'Academics',
     items: [
       { label: 'Class List', path: '/admin/class-list' },
       { label: 'Subjects', path: '/admin/academic-settings' },
