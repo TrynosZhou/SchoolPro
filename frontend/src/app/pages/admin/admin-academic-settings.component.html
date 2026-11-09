@@ -4,6 +4,97 @@
   [navSections]="adminNav"
 >
 
+<ng-template #subjectsCatalogue>
+  <section class="sj-panel">
+    <div class="sj-panel-head">
+      <div>
+        <h3 class="sj-panel-title">Subjects Catalogue</h3>
+        <p class="sj-panel-sub">Add, edit, or review the subjects taught at your school. Short labels appear on timetables.</p>
+      </div>
+      <span class="sj-count-pill"><span class="sj-dot"></span>{{ subjects().length }} registered</span>
+    </div>
+
+    <div class="sj-compose">
+      <div class="sj-compose-label">New subject</div>
+      <div class="sj-compose-row">
+        <label class="sj-field sj-field--code">
+          <span>Code</span>
+          <input [(ngModel)]="newSubject.code" name="subCodeNew" placeholder="e.g. MATH" maxlength="8" />
+        </label>
+        <label class="sj-field sj-field--name">
+          <span>Subject name</span>
+          <input [(ngModel)]="newSubject.name" name="subNameNew" placeholder="e.g. Mathematics" />
+        </label>
+        <label class="sj-field sj-field--short">
+          <span>Short label</span>
+          <input [(ngModel)]="newSubject.short" name="subShortNew" placeholder="e.g. Ma" maxlength="16" />
+        </label>
+        <button type="button" class="sj-btn-primary" (click)="addSubject()">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true"><path d="M7 2v10M2 7h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          Add subject
+        </button>
+      </div>
+    </div>
+
+    <div class="sj-toolbar">
+      <div class="sj-search">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="7" cy="7" r="4.75" stroke="currentColor" stroke-width="1.5"/><path d="M10.5 10.5L14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        <input
+          type="search"
+          [ngModel]="subjectSearch()"
+          (ngModelChange)="subjectSearch.set($event)"
+          name="subjectSearchBox"
+          placeholder="Search by code, name or short label"
+          aria-label="Search subjects"
+        />
+      </div>
+      <span class="sj-result-note">
+        @if (subjectSearch().trim()) {
+          {{ filteredSubjects().length }} of {{ subjects().length }} shown
+        } @else {
+          Select a code, label or name to edit it
+        }
+      </span>
+    </div>
+
+    <div class="sj-grid">
+      @for (s of filteredSubjects(); track s.id) {
+        <article class="sj-card" [style.--sj-accent]="subjectHue(s.code)">
+          <div class="sj-card-top">
+            <button type="button" class="sj-code" (click)="openEditSubjectCode(s)" title="Edit subject code">
+              <span>{{ s.code }}</span>
+              <svg class="sj-pencil" width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M8.5 1.5l2 2L4 10H2V8l6.5-6.5z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>
+            </button>
+            <button type="button" class="sj-short" (click)="openEditSubjectShort(s)" title="Edit timetable short label">
+              <span>{{ s.short || 'No label' }}</span>
+              <svg class="sj-pencil" width="10" height="10" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M8.5 1.5l2 2L4 10H2V8l6.5-6.5z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>
+            </button>
+          </div>
+          <button type="button" class="sj-name" (click)="openEditSubjectName(s)" title="Edit subject name">
+            <span>{{ s.name }}</span>
+            <svg class="sj-pencil" width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M8.5 1.5l2 2L4 10H2V8l6.5-6.5z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>
+          </button>
+          @if (s.description) { <p class="sj-desc">{{ s.description }}</p> }
+        </article>
+      } @empty {
+        <div class="sj-empty">
+          <div class="sj-empty-mark">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 5.5A1.5 1.5 0 015.5 4H11v15H5.5A1.5 1.5 0 014 17.5v-12zM20 5.5A1.5 1.5 0 0018.5 4H13v15h5.5a1.5 1.5 0 001.5-1.5v-12z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
+          </div>
+          @if (subjectSearch().trim()) {
+            <p class="sj-empty-title">No matching subjects</p>
+            <p class="sj-empty-sub">Try a different code, name or label.</p>
+          } @else {
+            <p class="sj-empty-title">No subjects in the catalogue yet</p>
+            <p class="sj-empty-sub">Use the form above to add your first subject.</p>
+          }
+        </div>
+      }
+    </div>
+  </section>
+</ng-template>
+
+
   @if (toast(); as t) {
     <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>
   }
@@ -15,84 +106,21 @@
     </div>
   } @else if (subjectsOnly()) {
     <!-- Focused Subjects-only page (from Academics → Subjects) -->
-    <header class="page-hero">
-      <div class="hero-text">
-        <p class="hero-eyebrow">Academics</p>
-        <h1 class="hero-title">Subjects</h1>
-        <p class="hero-sub">Master catalogue of subjects offered by the school. Short labels appear on timetables.</p>
+    <header class="sj-hero">
+      <div class="sj-hero-text">
+        <nav class="sj-crumbs" aria-label="Breadcrumb">
+          <span>Academics</span><span class="sj-sep">/</span><span class="sj-current">Subjects</span>
+        </nav>
+        <h1 class="sj-hero-title">Subjects</h1>
+        <p class="sj-hero-sub">The master catalogue of subjects offered by the school. Short labels appear on timetables and class schedules.</p>
       </div>
-      <div class="hero-stats">
-        <div class="stat-chip accent"><span class="stat-val">{{ subjects().length }}</span><span class="stat-lbl">Subjects</span></div>
+      <div class="sj-hero-stat" aria-label="Total subjects">
+        <span class="sj-hero-stat-val">{{ subjects().length }}</span>
+        <span class="sj-hero-stat-lbl">Subjects</span>
       </div>
     </header>
 
-    <section class="panel catalogue-panel subjects-only-panel">
-      <div class="panel-head">
-        <div>
-          <h3>Subjects Catalogue</h3>
-          <p class="panel-sub">Add, edit, or review subjects taught at your school.</p>
-        </div>
-        <span class="count-badge">{{ subjects().length }} registered</span>
-      </div>
-      <div class="add-bar elevated">
-        <div class="input-group code-group">
-          <label>Code</label>
-          <input [(ngModel)]="newSubject.code" name="subCodeOnly" placeholder="MATH" maxlength="8" />
-        </div>
-        <div class="input-group subject-name-group">
-          <label>Subject name</label>
-          <input [(ngModel)]="newSubject.name" name="subNameOnly" placeholder="Mathematics" />
-        </div>
-        <div class="input-group short-group">
-          <label>Short</label>
-          <input [(ngModel)]="newSubject.short" name="subShortOnly" placeholder="Ma" maxlength="16" />
-        </div>
-        <button type="button" class="btn-primary" (click)="addSubject()">
-          <span class="btn-icon">+</span> Add Subject
-        </button>
-      </div>
-      <div class="subject-grid">
-        @for (s of subjects(); track s.id) {
-          <article class="subject-card">
-            <button
-              type="button"
-              class="subject-code-btn"
-              (click)="openEditSubjectCode(s)"
-              title="Click to edit subject code"
-            >
-              <span class="subject-badge" [style.background]="subjectHue(s.code)">{{ s.code }}</span>
-              <span class="edit-hint" aria-hidden="true">✎</span>
-            </button>
-            <div class="subject-info">
-              <button
-                type="button"
-                class="subject-short-btn"
-                (click)="openEditSubjectShort(s)"
-                title="Click to edit timetable short label"
-              >
-                <span class="subject-short-badge">{{ s.short || '—' }}</span>
-                <span class="edit-hint" aria-hidden="true">✎</span>
-              </button>
-              <button
-                type="button"
-                class="subject-name-btn"
-                (click)="openEditSubjectName(s)"
-                title="Click to edit subject name"
-              >
-                <strong>{{ s.name }}</strong>
-                <span class="edit-hint" aria-hidden="true">✎</span>
-              </button>
-              @if (s.description) { <small>{{ s.description }}</small> }
-            </div>
-          </article>
-        } @empty {
-          <div class="empty-state span-all">
-            <span class="empty-icon">📖</span>
-            <p>No subjects in catalogue</p>
-          </div>
-        }
-      </div>
-    </section>
+    <ng-container *ngTemplateOutlet="subjectsCatalogue"></ng-container>
   } @else {
     <header class="page-hero">
       <div class="hero-text">
@@ -342,73 +370,7 @@
         }
 
         @if (activeTab() === 'subjects') {
-          <section class="panel catalogue-panel">
-            <div class="panel-head">
-              <div>
-                <h3>Subjects Catalogue</h3>
-                <p class="panel-sub">Master list of subjects taught at your school. Short labels appear on timetables.</p>
-              </div>
-              <span class="count-badge">{{ subjects().length }} registered</span>
-            </div>
-            <div class="add-bar elevated">
-              <div class="input-group code-group">
-                <label>Code</label>
-                <input [(ngModel)]="newSubject.code" name="subCode" placeholder="MATH" maxlength="8" />
-              </div>
-              <div class="input-group subject-name-group">
-                <label>Subject name</label>
-                <input [(ngModel)]="newSubject.name" name="subName" placeholder="Mathematics" />
-              </div>
-              <div class="input-group short-group">
-                <label>Short</label>
-                <input [(ngModel)]="newSubject.short" name="subShort" placeholder="Ma" maxlength="16" />
-              </div>
-              <button type="button" class="btn-primary" (click)="addSubject()">
-                <span class="btn-icon">+</span> Add Subject
-              </button>
-            </div>
-            <div class="subject-grid">
-              @for (s of subjects(); track s.id) {
-                <article class="subject-card">
-                  <button
-                    type="button"
-                    class="subject-code-btn"
-                    (click)="openEditSubjectCode(s)"
-                    title="Click to edit subject code"
-                  >
-                    <span class="subject-badge" [style.background]="subjectHue(s.code)">{{ s.code }}</span>
-                    <span class="edit-hint" aria-hidden="true">✎</span>
-                  </button>
-                  <div class="subject-info">
-                    <button
-                      type="button"
-                      class="subject-short-btn"
-                      (click)="openEditSubjectShort(s)"
-                      title="Click to edit timetable short label"
-                    >
-                      <span class="subject-short-badge">{{ s.short || '—' }}</span>
-                      <span class="edit-hint" aria-hidden="true">✎</span>
-                    </button>
-                    <button
-                      type="button"
-                      class="subject-name-btn"
-                      (click)="openEditSubjectName(s)"
-                      title="Click to edit subject name"
-                    >
-                      <strong>{{ s.name }}</strong>
-                      <span class="edit-hint" aria-hidden="true">✎</span>
-                    </button>
-                    @if (s.description) { <small>{{ s.description }}</small> }
-                  </div>
-                </article>
-              } @empty {
-                <div class="empty-state span-all">
-                  <span class="empty-icon">📖</span>
-                  <p>No subjects in catalogue</p>
-                </div>
-              }
-            </div>
-          </section>
+          <ng-container *ngTemplateOutlet="subjectsCatalogue"></ng-container>
         }
 
         @if (activeTab() === 'classSubjects') {

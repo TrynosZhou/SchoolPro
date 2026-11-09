@@ -1,5 +1,5 @@
 import { Component, computed, inject, OnInit, signal } from '@angular/core';
-import { DatePipe } from '@angular/common';
+import { DatePipe, NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { forkJoin, of } from 'rxjs';
@@ -173,7 +173,7 @@ interface PromotionRuleRow {
 @Component({
   selector: 'app-admin-academic-settings',
   standalone: true,
-  imports: [PortalLayoutComponent, FormsModule, RouterLink, DatePipe],
+  imports: [PortalLayoutComponent, FormsModule, RouterLink, DatePipe, NgTemplateOutlet],
   templateUrl: './admin-academic-settings.component.html',
   styleUrls: ['./admin-academic-settings.component.scss', './admin-settings.component.scss'],
 })
@@ -207,6 +207,15 @@ export class AdminAcademicSettingsComponent implements OnInit {
   forms = signal<FormRow[]>([]);
   classes = signal<ClassRow[]>([]);
   subjects = signal<SubjectRow[]>([]);
+  subjectSearch = signal('');
+  filteredSubjects = computed(() => {
+    const q = this.subjectSearch().trim().toLowerCase();
+    const rows = this.subjects();
+    if (!q) return rows;
+    return rows.filter((s) =>
+      [s.code, s.name, s.short ?? ''].some((v) => v.toLowerCase().includes(q)),
+    );
+  });
   departments = signal<DepartmentRow[]>([]);
   classSubjects = signal<ClassSubjectRow[]>([]);
   staff = signal<StaffRow[]>([]);
