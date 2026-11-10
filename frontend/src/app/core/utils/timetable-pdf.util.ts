@@ -28,6 +28,8 @@ export interface TimetablePdfRow {
 export interface TimetablePdfOptions {
   title: string;
   subtitle?: string;
+  /** Centred line below the subtitle — e.g. "Class: Form 1A" or "Teacher: Mr Zhou T". */
+  heading?: string;
   classTeacher?: string;
   columns: TimetablePdfColumn[];
   rows: TimetablePdfRow[];
@@ -42,8 +44,19 @@ const CELL_PAD = 1.5;
 const ROW_H = 25;
 const GRID_LINE = [0, 0, 0] as const;
 
-/** Render a weekly timetable grid (days × periods) to a downloadable A4 landscape PDF. */
+/** Render a weekly timetable grid and download it as an A4 landscape PDF. */
 export async function downloadTimetablePdf(options: TimetablePdfOptions): Promise<void> {
+  const doc = await buildTimetableDoc(options);
+  doc.save(options.fileName);
+}
+
+/** Render a weekly timetable grid to PDF bytes (used for bulk ZIP downloads). */
+export async function buildTimetablePdfBytes(options: TimetablePdfOptions): Promise<Uint8Array> {
+  const doc = await buildTimetableDoc(options);
+  return new Uint8Array(doc.output('arraybuffer'));
+}
+
+async function buildTimetableDoc(options: TimetablePdfOptions) {
   const { jsPDF } = await import('jspdf');
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' });
 
@@ -60,30 +73,52 @@ export async function downloadTimetablePdf(options: TimetablePdfOptions): Promis
   doc.setFontSize(24);
   doc.setTextColor(0, 0, 0);
   doc.text(options.title, pageWidth / 2, y + 8, { align: 'center' });
-  y += 12;
+  y += 16;
 
   if (options.subtitle) {
     doc.setFontSize(16);
-    doc.text(options.subtitle, pageWidth / 2, y, { align: 'center' });
-    y += 8;
+    doc.text(options.subtitle, pageWidth / 2, y + 2, { align: 'center' });
+    y += 10;
   }
 
-  if (options.classTeacher) {
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Class teacher: ${options.classTeacher}`, pageWidth - MARGIN, MARGIN + 5, { align: 'right' });
+  const classTeacher = (options.classTeacher || '').trim();
+  const hasClassTeacher = !!classTeacher && classTeacher !== '—' && classTeacher !== '-';
+
+  if (options.heading && hasClassTeacher) {
+    // Class name (centre) and class teacher (far right) share the line just above the grid header row.
+    y += 2;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(14);
+    doc.text(options.heading, pageWidth / 2, y + 5, { align: 'center' });
+    doc.setFontSize(12);
+    doc.text(`Class teacher: ${classTeacher}`, pageWidth - MARGIN, y + 5, { align: 'right' });
+    y += 9;
+  } else if (options.heading) {
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text(options.heading, pageWidth / 2, y + 2, { align: 'center' });
+    y += 9;
   }
 
   const drawHeader = (top: number): number => {
     doc.setDrawColor(GRID_LINE[0], GRID_LINE[1], GRID_LINE[2]);
     doc.setLineWidth(0.4);
 
+    // jsPDF text drawing switches the PDF fill colour to the text colour (black), so the
+    // fill must be set again before EVERY filled rect — otherwise header cells render solid black
+    // and hide the period numbers and lesson times.
     doc.setFillColor(255, 255, 255);
     doc.rect(MARGIN, top, DAY_COL_W, HEADER_H, 'FD');
 
     options.columns.forEach((col, i) => {
       const cx = MARGIN + DAY_COL_W + i * colW;
+      if (col.isBreak) {
+        doc.setFillColor(235, 235, 235);
+      } else {
+        doc.setFillColor(255, 255, 255);
+      }
       doc.rect(cx, top, colW, HEADER_H, 'FD');
+      doc.setTextColor(0, 0, 0);
 
       if (col.isBreak) {
         doc.setFontSize(6);
@@ -126,20 +161,37 @@ export async function downloadTimetablePdf(options: TimetablePdfOptions): Promis
     options.columns.forEach((col, i) => {
       const cx = MARGIN + DAY_COL_W + i * colW;
       const cell = row.cells[i];
-      doc.rect(cx, y, colW, ROW_H, 'D');
-
       if (cell.isBreak) {
+        // Break / lunch columns are one merged cell spanning every day row: draw it once.
+        if (ri === 0) {
+          const mergedH = Math.min(totalGridHeight, pageHeight - MARGIN - gridTop);
+          doc.setDrawColor(GRID_LINE[0], GRID_LINE[1], GRID_LINE[2]);
+          doc.setLineWidth(0.4);
+          doc.setFillColor(245, 245, 245);
+          doc.rect(cx, gridTop, colW, mergedH, 'FD');
+        }
         if (cell.breakLabel && ri === 0) {
-          doc.setFontSize(18);
+          const labelFontSize = 18;
+          doc.setFontSize(labelFontSize);
           doc.setFont('helvetica', 'normal');
-          doc.text(cell.breakLabel, cx + colW / 2, gridTop + totalGridHeight / 2, {
-            align: 'center',
-            baseline: 'middle',
-            angle: 90
-          });
+          doc.setTextColor(0, 0, 0);
+          // jsPDF applies `align` / `baseline` offsets on the un-rotated axes, which pushed the
+          // rotated label into the neighbouring lesson column. Position it manually instead:
+          // rotated 90° (reading bottom→top) the text runs upward from its anchor point and its
+          // glyphs sit to the LEFT of the baseline, so centre it on the break column explicitly.
+          const textWidth = doc.getTextWidth(cell.breakLabel);
+          const capHeight = labelFontSize * 0.3528 * 0.72; // pt → mm × cap-height ratio
+          doc.text(
+            cell.breakLabel,
+            cx + colW / 2 + capHeight / 2,
+            gridTop + totalGridHeight / 2 + textWidth / 2,
+            { angle: 90 },
+          );
         }
         return;
       }
+
+      doc.rect(cx, y, colW, ROW_H, 'D');
 
       if (cell.topLeft) {
         doc.setFontSize(7);
@@ -171,5 +223,5 @@ export async function downloadTimetablePdf(options: TimetablePdfOptions): Promis
     y += ROW_H;
   });
 
-  doc.save(options.fileName);
+  return doc;
 }

@@ -7,6 +7,7 @@ import { PortalLayoutComponent, NavItem, NavSection } from '../portal-layout/por
 import { PARENT_NAV_ITEMS } from '../../core/config/parent-nav';
 import { STUDENT_NAV_SECTIONS } from '../../core/config/student-nav';
 import { buildTeacherNavSections } from '../../core/config/teacher-nav';
+import { ACCOUNTANT_NAV_SECTIONS } from '../../core/config/accountant-nav';
 import { ApiService } from '../../core/services/api.service';
 import { AuthService } from '../../core/services/auth.service';
 import { MessageBadgeService } from '../../core/services/message-badge.service';
@@ -100,27 +101,31 @@ export class MessagingCenterComponent implements OnInit {
 
   get portalTitle(): string {
     if (this.isTeacher) return 'Teacher Portal';
+    if (this.role === 'accountant') return 'Accountant Portal';
     return this.role === 'student' ? 'Student Portal' : 'Parent Portal';
   }
 
   get homePath(): string {
     if (this.isTeacher) return '/teacher';
     if (this.isStudent) return '/student';
+    if (this.role === 'accountant') return '/accountant';
     return '/parent';
   }
 
   get navItems(): NavItem[] {
-    if (this.isTeacher || this.role === 'student') return [];
+    if (this.isTeacher || this.role === 'student' || this.role === 'accountant') return [];
     return PARENT_NAV_ITEMS;
   }
 
   get navSections(): NavSection[] {
     if (this.isTeacher) return buildTeacherNavSections(this.auth.user()?.permissions);
     if (this.role === 'student') return STUDENT_NAV_SECTIONS;
+    if (this.role === 'accountant') return ACCOUNTANT_NAV_SECTIONS;
     return [];
   }
 
   private get recipientsEndpoint(): string {
+    if (this.role === 'accountant') return '/academics/messages/accountant-recipients';
     return this.isTeacher
       ? '/academics/messages/teacher-recipients'
       : '/academics/messages/staff-recipients';

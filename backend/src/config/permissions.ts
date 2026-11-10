@@ -129,6 +129,8 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<UserRole, string[]> = {
     'finance.books',
     'finance.reports',
     'finance.student_balance',
+    'communication.send',
+    'communication.inbox',
   ],
   [UserRole.TEACHER]: [
     'students.view',

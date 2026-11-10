@@ -37,6 +37,12 @@ export const ACCOUNTANT_NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
+    heading: 'Communication',
+    items: [
+      { label: 'Messages', path: '/accountant/messages', icon: '💬' },
+    ],
+  },
+  {
     heading: 'Account',
     items: [
       { label: CHANGE_PASSWORD_LABEL, path: CHANGE_PASSWORD_PATHS.accountant, icon: CHANGE_PASSWORD_ICON },

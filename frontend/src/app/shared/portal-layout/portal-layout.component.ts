@@ -171,7 +171,7 @@ export class PortalLayoutComponent implements OnInit, OnChanges, OnDestroy {
 
   get showBalanceEnquiry(): boolean {
     const role = (this.auth.user()?.role || '').toLowerCase();
-    return ['admin', 'director', 'principal'].includes(role);
+    return ['admin', 'director', 'principal', 'accountant'].includes(role);
   }
 
   get homeLink(): string {
@@ -295,6 +295,7 @@ export class PortalLayoutComponent implements OnInit, OnChanges, OnDestroy {
   get notificationsPath(): string {
     const role = (this.auth.user()?.role || '').toLowerCase();
     if (role === 'admin') return '/admin/communication/notifications';
+    if (role === 'accountant') return '/accountant';
     if (role === 'teacher') return '/teacher/notifications';
     if (role === 'student') return '/student/notifications';
     if (role === 'parent') return '/parent/notifications';
@@ -416,10 +417,12 @@ export class PortalLayoutComponent implements OnInit, OnChanges, OnDestroy {
 
     this.api.get<BalanceEnquiryRow[]>('/billing/student-balance', { q }).subscribe({
       next: (rows) => {
-        this.balanceResults.set(rows);
+        const id = q.toLowerCase();
+        const matches = rows.filter((r) => (r.admissionNumber || '').trim().toLowerCase() === id);
+        this.balanceResults.set(matches);
         this.balanceLoading.set(false);
-        if (rows.length === 1) {
-          this.balanceSelected.set(rows[0]);
+        if (matches.length >= 1) {
+          this.balanceSelected.set(matches[0]);
         }
       },
       error: () => {
@@ -435,7 +438,9 @@ export class PortalLayoutComponent implements OnInit, OnChanges, OnDestroy {
 
   goToRecordPayment(row: BalanceEnquiryRow): void {
     this.closeBalanceEnquiry();
-    void this.router.navigate(['/admin/fin-reports/record-payment', row.id]);
+    const role = (this.auth.user()?.role || '').toLowerCase();
+    const base = role === 'accountant' ? '/accountant' : '/admin';
+    void this.router.navigate([`${base}/fin-reports/record-payment`, row.id]);
   }
 
   formatGender(value?: string): string {

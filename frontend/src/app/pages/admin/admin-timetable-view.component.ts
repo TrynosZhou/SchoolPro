@@ -1,4 +1,5 @@
 import { Component, computed, inject, OnInit, signal } from '@angular/core';
+import { firstValueFrom } from 'rxjs';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
@@ -6,6 +7,7 @@ import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
 import { ApiService } from '../../core/services/api.service';
 import { TimetablePeriod, TimetablePeriodsService } from '../../core/services/timetable-periods.service';
 import { classHeaderLabel, classHeaderLabelById } from '../../core/utils/class-display';
+import { formatTeacherTimetableName } from '../../core/utils/teacher-display';
 import { buildTimetableTermVersionLabel } from '../../core/utils/timetable-term-label';
 import { environment } from '../../../environments/environment';
 import {
@@ -20,9 +22,18 @@ import {
   teacherInitials,
   timetableSubjectShort,
 } from '../../core/utils/timetable-grid-display';
-import { downloadTimetablePdf, TimetablePdfCell, TimetablePdfColumn, TimetablePdfRow } from '../../core/utils/timetable-pdf.util';
+import { buildZip, downloadBlob } from '../../core/utils/zip.util';
+import { buildTimetablePdfBytes, TimetablePdfOptions, downloadTimetablePdf, TimetablePdfCell, TimetablePdfColumn, TimetablePdfRow } from '../../core/utils/timetable-pdf.util';
 
-interface ClassRow { id: string; name: string; form?: { name: string }; }
+interface ClassTeacherUser { title?: string | null; firstName?: string | null; lastName?: string | null; }
+interface ClassRow {
+  id: string;
+  name: string;
+  form?: { name: string };
+  classTeacherId?: string | null;
+  classTeacher?: { title?: string | null; user?: ClassTeacherUser | null } | null;
+}
+interface StaffLookupRow { id: string; title?: string | null; user?: ClassTeacherUser | null; }
 interface TimetableEntry {
   id: string;
   dayOfWeek: number;
@@ -122,6 +133,7 @@ export class AdminTimetableViewComponent implements OnInit {
   readonly classAllValue = ALL_SELECTION;
   readonly teacherAllValue = ALL_SELECTION;
   classes = signal<ClassRow[]>([]);
+  private staffById = signal<Record<string, StaffLookupRow>>({});
   entries = signal<TimetableEntry[]>([]);
   loadingClasses = signal(true);
   loading = signal(false);
@@ -136,6 +148,23 @@ export class AdminTimetableViewComponent implements OnInit {
   selectedClassLabel = computed(() => classHeaderLabelById(this.classes(), this.classId()));
 
   classLabel = (c: ClassRow) => classHeaderLabel(c);
+
+  /** Display name of the class teacher for a class, or '' when none is assigned. */
+  classTeacherNameFor(classId: string | null | undefined): string {
+    const c = this.classes().find((row) => row.id === classId);
+    if (!c) return '';
+    const rel = c.classTeacher;
+    const staff = c.classTeacherId ? this.staffById()[c.classTeacherId] : undefined;
+    const user = rel?.user ?? staff?.user;
+    if (!user) return '';
+    return formatTeacherTimetableName({
+      title: rel?.title ?? staff?.title,
+      firstName: user.firstName,
+      lastName: user.lastName,
+    });
+  }
+
+  selectedClassTeacher = computed(() => this.classTeacherNameFor(this.classId()));
 
   snapshotClasses = computed(() => this.snapshot()?.classes ?? []);
 
@@ -232,6 +261,14 @@ export class AdminTimetableViewComponent implements OnInit {
     if (tab === 'teacher') {
       this.setMainTab('teacher');
     }
+    this.api.get<StaffLookupRow[]>('/admin/staff').subscribe({
+      next: (rows) => {
+        const map: Record<string, StaffLookupRow> = {};
+        for (const r of rows || []) map[r.id] = r;
+        this.staffById.set(map);
+      },
+      error: () => this.staffById.set({}),
+    });
     this.api.get<ClassRow[]>('/admin/classes').subscribe({
       next: (rows) => {
         this.classes.set(rows);
@@ -503,7 +540,8 @@ export class AdminTimetableViewComponent implements OnInit {
     downloadTimetablePdf({
       title: this.schoolName(),
       subtitle: `${this.termVersionLabel()}`,
-      classTeacher: '—',
+      heading: label,
+      classTeacher: this.classTeacherNameFor(this.classId()),
       columns: this.pdfColumns(),
       rows: this.pdfRows((day, period) => {
         const e = this.entryAt(day, period);
@@ -518,12 +556,12 @@ export class AdminTimetableViewComponent implements OnInit {
     });
   }
 
-  downloadSnapshotClass(klass: SnapshotClass) {
-    if (!this.periods().length) return;
-    downloadTimetablePdf({
+  private snapshotClassPdfOptions(klass: SnapshotClass): TimetablePdfOptions {
+    return {
       title: this.schoolName(),
       subtitle: `${this.termVersionLabel()}`,
-      classTeacher: '—',
+      heading: klass.className,
+      classTeacher: this.classTeacherNameFor(klass.classId),
       columns: this.pdfColumns(),
       rows: this.pdfRows((day, period) => {
         const s = this.classSlotAt(klass, day, period);
@@ -531,18 +569,18 @@ export class AdminTimetableViewComponent implements OnInit {
         return {
           topRight: s.room || 'Boys',
           main: this.classSlotSubject(s),
-          bottomRight: s.teacherName
+          bottomRight: s.teacherName,
         };
       }),
       fileName: this.pdfFileName(klass.className, 'class-timetable'),
-    });
+    };
   }
 
-  downloadTeacherTimetable(teacher: SnapshotTeacher) {
-    if (!this.periods().length) return;
-    downloadTimetablePdf({
+  private teacherPdfOptions(teacher: SnapshotTeacher): TimetablePdfOptions {
+    return {
       title: this.schoolName(),
       subtitle: `${this.termVersionLabel()}`,
+      heading: `Teacher: ${teacher.teacherName}`,
       columns: this.pdfColumns(),
       rows: this.pdfRows((day, period) => {
         const s = this.teacherSlotAt(teacher, day, period);
@@ -550,10 +588,99 @@ export class AdminTimetableViewComponent implements OnInit {
         return {
           topLeft: this.teacherSlotSubject(s),
           main: this.teacherSlotClass(s),
-          bottomCenter: s.room || 'Boys'
+          bottomCenter: s.room || 'Boys',
         };
       }),
       fileName: this.pdfFileName(teacher.teacherName, 'teacher-timetable'),
-    });
+    };
+  }
+
+  downloadSnapshotClass(klass: SnapshotClass) {
+    if (!this.periods().length) return;
+    downloadTimetablePdf(this.snapshotClassPdfOptions(klass));
+  }
+
+  downloadTeacherTimetable(teacher: SnapshotTeacher) {
+    if (!this.periods().length) return;
+    downloadTimetablePdf(this.teacherPdfOptions(teacher));
+  }
+
+  // ── Bulk (ZIP) downloads ──
+  bulkBusy = signal<'classes' | 'teachers' | null>(null);
+  bulkProgress = signal('');
+  bulkError = signal('');
+
+  /** Make sure the all-classes / all-teachers snapshot is loaded, then return it. */
+  private async ensureSnapshot(): Promise<TimetableSnapshot | null> {
+    if (!this.snapshotLoaded() || !this.snapshot()) {
+      this.loadingSnapshot.set(true);
+      try {
+        const data = await firstValueFrom(this.api.get<TimetableSnapshot>('/timetable/generate/snapshot'));
+        this.snapshot.set(data);
+        this.snapshotLoaded.set(true);
+        this.ensureTeacherSelection();
+      } catch {
+        this.snapshot.set(null);
+        return null;
+      } finally {
+        this.loadingSnapshot.set(false);
+      }
+    }
+    return this.snapshot();
+  }
+
+  async downloadAllClassTimetablesZip() {
+    await this.bulkZip('classes');
+  }
+
+  async downloadAllTeacherTimetablesZip() {
+    await this.bulkZip('teachers');
+  }
+
+  private async bulkZip(kind: 'classes' | 'teachers') {
+    if (this.bulkBusy()) return;
+    this.bulkError.set('');
+    if (!this.periods().length) {
+      this.bulkError.set('Configure lesson periods before downloading timetables.');
+      return;
+    }
+    this.bulkBusy.set(kind);
+    this.bulkProgress.set('Loading timetables…');
+    try {
+      const snap = await this.ensureSnapshot();
+      const items: TimetablePdfOptions[] = !snap
+        ? []
+        : kind === 'classes'
+          ? snap.classes.map((c) => this.snapshotClassPdfOptions(c))
+          : snap.teachers.map((t) => this.teacherPdfOptions(t));
+      if (!items.length) {
+        this.bulkError.set(
+          snap ? `No ${kind === 'classes' ? 'class' : 'teacher'} timetables to download yet.` : 'Could not load timetables. Please try again.',
+        );
+        return;
+      }
+
+      const used = new Set<string>();
+      const files: { name: string; data: Uint8Array }[] = [];
+      for (let i = 0; i < items.length; i++) {
+        this.bulkProgress.set(`Creating PDF ${i + 1} of ${items.length}…`);
+        let name = items[i].fileName;
+        for (let n = 2; used.has(name); n++) name = items[i].fileName.replace(/\.pdf$/, `-${n}.pdf`);
+        used.add(name);
+        files.push({ name, data: await buildTimetablePdfBytes(items[i]) });
+      }
+
+      this.bulkProgress.set('Zipping…');
+      const termSlug = this.termVersionLabel().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+      downloadBlob(
+        buildZip(files),
+        `all-${kind === 'classes' ? 'class' : 'teacher'}-timetables${termSlug ? '-' + termSlug : ''}.zip`,
+      );
+    } catch {
+      this.bulkError.set('Something went wrong while creating the ZIP file. Please try again.');
+    } finally {
+      this.bulkBusy.set(null);
+      this.bulkProgress.set('');
+    }
   }
 }

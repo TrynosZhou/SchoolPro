@@ -17,6 +17,7 @@ import { assertTimetableTeacherMatchesAssignment } from '../services/class-subje
 import {
   conversationKey,
   canMessageRecipient,
+  listAccountantMessagingRecipients,
   listParentMessagingRecipients,
   listStudentMessagingRecipients,
   listTeacherMessagingRecipients,
@@ -256,7 +257,7 @@ router.get('/messages/recipients', authorize(UserRole.TEACHER, UserRole.ADMIN, U
   });
 });
 
-router.get('/messages/unread-count', authorize(UserRole.TEACHER, UserRole.PARENT, UserRole.STUDENT, UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), msgView, async (req: AuthRequest, res: Response) => {
+router.get('/messages/unread-count', authorize(UserRole.TEACHER, UserRole.PARENT, UserRole.STUDENT, UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.ACCOUNTANT), msgView, async (req: AuthRequest, res: Response) => {
   const rows = await AppDataSource.query(
     `SELECT COUNT(*)::int AS count FROM messages WHERE "recipientId" = $1 AND "isRead" = false`,
     [req.user!.userId],
@@ -264,7 +265,7 @@ router.get('/messages/unread-count', authorize(UserRole.TEACHER, UserRole.PARENT
   res.json({ count: Number(rows[0]?.count || 0) });
 });
 
-router.get('/messages/inbox', authorize(UserRole.TEACHER, UserRole.PARENT, UserRole.STUDENT, UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), msgView, async (req: AuthRequest, res: Response) => {
+router.get('/messages/inbox', authorize(UserRole.TEACHER, UserRole.PARENT, UserRole.STUDENT, UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.ACCOUNTANT), msgView, async (req: AuthRequest, res: Response) => {
   const repo = AppDataSource.getRepository(Message);
   const messages = await repo.find({
     where: { recipientId: req.user!.userId },
@@ -274,7 +275,7 @@ router.get('/messages/inbox', authorize(UserRole.TEACHER, UserRole.PARENT, UserR
   res.json(messages);
 });
 
-router.get('/messages/sent', authorize(UserRole.TEACHER, UserRole.PARENT, UserRole.STUDENT, UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), msgView, async (req: AuthRequest, res: Response) => {
+router.get('/messages/sent', authorize(UserRole.TEACHER, UserRole.PARENT, UserRole.STUDENT, UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.ACCOUNTANT), msgView, async (req: AuthRequest, res: Response) => {
   const repo = AppDataSource.getRepository(Message);
   const messages = await repo.find({
     where: { senderId: req.user!.userId },
@@ -284,7 +285,7 @@ router.get('/messages/sent', authorize(UserRole.TEACHER, UserRole.PARENT, UserRo
   res.json(messages);
 });
 
-router.get('/messages', authorize(UserRole.TEACHER, UserRole.PARENT, UserRole.STUDENT, UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), msgView, async (req: AuthRequest, res: Response) => {
+router.get('/messages', authorize(UserRole.TEACHER, UserRole.PARENT, UserRole.STUDENT, UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.ACCOUNTANT), msgView, async (req: AuthRequest, res: Response) => {
   const repo = AppDataSource.getRepository(Message);
   const messages = await repo.find({
     where: [{ recipientId: req.user!.userId }, { senderId: req.user!.userId }],
@@ -306,6 +307,11 @@ router.get('/messages/staff-recipients', authorize(UserRole.PARENT, UserRole.STU
   res.json(list);
 });
 
+// Recipients an accountant may contact: office, other accountants and parents.
+router.get('/messages/accountant-recipients', authorize(UserRole.ACCOUNTANT), msgView, async (req: AuthRequest, res: Response) => {
+  res.json(await listAccountantMessagingRecipients(req.user!.userId));
+});
+
 // Recipients a teacher may contact: parents/students of the students they teach, plus office.
 router.get('/messages/teacher-recipients', authorize(UserRole.TEACHER), msgView, async (req: AuthRequest, res: Response) => {
   if (!req.user!.staffId) return res.json([]);
@@ -314,7 +320,7 @@ router.get('/messages/teacher-recipients', authorize(UserRole.TEACHER), msgView,
 });
 
 // Threaded conversation list for the current user: one entry per counterpart.
-router.get('/messages/threads', authorize(UserRole.TEACHER, UserRole.PARENT, UserRole.STUDENT, UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), msgView, async (req: AuthRequest, res: Response) => {
+router.get('/messages/threads', authorize(UserRole.TEACHER, UserRole.PARENT, UserRole.STUDENT, UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.ACCOUNTANT), msgView, async (req: AuthRequest, res: Response) => {
   const repo = AppDataSource.getRepository(Message);
   const me = req.user!.userId;
   const messages = await repo.find({
@@ -353,7 +359,7 @@ router.get('/messages/threads', authorize(UserRole.TEACHER, UserRole.PARENT, Use
 });
 
 // All messages in a single conversation (and mark inbound ones read).
-router.get('/messages/threads/:threadId', authorize(UserRole.TEACHER, UserRole.PARENT, UserRole.STUDENT, UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), msgView, async (req: AuthRequest, res: Response) => {
+router.get('/messages/threads/:threadId', authorize(UserRole.TEACHER, UserRole.PARENT, UserRole.STUDENT, UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.ACCOUNTANT), msgView, async (req: AuthRequest, res: Response) => {
   const repo = AppDataSource.getRepository(Message);
   const me = req.user!.userId;
   const threadId = String(req.params.threadId);
@@ -481,7 +487,7 @@ router.post(
 
 router.get(
   '/messages/attachments/:attachmentId',
-  authorize(UserRole.TEACHER, UserRole.PARENT, UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.STUDENT),
+  authorize(UserRole.TEACHER, UserRole.PARENT, UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.STUDENT, UserRole.ACCOUNTANT),
   msgView,
   async (req: AuthRequest, res: Response) => {
     const attachmentRepo = AppDataSource.getRepository(MessageAttachment);
@@ -513,7 +519,7 @@ router.get(
   },
 );
 
-router.post('/messages', authorize(UserRole.TEACHER, UserRole.PARENT, UserRole.STUDENT, UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), msgCreate, async (req: AuthRequest, res: Response) => {
+router.post('/messages', authorize(UserRole.TEACHER, UserRole.PARENT, UserRole.STUDENT, UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.ACCOUNTANT), msgCreate, async (req: AuthRequest, res: Response) => {
   const { recipientId, subject, body, studentId, broadcastToAllParents } = req.body || {};
   const trimmedSubject = String(subject || '').trim();
   const trimmedBody = String(body || '').trim();
@@ -624,7 +630,7 @@ router.post('/messages', authorize(UserRole.TEACHER, UserRole.PARENT, UserRole.S
   res.status(201).json(full);
 });
 
-router.patch('/messages/:id/read', authorize(UserRole.TEACHER, UserRole.PARENT, UserRole.STUDENT, UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL), msgView, async (req: AuthRequest, res: Response) => {
+router.patch('/messages/:id/read', authorize(UserRole.TEACHER, UserRole.PARENT, UserRole.STUDENT, UserRole.ADMIN, UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.ACCOUNTANT), msgView, async (req: AuthRequest, res: Response) => {
   const repo = AppDataSource.getRepository(Message);
   const msg = await repo.findOne({
     where: { id: req.params.id, recipientId: req.user!.userId },

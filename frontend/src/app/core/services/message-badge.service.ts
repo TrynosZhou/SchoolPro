@@ -42,13 +42,15 @@ export class MessageBadgeService {
   }
 
   roleHasInbox(role: string): boolean {
-    return ['admin', 'director', 'principal', 'teacher', 'parent', 'student'].includes(role);
+    return ['admin', 'director', 'principal', 'accountant', 'teacher', 'parent', 'student'].includes(role);
   }
 
   messagesPathForRole(role: string): string {
     switch (role) {
       case 'admin':
         return '/admin/communication/inbox';
+      case 'accountant':
+        return '/accountant/messages';
       case 'student':
         return '/student/messages';
       case 'parent':

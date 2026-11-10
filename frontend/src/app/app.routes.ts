@@ -214,6 +214,7 @@ export const routes: Routes = [
       { path: 'fin-reports/debtor-aging', component: AdminDebtorAgingComponent },
       { path: 'fin-reports/fee-collection-revenue', component: AdminFeeCollectionRevenueComponent },
       { path: 'fin-reports/general-ledger', component: AdminGeneralLedgerComponent },
+      { path: 'messages', component: MessagingCenterComponent },
       { path: 'change-password', component: ChangePasswordPageComponent },
     ],
   },

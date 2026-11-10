@@ -19,6 +19,39 @@
     </button>
 
     <nav class="topbar-actions" [attr.aria-label]="'shell.quickActions' | t">
+      @if (showMessagesAction) {
+        <a
+          [routerLink]="effectiveMessagesPath"
+          class="topbar-action-icon"
+          aria-label="Messages"
+          title="Messages"
+        >
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M3 7a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+            <path d="M3 7l9 6 9-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+          @if (unreadMessageCount() > 0) {
+            <span class="topbar-badge" aria-label="Unread messages">{{ unreadBadgeLabel(unreadMessageCount()) }}</span>
+          }
+        </a>
+      }
+
+      @if (showBalanceEnquiry) {
+        <button
+          type="button"
+          class="topbar-action-icon"
+          (click)="$event.stopPropagation(); openBalanceEnquiry()"
+          aria-label="Balance enquiry"
+          title="Balance enquiry"
+        >
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <rect x="3" y="6" width="18" height="12" rx="2" stroke="currentColor" stroke-width="2" />
+            <path d="M3 10h18" stroke="currentColor" stroke-width="2" />
+            <path d="M7 15h4" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+          </svg>
+        </button>
+      }
+
       <a [routerLink]="notificationsPath" class="topbar-action-icon" [attr.aria-label]="'Notifications' | t">
         <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
           <path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
@@ -319,19 +352,19 @@
     <section class="balance-modal" (click)="$event.stopPropagation()" role="dialog" aria-labelledby="balanceModalTitle" aria-modal="true" tabindex="-1">
       <header class="help-modal-head">
         <div>
-          <h3 id="balanceModalTitle">{{ 'shell.balanceTitle' | t }}</h3>
-          <p>{{ 'shell.balanceHint' | t }}</p>
+          <h3 id="balanceModalTitle">Balance Enquiry</h3>
+          <p>Enter the Student ID to view the invoice balance.</p>
         </div>
         <button type="button" class="help-close-btn" (click)="closeBalanceEnquiry()" [attr.aria-label]="'shell.close' | t">×</button>
       </header>
 
       <div class="help-search-row">
-        <label class="sr-only" for="balanceEnquirySearch">{{ 'shell.balanceSearch' | t }}</label>
+        <label class="sr-only" for="balanceEnquirySearch">Student ID</label>
         <input
           id="balanceEnquirySearch"
           type="text"
           class="help-search-input"
-          [placeholder]="'shell.balancePlaceholder' | t"
+          placeholder="Enter Student ID (e.g. SP6403092026)"
           [(ngModel)]="balanceQuery"
           (keydown.enter)="getBalanceEnquiry()"
           name="balanceEnquirySearch"
@@ -343,15 +376,15 @@
           (click)="getBalanceEnquiry()"
           [disabled]="balanceLoading() || !balanceQuery.trim()"
         >
-          {{ balanceLoading() ? ('shell.loading' | t) : ('shell.getBalance' | t) }}
+          {{ balanceLoading() ? 'Loading…' : 'View Balance' }}
         </button>
       </div>
 
       <div class="balance-modal-body" aria-live="polite">
         @if (balanceLoading()) {
-          <p class="balance-status">Searching student balance…</p>
+          <p class="balance-status">Fetching invoice balance…</p>
         } @else if (balanceSearched() && !balanceResults().length) {
-          <p class="balance-status warn">No student found matching "{{ balanceQuery }}".</p>
+          <p class="balance-status warn">No student found with Student ID "{{ balanceQuery }}".</p>
         } @else if (balanceResults().length > 1 && !balanceSelected()) {
           <p class="balance-pick-label">{{ balanceResults().length }} students found — select one:</p>
           <div class="balance-pick-list">
