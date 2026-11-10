@@ -45,6 +45,7 @@ import { StaffPayrollProfile } from './StaffPayrollProfile';
 import { PayrollRun } from './PayrollRun';
 import { Payslip } from './Payslip';
 import { StaffLeaveBalance } from './StaffLeaveBalance';
+import { LeaveRequest } from './LeaveRequest';
 import { TuitionExemption } from './TuitionExemption';
 import { InvoiceAdjustment } from './InvoiceAdjustment';
 import { ChartOfAccount } from './ChartOfAccount';
@@ -116,6 +117,7 @@ export const entities = [
   PayrollRun,
   Payslip,
   StaffLeaveBalance,
+  LeaveRequest,
   TuitionExemption,
   InvoiceAdjustment,
   ChartOfAccount,
@@ -189,6 +191,7 @@ export {
   PayrollRun,
   Payslip,
   StaffLeaveBalance,
+  LeaveRequest,
   TuitionExemption,
   InvoiceAdjustment,
   ChartOfAccount,

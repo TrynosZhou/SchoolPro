@@ -1,9 +1,18 @@
+@use '../../../styles/admin-classic' as classic;
+
 :host {
   display: block;
 }
 
 .payroll-page {
   max-width: 1280px;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+
+  .kpi-grid {
+    margin-bottom: 0;
+  }
 }
 
 .toast {
@@ -1077,3 +1086,7 @@ label.full {
     font-weight: 600;
   }
 }
+
+// Classical navy & brass layer (shared with Login, Dashboard, Students, Staff)
+@include classic.page;
+@include classic.page-extras;

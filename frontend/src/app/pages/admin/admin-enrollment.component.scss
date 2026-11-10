@@ -1,3 +1,5 @@
+@use '../../../styles/admin-classic' as classic;
+
 :host {
   display: block;
 }
@@ -973,3 +975,7 @@
     min-width: 100%;
   }
 }
+
+
+// Classical navy & brass layer (shared with Login + Dashboard)
+@include classic.page;

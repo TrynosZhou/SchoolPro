@@ -1,3 +1,5 @@
+@use '../../../styles/admin-classic' as classic;
+
 :host {
   display: block;
 }
@@ -840,3 +842,231 @@
     width: 100%;
   }
 }
+
+// ── Row actions (Edit / Delete) ─────────────────────────────
+.col-actions {
+  width: 1%;
+  white-space: nowrap;
+}
+
+.row-actions,
+.card-actions {
+  display: inline-flex;
+  gap: 0.4rem;
+}
+
+.card-actions {
+  margin-top: 0.6rem;
+}
+
+.act-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--color-border-strong, #cbd5e1);
+  border-radius: 2px;
+  background: var(--color-bg, #fff);
+  color: var(--navy, #0f1d36);
+  font-size: 0.82rem;
+  font-weight: 600;
+  line-height: 1.2;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+
+  &:hover {
+    background: var(--brass-soft, rgba(184, 146, 74, 0.14));
+    border-color: var(--brass, #b8924a);
+  }
+
+  &.act-delete {
+    color: var(--color-negative, #dc2626);
+
+    &:hover {
+      background: rgba(220, 38, 38, 0.08);
+      border-color: var(--color-negative, #dc2626);
+    }
+  }
+}
+
+// ── Modals ──────────────────────────────────────────────────
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+}
+
+.modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  z-index: 3001;
+  transform: translate(-50%, -50%);
+  width: min(560px, calc(100vw - 2rem));
+  max-height: calc(100vh - 2rem);
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg, #fff);
+  overflow: hidden;
+}
+
+.modal-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 1.25rem 1.5rem 1rem;
+
+  .eyebrow {
+    margin: 0 0 0.25rem;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+  }
+
+  h2 {
+    margin: 0 0 0.35rem;
+  }
+}
+
+.modal-close {
+  border: 1px solid var(--color-border-strong, #cbd5e1);
+  background: var(--color-bg, #fff);
+  width: 2rem;
+  height: 2rem;
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--navy, #0f1d36);
+}
+
+.modal-body {
+  padding: 1.25rem 1.5rem;
+  overflow-y: auto;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+
+  @media (max-width: 520px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.mfield {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+
+  label {
+    font-size: 0.74rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--color-text-secondary, #475569);
+  }
+
+  input,
+  select {
+    width: 100%;
+    padding: 0.55rem 0.7rem;
+    border: 1px solid var(--color-border-strong, #cbd5e1);
+    border-radius: 2px;
+    background: var(--color-bg, #fff);
+    color: var(--color-text-primary, #0f172a);
+    font-size: 0.92rem;
+
+    &:focus {
+      outline: none;
+      border-color: var(--navy, #0f1d36);
+      box-shadow: 0 0 0 3px rgba(184, 146, 74, 0.25);
+    }
+  }
+}
+
+.modal-note {
+  margin: 1rem 0 0;
+  padding: 0.6rem 0.8rem;
+  border-left: 3px solid var(--brass, #b8924a);
+  background: var(--brass-soft, rgba(184, 146, 74, 0.14));
+  color: var(--brass-ink, #7a5a1f);
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  padding: 0.9rem 1.5rem;
+
+  button {
+    padding: 0.55rem 1.1rem;
+    cursor: pointer;
+
+    &:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+  }
+}
+
+.choice {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.4rem;
+  padding: 1rem;
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-left: 3px solid var(--brass, #b8924a);
+  border-radius: 3px;
+
+  & + & {
+    margin-top: 0.85rem;
+  }
+
+  strong {
+    color: var(--navy, #0f1d36);
+  }
+
+  p {
+    margin: 0 0 0.4rem;
+    font-size: 0.88rem;
+    color: var(--color-text-secondary, #475569);
+  }
+
+  button {
+    padding: 0.5rem 1rem;
+    cursor: pointer;
+
+    &:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+  }
+
+  &.danger {
+    border-left-color: var(--color-negative, #dc2626);
+
+    strong {
+      color: var(--color-negative, #dc2626);
+    }
+  }
+}
+
+.btn-danger {
+  background: var(--color-negative, #dc2626);
+  border: 1px solid var(--color-negative, #dc2626);
+  border-radius: 2px;
+  color: #fff;
+  font-weight: 600;
+
+  &:hover:not(:disabled) {
+    filter: brightness(0.92);
+  }
+}
+
+// Classical navy & brass layer (shared with Login, Dashboard, Students, Staff)
+@include classic.page;
+@include classic.page-extras;

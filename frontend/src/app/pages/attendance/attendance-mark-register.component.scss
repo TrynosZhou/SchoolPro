@@ -1,3 +1,6 @@
+@use '../../../styles/admin-classic' as classic;
+@use '../../../styles/classic-academics' as academics;
+
 :host {
   display: block;
 }
@@ -711,3 +714,7 @@
     justify-content: space-between;
   }
 }
+
+// Classical navy & brass layer (shared with Login, Dashboard and Students)
+@include classic.page;
+@include academics.page;

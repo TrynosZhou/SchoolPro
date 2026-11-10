@@ -19,6 +19,15 @@ interface ClassOption {
   students?: { id: string }[];
 }
 
+interface EditForm {
+  firstName: string;
+  lastName: string;
+  gender: string;
+  dateOfBirth: string;
+  studentType: 'day_scholar' | 'boarder';
+  classId: string;
+}
+
 interface TermOption {
   id: string;
   name: string;
@@ -65,6 +74,13 @@ export class ClassListComponent implements OnInit, OnDestroy {
   sortOrder = signal<SortOrder>('name-asc');
   viewMode = signal<ViewMode>('table');
   toast = signal<{ type: 'success' | 'error'; msg: string } | null>(null);
+
+  // ── Row actions (admin only) ──
+  readonly canManage = !this.isTeacherPortal;
+  editTarget = signal<Student | null>(null);
+  deleteTarget = signal<Student | null>(null);
+  saving = signal(false);
+  editForm: EditForm = this.emptyEditForm();
 
   pdfLoading = signal(false);
   pdfPreviewOpen = signal(false);
@@ -189,7 +205,7 @@ export class ClassListComponent implements OnInit, OnDestroy {
     this.tryAutoFetch();
   }
 
-  fetchStudents(): void {
+  fetchStudents(quiet = false): void {
     if (!this.selectedTermId) {
       this.showToast('error', 'Select a term first.');
       return;
@@ -209,7 +225,7 @@ export class ClassListComponent implements OnInit, OnDestroy {
           this.students.set(rows);
           this.hasFetched.set(true);
           this.loadingStudents.set(false);
-          if (!rows.length) {
+          if (!rows.length && !quiet) {
             this.showToast('error', 'No students enrolled in this class yet.');
           }
         },
@@ -236,6 +252,195 @@ export class ClassListComponent implements OnInit, OnDestroy {
     if (type === 'boarder') return 'Boarder';
     if (type === 'day_scholar') return 'Day Scholar';
     return '—';
+  }
+
+  // ───────────────────────── Edit / Delete ─────────────────────────
+
+  private emptyEditForm(): EditForm {
+    return { firstName: '', lastName: '', gender: '', dateOfBirth: '', studentType: 'day_scholar', classId: '' };
+  }
+
+  private guardDemo(): boolean {
+    if (this.auth.isDemoSession()) {
+      this.showToast('error', "This action isn't available in demo mode.");
+      return true;
+    }
+    return false;
+  }
+
+  openEdit(student: Student): void {
+    if (!this.canManage || this.guardDemo()) return;
+    this.deleteTarget.set(null);
+    this.editForm = {
+      firstName: student.firstName,
+      lastName: student.lastName,
+      gender: student.gender || '',
+      dateOfBirth: student.dateOfBirth?.toString().slice(0, 10) || '',
+      studentType: student.studentType === 'boarder' ? 'boarder' : 'day_scholar',
+      classId: this.selectedClassId,
+    };
+    this.editTarget.set(student);
+  }
+
+  closeEdit(): void {
+    if (this.saving()) return;
+    this.editTarget.set(null);
+    this.editForm = this.emptyEditForm();
+  }
+
+  /** Classes the learner can be moved to, with a note when one is full. */
+  classOptionLabel(c: ClassOption): string {
+    const label = classDisplayName(this.classes(), c.id) || c.name;
+    if (c.id === this.selectedClassId) return `${label} (current)`;
+    if (this.isClassFull(c)) return `${label} (full)`;
+    return label;
+  }
+
+  isClassFull(c: ClassOption): boolean {
+    return !!c.capacity && this.classEnrollmentCount(c) >= c.capacity;
+  }
+
+  saveEdit(): void {
+    const student = this.editTarget();
+    if (!student) return;
+    const f = this.editForm;
+
+    if (!f.firstName.trim() || !f.lastName.trim()) {
+      this.showToast('error', 'First name and last name are required.');
+      return;
+    }
+    if (!f.dateOfBirth) {
+      this.showToast('error', 'Date of birth is required.');
+      return;
+    }
+    if (!f.gender) {
+      this.showToast('error', 'Select a gender.');
+      return;
+    }
+
+    const movingClass = !!f.classId && f.classId !== this.selectedClassId;
+    if (movingClass) {
+      const target = this.classes().find((c) => c.id === f.classId);
+      if (target && this.isClassFull(target)) {
+        this.showToast('error', `${target.name} is at full capacity.`);
+        return;
+      }
+    }
+
+    const g = student.guardians?.[0];
+    const guardians = g
+      ? [
+          {
+            ...g,
+            phone: g.phone || g.guardianPhone || '',
+            guardianPhone: g.phone || g.guardianPhone || undefined,
+            isPrimary: true,
+          },
+        ]
+      : [];
+
+    const body = {
+      firstName: f.firstName.trim(),
+      lastName: f.lastName.trim(),
+      gender: f.gender,
+      dateOfBirth: f.dateOfBirth,
+      studentType: f.studentType,
+      address: student.address || '',
+      previousSchool: student.previousSchool || '',
+      formId: student.formId || student.form?.id || this.selectedClassMeta()?.form?.id || '',
+      guardians,
+    };
+
+    this.saving.set(true);
+    this.api.put<Student>(`/students/${student.id}`, body).subscribe({
+      next: () => {
+        if (!movingClass) {
+          this.finishEdit(`${student.admissionNumber} updated.`);
+          return;
+        }
+        this.api.patch<Student>(`/students/${student.id}/enroll`, { classId: f.classId }).subscribe({
+          next: () => {
+            this.finishEdit(`${student.admissionNumber} updated and moved to another class.`);
+            this.refreshClasses();
+          },
+          error: (e) => {
+            this.saving.set(false);
+            this.showToast('error', e.error?.message || 'Details saved, but the class could not be changed.');
+            this.fetchStudents(true);
+          },
+        });
+      },
+      error: (e) => {
+        this.saving.set(false);
+        this.showToast('error', e.error?.message || 'Update failed. Try again.');
+      },
+    });
+  }
+
+  private finishEdit(msg: string): void {
+    this.saving.set(false);
+    this.editTarget.set(null);
+    this.editForm = this.emptyEditForm();
+    this.showToast('success', msg);
+    this.fetchStudents(true);
+  }
+
+  confirmDelete(student: Student): void {
+    if (!this.canManage || this.guardDemo()) return;
+    this.editTarget.set(null);
+    this.deleteTarget.set(student);
+  }
+
+  cancelDelete(): void {
+    if (this.saving()) return;
+    this.deleteTarget.set(null);
+  }
+
+  /** Takes the learner out of this class but keeps the student record. */
+  removeFromClass(): void {
+    const student = this.deleteTarget();
+    if (!student) return;
+    this.saving.set(true);
+    this.api.patch<Student>(`/students/${student.id}/unenroll`, {}).subscribe({
+      next: () => {
+        this.saving.set(false);
+        this.deleteTarget.set(null);
+        this.showToast('success', `${student.firstName} ${student.lastName} removed from the class.`);
+        this.fetchStudents(true);
+        this.refreshClasses();
+      },
+      error: (e) => {
+        this.saving.set(false);
+        this.showToast('error', e.error?.message || 'Could not remove the student from this class.');
+      },
+    });
+  }
+
+  /** Permanently deletes the student record. */
+  deleteStudent(): void {
+    const student = this.deleteTarget();
+    if (!student) return;
+    this.saving.set(true);
+    this.api.delete<{ message: string }>(`/students/${student.id}`).subscribe({
+      next: () => {
+        this.saving.set(false);
+        this.deleteTarget.set(null);
+        this.showToast('success', `${student.admissionNumber} deleted.`);
+        this.fetchStudents(true);
+        this.refreshClasses();
+      },
+      error: (e) => {
+        this.saving.set(false);
+        this.showToast('error', e.error?.message || 'Could not delete the student. Try again.');
+      },
+    });
+  }
+
+  private refreshClasses(): void {
+    if (this.isTeacherPortal) return;
+    this.api.get<ClassOption[]>('/admin/classes').subscribe({
+      next: (c) => this.classes.set(c),
+    });
   }
 
   previewPdf(): void {

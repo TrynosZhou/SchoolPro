@@ -22,7 +22,8 @@ export const ADMIN_NAV_SECTIONS: NavSection[] = [
     items: [
       { label: 'Staff Directory', path: '/admin/staff' },
       { label: 'Payroll', path: '/admin/payroll' },
-      { label: 'Leave Requests', path: '/admin/staff-attendance' },
+      { label: 'Staff Attendance', path: '/admin/staff-attendance' },
+      { label: 'Leave Requests', path: '/admin/leave-requests' },
     ],
   },
 

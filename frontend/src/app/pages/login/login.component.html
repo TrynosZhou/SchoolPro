@@ -1,14 +1,11 @@
 <div class="login-shell">
   <div class="login-bg" aria-hidden="true">
-    <span class="orb orb-1"></span>
-    <span class="orb orb-2"></span>
-    <span class="orb orb-3"></span>
   </div>
 
   <nav class="public-nav" aria-label="Admissions">
     <a routerLink="/demo" class="public-nav-link demo-link">Try demo</a>
     <a routerLink="/apply/status" class="public-nav-link">Check status</a>
-    <a routerLink="/apply" class="apply-now-btn">🎓 Apply Now</a>
+    <a routerLink="/apply" class="apply-now-btn">Apply now</a>
   </nav>
 
   <div class="login-layout" [class.mode-signup]="mode() === 'signup'">
@@ -35,7 +32,6 @@
         <ul class="feature-list">
           @for (f of features; track f.title) {
             <li class="feature-item">
-              <span class="feature-icon">{{ f.icon }}</span>
               <div>
                 <strong>{{ f.title }}</strong>
                 <span>{{ f.text }}</span>
@@ -46,7 +42,7 @@
 
         <footer class="brand-footer">
           <span>© {{ currentYear }} School Pro Academy</span>
-          <span class="dot">·</span>
+          <span class="dot" aria-hidden="true">|</span>
           <span>Harare, Zimbabwe</span>
         </footer>
       </div>
@@ -78,19 +74,15 @@
           }
 
           @if (mode() === 'signin') {
-            <span class="signin-badge">Secure sign in</span>
             <h2>Welcome back</h2>
             <p>Enter your credentials to access your portal</p>
           } @else if (mode() === 'signup') {
-            <span class="signin-badge signup">Create account</span>
             <h2>Join School Pro</h2>
             <p>Parents can register to access the portal and link their children</p>
           } @else if (mode() === 'forgot') {
-            <span class="signin-badge">Account recovery</span>
             <h2>Forgot password?</h2>
             <p>Enter your username or email and we will send reset instructions if an account exists</p>
           } @else {
-            <span class="signin-badge">Account recovery</span>
             <h2>Set a new password</h2>
             <p>Choose a strong password for your account</p>
           }
@@ -101,7 +93,6 @@
             <div class="field role-select-field">
               <label for="signInRole">Sign in as</label>
               <div class="input-wrap">
-                <span class="input-icon" aria-hidden="true">🎭</span>
                 <select
                   id="signInRole"
                   [ngModel]="signInRole()"
@@ -147,7 +138,6 @@
                 }
               </label>
               <div class="input-wrap">
-                <span class="input-icon" aria-hidden="true">{{ isStudentRole() && mode() === 'signin' ? '🆔' : '👤' }}</span>
                 <input
                   id="username"
                   type="text"
@@ -173,7 +163,6 @@
             <div class="field" [class.has-error]="error()">
               <label for="signupEmail">Email address</label>
               <div class="input-wrap">
-                <span class="input-icon" aria-hidden="true">✉</span>
                 <input
                   id="signupEmail"
                   type="email"
@@ -191,7 +180,6 @@
             <div class="field">
               <label for="phone">Phone (optional)</label>
               <div class="input-wrap">
-                <span class="input-icon" aria-hidden="true">📱</span>
                 <input id="phone" type="tel" [(ngModel)]="signup.phone" name="phone" autocomplete="tel" placeholder="+263771000005" />
               </div>
             </div>
@@ -199,7 +187,6 @@
             <div class="field span-2">
               <label for="linkAdmission">First child's Student ID (optional)</label>
               <div class="input-wrap">
-                <span class="input-icon" aria-hidden="true">🔗</span>
                 <input
                   id="linkAdmission"
                   [(ngModel)]="signup.linkAdmissionNumber"
@@ -240,7 +227,6 @@
                 <label for="password">Date of birth or password</label>
               </div>
               <div class="input-wrap">
-                <span class="input-icon" aria-hidden="true">🔒</span>
                 <input
                   id="password"
                   [type]="showPassword() ? 'text' : 'password'"
@@ -256,7 +242,7 @@
                   (click)="togglePassword()"
                   [attr.aria-label]="showPassword() ? 'Hide password' : 'Show password'"
                 >
-                  {{ showPassword() ? '🙈' : '👁' }}
+                  {{ showPassword() ? 'Hide' : 'Show' }}
                 </button>
               </div>
               <small class="field-hint">
@@ -277,7 +263,6 @@
                 }
               </div>
               <div class="input-wrap">
-                <span class="input-icon" aria-hidden="true">🔒</span>
                 <input
                   id="password"
                   [type]="showPassword() ? 'text' : 'password'"
@@ -293,7 +278,7 @@
                   (click)="togglePassword()"
                   [attr.aria-label]="showPassword() ? 'Hide password' : 'Show password'"
                 >
-                  {{ showPassword() ? '🙈' : '👁' }}
+                  {{ showPassword() ? 'Hide' : 'Show' }}
                 </button>
               </div>
             </div>
@@ -303,7 +288,6 @@
             <div class="field">
               <label for="confirmPassword">Confirm password</label>
               <div class="input-wrap">
-                <span class="input-icon" aria-hidden="true">🔒</span>
                 <input
                   id="confirmPassword"
                   [type]="showPassword() ? 'text' : 'password'"
@@ -327,7 +311,6 @@
             <div class="field">
               <label for="resetConfirmPassword">Confirm new password</label>
               <div class="input-wrap">
-                <span class="input-icon" aria-hidden="true">🔒</span>
                 <input
                   id="resetConfirmPassword"
                   [type]="showPassword() ? 'text' : 'password'"

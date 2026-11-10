@@ -1,3 +1,5 @@
+@use '../../../styles/admin-classic' as classic;
+
 :host {
   display: block;
 }
@@ -817,3 +819,6 @@
     justify-content: space-between;
   }
 }
+
+// Classical navy & brass layer (shared with Login + Dashboard)
+@include classic.page;

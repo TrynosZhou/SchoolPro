@@ -17,6 +17,7 @@ import { ClassListComponent } from './pages/students/class-list.component';
 import { AdminReportCardsComponent } from './pages/admin/admin-report-cards.component';
 import { AdminStaffComponent } from './pages/admin/admin-staff.component';
 import { AdminStaffAttendanceComponent } from './pages/admin/admin-staff-attendance.component';
+import { AdminLeaveRequestsComponent } from './pages/admin/admin-leave-requests.component';
 import { AdminClassAssignmentsComponent } from './pages/admin/admin-class-assignments.component';
 import { TeacherDashboardComponent } from './pages/teacher/teacher-dashboard.component';
 import { TeacherExamsComponent } from './pages/teacher/teacher-exams.component';
@@ -181,6 +182,7 @@ export const routes: Routes = [
       { path: 'analytics/report-builder', component: AdminReportBuilderComponent },
       { path: 'classes', component: AdminDashboardComponent },
       { path: 'staff-attendance', component: AdminStaffAttendanceComponent },
+      { path: 'leave-requests', component: AdminLeaveRequestsComponent },
       { path: 'class-assignments', component: AdminClassAssignmentsComponent },
       { path: 'lms', component: LmsTeacherComponent },
       { path: 'library', component: LmsLibraryComponent },

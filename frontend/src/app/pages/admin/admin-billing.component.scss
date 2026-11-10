@@ -1,3 +1,5 @@
+@use '../../../styles/admin-classic' as classic;
+
 :host {
   display: block;
 }
@@ -1752,4 +1754,390 @@ td.owed strong { color: var(--color-negative); }
   .list-toolbar { padding: 0.85rem 1rem; }
   .card-grid { grid-template-columns: 1fr; padding: 0.85rem 1rem; }
   .bulk-summary-grid { grid-template-columns: 1fr 1fr; padding: 1rem; }
+}
+
+
+// =============================================================
+// Classical navy & brass layer (shared with Login, Dashboard,
+// Finance, Students …) + billing-specific refinements
+// =============================================================
+@include classic.page;
+
+.billing-page {
+  gap: var(--space-5);
+}
+
+// ── Header ──
+.hero {
+  .hero-copy .hero-sub {
+    max-width: 68ch;
+  }
+
+  .hero-copy .eyebrow::before {
+    content: '';
+    display: inline-block;
+    width: 1.5rem;
+    height: 1px;
+    margin-right: 0.6rem;
+    vertical-align: middle;
+    background: var(--brass);
+  }
+}
+
+// ── KPI tiles: a touch more air, label above-the-fold readable ──
+.kpi-grid .kpi {
+  padding: var(--space-5) var(--space-6);
+
+  .kpi-meta span {
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: var(--font-size-xs);
+  }
+}
+
+// ── Alert banner ──
+.alert-banner {
+  border-radius: 3px;
+  border-left: 3px solid var(--color-warning);
+  background: var(--color-bg);
+  color: var(--color-text-primary);
+}
+
+// ── Main shell + tab bar ──
+.list-shell {
+  border-top: 1px solid var(--color-border);
+}
+
+.tab-bar {
+  padding: 0 var(--space-5);
+}
+
+.tab-nav button {
+  font-size: 0.9rem;
+  letter-spacing: 0.01em;
+  padding: 0.95rem 1.1rem !important;
+}
+
+// Quiet the shortcut buttons in the tab bar (outlined, not solid)
+.tab-actions .btn-primary,
+.tab-actions .btn-primary.btn-sm {
+  background: var(--color-bg) !important;
+  color: var(--navy) !important;
+  border: 1px solid var(--color-border-strong) !important;
+  box-shadow: none !important;
+  font-weight: 600;
+
+  &:hover:not(:disabled) {
+    background: var(--color-bg-subtle) !important;
+    border-color: var(--navy) !important;
+    color: var(--navy) !important;
+  }
+}
+
+// ── Panels ──
+.panel-body {
+  padding: var(--space-6) var(--space-8);
+}
+
+.panel-head {
+  margin-bottom: var(--space-5);
+
+  .subtitle {
+    max-width: 62ch;
+  }
+}
+
+.subtitle {
+  font-size: var(--font-size-base);
+  color: var(--color-text-muted);
+}
+
+// Term selector
+.term-chips {
+  gap: 0;
+  margin-bottom: var(--space-5);
+}
+
+.term-chip {
+  border-radius: 0;
+  margin-right: -1px;
+  padding: 0.5rem 1.1rem;
+  background: var(--color-bg);
+  border-color: var(--color-border-strong);
+  color: var(--color-text-secondary);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+
+  &:first-child { border-radius: 2px 0 0 2px; }
+  &:last-child  { border-radius: 0 2px 2px 0; margin-right: 0; }
+
+  &:hover:not(.active) {
+    color: var(--navy);
+    background: var(--color-bg-subtle);
+  }
+
+  &.active {
+    position: relative;
+    z-index: 1;
+    background: var(--navy);
+    border-color: var(--navy);
+    color: #fff;
+    box-shadow: inset 0 -3px 0 var(--brass);
+  }
+
+  .current-dot {
+    border-radius: 2px;
+    background: var(--brass);
+    color: var(--navy);
+    font-size: 0.62rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+}
+
+// ── Forms ──
+.layout-split .pay-form,
+.pay-form {
+  gap: var(--space-4);
+}
+
+.layout-split .pay-form {
+  padding: var(--space-5) var(--space-6);
+  border: 1px solid var(--color-border);
+  border-top: 3px solid var(--brass);
+  border-radius: 3px;
+  background: var(--color-bg);
+}
+
+.field input,
+.field select {
+  padding: 0.65rem 0.8rem;
+  background: var(--color-bg);
+}
+
+.search-input {
+  border: 1px solid var(--color-border-strong);
+  box-shadow: none;
+}
+
+.student-search-field {
+  padding: var(--space-4) var(--space-5);
+  border-radius: 3px;
+  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--brass);
+  background: var(--color-bg-subtle);
+
+  .field-label {
+    font-size: var(--font-size-xs);
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--navy);
+  }
+}
+
+.btn-get-balance {
+  border-radius: 2px;
+  background: var(--navy);
+  box-shadow: inset 0 -3px 0 var(--brass);
+
+  &:hover:not(:disabled) { background: var(--navy-2); }
+}
+
+.match-card,
+.unpaid-item,
+.selected-student-card {
+  border-radius: 2px;
+}
+
+.match-card {
+  &:hover { border-color: var(--navy); box-shadow: 0 8px 20px -14px rgba(15, 29, 54, 0.45); }
+  &.selected { border-color: var(--navy); border-left: 3px solid var(--brass); background: var(--color-bg-subtle); }
+}
+
+.unpaid-item {
+  &:hover { border-color: var(--navy); background: var(--color-bg-subtle); }
+  &.selected { border-color: var(--navy); border-left: 3px solid var(--brass); background: var(--color-bg-subtle); }
+}
+
+.selected-student-card {
+  border-color: var(--color-border-strong);
+  border-left: 3px solid var(--brass);
+  background: var(--color-bg-subtle);
+}
+
+.search-no-result,
+.search-multi-hint {
+  border-radius: 2px;
+}
+
+.search-multi-hint {
+  color: var(--navy);
+  background: var(--color-bg-subtle);
+  border-color: var(--color-border-strong);
+}
+
+// ── Student record card ──
+.stu-profile-card {
+  border-radius: 3px;
+  border: 1px solid var(--color-border);
+  border-top: 3px solid var(--brass);
+  box-shadow: none;
+}
+
+.stu-card-header {
+  background: var(--color-bg-subtle);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.stu-avatar-lg {
+  background: var(--navy);
+  color: #e6d3a8;
+  border: 1px solid var(--brass);
+  box-shadow: none;
+  font-family: var(--serif);
+  font-size: 1.1rem;
+}
+
+.stu-card-title {
+  color: var(--brass-ink);
+  letter-spacing: 0.14em;
+}
+
+.stu-card-id {
+  border-radius: 2px;
+  background: var(--color-bg-muted);
+  border-color: var(--color-border);
+  color: var(--navy);
+}
+
+.stu-detail-value {
+  color: var(--navy);
+
+  &.gender-value[data-gender='male'],
+  &.gender-value[data-gender='female'] { color: var(--navy); }
+}
+
+.remove-student-btn {
+  border-radius: 2px;
+  color: var(--navy);
+  border-color: var(--color-border-strong);
+}
+
+.balance-amount {
+  font-family: var(--serif);
+  font-size: 2.2rem;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+// ── Side panel / tips ──
+.side-panel {
+  background: var(--color-bg-subtle);
+
+  h3 {
+    font-family: var(--serif);
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--navy);
+  }
+}
+
+.tips li::marker { color: var(--brass); }
+
+// ── Success / receipt ──
+.success-card {
+  .success-icon { border-radius: 50%; }
+  .rcpt-amt { font-family: var(--serif); font-weight: 600; letter-spacing: 0; font-size: 2rem; }
+  .rcpt-no { color: var(--brass-ink); }
+}
+
+// ── Tables ──
+.data-table {
+  thead th {
+    background: var(--color-bg-subtle);
+    color: var(--navy);
+    letter-spacing: 0.1em;
+  }
+
+  tbody tr:hover { background: var(--color-bg-subtle); }
+  tbody td { padding: 0.85rem 1rem; }
+}
+
+.invoices-table thead th { color: var(--navy); }
+
+.inv-no {
+  border-radius: 2px;
+  background: var(--color-bg-muted);
+  color: var(--navy);
+  border: 1px solid var(--color-border);
+  font-weight: 600;
+}
+
+.method {
+  border-radius: 2px;
+}
+
+// ── Cards (grid view) ──
+.invoice-card,
+.receipt-card {
+  border-radius: 3px;
+  border-top: 3px solid var(--brass);
+  box-shadow: none;
+
+  &:hover {
+    border-color: var(--color-border-strong);
+    border-top-color: var(--brass);
+    box-shadow: 0 10px 24px -16px rgba(15, 29, 54, 0.4);
+  }
+}
+
+.card-amounts {
+  border-radius: 2px;
+  border-left: 3px solid var(--brass);
+}
+
+.bulk-stat {
+  border-radius: 3px;
+}
+
+// ── Modal ──
+.modal-head .modal-eyebrow {
+  color: var(--brass-ink);
+  letter-spacing: 0.14em;
+}
+
+.modal-head h3 {
+  font-family: var(--serif);
+  font-size: 1.6rem;
+  font-weight: 600;
+  line-height: 1.1;
+  color: var(--navy);
+}
+
+.bulk-result,
+.bulk-note { border-radius: 2px; }
+
+// ── Dark theme touch-ups ──
+:host-context([data-theme='dark']) {
+  .stu-detail-value,
+  .stu-card-id,
+  .inv-no,
+  .data-table thead th,
+  .invoices-table thead th,
+  .side-panel h3,
+  .modal-head h3,
+  .student-search-field .field-label,
+  .search-multi-hint {
+    color: var(--color-text-primary);
+  }
+
+  .tab-actions .btn-primary,
+  .tab-actions .btn-primary.btn-sm {
+    background: transparent !important;
+    color: #e6d3a8 !important;
+  }
+
+  .stu-card-title,
+  .success-card .rcpt-no { color: #d8bd86; }
 }

@@ -1,3 +1,4 @@
+import { approvedAnnualLeaveDaysInMonth } from './leave-request.service';
 import { AppDataSource } from '../config/data-source';
 import { postPayrollPaymentToGl } from './gl-posting.service';
 import { PayrollRun, Payslip, Staff, StaffLeaveBalance, StaffPayrollProfile } from '../entities';
@@ -348,7 +349,9 @@ export async function createRun(
     if (!staff || !profile) continue;
     const calc = calcFromProfile(profile);
     const staffName = `${staff.user.firstName} ${staff.user.lastName}`.trim();
-    const leave = await applyMonthlyLeaveAccrual(staff.id, profile, 0);
+    // Approved annual leave inside this month becomes "leave taken" on the payslip.
+    const leaveTaken = await approvedAnnualLeaveDaysInMonth(staff.id, year, month);
+    const leave = await applyMonthlyLeaveAccrual(staff.id, profile, leaveTaken);
     await payslipRepo.save(
       payslipRepo.create({
         payrollRunId: run.id,

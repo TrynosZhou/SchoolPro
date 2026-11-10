@@ -1,3 +1,5 @@
+@use '../../../styles/admin-classic' as classic;
+
 :host {
   display: block;
 }
@@ -591,3 +593,7 @@
     cursor: not-allowed;
   }
 }
+
+// Classical navy & brass layer (shared with Login, Dashboard, Students, Staff)
+@include classic.page;
+@include classic.page-extras;

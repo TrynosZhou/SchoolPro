@@ -1,0 +1,246 @@
+<app-portal-layout portalTitle="Admin Portal" pageTitle="Leave Requests" [navSections]="adminNav">
+  <div class="leave-page">
+    @if (toast(); as t) {
+      <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>
+    }
+
+    <header class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">Human Resources</p>
+        <h2>Leave requests</h2>
+        <p class="hero-sub">
+          Review staff leave applications, record leave on behalf of a colleague, and keep track of who is away.
+        </p>
+      </div>
+      <div class="hero-actions">
+        <button type="button" class="primary-action" (click)="openNew()" [disabled]="apiMissing()">+ New request</button>
+        <button type="button" class="refresh-action" (click)="load()" [disabled]="loading()">Refresh</button>
+      </div>
+    </header>
+
+    @if (apiMissing()) {
+      <div class="alert-banner" role="alert">
+        The leave requests service is not available on the server yet. This page expects
+        <code>GET /leave-requests</code>, <code>POST /leave-requests</code>,
+        <code>PATCH /leave-requests/:id/review</code> and <code>PATCH /leave-requests/:id/cancel</code>.
+      </div>
+    }
+
+    <div class="kpi-grid">
+      <article class="kpi warn">
+        <div class="kpi-meta">
+          <strong>{{ stats().pending }}</strong>
+          <span>Awaiting decision</span>
+        </div>
+      </article>
+      <article class="kpi">
+        <div class="kpi-meta">
+          <strong>{{ stats().onLeave }}</strong>
+          <span>Away today</span>
+        </div>
+      </article>
+      <article class="kpi">
+        <div class="kpi-meta">
+          <strong>{{ stats().approvedMonth }}</strong>
+          <span>Approved this month</span>
+        </div>
+      </article>
+      <article class="kpi">
+        <div class="kpi-meta">
+          <strong>{{ stats().rejected }}</strong>
+          <span>Rejected</span>
+        </div>
+      </article>
+    </div>
+
+    <section class="list-shell">
+      <div class="list-toolbar">
+        <div class="search-wrap">
+          <input
+            type="search"
+            class="search-input"
+            placeholder="Search by staff name, ID, department or leave type…"
+            [ngModel]="search()"
+            (ngModelChange)="search.set($event)"
+            name="leaveSearch"
+          />
+        </div>
+        <div class="filter-chips" role="group" aria-label="Filter by status">
+          @for (f of filters; track f.value) {
+            <button type="button" class="chip" [class.active]="statusFilter() === f.value" (click)="statusFilter.set(f.value)">
+              {{ f.label }} <span class="chip-count">{{ countFor(f.value) }}</span>
+            </button>
+          }
+        </div>
+      </div>
+
+      @if (loading()) {
+        <div class="state-block"><span class="spinner"></span><p>Loading leave requests…</p></div>
+      } @else if (filtered().length) {
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Staff member</th>
+                <th>Leave type</th>
+                <th>From</th>
+                <th>To</th>
+                <th class="num">Days</th>
+                <th>Status</th>
+                <th class="col-actions">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (r of filtered(); track r.id) {
+                <tr>
+                  <td>
+                    <div class="who">
+                      <span class="avatar">{{ initials(staffOf(r)) }}</span>
+                      <div>
+                        <strong>{{ staffName(staffOf(r)) }}</strong>
+                        <small>{{ staffOf(r)?.employeeNumber || '—' }} · {{ staffOf(r)?.department || '—' }}</small>
+                      </div>
+                    </div>
+                  </td>
+                  <td>{{ typeLabel(r.leaveType) }}</td>
+                  <td>{{ r.startDate | date: 'dd MMM yyyy' }}</td>
+                  <td>{{ r.endDate | date: 'dd MMM yyyy' }}</td>
+                  <td class="num">{{ r.days }}</td>
+                  <td><span class="status-badge" [class]="'status-badge status-' + r.status">{{ statusLabel(r.status) }}</span></td>
+                  <td class="col-actions">
+                    <button type="button" class="act-btn" (click)="openDetail(r)">
+                      {{ r.status === 'pending' ? 'Review' : 'View' }}
+                    </button>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      } @else {
+        <div class="state-block">
+          <h3>{{ requests().length ? 'No requests match' : 'No leave requests yet' }}</h3>
+          <p>
+            {{ requests().length ? 'Try another status or clear the search.' : 'Requests will appear here once staff apply, or record one yourself with “New request”.' }}
+          </p>
+        </div>
+      }
+    </section>
+  </div>
+</app-portal-layout>
+
+@if (newOpen()) {
+  <div class="modal-backdrop" (click)="closeNew()"></div>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="newLeaveTitle">
+    <header class="modal-head">
+      <div>
+        <p class="eyebrow">Leave request</p>
+        <h2 id="newLeaveTitle">Record leave</h2>
+      </div>
+      <button type="button" class="modal-close" (click)="closeNew()" aria-label="Close">×</button>
+    </header>
+
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="mfield full">
+          <label for="lrStaff">Staff member</label>
+          <select id="lrStaff" [(ngModel)]="form.staffId" name="lrStaff">
+            <option value="">Select staff member…</option>
+            @for (s of activeStaff(); track s.id) {
+              <option [value]="s.id">{{ staffName(s) }} · {{ s.employeeNumber }}</option>
+            }
+          </select>
+          @if (form.staffId && balanceFor(form.staffId) !== null) {
+            <small class="hint">Annual leave balance: {{ balanceFor(form.staffId) }} days</small>
+          }
+        </div>
+        <div class="mfield full">
+          <label for="lrType">Leave type</label>
+          <select id="lrType" [(ngModel)]="form.leaveType" name="lrType">
+            @for (t of leaveTypes; track t.value) {
+              <option [value]="t.value">{{ t.label }}</option>
+            }
+          </select>
+        </div>
+        <div class="mfield">
+          <label for="lrFrom">First day</label>
+          <input id="lrFrom" type="date" [(ngModel)]="form.startDate" name="lrFrom" />
+        </div>
+        <div class="mfield">
+          <label for="lrTo">Last day</label>
+          <input id="lrTo" type="date" [(ngModel)]="form.endDate" name="lrTo" [min]="form.startDate" />
+        </div>
+        <div class="mfield full">
+          <label for="lrReason">Reason (optional)</label>
+          <textarea id="lrReason" rows="3" [(ngModel)]="form.reason" name="lrReason"></textarea>
+        </div>
+      </div>
+
+      <p class="modal-note">
+        {{ formDayCount() }} working {{ formDayCount() === 1 ? 'day' : 'days' }} (weekends excluded).
+      </p>
+      @if (formBalanceWarning(); as w) {
+        <p class="modal-note warn">{{ w }}</p>
+      }
+
+      <label class="check">
+        <input type="checkbox" [(ngModel)]="form.approveNow" name="lrApprove" />
+        Approve immediately
+      </label>
+    </div>
+
+    <footer class="modal-actions">
+      <button type="button" class="btn-secondary" (click)="closeNew()" [disabled]="saving()">Cancel</button>
+      <button type="button" class="btn-primary" (click)="submitNew()" [disabled]="saving()">
+        {{ saving() ? 'Saving…' : 'Save request' }}
+      </button>
+    </footer>
+  </div>
+}
+
+@if (detail(); as d) {
+  <div class="modal-backdrop" (click)="closeDetail()"></div>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="leaveDetailTitle">
+    <header class="modal-head">
+      <div>
+        <p class="eyebrow">{{ typeLabel(d.leaveType) }}</p>
+        <h2 id="leaveDetailTitle">{{ staffName(staffOf(d)) }}</h2>
+        <span class="status-badge" [class]="'status-badge status-' + d.status">{{ statusLabel(d.status) }}</span>
+      </div>
+      <button type="button" class="modal-close" (click)="closeDetail()" aria-label="Close">×</button>
+    </header>
+
+    <div class="modal-body">
+      <dl class="detail-grid">
+        <div><dt>First day</dt><dd>{{ d.startDate | date: 'EEE, dd MMM yyyy' }}</dd></div>
+        <div><dt>Last day</dt><dd>{{ d.endDate | date: 'EEE, dd MMM yyyy' }}</dd></div>
+        <div><dt>Working days</dt><dd>{{ d.days }}</dd></div>
+        <div>
+          <dt>Annual leave balance</dt>
+          <dd>{{ balanceFor(d.staffId) !== null ? balanceFor(d.staffId) + ' days' : '—' }}</dd>
+        </div>
+        <div class="full"><dt>Reason</dt><dd>{{ d.reason || 'No reason given.' }}</dd></div>
+        @if (d.status !== 'pending' && d.reviewNote) {
+          <div class="full"><dt>Decision note</dt><dd>{{ d.reviewNote }}</dd></div>
+        }
+      </dl>
+
+      @if (d.status === 'pending') {
+        <div class="mfield">
+          <label for="lrNote">Note to staff member</label>
+          <textarea id="lrNote" rows="3" [(ngModel)]="reviewNote" name="lrNote" placeholder="Required when rejecting"></textarea>
+        </div>
+      }
+    </div>
+
+    <footer class="modal-actions">
+      <button type="button" class="btn-secondary" (click)="closeDetail()" [disabled]="saving()">Close</button>
+      @if (d.status === 'pending') {
+        <button type="button" class="btn-danger" (click)="review('rejected')" [disabled]="saving()">Reject</button>
+        <button type="button" class="btn-primary" (click)="review('approved')" [disabled]="saving()">Approve</button>
+      } @else if (d.status === 'approved' && d.endDate.slice(0, 10) >= todayIso) {
+        <button type="button" class="btn-danger" (click)="cancelRequest()" [disabled]="saving()">Cancel leave</button>
+      }
+    </footer>
+  </div>
+}

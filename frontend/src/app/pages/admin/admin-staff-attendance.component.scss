@@ -1,9 +1,14 @@
+@use '../../../styles/admin-classic' as classic;
+
 :host {
   display: block;
 }
 
 .staff-attendance-page {
   max-width: 960px;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
 }
 
 .toast {
@@ -395,3 +400,7 @@
     color: #0d9488;
   }
 }
+
+// Classical navy & brass layer (shared with Login, Dashboard, Students, Staff)
+@include classic.page;
+@include classic.page-extras;

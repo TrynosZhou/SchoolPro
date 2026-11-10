@@ -1,3 +1,6 @@
+@use '../../../styles/admin-classic' as classic;
+@use '../../../styles/classic-academics' as academics;
+
 :host {
   display: block;
   --settings-accent: #4f46e5;
@@ -1344,3 +1347,7 @@
     justify-content: flex-start;
   }
 }
+
+// Classical navy & brass layer (shared with Login, Dashboard and Students)
+@include classic.page;
+@include academics.page;

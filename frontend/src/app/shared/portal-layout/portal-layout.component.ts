@@ -717,6 +717,7 @@ export class PortalLayoutComponent implements OnInit, OnChanges, OnDestroy {
     'report builder': 'fin-reports',
     payroll: 'staff',
     'leave requests': 'staff',
+    'staff attendance': 'staff',
     announcements: 'communication',
     messages: 'communication',
     'bulk sms / email': 'communication',

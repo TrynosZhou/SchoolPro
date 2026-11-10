@@ -1,3 +1,5 @@
+@use '../../../styles/admin-classic' as classic;
+
 :host {
   display: block;
 }
@@ -1007,3 +1009,6 @@
     justify-content: flex-end;
   }
 }
+
+// Classical navy & brass layer (shared with Login + Dashboard)
+@include classic.page;

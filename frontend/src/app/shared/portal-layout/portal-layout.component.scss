@@ -1,9 +1,9 @@
 // Dark sidebar — matching reference
-$sidebar-bg: #1a2550;
+$sidebar-bg: #0f1d36;
 $sidebar-border: rgba(255, 255, 255, 0.05);
 $nav-text: #a0aec0;
 $nav-text-hover: #ffffff;
-$nav-active-bg: #4f5fe8;
+$nav-active-bg: #b8924a;
 $nav-active-text: #ffffff;
 $nav-group-label: #718096;
 $sidebar-width: 260px;
@@ -306,7 +306,7 @@ $sidebar-transition: 0.2s ease;
   }
 
   &.active {
-    background: rgba(79, 95, 232, 0.22);
+    background: rgba(184, 146, 74, 0.22);
     color: $nav-active-text;
     font-weight: 600;
   }
@@ -368,7 +368,7 @@ $sidebar-transition: 0.2s ease;
     background: $nav-active-bg;
     color: $nav-active-text;
     font-weight: 600;
-    box-shadow: 0 4px 12px rgba(79, 95, 232, 0.4);
+    box-shadow: 0 4px 12px rgba(184, 146, 74, 0.4);
 
     .nav-item-icon {
       color: $nav-active-text;
@@ -530,7 +530,7 @@ $sidebar-transition: 0.2s ease;
   align-items: center;
   gap: 2rem;
   height: var(--appbar-h);
-  background: #1a2550;
+  background: #0f1d36;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   padding: 0 2rem;
   color: #ffffff;
@@ -570,8 +570,8 @@ $sidebar-transition: 0.2s ease;
     &:focus {
       outline: none;
       background: #ffffff;
-      border-color: #4f5fe8;
-      box-shadow: 0 0 0 3px rgba(79, 95, 232, 0.1);
+      border-color: #b8924a;
+      box-shadow: 0 0 0 3px rgba(184, 146, 74, 0.1);
     }
   }
 }
@@ -614,7 +614,7 @@ $sidebar-transition: 0.2s ease;
     width: 0.5rem;
     height: 0.5rem;
     background: #ef4444;
-    border: 2px solid #1a2550;
+    border: 2px solid #0f1d36;
     border-radius: 50%;
   }
 }
@@ -641,7 +641,7 @@ $sidebar-transition: 0.2s ease;
     width: 2.5rem;
     height: 2.5rem;
     border-radius: 50%;
-    background: #4f5fe8;
+    background: #b8924a;
     color: #ffffff;
     display: flex;
     align-items: center;
@@ -744,10 +744,10 @@ $sidebar-transition: 0.2s ease;
 
     &:hover {
       background: #f1f5f9;
-      color: #4f5fe8;
+      color: #b8924a;
 
       svg {
-        color: #4f5fe8;
+        color: #b8924a;
       }
     }
 
@@ -784,12 +784,12 @@ $sidebar-transition: 0.2s ease;
     width: 2.5rem;
     height: 2.5rem;
     border-radius: 10px;
-    background: #4f5fe8;
+    background: #b8924a;
     display: flex;
     align-items: center;
     justify-content: center;
     color: #ffffff;
-    box-shadow: 0 4px 12px rgba(79, 95, 232, 0.3);
+    box-shadow: 0 4px 12px rgba(184, 146, 74, 0.3);
 
     svg {
       width: 1.5rem;
@@ -1910,4 +1910,77 @@ $sidebar-transition: 0.2s ease;
 @keyframes fade-in {
   from { opacity: 0; }
   to { opacity: 1; }
+}
+
+// ── Classical navy & brass refresh (override layer) ───────────
+.brand-text strong {
+  font-family: 'Cormorant Garamond', Georgia, 'Times New Roman', serif;
+  font-size: 1.3rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  white-space: normal;
+  line-height: 1.05;
+}
+
+.topbar {
+  background: #0f1d36;
+  border-bottom: 1px solid rgba(184, 146, 74, 0.35);
+}
+
+.nav-group-label {
+  color: #d8bd86;
+  opacity: 0.7;
+  letter-spacing: 0.1em;
+}
+
+.nav-item {
+  border-radius: 2px 8px 8px 2px;
+  border-left: 3px solid transparent;
+
+  &.active {
+    background: rgba(184, 146, 74, 0.14);
+    border-left-color: #b8924a;
+    box-shadow: none;
+    color: #ffffff;
+
+    .nav-item-icon {
+      color: #d8bd86;
+    }
+  }
+}
+
+// ── Expandable menus: keep toggles aligned and clearly show state ──
+.nav-menu-toggle {
+  border-left: 3px solid transparent;
+  border-radius: 2px 8px 8px 2px;
+}
+
+.nav-section.has-active > .nav-menu-toggle {
+  border-left-color: #b8924a;
+}
+
+.nav-section.open > .nav-menu-toggle {
+  background: rgba(255, 255, 255, 0.04);
+  color: #ffffff;
+}
+
+.nav-menu-chevron {
+  color: #d8bd86;
+  opacity: 0.85;
+}
+
+.nav-submenu {
+  border-left-color: rgba(184, 146, 74, 0.35);
+}
+
+.nav-subitem.active {
+  background: rgba(184, 146, 74, 0.14);
+  box-shadow: inset 2px 0 0 #b8924a;
+}
+
+.nav-menu-toggle:focus-visible,
+.nav-item:focus-visible,
+.nav-subitem:focus-visible {
+  outline: 2px solid #d8bd86;
+  outline-offset: -2px;
 }
