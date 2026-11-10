@@ -1,6 +1,7 @@
 import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
+import { firstValueFrom } from 'rxjs';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
 import { ApiService } from '../../core/services/api.service';
@@ -44,6 +45,9 @@ type PromotionPreview =
   | { kind: 'completion'; label: string }
   | { kind: 'missing' };
 
+/** Special selection value meaning "every class that has students and a promotion rule". */
+const ALL_CLASSES = '__ALL__';
+
 function schoolYearCalendarYear(y: SchoolYearRow): number {
   const matches = String(y.name).match(/20\d{2}/g);
   if (matches?.length) return parseInt(matches[0], 10);
@@ -71,8 +75,9 @@ export class AdminClassPromotionComponent implements OnInit {
   promotionRules = signal<PromotionRuleRow[]>([]);
   lastResult = signal<PromotionResult | null>(null);
 
-  selectedCompletingYearId = '';
-  selectedClassId = '';
+  selectedCompletingYearId = signal('');
+  selectedClassId = signal('');
+  readonly allClassesId = ALL_CLASSES;
   classSearch = signal('');
   formFilter = signal('all');
 
@@ -81,7 +86,7 @@ export class AdminClassPromotionComponent implements OnInit {
   );
 
   completingYear = computed(() =>
-    this.years().find((y) => y.id === this.selectedCompletingYearId) ?? null,
+    this.years().find((y) => y.id === this.selectedCompletingYearId()) ?? null,
   );
 
   targetYear = computed(() => {
@@ -140,10 +145,29 @@ export class AdminClassPromotionComponent implements OnInit {
     };
   });
 
+  isAllSelected = computed(() => this.selectedClassId() === ALL_CLASSES);
+
+  /** Classes that will be promoted in "All classes" mode: have students AND an active rule. */
+  eligibleClasses = computed(() =>
+    this.classes().filter((c) => this.classStudentCount(c) > 0 && this.hasPromotionRule(c.id)),
+  );
+
+  eligibleStudentTotal = computed(() =>
+    this.eligibleClasses().reduce((sum, c) => sum + this.classStudentCount(c), 0),
+  );
+
+  /** Classes skipped in "All classes" mode. */
+  skippedSummary = computed(() => {
+    const classes = this.classes();
+    const empty = classes.filter((c) => this.classStudentCount(c) === 0).length;
+    const noRule = classes.filter((c) => this.classStudentCount(c) > 0 && !this.hasPromotionRule(c.id)).length;
+    return { empty, noRule };
+  });
+
   promotionPreview = computed((): PromotionPreview | null => {
-    if (!this.selectedClassId) return null;
+    if (!this.selectedClassId() || this.isAllSelected()) return null;
     const rule = this.promotionRules().find(
-      (r) => r.fromClassId === this.selectedClassId && r.isActive,
+      (r) => r.fromClassId === this.selectedClassId() && r.isActive,
     );
     if (!rule) return { kind: 'missing' };
     if (rule.completionLabel) return { kind: 'completion', label: rule.completionLabel };
@@ -153,14 +177,17 @@ export class AdminClassPromotionComponent implements OnInit {
 
   canPromote = computed(
     () =>
-      Boolean(this.selectedCompletingYearId) &&
-      Boolean(this.selectedClassId) &&
+      Boolean(this.selectedCompletingYearId()) &&
+      Boolean(this.selectedClassId()) &&
       Boolean(this.targetYear()) &&
-      this.promotionPreview()?.kind !== 'missing',
+      (this.isAllSelected()
+        ? this.eligibleClasses().length > 0
+        : this.promotionPreview()?.kind !== 'missing'),
   );
 
   selectedClassLabel = computed(() => {
-    const c = this.classes().find((row) => row.id === this.selectedClassId);
+    if (this.isAllSelected()) return 'All classes';
+    const c = this.classes().find((row) => row.id === this.selectedClassId());
     return c ? this.classLabel(c) : '';
   });
 
@@ -190,8 +217,8 @@ export class AdminClassPromotionComponent implements OnInit {
     this.api.get<SchoolYearRow[]>('/admin/school-years').subscribe({
       next: (y) => {
         this.years.set(y);
-        if (!this.selectedCompletingYearId) {
-          this.selectedCompletingYearId = this.defaultCompletingYearId(y);
+        if (!this.selectedCompletingYearId()) {
+          this.selectedCompletingYearId.set(this.defaultCompletingYearId(y));
         }
         yearsDone = true;
         finish();
@@ -255,17 +282,20 @@ export class AdminClassPromotionComponent implements OnInit {
   }
 
   selectedClassStudentCount(): number {
-    const c = this.classes().find((row) => row.id === this.selectedClassId);
+    if (this.selectedClassId() === ALL_CLASSES) {
+      return this.eligibleClasses().reduce((sum, c) => sum + this.classStudentCount(c), 0);
+    }
+    const c = this.classes().find((row) => row.id === this.selectedClassId());
     return c ? this.classStudentCount(c) : 0;
   }
 
   selectClass(classId: string) {
-    this.selectedClassId = classId;
+    this.selectedClassId.set(classId);
     this.lastResult.set(null);
   }
 
   promote() {
-    if (!this.selectedCompletingYearId || !this.selectedClassId) {
+    if (!this.selectedCompletingYearId() || !this.selectedClassId()) {
       this.showToast('error', 'Select the completing school year and a class.');
       return;
     }
@@ -278,13 +308,18 @@ export class AdminClassPromotionComponent implements OnInit {
       return;
     }
 
+    if (this.isAllSelected()) {
+      void this.promoteAll(target);
+      return;
+    }
+
     const preview = this.promotionPreview();
     if (preview?.kind === 'missing') {
       this.showToast('error', 'Configure a promotion rule for this class in Academic Settings.');
       return;
     }
 
-    const from = this.classLabel(this.classes().find((c) => c.id === this.selectedClassId)!);
+    const from = this.classLabel(this.classes().find((c) => c.id === this.selectedClassId())!);
     const completing = this.completingYear()!.name;
     const into = target.name;
     const destination =
@@ -301,9 +336,9 @@ export class AdminClassPromotionComponent implements OnInit {
     this.promoting.set(true);
     this.api
       .post<PromotionResult>('/admin/class-promotion/promote', {
-        completingSchoolYearId: this.selectedCompletingYearId,
+        completingSchoolYearId: this.selectedCompletingYearId(),
         targetSchoolYearId: target.id,
-        classId: this.selectedClassId,
+        classId: this.selectedClassId(),
       })
       .subscribe({
         next: (r) => {
@@ -317,6 +352,83 @@ export class AdminClassPromotionComponent implements OnInit {
           this.showToast('error', e.error?.message || 'Promotion failed');
         },
       });
+  }
+
+  /**
+   * Promote every class that has students and an active rule.
+   * Classes with no students (or no rule) are skipped.
+   * Highest forms are promoted first so a student moved up from a lower class
+   * can never be picked up and promoted a second time.
+   */
+  private async promoteAll(target: SchoolYearRow) {
+    const eligible = [...this.eligibleClasses()].sort(
+      (a, b) =>
+        (b.form?.level ?? 0) - (a.form?.level ?? 0) ||
+        this.classLabel(a).localeCompare(this.classLabel(b)),
+    );
+    if (!eligible.length) {
+      this.showToast('error', 'No class has both students and an active promotion rule.');
+      return;
+    }
+
+    const skipped = this.skippedSummary();
+    const totalStudents = this.selectedClassStudentCount();
+    const completing = this.completingYear()!;
+
+    if (
+      !confirm(
+        `Year-end promotion: move ALL active students in ${eligible.length} class(es) ` +
+          `(${totalStudents} student(s)) from school year ${completing.name} into ${target.name}?\n\n` +
+          `Skipped: ${skipped.empty} class(es) with no students` +
+          (skipped.noRule ? `, ${skipped.noRule} class(es) with students but no promotion rule` : '') +
+          '.',
+      )
+    ) {
+      return;
+    }
+
+    this.promoting.set(true);
+    let promoted = 0;
+    const failed: string[] = [];
+
+    for (const c of eligible) {
+      try {
+        const r = await firstValueFrom(
+          this.api.post<PromotionResult>('/admin/class-promotion/promote', {
+            completingSchoolYearId: completing.id,
+            targetSchoolYearId: target.id,
+            classId: c.id,
+          }),
+        );
+        promoted += r?.promoted ?? 0;
+      } catch {
+        failed.push(this.classLabel(c));
+      }
+    }
+
+    this.promoting.set(false);
+
+    const done = eligible.length - failed.length;
+    let message = `${done} of ${eligible.length} class(es) promoted into ${target.name}. ` +
+      `Skipped ${skipped.empty} empty class(es)` +
+      (skipped.noRule ? ` and ${skipped.noRule} class(es) without a rule` : '') +
+      '.';
+    if (failed.length) message += ` Failed: ${failed.join(', ')}.`;
+
+    this.lastResult.set({
+      promoted,
+      completingSchoolYearId: completing.id,
+      targetSchoolYearId: target.id,
+      fromClassId: ALL_CLASSES,
+      message,
+    });
+    this.load(true);
+    this.showToast(
+      failed.length ? 'error' : 'success',
+      failed.length
+        ? `Promoted ${promoted} student(s); ${failed.length} class(es) failed: ${failed.join(', ')}`
+        : `Promoted ${promoted} student(s) across ${done} class(es).`,
+    );
   }
 
   private showToast(type: 'success' | 'error', msg: string) {

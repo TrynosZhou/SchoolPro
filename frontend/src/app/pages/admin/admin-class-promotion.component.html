@@ -80,7 +80,7 @@
           <div class="year-grid">
             <div class="field">
               <label for="completingYearId">School year completing *</label>
-              <select [(ngModel)]="selectedCompletingYearId" id="completingYearId" name="completingYearId">
+              <select [ngModel]="selectedCompletingYearId()" (ngModelChange)="selectedCompletingYearId.set($event)" id="completingYearId" name="completingYearId">
                 <option value="">— Select year —</option>
                 @for (y of sortedYears(); track y.id) {
                   <option [value]="y.id">{{ y.name }} ({{ y.startDate }} → {{ y.endDate }})</option>
@@ -106,7 +106,7 @@
           </div>
         </div>
 
-        @if (selectedClassId && completingYear() && targetYear()) {
+        @if (selectedClassId() && completingYear() && targetYear()) {
           <div class="preview-panel">
             <div class="preview-step from">
               <span class="step-label">From</span>
@@ -117,6 +117,10 @@
             <div class="preview-arrow">➜</div>
             <div class="preview-step to">
               <span class="step-label">To</span>
+              @if (isAllSelected()) {
+                <strong>Each class's configured destination</strong>
+                <span>{{ targetYear()!.name }} · {{ eligibleClasses().length }} class(es)</span>
+              }
               @if (promotionPreview(); as preview) {
                 @if (preview.kind === 'missing') {
                   <strong class="missing-text">No rule configured</strong>
@@ -164,11 +168,24 @@
           </div>
 
           <div class="class-grid">
+            <button
+              type="button"
+              class="class-card all-card"
+              [class.active]="isAllSelected()"
+              (click)="selectClass(allClassesId)"
+            >
+              <div class="class-card-top">
+                <strong>All classes</strong>
+                <span class="rule-badge">{{ eligibleClasses().length }} to promote</span>
+              </div>
+              <span class="form-name">Every form — empty classes and classes without a rule are skipped</span>
+              <span class="student-count">{{ eligibleStudentTotal() }} student{{ eligibleStudentTotal() === 1 ? '' : 's' }}</span>
+            </button>
             @for (c of visibleClasses(); track c.id) {
               <button
                 type="button"
                 class="class-card"
-                [class.active]="selectedClassId === c.id"
+                [class.active]="selectedClassId() === c.id"
                 [class.no-rule]="!hasPromotionRule(c.id)"
                 (click)="selectClass(c.id)"
               >
@@ -191,7 +208,16 @@
 
         <div class="action-bar">
           <div class="action-copy">
-            @if (canPromote()) {
+            @if (canPromote() && isAllSelected()) {
+              <strong>Ready to promote all classes</strong>
+              <span>
+                {{ eligibleClasses().length }} class(es), {{ stats().studentsInSelected }} student(s) for {{ completingYear()?.name }}.
+                Skipping {{ skippedSummary().empty }} empty{{ skippedSummary().noRule ? ' and ' + skippedSummary().noRule + ' without a rule' : '' }}.
+              </span>
+            } @else if (isAllSelected() && targetYear()) {
+              <strong>Nothing to promote</strong>
+              <span>No class has both students and an active promotion rule.</span>
+            } @else if (canPromote()) {
               <strong>Ready to promote</strong>
               <span>{{ stats().studentsInSelected }} student(s) in {{ selectedClassLabel() }} for {{ completingYear()?.name }}.</span>
             } @else if (!targetYear() && completingYear()) {
@@ -206,7 +232,7 @@
             }
           </div>
           <button type="button" class="btn-primary" (click)="promote()" [disabled]="promoting() || !canPromote()">
-            {{ promoting() ? 'Promoting…' : 'Promote for coming year' }}
+            {{ promoting() ? 'Promoting…' : isAllSelected() ? 'Promote all classes' : 'Promote for coming year' }}
           </button>
         </div>
       </section>

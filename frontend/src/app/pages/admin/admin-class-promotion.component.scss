@@ -597,3 +597,25 @@
 // Classical navy & brass layer (shared with Login, Dashboard, Students, Staff)
 @include classic.page;
 @include classic.page-extras;
+
+
+// "All classes" card — full-width, sits first in the class grid
+.class-card.all-card {
+  grid-column: 1 / -1;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 1rem;
+  border-style: solid;
+  border-width: 1px;
+  background: #f8fafc;
+
+  .class-card-top {
+    width: auto;
+    gap: 0.75rem;
+  }
+
+  .form-name {
+    flex: 1 1 14rem;
+  }
+}
