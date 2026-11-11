@@ -36,6 +36,7 @@ async function sendTwilioMessage(params: {
   body?: string;
   contentSid?: string;
   contentVariables?: string;
+  mediaUrl?: string;
 }): Promise<TwilioSendResult> {
   try {
     const url = `https://api.twilio.com/2010-04-01/Accounts/${params.accountSid}/Messages.json`;
@@ -49,6 +50,7 @@ async function sendTwilioMessage(params: {
     } else if (params.body) {
       form.set('Body', params.body);
     }
+    if (params.mediaUrl) form.set('MediaUrl', params.mediaUrl);
     const statusCallback = getStatusCallbackUrl();
     if (statusCallback) form.set('StatusCallback', statusCallback);
 
@@ -237,5 +239,39 @@ export async function sendResultSms(params: {
     from: smsFrom,
     to,
     body,
+  });
+}
+
+/**
+ * Report-card delivery over WhatsApp: a text summary (readable without internet/PDF viewer)
+ * plus an optional PDF attached via a publicly reachable URL.
+ */
+export async function sendReportCardWhatsApp(params: {
+  parentPhone: string;
+  body: string;
+  pdfUrl?: string;
+}): Promise<TwilioSendResult> {
+  if (tenantContext.isDemo()) {
+    console.log(`[WhatsApp DEMO MOCK] report card → ${params.parentPhone}`);
+    return { success: true, sid: `DEMO-WA-${Date.now()}`, mocked: true };
+  }
+
+  const whatsapp = await getEffectiveWhatsApp();
+  const to = params.parentPhone.startsWith('whatsapp:')
+    ? params.parentPhone
+    : `whatsapp:${params.parentPhone}`;
+
+  if (whatsapp.useMock || !whatsapp.accountSid || !whatsapp.authToken || !whatsapp.from) {
+    console.log(`[WhatsApp mock] report card → ${to} | ${params.body}`);
+    return { success: true, sid: `MOCK-WA-${Date.now()}`, mocked: true };
+  }
+
+  return sendTwilioMessage({
+    accountSid: whatsapp.accountSid,
+    authToken: whatsapp.authToken,
+    from: normalizeWhatsAppFrom(whatsapp.from),
+    to,
+    body: params.body,
+    mediaUrl: params.pdfUrl,
   });
 }

@@ -151,7 +151,7 @@ export async function processResultNotificationJob(
 }
 
 /** Prefer dedicated WhatsApp phone, then guardian phone, then linked parent account phone. */
-function resolveGuardianNotifyPhone(guardian: Guardian): string {
+export function resolveGuardianNotifyPhone(guardian: Guardian): string {
   const raw =
     guardian.guardianPhone?.trim() ||
     guardian.phone?.trim() ||
@@ -164,7 +164,7 @@ function resolveGuardianNotifyPhone(guardian: Guardian): string {
  * Prefer WhatsApp unless the linked parent explicitly disabled it.
  * Unlinked guardians (no parent row) also get WhatsApp — same rule as fee/absence notify.
  */
-function guardianAllowsWhatsApp(guardian: Guardian): boolean {
+export function guardianAllowsWhatsApp(guardian: Guardian): boolean {
   if (guardian.guardianWhatsappConsent === true) return true;
   // parent?.receivesWhatsApp !== false → true when parent is missing or WhatsApp is enabled
   return guardian.parent?.receivesWhatsApp !== false;

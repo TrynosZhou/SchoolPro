@@ -39,6 +39,14 @@ interface PublicationStatus {
   smsSent?: number;
 }
 
+interface WhatsAppReportCardSendResult {
+  message: string;
+  total: number;
+  sent: number;
+  failed: number;
+  skipped: number;
+}
+
 interface NotificationLogSummary {
   total: number;
   queued: number;
@@ -242,6 +250,8 @@ export class AdminAcademicSettingsComponent implements OnInit {
   loadingPublication = signal(false);
   notificationLogs = signal<ResultNotificationLogsResponse | null>(null);
   loadingNotificationLogs = signal(false);
+  sendingWhatsApp = signal(false);
+  whatsAppSendResult = signal<WhatsAppReportCardSendResult | null>(null);
 
   newYear = { name: '', startDate: '', endDate: '', isCurrent: false };
   editingYearId = signal<string | null>(null);
@@ -474,6 +484,57 @@ export class AdminAcademicSettingsComponent implements OnInit {
         error: (e) => {
           this.submitting.set(false);
           this.showToast('error', e.error?.message || 'Failed to publish results');
+        },
+      });
+  }
+
+  /** Sends each parent a WhatsApp message with their linked child's report card (for parents without internet access). */
+  sendReportCardsViaWhatsApp() {
+    if (!this.publishTermId || !this.publishExamTypeId) {
+      this.showToast('error', 'Select a term and exam type.');
+      return;
+    }
+    if (!this.publicationStatus()?.readyReportCardCount) {
+      this.showToast('error', 'No report cards exist for this term and exam type.');
+      return;
+    }
+    const term = this.allTerms().find((t) => t.id === this.publishTermId)?.name || 'this term';
+    const exam = this.examTypes().find((e) => e.id === this.publishExamTypeId)?.name || 'this exam';
+    if (
+      !confirm(
+        `Send ${exam} report cards for ${term} via WhatsApp?\n\nEach parent will receive their linked child's report card on their registered WhatsApp number.`,
+      )
+    ) {
+      return;
+    }
+    this.sendingWhatsApp.set(true);
+    this.whatsAppSendResult.set(null);
+    this.api
+      .post<WhatsAppReportCardSendResult>('/exams/report-cards/send-whatsapp', {
+        termId: this.publishTermId,
+        examTypeId: this.publishExamTypeId,
+      })
+      .subscribe({
+        next: (r) => {
+          this.sendingWhatsApp.set(false);
+          this.whatsAppSendResult.set(r);
+          const parts = [`Sent: ${r.sent}`];
+          if (r.failed) parts.push(`Failed: ${r.failed}`);
+          if (r.skipped) parts.push(`Skipped (no WhatsApp number): ${r.skipped}`);
+          this.showToast(
+            r.sent === 0 && r.failed > 0 ? 'error' : 'success',
+            `${r.message || 'Report cards processed.'} ${parts.join(', ')}.`,
+          );
+          this.refreshPublicationStatus();
+        },
+        error: (e) => {
+          this.sendingWhatsApp.set(false);
+          this.showToast(
+            'error',
+            e.status === 404
+              ? 'WhatsApp report card sending is unavailable — update and restart the backend.'
+              : e.error?.message || 'Failed to send report cards via WhatsApp',
+          );
         },
       });
   }

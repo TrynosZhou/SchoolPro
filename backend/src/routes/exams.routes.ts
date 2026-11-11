@@ -43,6 +43,7 @@ import {
   publishResults,
   unpublishResults,
 } from '../services/publish-results.service';
+import { sendReportCardsViaWhatsApp } from '../services/report-card-whatsapp.service';
 import { listResultNotificationLogsForExam } from '../services/notification-log.service';
 import { ResultsPublication } from '../entities/ResultsPublication';
 import { requireModuleAccess, requireFinanceOrModuleAccess } from '../middleware/access-control';
@@ -204,6 +205,24 @@ router.post('/results/publish', authorize(...PUBLISH_ROLES), async (req: AuthReq
     return res.status(400).json({ message: err instanceof Error ? err.message : 'Publish failed' });
   }
 });
+
+router.post(
+  '/report-cards/send-whatsapp',
+  authorize(...PUBLISH_ROLES),
+  async (req: AuthRequest, res: Response) => {
+    const { termId, examTypeId } = req.body as { termId?: string; examTypeId?: string };
+    if (!termId || !examTypeId) {
+      return res.status(400).json({ message: 'termId and examTypeId are required' });
+    }
+    try {
+      res.json(await sendReportCardsViaWhatsApp({ termId, examTypeId }));
+    } catch (err) {
+      return res.status(400).json({
+        message: err instanceof Error ? err.message : 'Failed to send report cards via WhatsApp',
+      });
+    }
+  },
+);
 
 router.post('/results/unpublish', authorize(...PUBLISH_ROLES), async (req: AuthRequest, res: Response) => {
   const { termId, examTypeId } = req.body as { termId?: string; examTypeId?: string };
