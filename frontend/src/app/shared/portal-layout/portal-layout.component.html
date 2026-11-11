@@ -378,43 +378,73 @@
 </ng-template>
 
 @if (balanceOpen()) {
-  <div class="help-modal-backdrop" (click)="closeBalanceEnquiry()">
-    <section class="balance-modal" (click)="$event.stopPropagation()" role="dialog" aria-labelledby="balanceModalTitle" aria-modal="true" tabindex="-1">
-      <header class="help-modal-head">
-        <div>
+  <div class="help-modal-backdrop bal-backdrop" (click)="closeBalanceEnquiry()">
+    <section class="balance-modal" (click)="$event.stopPropagation()" role="dialog" aria-labelledby="balanceModalTitle" aria-describedby="balanceModalDesc" aria-modal="true" tabindex="-1">
+      <header class="bal-head">
+        <span class="bal-head-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none">
+            <path d="M3 10l9-6 9 6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" />
+            <path d="M5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 20h18" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" />
+          </svg>
+        </span>
+        <div class="bal-head-text">
           <h3 id="balanceModalTitle">Balance Enquiry</h3>
-          <p>Enter the Student ID to view the invoice balance.</p>
+          <p id="balanceModalDesc">Enter the Student ID to view the invoice balance.</p>
         </div>
-        <button type="button" class="help-close-btn" (click)="closeBalanceEnquiry()" [attr.aria-label]="'shell.close' | t">×</button>
+        <button type="button" class="bal-close" (click)="closeBalanceEnquiry()" [attr.aria-label]="'shell.close' | t">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+          </svg>
+        </button>
       </header>
 
-      <div class="help-search-row">
-        <label class="sr-only" for="balanceEnquirySearch">Student ID</label>
-        <input
-          id="balanceEnquirySearch"
-          type="text"
-          class="help-search-input"
-          placeholder="Enter Student ID (e.g. SP6403092026)"
-          [(ngModel)]="balanceQuery"
-          (keydown.enter)="getBalanceEnquiry()"
-          name="balanceEnquirySearch"
-          autocomplete="off"
-        />
-        <button
-          type="button"
-          class="help-go-btn"
-          (click)="getBalanceEnquiry()"
-          [disabled]="balanceLoading() || !balanceQuery.trim()"
-        >
-          {{ balanceLoading() ? 'Loading…' : 'View Balance' }}
-        </button>
+      <div class="bal-search">
+        <label class="bal-search-label" for="balanceEnquirySearch">Student ID</label>
+        <div class="bal-search-row">
+          <div class="bal-input-wrap">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <circle cx="11" cy="11" r="6.5" stroke="currentColor" stroke-width="1.8" />
+              <path d="M16 16l4.5 4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+            </svg>
+            <input
+              id="balanceEnquirySearch"
+              type="text"
+              class="bal-input"
+              placeholder="e.g. SP6403092026"
+              [(ngModel)]="balanceQuery"
+              (keydown.enter)="getBalanceEnquiry()"
+              name="balanceEnquirySearch"
+              autocomplete="off"
+              spellcheck="false"
+            />
+          </div>
+          <button
+            type="button"
+            class="bal-submit"
+            (click)="getBalanceEnquiry()"
+            [disabled]="balanceLoading() || !balanceQuery.trim()"
+          >
+            {{ balanceLoading() ? 'Searching…' : 'View Balance' }}
+          </button>
+        </div>
       </div>
 
       <div class="balance-modal-body" aria-live="polite">
         @if (balanceLoading()) {
-          <p class="balance-status">Fetching invoice balance…</p>
+          <div class="bal-state">
+            <span class="bal-spinner" aria-hidden="true"></span>
+            <p>Fetching invoice balance…</p>
+          </div>
         } @else if (balanceSearched() && !balanceResults().length) {
-          <p class="balance-status warn">No student found with Student ID "{{ balanceQuery }}".</p>
+          <div class="bal-state warn">
+            <span class="bal-state-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.7" />
+                <path d="M12 7.5v5.5M12 16.4v.1" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+              </svg>
+            </span>
+            <p><strong>No student found</strong>No record matches Student ID “{{ balanceQuery }}”. Check the ID and try again.</p>
+          </div>
         } @else if (balanceResults().length > 1 && !balanceSelected()) {
           <p class="balance-pick-label">{{ balanceResults().length }} students found — select one:</p>
           <div class="balance-pick-list">
@@ -430,7 +460,15 @@
           </div>
         } @else if (balanceSelected()) {
           @if (balanceSelected(); as row) {
-            <div class="balance-result-card" [class.clear]="row.balance <= 0">
+            <article class="balance-result-card" [class.clear]="row.balance <= 0">
+              <div class="bal-student">
+                <span class="bal-avatar" aria-hidden="true">{{ (row.firstName || '?').charAt(0) }}{{ (row.lastName || '').charAt(0) }}</span>
+                <div class="bal-student-id">
+                  <h4>{{ row.firstName }} {{ row.lastName }}</h4>
+                  <code>{{ row.admissionNumber }}</code>
+                </div>
+              </div>
+
               <dl class="balance-details">
                 <div>
                   <dt>Last name</dt>
@@ -445,30 +483,43 @@
                   <dd>{{ formatGender(row.gender) }}</dd>
                 </div>
                 <div>
+                  <dt>Class</dt>
                   <dd>{{ formatClassName(row.classLabel || row.className) }}</dd>
                 </div>
-                <div class="balance-highlight">
-                  <dt>Current invoice balance</dt>
-                  <dd class="balance-amount-row">
-                    <span class="balance-amount">${{ formatMoney(row.balance) }}</span>
-                    <button
-                      type="button"
-                      class="balance-pay-btn"
-                      (click)="goToRecordPayment(row)"
-                      [attr.aria-label]="'Record payment for ' + row.firstName + ' ' + row.lastName"
-                    >
-                      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                        <rect x="3" y="6" width="18" height="12" rx="2" stroke="currentColor" stroke-width="1.8" />
-                        <path d="M3 10h18" stroke="currentColor" stroke-width="1.8" />
-                        <path d="M7 15h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-                      </svg>
-                      <span>Pay</span>
-                    </button>
-                  </dd>
-                </div>
               </dl>
-            </div>
+
+              <div class="balance-highlight">
+                <div class="bal-amount-block">
+                  <span class="bal-amount-label">Current invoice balance</span>
+                  <span class="balance-amount">${{ formatMoney(row.balance) }}</span>
+                  <span class="bal-badge">{{ row.balance <= 0 ? 'Fully paid' : 'Outstanding' }}</span>
+                </div>
+                <button
+                  type="button"
+                  class="balance-pay-btn"
+                  (click)="goToRecordPayment(row)"
+                  [attr.aria-label]="'Record payment for ' + row.firstName + ' ' + row.lastName"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <rect x="3" y="6" width="18" height="12" rx="2" stroke="currentColor" stroke-width="1.8" />
+                    <path d="M3 10h18" stroke="currentColor" stroke-width="1.8" />
+                    <path d="M7 15h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+                  </svg>
+                  <span>Record Payment</span>
+                </button>
+              </div>
+            </article>
           }
+        } @else {
+          <div class="bal-state idle">
+            <span class="bal-state-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none">
+                <rect x="4" y="3.5" width="16" height="17" rx="2" stroke="currentColor" stroke-width="1.6" />
+                <path d="M8 8.5h8M8 12h8M8 15.5h5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+              </svg>
+            </span>
+            <p><strong>Ready when you are</strong>Student details and the current balance will appear here.</p>
+          </div>
         }
       </div>
     </section>
