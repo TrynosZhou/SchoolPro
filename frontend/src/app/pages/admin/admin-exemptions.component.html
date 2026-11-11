@@ -5,37 +5,46 @@
     }
 
     <header class="hero">
-      <div>
+      <div class="hero-copy">
         <p class="eyebrow">Finance</p>
-        <h1>Exemptions</h1>
+        <h2>Fee exemptions</h2>
         <p class="hero-sub">
-          Add students who should receive a fee exemption. Staff children are exempt from desk fee, registration fee, and tuition.
-          Other exemptions apply as a fixed percentage or fixed amount on tuition when bulk tuition invoices are created and on registration tuition lines.
+          Staff children are exempt from desk fee, registration fee and tuition. Every other exemption is a fixed percentage
+          or fixed amount taken off tuition when bulk tuition invoices are created and on registration tuition lines.
         </p>
       </div>
       <div class="hero-actions">
-        <button type="button" class="btn-primary" (click)="previewPdf()" [disabled]="pdfLoading() || listLoading()">
+        <button type="button" class="secondary-action" (click)="previewPdf()" [disabled]="pdfLoading() || listLoading()">
           {{ pdfLoading() ? 'Generating…' : 'Preview PDF' }}
         </button>
-        <button type="button" class="btn-primary" (click)="downloadPdf()" [disabled]="pdfLoading() || listLoading()">
+        <button type="button" class="primary-action" (click)="downloadPdf()" [disabled]="pdfLoading() || listLoading()">
           {{ pdfLoading() ? 'Generating…' : 'Download PDF' }}
         </button>
       </div>
     </header>
 
     <section class="panel">
-      <h2>Find student</h2>
-      <p class="panel-sub">Search by Student ID, first name, or last name, then click <strong>+</strong> to add an exemption.</p>
+      <header class="panel-head">
+        <div>
+          <h2>Find a student</h2>
+          <p class="panel-sub">Search by student ID, first name or last name, then select <strong>Add</strong> to set up an exemption.</p>
+        </div>
+      </header>
 
       <div class="search-row">
-        <input
-          type="search"
-          class="search-input"
-          [(ngModel)]="query"
-          name="exemptionSearch"
-          placeholder="Student ID, First Name, or Last Name…"
-          (keyup.enter)="searchStudents()"
-        />
+        <div class="search-wrap">
+          <span class="search-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></svg>
+          </span>
+          <input
+            type="search"
+            class="search-input"
+            [(ngModel)]="query"
+            name="exemptionSearch"
+            placeholder="Student ID, first name or last name"
+            (keyup.enter)="searchStudents()"
+          />
+        </div>
         <button type="button" class="btn-primary" (click)="searchStudents()" [disabled]="searchLoading()">
           {{ searchLoading() ? 'Searching…' : 'Search' }}
         </button>
@@ -46,25 +55,23 @@
 
       @if (hasSearched()) {
         @if (searchLoading()) {
-          <p class="muted">Searching students…</p>
+          <p class="notice" role="status">Searching students…</p>
         } @else if (!searchResults().length) {
-          <p class="muted warn">No student found for "{{ query }}".</p>
+          <p class="notice warn" role="status">No student found for “{{ query }}”. Check the spelling or try the student ID.</p>
         } @else {
           <div class="result-list">
             @for (row of searchResults(); track row.id) {
               <article class="result-card">
+                <span class="avatar" aria-hidden="true">{{ (row.firstName || '?').charAt(0) }}{{ (row.lastName || '').charAt(0) }}</span>
                 <div class="result-main">
                   <strong>{{ row.lastName }}, {{ row.firstName }}</strong>
                   <div class="meta">
-                    <span><code>{{ row.admissionNumber }}</code></span>
+                    <code class="sid">{{ row.admissionNumber }}</code>
                     @if (row.className) {
                       <span>{{ classLabel(row.className) }}</span>
                     }
                     @if (row.gender) {
                       <span>{{ genderLabel(row.gender) }}</span>
-                    }
-                    @if (row.gender) {
-                      <span>{{ row.gender }}</span>
                     }
                     @if (row.hasExemption) {
                       <span class="badge">On exemption list</span>
@@ -73,11 +80,12 @@
                 </div>
                 <button
                   type="button"
-                  class="add-btn"
-                  [attr.aria-label]="'Add ' + row.firstName + ' ' + row.lastName + ' to exemption list'"
+                  class="btn-ghost add-btn"
+                  [attr.aria-label]="(row.hasExemption ? 'Edit exemption for ' : 'Add exemption for ') + row.firstName + ' ' + row.lastName"
                   (click)="openAdd(row)"
                 >
-                  +
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+                  {{ row.hasExemption ? 'Edit' : 'Add' }}
                 </button>
               </article>
             }
@@ -90,14 +98,17 @@
       <div class="panel-head">
         <div>
           <h2>Exemption list</h2>
-          <p class="panel-sub">{{ exemptions().length }} student{{ exemptions().length === 1 ? '' : 's' }} with active tuition exemptions.</p>
+          <p class="panel-sub">{{ exemptions().length }} student{{ exemptions().length === 1 ? '' : 's' }} with an active exemption.</p>
         </div>
       </div>
 
       @if (listLoading()) {
-        <p class="muted">Loading exemptions…</p>
+        <p class="notice" role="status">Loading exemptions…</p>
       } @else if (!exemptions().length) {
-        <p class="muted">No students on the exemption list yet.</p>
+        <div class="empty-block">
+          <h3>No exemptions yet</h3>
+          <p>Search for a student above to add the first one.</p>
+        </div>
       } @else {
         <div class="table-wrap">
           <table>
@@ -109,19 +120,20 @@
                 <th>Gender</th>
                 <th>Exemption</th>
                 <th>Reason</th>
-                <th></th>
+                <th class="actions-col"><span class="sr-only">Actions</span></th>
               </tr>
             </thead>
             <tbody>
               @for (row of exemptions(); track row.id) {
                 <tr>
-                  <td><strong>{{ row.lastName }}, {{ row.firstName }}</strong></td>
-                  <td><code>{{ row.admissionNumber }}</code></td>
+                  <td><strong class="student-name">{{ row.lastName }}, {{ row.firstName }}</strong></td>
+                  <td><code class="sid">{{ row.admissionNumber }}</code></td>
                   <td>{{ classLabel(row.className) }}</td>
                   <td>{{ genderLabel(row.gender) }}</td>
-                  <td>{{ exemptionLabel(row) }}</td>
+                  <td><span class="exemption-tag">{{ exemptionLabel(row) }}</span></td>
                   <td>{{ row.reason || '—' }}</td>
-                  <td class="actions">
+                  <td class="actions-cell">
+                    <div class="actions">
                     <button type="button" class="btn-ghost" (click)="openAdd({
                       id: row.studentId,
                       admissionNumber: row.admissionNumber,
@@ -132,6 +144,7 @@
                       hasExemption: true
                     })">Edit</button>
                     <button type="button" class="btn-danger" (click)="removeExemption(row)">Remove</button>
+                    </div>
                   </td>
                 </tr>
               }
@@ -145,19 +158,19 @@
   @if (addOpen(); as _) {
     @if (selectedStudent(); as student) {
       <div class="modal-backdrop" (click)="closeAdd()">
-        <div class="modal" role="dialog" aria-labelledby="exemptionModalTitle" (click)="$event.stopPropagation()">
+        <div class="modal" role="dialog" aria-modal="true" aria-labelledby="exemptionModalTitle" (click)="$event.stopPropagation()">
           <header class="modal-head">
             <div>
-              <h3 id="exemptionModalTitle">Add tuition exemption</h3>
-              <p>{{ student.lastName }}, {{ student.firstName }} · {{ classLabel(student.className) }} · {{ genderLabel(student.gender) }}</p>
+              <h2 id="exemptionModalTitle">{{ student.hasExemption ? 'Edit tuition exemption' : 'Add tuition exemption' }}</h2>
+              <p>{{ student.lastName }}, {{ student.firstName }}<span class="sep" aria-hidden="true"></span>{{ classLabel(student.className) }}<span class="sep" aria-hidden="true"></span>{{ genderLabel(student.gender) }}</p>
             </div>
             <button type="button" class="close-btn" (click)="closeAdd()" aria-label="Close">×</button>
           </header>
 
           <form class="modal-form" (ngSubmit)="saveExemption()">
             <div class="field">
-              <label>Exemption type</label>
-              <div class="type-row">
+              <label id="exemptionTypeLabel">Exemption type</label>
+              <div class="type-row" role="radiogroup" aria-labelledby="exemptionTypeLabel">
                 <label class="radio-chip staff-child">
                   <input type="radio" name="exemptionType" value="staff_child" [(ngModel)]="formType" />
                   Staff child
@@ -199,9 +212,9 @@
                 [(ngModel)]="formReason"
                 name="exemptionReason"
                 rows="5"
-                placeholder="e.g. Staff child, scholarship, bursary award, sibling discount…"
+                placeholder="For example: staff child, scholarship, bursary award or sibling discount"
               ></textarea>
-              <small class="field-hint">Explain why this student is exempted from full tuition.</small>
+              <small class="field-hint">Say why this student does not pay full tuition.</small>
             </div>
 
             <div class="modal-actions">

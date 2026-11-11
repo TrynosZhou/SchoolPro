@@ -50,12 +50,21 @@ interface Demographics {
 }
 
 const PALETTE = {
-  male: '#2563eb',
-  female: '#db2777',
-  unspecified: '#94a3b8',
-  boarder: '#7c3aed',
-  day: '#0891b2',
-  bars: ['#1e3a8a', '#2563eb', '#0891b2', '#059669', '#d97706', '#db2777', '#7c3aed', '#dc2626'],
+  male: '#16294a', // navy
+  female: '#8a1c2b', // burgundy
+  unspecified: '#a8a29e', // stone
+  boarder: '#16294a',
+  day: '#b8924a', // brass
+  bars: ['#16294a', '#2c4a7c', '#b8924a', '#8a1c2b', '#4f6d5a', '#6b5b7b', '#a4533a', '#7a8699'],
+};
+
+// Shared chart styling: quiet gridlines, serif-free Inter labels, square legend keys
+const CHART_FONT = { family: "'Inter', -apple-system, 'Segoe UI', sans-serif", size: 12 };
+const AXIS_TICKS = { color: '#52525b', font: CHART_FONT };
+const GRID = { color: '#e9e5da', lineWidth: 1 };
+const LEGEND = {
+  position: 'bottom' as const,
+  labels: { boxWidth: 12, boxHeight: 12, usePointStyle: false, color: '#16294a', font: CHART_FONT },
 };
 
 @Component({
@@ -138,6 +147,8 @@ export class AdminAnalyticsDemographicsComponent implements OnInit {
           backgroundColor: rows.map((r) =>
             r.key === 'Male' ? PALETTE.male : r.key === 'Female' ? PALETTE.female : PALETTE.unspecified,
           ),
+          borderColor: '#ffffff',
+          borderWidth: 3,
         },
       ],
     };
@@ -152,6 +163,8 @@ export class AdminAnalyticsDemographicsComponent implements OnInit {
         {
           data: rows.map((r) => r.count),
           backgroundColor: rows.map((r) => (r.key === 'Boarder' ? PALETTE.boarder : PALETTE.day)),
+          borderColor: '#ffffff',
+          borderWidth: 3,
         },
       ],
     };
@@ -202,16 +215,24 @@ export class AdminAnalyticsDemographicsComponent implements OnInit {
   });
 
   readonly stackedBarOptions: ChartOptions<'bar'> = {
+    plugins: { legend: LEGEND },
     scales: {
-      x: { stacked: true },
-      y: { stacked: true, beginAtZero: true, ticks: { precision: 0 } },
+      x: { stacked: true, grid: { display: false }, ticks: AXIS_TICKS, border: { color: '#16294a' } },
+      y: { stacked: true, beginAtZero: true, grid: GRID, border: { display: false }, ticks: { ...AXIS_TICKS, precision: 0 } },
     },
   };
 
   readonly plainBarOptions: ChartOptions<'bar'> = {
     plugins: { legend: { display: false } },
-    scales: { y: { beginAtZero: true, ticks: { precision: 0 } } },
+    scales: {
+      x: { grid: { display: false }, ticks: AXIS_TICKS, border: { color: '#16294a' } },
+      y: { beginAtZero: true, grid: GRID, border: { display: false }, ticks: { ...AXIS_TICKS, precision: 0 } },
+    },
   };
+
+  /** Legend styling for the pie / doughnut charts (they take no custom options elsewhere). */
+  readonly pieOptions: ChartOptions<'pie'> = { plugins: { legend: LEGEND } };
+  readonly doughnutOptions: ChartOptions<'doughnut'> = { plugins: { legend: LEGEND }, cutout: '62%' };
 
   pct(part: number, total: number): number {
     return total ? Math.round((part / total) * 1000) / 10 : 0;

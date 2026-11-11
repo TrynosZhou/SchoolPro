@@ -5,10 +5,11 @@
   }
 
   <div class="fee-mgmt">
-    <header class="fee-header">
-      <div class="fee-header-copy">
-        <h1>Fee Management</h1>
-        <p>Track, collect, and manage student fees</p>
+    <header class="hero fee-header">
+      <div class="hero-copy fee-header-copy">
+        <p class="eyebrow">Finance</p>
+        <h2>Fee management</h2>
+        <p class="hero-sub">Track what is owed, record what is collected and set the fees each student is charged.</p>
       </div>
       <div class="fee-header-actions">
         <button *appUnlessDemo type="button" class="btn-secondary" (click)="exportFees()">
@@ -17,11 +18,11 @@
         </button>
         <a [routerLink]="basePath + '/payment'" class="btn-secondary">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10h18M7 15h1m4 0h1m4 0h1M6 6h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          Add Payment
+          Add payment
         </a>
         <a [routerLink]="basePath + '/billing'" [queryParams]="{ tab: 'single-invoice' }" class="btn-secondary">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 12h6m-6 4h6M8 4h8l2 4H6l2-4zm10 6v10a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V10h12z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          Edit Invoice
+          Edit invoice
         </a>
         <a [routerLink]="basePath + '/billing'" [queryParams]="{ tab: 'bulk-invoice' }" class="btn-secondary">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm12 10v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -29,16 +30,18 @@
         </a>
         <button type="button" class="btn-primary" (click)="openAddCategory()">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-          New Fee Entry
+          New fee entry
         </button>
       </div>
     </header>
 
-    <nav class="fee-tabs" aria-label="Fee management sections">
+    <nav class="fee-tabs" role="tablist" aria-label="Fee management sections">
       @for (tab of tabs; track tab.id) {
         <button
           type="button"
           class="fee-tab"
+          role="tab"
+          [attr.aria-selected]="activeTab() === tab.id"
           [class.active]="activeTab() === tab.id"
           (click)="setTab(tab.id)"
         >
@@ -55,13 +58,13 @@
           <div class="overview-kpi-row">
             <article class="kpi-card">
               <div class="kpi-card-top">
-                <span class="kpi-label">Total Collectable</span>
+                <span class="kpi-label">Total collectable</span>
                 <span class="kpi-icon neutral" aria-hidden="true">
                   <svg viewBox="0 0 24 24"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </span>
               </div>
               <strong class="kpi-value">{{ overviewStats().totalCollectable | currency:'USD':'symbol':'1.0-0' }}</strong>
-              <span class="kpi-sub">All charges</span>
+              <span class="kpi-sub">Across all charges</span>
             </article>
 
             <article class="kpi-card collected">
@@ -72,7 +75,7 @@
                 </span>
               </div>
               <strong class="kpi-value">{{ overviewStats().collected | currency:'USD':'symbol':'1.0-0' }}</strong>
-              <span class="kpi-sub">{{ overviewStats().collectionRate }}% collection rate</span>
+              <span class="kpi-sub">{{ overviewStats().collectionRate }}% collected</span>
             </article>
 
             <article class="kpi-card unpaid">
@@ -170,14 +173,17 @@
     }
 
     <section class="records-panel" *ngIf="activeTab() === 'records'">
-      <p class="muted" *ngIf="loading()">Loading fee records…</p>
+      <p class="muted" role="status" *ngIf="loading()">Loading fee records…</p>
       <ng-container *ngIf="!loading()">
         <div class="records-toolbar">
           <div class="search-wrap">
+            <span class="search-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></svg>
+            </span>
             <input
               type="search"
               class="search-input"
-              placeholder="Search by name or invoice…"
+              placeholder="Search by student name or invoice number"
               [ngModel]="recordSearch()"
               (ngModelChange)="recordSearch.set($event)"
               name="feeRecQ"
@@ -186,15 +192,15 @@
           <div class="status-filters" role="group" aria-label="Invoice status filter">
             <button
               type="button"
-              class="status-pill"
+              class="filter-btn"
               [class.active]="recordStatus() === 'all'"
               (click)="recordStatus.set('all')"
             >
-              All Status
+              All statuses
             </button>
             <button
               type="button"
-              class="status-pill"
+              class="filter-btn"
               [class.active]="recordStatus() === 'paid'"
               (click)="recordStatus.set('paid')"
             >
@@ -202,7 +208,7 @@
             </button>
             <button
               type="button"
-              class="status-pill"
+              class="filter-btn"
               [class.active]="recordStatus() === 'unpaid'"
               (click)="recordStatus.set('unpaid')"
             >
@@ -210,7 +216,7 @@
             </button>
             <button
               type="button"
-              class="status-pill"
+              class="filter-btn"
               [class.active]="recordStatus() === 'partial'"
               (click)="recordStatus.set('partial')"
             >
@@ -218,7 +224,7 @@
             </button>
             <button
               type="button"
-              class="status-pill"
+              class="filter-btn"
               [class.active]="recordStatus() === 'cancelled'"
               (click)="recordStatus.set('cancelled')"
             >
@@ -227,7 +233,7 @@
           </div>
           <div class="category-filters">
             <svg class="filter-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h18l-7 9v6l-4 2v-8L3 4z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            <span class="category-label">Category:</span>
+            <span class="category-label">Category</span>
             <div class="category-chips">
               <button
                 type="button"
@@ -342,7 +348,7 @@
                   </td>
                 </tr>
               } @empty {
-                <tr><td colspan="9" class="empty">No fee records yet.</td></tr>
+                <tr><td colspan="9" class="empty">No fee records match these filters.</td></tr>
               }
             </tbody>
           </table>
@@ -353,7 +359,7 @@
     @if (activeTab() === 'invoices') {
       <section class="invoices-panel" (click)="closeInvoiceMenu()">
         <div class="invoices-toolbar">
-          <p>Invoices are generated from fee charges in your ledger.</p>
+          <p>Invoices are generated from the fee charges in your ledger.</p>
           <div class="invoices-toolbar-actions">
             <button
               type="button"
@@ -362,7 +368,7 @@
               [disabled]="sendingReminders()"
             >
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              {{ sendingReminders() ? 'Sending…' : 'Bulk send' }}
+              {{ sendingReminders() ? 'Sending…' : 'Send reminders' }}
             </button>
             <a [routerLink]="basePath + '/billing'" [queryParams]="{ tab: 'bulk-invoice' }" class="btn-secondary" (click)="$event.stopPropagation()">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm12 10v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -379,7 +385,8 @@
           <p class="muted">Loading invoices…</p>
         } @else if (!invoices().length) {
           <div class="empty-state">
-            <p>No invoices yet. Create charges from Billing to generate invoices.</p>
+            <h3>No invoices yet</h3>
+            <p>Create charges from Billing to generate invoices.</p>
             <a [routerLink]="basePath + '/billing'" [queryParams]="{ tab: 'single-invoice' }" class="btn-primary">New charge</a>
           </div>
         } @else {
@@ -475,7 +482,7 @@
           <div class="tuition-rates-head">
             <div>
               <h3>Tuition rates</h3>
-              <p>Invoices charge these amounts by student level and by day scholar or boarder.</p>
+              <p>Invoices use these amounts by student level, for day scholars and boarders.</p>
             </div>
             <button type="submit" class="btn-primary btn-sm" [disabled]="savingTuitionRates()">
               {{ savingTuitionRates() ? 'Saving…' : 'Save tuition rates' }}
@@ -511,8 +518,9 @@
           <p class="muted">Loading fee categories…</p>
         } @else if (!fees().length) {
           <div class="empty-state">
-            <p>No fee categories yet.</p>
-            <button type="button" class="btn-primary" (click)="openAddCategory()">Add your first category</button>
+            <h3>No fee categories yet</h3>
+            <p>Add a category to start charging fees.</p>
+            <button type="button" class="btn-primary" (click)="openAddCategory()">Add first category</button>
           </div>
         } @else {
           <div class="category-grid">
@@ -551,9 +559,9 @@
 
   @if (showCategoryModal()) {
     <div class="modal-backdrop" (click)="closeCategoryModal()">
-      <div class="modal" role="dialog" aria-labelledby="categoryModalTitle" (click)="$event.stopPropagation()">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="categoryModalTitle" (click)="$event.stopPropagation()">
         <div class="modal-head">
-          <h2 id="categoryModalTitle">{{ editingId() ? 'Edit category' : 'Add category' }}</h2>
+          <h2 id="categoryModalTitle">{{ editingId() ? 'Edit fee category' : 'Add fee category' }}</h2>
           <button type="button" class="icon-btn" (click)="closeCategoryModal()" aria-label="Close">×</button>
         </div>
         <form class="modal-form" (ngSubmit)="saveCategory()">
@@ -593,7 +601,7 @@
             </div>
             <label class="checkbox-field">
               <input type="checkbox" [(ngModel)]="categoryForm.isActive" name="catActive" />
-              Active category
+              Category is active
             </label>
           </div>
           <div class="modal-actions">

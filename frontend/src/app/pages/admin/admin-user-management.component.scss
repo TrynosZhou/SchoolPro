@@ -1,3 +1,5 @@
+@use '../../../styles/admin-classic' as classic;
+
 :host {
   display: block;
 }
@@ -554,12 +556,6 @@
   &.locked { background: #fee2e2; color: #991b1b; }
 }
 
-.role-director { background: #7c3aed; }
-.role-principal { background: #4338ca; }
-.role-admin { background: #2563eb; }
-.role-teacher { background: #0d9488; }
-.role-parent { background: #d97706; }
-.role-student { background: #64748b; }
 
 .card-grid {
   display: grid;
@@ -847,5 +843,265 @@
 
   .card-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+// =============================================================
+// Classical navy & brass layer (shared with Login + Dashboard)
+// =============================================================
+@include classic.page;
+
+// ── Page-specific refinements ────────────────────────────────
+:host {
+  .users-page {
+    gap: var(--space-5);
+  }
+
+  // Hero tab-style actions: the selected view reads as "pressed"
+  .hero-actions {
+    gap: var(--space-2);
+
+    .tab-action.active {
+      background: var(--navy) !important;
+      border-color: var(--navy) !important;
+      color: #fff !important;
+      box-shadow: inset 0 -3px 0 var(--brass);
+    }
+
+    .primary-action:disabled,
+    .refresh-action:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+  }
+
+  // Toolbar: tidy dividers and metadata line
+  .list-toolbar {
+    padding: var(--space-4) var(--space-5);
+  }
+
+  .chip-divider {
+    background: var(--color-border-strong);
+  }
+
+  .chip.ok.active {
+    background: var(--color-positive);
+    border-color: var(--color-positive);
+    box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.25);
+  }
+
+  .chip.bad.active {
+    background: var(--color-negative);
+    border-color: var(--color-negative);
+    box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.25);
+  }
+
+  .results-meta {
+    color: var(--color-text-muted);
+
+    strong {
+      color: var(--navy);
+    }
+  }
+
+  // Table
+  .data-table {
+    tbody tr {
+      transition: background var(--transition-base);
+
+      &:hover {
+        background: var(--color-bg-subtle);
+      }
+    }
+
+    .inactive-row td {
+      color: var(--color-text-muted);
+    }
+
+    .locked-row td:first-child {
+      box-shadow: inset 3px 0 0 var(--color-negative);
+    }
+
+    .actions {
+      white-space: nowrap;
+      text-align: right;
+    }
+  }
+
+  .user-cell .muted,
+  .email-cell {
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+  }
+
+  .assigned-role {
+    display: block;
+    margin-top: 0.2rem;
+    font-size: var(--font-size-xs);
+    font-style: italic;
+    color: var(--color-text-muted);
+  }
+
+  // Role pills — restrained, one family of tones instead of rainbow fills
+  .role-pill {
+    display: inline-block;
+    border-radius: 2px !important;
+    padding: 0.18rem 0.55rem;
+    border: 1px solid var(--color-border-strong);
+    background: var(--color-accent-subtle);
+    color: var(--navy);
+    font-size: var(--font-size-xs);
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .role-pill.role-director {
+    background: var(--navy);
+    border-color: var(--navy);
+    color: #e6d3a8;
+  }
+
+  .role-pill.role-principal,
+  .role-pill.role-admin,
+  .role-pill.role-administrator {
+    background: var(--brass-soft);
+    border-color: rgba(184, 146, 74, 0.5);
+    color: var(--brass-ink);
+  }
+
+  .role-pill.role-parent,
+  .role-pill.role-student {
+    background: var(--color-bg-muted);
+    color: var(--color-text-secondary);
+  }
+
+  // Status pills — bordered, square-cornered, semantic colour only
+  .status-pill {
+    display: inline-block;
+    padding: 0.18rem 0.55rem;
+    border: 1px solid transparent;
+    font-size: var(--font-size-xs);
+    text-transform: uppercase;
+
+    &.active {
+      background: rgba(22, 163, 74, 0.1);
+      border-color: rgba(22, 163, 74, 0.35);
+      color: #166534;
+    }
+
+    &.inactive {
+      background: var(--color-bg-muted);
+      border-color: var(--color-border-strong);
+      color: var(--color-text-secondary);
+    }
+
+    &.locked {
+      background: rgba(220, 38, 38, 0.08);
+      border-color: rgba(220, 38, 38, 0.35);
+      color: #991b1b;
+    }
+  }
+
+  // Card view
+  .user-card {
+    border: 1px solid var(--color-border);
+    border-top: 3px solid var(--brass);
+    border-radius: 3px;
+    box-shadow: none;
+    transition: box-shadow var(--transition-base);
+
+    &:hover {
+      box-shadow: 0 10px 24px -16px rgba(15, 29, 54, 0.4);
+    }
+
+    &.locked {
+      border-top-color: var(--color-negative);
+      background: var(--color-bg);
+    }
+
+    .card-title strong {
+      color: var(--navy);
+      font-family: var(--serif);
+      font-size: 1.2rem;
+      font-weight: 600;
+    }
+
+    .card-meta > div > span {
+      font-size: var(--font-size-xs);
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--color-text-muted);
+    }
+
+    .card-actions {
+      border-top: 1px solid var(--color-border);
+      padding-top: var(--space-3);
+    }
+  }
+
+  .btn-ghost.unlock {
+    color: var(--brass-ink) !important;
+    border-color: rgba(184, 146, 74, 0.55) !important;
+  }
+
+  // Drawer & change-password panel use h3 headings on this page
+  .drawer-head h3,
+  .change-password-panel h3 {
+    margin: 0;
+    font-family: var(--serif);
+    font-size: 1.75rem;
+    font-weight: 600;
+    line-height: 1.1;
+    color: var(--navy);
+  }
+
+  .change-password-panel {
+    max-width: 36rem;
+
+    > p {
+      color: var(--color-text-secondary);
+      line-height: 1.6;
+    }
+  }
+
+  .drawer-body .hint {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
+    text-transform: none;
+    letter-spacing: 0;
+    font-weight: 400;
+  }
+
+  .password-field {
+    display: flex;
+    gap: var(--space-2);
+    align-items: center;
+
+    input {
+      flex: 1;
+    }
+  }
+
+  .empty-state {
+    padding: var(--space-12) var(--space-6);
+  }
+}
+
+:host-context([data-theme='dark']) {
+  .role-pill {
+    background: var(--color-bg-muted);
+    color: var(--color-text-primary);
+  }
+
+  .status-pill.active { color: #86efac; }
+  .status-pill.locked { color: #fca5a5; }
+
+  .drawer-head h3,
+  .change-password-panel h3,
+  .user-card .card-title strong {
+    color: var(--color-text-primary);
   }
 }

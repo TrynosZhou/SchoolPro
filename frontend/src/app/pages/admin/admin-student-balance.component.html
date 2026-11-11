@@ -7,9 +7,9 @@
     <header class="hero">
       <div class="hero-copy">
         <p class="eyebrow">Finance</p>
-        <h2>Student balance lookup</h2>
+        <h2>Student balances</h2>
         <p class="hero-sub">
-          Search by student ID, first name, or last name to view invoiced amounts, payments, and outstanding balance.
+          Look up what a student has been invoiced, what they have paid and what is still owed.
           Record payments on
           <a routerLink="/admin/payment">Payment</a>
           or review the full ledger on
@@ -29,28 +29,28 @@
       </div>
       <div class="kpi-grid">
         <article class="kpi">
-          <span class="kpi-icon">👥</span>
+          <span class="kpi-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
           <div>
             <strong>{{ hasSearched() ? stats().count : '—' }}</strong>
             <span>Students found</span>
           </div>
         </article>
         <article class="kpi warn" [class.bad]="stats().owing > 0">
-          <span class="kpi-icon">⚠</span>
+          <span class="kpi-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg></span>
           <div>
             <strong>{{ hasSearched() ? stats().owing : '—' }}</strong>
             <span>With balance</span>
           </div>
         </article>
         <article class="kpi ok">
-          <span class="kpi-icon">✓</span>
+          <span class="kpi-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg></span>
           <div>
             <strong>{{ hasSearched() ? stats().clear : '—' }}</strong>
             <span>Paid in full</span>
           </div>
         </article>
         <article class="kpi accent">
-          <span class="kpi-icon">💵</span>
+          <span class="kpi-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span>
           <div>
             <strong>{{ hasSearched() ? ('$' + (stats().totalOwing | number:'1.0-0')) : '—' }}</strong>
             <span>Total outstanding</span>
@@ -60,7 +60,7 @@
     </header>
 
     @if (hasSearched() && stats().owing > 0) {
-      <div class="alert-banner">
+      <div class="alert-banner" role="status">
         <span>{{ stats().owing }} student{{ stats().owing === 1 ? '' : 's' }} with {{ '$' + (stats().totalOwing | number:'1.2-2') }} outstanding.</span>
         <button type="button" class="link-btn" (click)="filterOwingOnly()">Show owing only</button>
       </div>
@@ -68,18 +68,19 @@
 
     <section class="list-shell">
       <div class="list-toolbar">
-        <h3>Find student balance</h3>
-        <p>Enter student ID, first name, or last name — press Enter or click Search.</p>
+        <h3>Find a student</h3>
+        <p>Search by student ID, first name or last name. Press Enter or select Search.</p>
 
         <div class="search-row">
           <div class="search-wrap">
+            <span class="search-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></svg></span>
             <input
               #balanceSearchInput
               type="search"
               class="search-input"
               [(ngModel)]="query"
               name="studentBalanceQuery"
-              placeholder="e.g. STU-001 / Tawanda / Ncube"
+              placeholder="Student ID or name, e.g. STU-001 or Ncube"
               (keyup.enter)="getBalance()"
             />
             @if (query) {
@@ -106,14 +107,14 @@
             </div>
             <div class="toolbar-actions">
               <select [ngModel]="sortOrder()" (ngModelChange)="sortOrder.set($event)" name="sortOrder" class="sort-select">
-                <option value="balance-desc">Balance high → low</option>
-                <option value="balance-asc">Balance low → high</option>
-                <option value="name-asc">Name A–Z</option>
-                <option value="name-desc">Name Z–A</option>
+                <option value="balance-desc">Balance, high to low</option>
+                <option value="balance-asc">Balance, low to high</option>
+                <option value="name-asc">Name, A to Z</option>
+                <option value="name-desc">Name, Z to A</option>
               </select>
               <div class="view-toggle" role="group" aria-label="View mode">
-                <button type="button" class="view-btn" [class.active]="viewMode() === 'table'" (click)="viewMode.set('table')" title="Table view">☰</button>
-                <button type="button" class="view-btn" [class.active]="viewMode() === 'cards'" (click)="viewMode.set('cards')" title="Card view">▦</button>
+                <button type="button" class="view-btn" [class.active]="viewMode() === 'table'" (click)="viewMode.set('table')" title="Table view" aria-label="Table view" [attr.aria-pressed]="viewMode() === 'table'"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18"/></svg></button>
+                <button type="button" class="view-btn" [class.active]="viewMode() === 'cards'" (click)="viewMode.set('cards')" title="Card view" aria-label="Card view" [attr.aria-pressed]="viewMode() === 'cards'"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg></button>
               </div>
             </div>
           </div>
@@ -136,19 +137,19 @@
         </div>
       } @else if (!hasSearched()) {
         <div class="empty-state">
-          <span class="empty-icon">🔍</span>
+          <span class="empty-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></svg></span>
           <h3>Search for a student</h3>
-          <p>Enter a student ID or name above to view invoice totals and outstanding balance.</p>
+          <p>Enter a student ID or name above to see invoice totals and the outstanding balance.</p>
         </div>
       } @else if (!rows().length) {
         <div class="empty-state">
-          <span class="empty-icon">👤</span>
+          <span class="empty-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
           <h3>No students found</h3>
           <p>Try a different student ID, first name, or last name.</p>
         </div>
       } @else if (!visibleRows().length) {
         <div class="empty-state">
-          <span class="empty-icon">📋</span>
+          <span class="empty-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg></span>
           <h3>No rows match your filter</h3>
           <button type="button" class="btn-secondary" (click)="clearFilters()">Clear filters</button>
         </div>
@@ -169,7 +170,7 @@
                 }
               </div>
 
-              <div class="class-meta">{{ classLabel(r) }}@if (r.gender) { · {{ genderLabel(r.gender) }} }</div>
+              <div class="class-meta">{{ classLabel(r) }}@if (r.gender) { <span class="dot" aria-hidden="true"></span>{{ genderLabel(r.gender) }} }</div>
 
               <div class="amount-grid">
                 <div>

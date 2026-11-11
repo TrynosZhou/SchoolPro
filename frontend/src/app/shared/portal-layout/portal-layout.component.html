@@ -19,6 +19,36 @@
     </button>
 
     <nav class="topbar-actions" [attr.aria-label]="'shell.quickActions' | t">
+      @if (hasSocialLinks) {
+        <div class="topbar-social" role="group" aria-label="Follow us">
+          @if (socialLinks.facebook; as fb) {
+            <a [href]="fb" class="topbar-action-icon topbar-social-link" target="_blank" rel="noopener noreferrer" aria-label="Follow us on Facebook" title="Follow us on Facebook">
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M18 2h-3a5 5 0 00-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 011-1h3z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </a>
+          }
+          @if (socialLinks.instagram; as ig) {
+            <a [href]="ig" class="topbar-action-icon topbar-social-link" target="_blank" rel="noopener noreferrer" aria-label="Follow us on Instagram" title="Follow us on Instagram">
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <rect x="2" y="2" width="20" height="20" rx="5" ry="5" stroke="currentColor" stroke-width="2" />
+                <path d="M16 11.37A4 4 0 1112.63 8 4 4 0 0116 11.37z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                <path d="M17.5 6.5h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+              </svg>
+            </a>
+          }
+          @if (socialLinks.website; as web) {
+            <a [href]="web" class="topbar-action-icon topbar-social-link" target="_blank" rel="noopener noreferrer" aria-label="Visit our website" title="Visit our website">
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" />
+                <path d="M2 12h20" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                <path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </a>
+          }
+        </div>
+      }
+
       @if (showMessagesAction) {
         <a
           [routerLink]="effectiveMessagesPath"

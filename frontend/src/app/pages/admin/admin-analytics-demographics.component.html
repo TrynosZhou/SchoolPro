@@ -5,7 +5,8 @@
   [navItems]="portalLayout.navItems || []"
 >
   <section class="an-head">
-    <div>
+    <div class="an-head-copy">
+      <p class="an-eyebrow">Analytics</p>
       <h1>Student Demographics</h1>
       <p class="an-sub">Breakdowns by class, grade level, gender and age — filter by academic year or term.</p>
     </div>
@@ -93,11 +94,11 @@
     <section class="chart-grid">
       <div class="card chart-card">
         <h3>Gender distribution</h3>
-        <div class="chart-wrap"><app-chart type="pie" [data]="genderChart()"></app-chart></div>
+        <div class="chart-wrap"><app-chart type="pie" [data]="genderChart()" [options]="pieOptions"></app-chart></div>
       </div>
       <div class="card chart-card">
         <h3>Boarders vs day scholars</h3>
-        <div class="chart-wrap"><app-chart type="doughnut" [data]="typeChart()"></app-chart></div>
+        <div class="chart-wrap"><app-chart type="doughnut" [data]="typeChart()" [options]="doughnutOptions"></app-chart></div>
       </div>
       <div class="card chart-card wide">
         <h3>Students by grade level &amp; gender</h3>

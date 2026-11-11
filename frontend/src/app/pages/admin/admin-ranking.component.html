@@ -6,15 +6,16 @@
 >
 
   @if (toast(); as t) {
-    <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>
+    <div class="toast" role="status" aria-live="polite" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>
   }
 
+  <!-- ── Page header ─────────────────────────────────────── -->
   <header class="admin-hero">
     <div class="admin-hero-text">
       <p class="eyebrow">Academics · Rankings</p>
       <h1 class="admin-hero-title">Student Rankings</h1>
       <p class="admin-hero-sub">
-        Choose exam session and ranking type, then select the class, form, or subject to view ranked students.
+        Pick an exam and term, choose how students are ranked, then narrow to a class, form or subject.
       </p>
     </div>
     <div class="admin-hero-actions">
@@ -23,10 +24,24 @@
     </div>
   </header>
 
-  <section class="filters-card card">
-    <div class="filters-toolbar">
+  <!-- ── Criteria ────────────────────────────────────────── -->
+  <section class="filters-card card" aria-labelledby="criteria-title">
+    <header class="filters-card-head">
+      <span class="filters-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4z"/>
+          <path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/>
+        </svg>
+      </span>
+      <div class="filters-card-copy">
+        <h2 id="criteria-title">Ranking criteria</h2>
+        <p>Rankings are drawn from the marks already captured for the exam you choose.</p>
+      </div>
+    </header>
+
+    <div class="filters-row">
       <label class="field">
-        <span>Exam type</span>
+        <span>Exam type<span class="req" aria-hidden="true"> *</span></span>
         <select [(ngModel)]="filters.examTypeId" name="examType" (ngModelChange)="onFilterChange()">
           <option value="">— Select —</option>
           @for (t of examTypes(); track t.id) {
@@ -36,7 +51,7 @@
       </label>
 
       <label class="field">
-        <span>Term</span>
+        <span>Term<span class="req" aria-hidden="true"> *</span></span>
         <select [(ngModel)]="filters.termId" name="term" (ngModelChange)="onFilterChange()">
           <option value="">— Select —</option>
           @for (t of terms(); track t.id) {
@@ -46,7 +61,7 @@
       </label>
 
       <label class="field">
-        <span>Ranking type</span>
+        <span>Ranking type<span class="req" aria-hidden="true"> *</span></span>
         <select [(ngModel)]="filters.rankingType" name="rankingType" (ngModelChange)="onRankingTypeChange()">
           <option value="">— Select —</option>
           @for (rt of rankingTypes; track rt.value) {
@@ -57,7 +72,7 @@
 
       @if (filters.rankingType === 'class') {
         <label class="field">
-          <span>Class</span>
+          <span>Class<span class="req" aria-hidden="true"> *</span></span>
           <select [(ngModel)]="filters.classId" name="class" (ngModelChange)="onFilterChange()">
             <option value="">— Select class —</option>
             @for (c of classes(); track c.id) {
@@ -69,7 +84,7 @@
 
       @if (filters.rankingType === 'form') {
         <label class="field">
-          <span>Form</span>
+          <span>Form<span class="req" aria-hidden="true"> *</span></span>
           <select [(ngModel)]="filters.formId" name="form" (ngModelChange)="onFilterChange()">
             <option value="">— Select form —</option>
             @for (f of forms(); track f.id) {
@@ -81,7 +96,7 @@
 
       @if (filters.rankingType === 'subject') {
         <label class="field">
-          <span>Subject</span>
+          <span>Subject<span class="req" aria-hidden="true"> *</span></span>
           <select [(ngModel)]="filters.subjectId" name="subject" (ngModelChange)="onFilterChange()">
             <option value="">— Select subject —</option>
             @for (s of subjects(); track s.id) {
@@ -90,94 +105,197 @@
           </select>
         </label>
       }
+    </div>
 
-      <div class="btn-wrap">
-        <button
-          type="button"
-          class="btn-load"
-          (click)="loadRankings()"
-          [disabled]="loading() || !filtersReady()"
-        >
-          {{ loading() ? 'Loading…' : 'Show rankings' }}
+    <div class="filters-actions">
+      <button
+        type="button"
+        class="btn-load"
+        (click)="loadRankings()"
+        [disabled]="loading() || !filtersReady()"
+      >
+        @if (loading()) {
+          <span class="btn-spinner" aria-hidden="true"></span>
+          Loading…
+        } @else {
+          Show rankings
+        }
+      </button>
+      <button type="button" class="btn-reset" (click)="resetFilters()" [disabled]="loading()">Clear</button>
+      <p class="filters-hint" [class.ready]="filtersReady()" aria-live="polite">{{ nextStepHint() }}</p>
+    </div>
+  </section>
+
+  <!-- ── Loading ─────────────────────────────────────────── -->
+  @if (loading()) {
+    <section class="card empty-state state-card" aria-busy="true">
+      <span class="empty-spinner" aria-hidden="true"></span>
+      <h3>Compiling rankings</h3>
+      <p>Calculating positions from the captured marks.</p>
+    </section>
+  }
+
+  <!-- ── Nothing yet ─────────────────────────────────────── -->
+  @if (!loading() && !hasLoaded()) {
+    <section class="card empty-state state-card">
+      <span class="empty-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6 20V10M12 20V4M18 20v-7"/>
+        </svg>
+      </span>
+      <h3>No rankings to show yet</h3>
+      <p>{{ nextStepHint() }}</p>
+    </section>
+  }
+
+  <!-- ── Results ─────────────────────────────────────────── -->
+  @if (!loading() && hasLoaded() && rankings(); as data) {
+
+    <section class="results-head" aria-label="Rankings summary">
+      <div class="results-title-block">
+        <p class="results-kicker">{{ data.rankingLabel }}</p>
+        <h2 class="results-title">{{ scopeName() || data.rankingLabel }}</h2>
+        <ul class="session-pills" aria-label="Session details">
+          <li class="pill"><strong>Exam</strong>{{ data.examType.name }}</li>
+          <li class="pill"><strong>Term</strong>{{ data.term.name }}</li>
+          @if (data.subject) {
+            <li class="pill pill-subject"><strong>Subject</strong>{{ data.subject.name }}</li>
+          }
+        </ul>
+      </div>
+      <div class="pdf-actions">
+        <button type="button" class="btn-pdf btn-preview" (click)="previewPdf()" [disabled]="pdfLoading()">
+          Preview PDF
         </button>
+        <button type="button" class="btn-pdf btn-download" (click)="downloadPdf()" [disabled]="pdfLoading()">
+          Download PDF
+        </button>
+      </div>
+    </section>
+
+    <div class="kpi-grid summary-grid">
+      <div class="kpi-card">
+        <div>
+          <span class="kpi-lbl">Students ranked</span>
+          <span class="kpi-val">{{ stats().count }}</span>
+        </div>
+      </div>
+      <div class="kpi-card gold">
+        <div>
+          <span class="kpi-lbl">Highest</span>
+          <span class="kpi-val">{{ stats().highest !== null ? (stats().highest | number:'1.1-1') + '%' : '—' }}</span>
+        </div>
+      </div>
+      <div class="kpi-card">
+        <div>
+          <span class="kpi-lbl">Average</span>
+          <span class="kpi-val">{{ stats().mean !== null ? (stats().mean | number:'1.1-1') + '%' : '—' }}</span>
+        </div>
+      </div>
+      <div class="kpi-card">
+        <div>
+          <span class="kpi-lbl">Lowest</span>
+          <span class="kpi-val">{{ stats().lowest !== null ? (stats().lowest | number:'1.1-1') + '%' : '—' }}</span>
+        </div>
       </div>
     </div>
 
-    @if (!filters.rankingType) {
-      <p class="filters-hint">Select a ranking type to enable class, form, or subject filter.</p>
+    @if (honourRoll().length) {
+      <section class="honour" aria-label="Top three students">
+        @for (s of honourRoll(); track s.studentId; let i = $index) {
+          <article class="honour-card" [class.first]="i === 0">
+            <p class="honour-place">{{ ordinal(s.position) }} place</p>
+            <p class="honour-name">{{ s.firstName }} {{ s.lastName }}</p>
+            <p class="honour-meta">
+              {{ classDisplay(s.className) }}
+              @if (isSubjectRanking()) {
+                · Mark {{ s.mark }}
+              } @else {
+                · {{ s.subjectCount }} subjects
+              }
+            </p>
+            <p class="honour-score">
+              {{ s.averagePercent | number:'1.1-1' }}<span class="honour-unit">%</span>
+            </p>
+          </article>
+        }
+      </section>
     }
-  </section>
 
-  @if (hasLoaded() && rankings(); as data) {
-    <section class="card toolbar-card">
-      <div class="toolbar-main">
-        <div>
-          <h2>{{ data.rankingLabel }}</h2>
-          <p class="meta">{{ sessionLabel() }}</p>
+    <section class="card table-card">
+      <div class="table-toolbar">
+        <div class="search-wrap">
+          <label class="sr-only" for="ranking-search">Search students</label>
+          <input
+            id="ranking-search"
+            type="search"
+            class="search"
+            placeholder="Search by name, ID or class"
+            [ngModel]="search()"
+            (ngModelChange)="search.set($event)"
+            name="q"
+            autocomplete="off"
+          />
         </div>
-        <div class="pdf-actions">
-          <button type="button" class="btn-pdf btn-preview" (click)="previewPdf()" [disabled]="pdfLoading()">
-            Preview PDF
-          </button>
-          <button type="button" class="btn-pdf btn-download" (click)="downloadPdf()" [disabled]="pdfLoading()">
-            Download PDF
-          </button>
-        </div>
+        <p class="results-meta" aria-live="polite">
+          Showing <strong>{{ filteredStudents().length }}</strong> of <strong>{{ data.students.length }}</strong>
+        </p>
       </div>
-      <input
-        type="search"
-        class="search"
-        placeholder="Search student…"
-        [ngModel]="search()"
-        (ngModelChange)="search.set($event)"
-        name="q"
-      />
-    </section>
 
-    <section class="card table-wrap">
       <div class="table-scroll">
         <table class="ranking-table">
+          <caption class="sr-only">{{ sessionLabel() }}</caption>
           <thead>
             <tr>
-              <th>Position</th>
-              <th>Student ID</th>
-              <th>Last Name</th>
-              <th>First Name</th>
-              <th>Class</th>
+              <th scope="col" class="col-pos">Position</th>
+              <th scope="col">Student</th>
+              <th scope="col">Class</th>
               @if (data.rankingType === 'form' || data.rankingType === 'subject') {
-                <th>Form</th>
+                <th scope="col">Form</th>
               }
               @if (isSubjectRanking()) {
-                <th>Mark</th>
-                <th>%</th>
+                <th scope="col" class="num">Mark</th>
               } @else {
-                <th>Subjects</th>
-                <th>Average %</th>
+                <th scope="col" class="num">Subjects</th>
               }
+              <th scope="col" class="col-score">{{ isSubjectRanking() ? 'Percentage' : 'Average' }}</th>
             </tr>
           </thead>
           <tbody>
             @for (s of filteredStudents(); track s.studentId) {
               <tr [class.top-three]="s.position <= 3">
-                <td>
-                  <span class="pos-badge" [class.gold]="s.position === 1" [class.silver]="s.position === 2" [class.bronze]="s.position === 3">
-                    {{ s.position }}
-                  </span>
+                <td class="col-pos">
+                  <span class="pos-badge" [class.top]="s.position <= 3">{{ s.position }}</span>
                 </td>
-                <td><code>{{ s.admissionNumber }}</code></td>
-                <td class="fw">{{ s.lastName }}</td>
-                <td>{{ s.firstName }}</td>
+                <td>
+                  <span class="student-name"><strong>{{ s.lastName }}</strong>, {{ s.firstName }}</span>
+                  <code class="student-id">{{ s.admissionNumber }}</code>
+                </td>
                 <td>{{ classDisplay(s.className) }}</td>
                 @if (data.rankingType === 'form' || data.rankingType === 'subject') {
                   <td>{{ s.formName }}</td>
                 }
                 @if (isSubjectRanking()) {
-                  <td class="mark">{{ s.mark }}</td>
-                  <td>{{ s.averagePercent | number:'1.2-2' }}</td>
+                  <td class="num mark">{{ s.mark }}</td>
                 } @else {
-                  <td>{{ s.subjectCount }}</td>
-                  <td class="avg">{{ s.averagePercent | number:'1.2-2' }}</td>
+                  <td class="num">{{ s.subjectCount }}</td>
                 }
+                <td class="col-score">
+                  <span class="score">
+                    <span class="score-num">{{ s.averagePercent | number:'1.2-2' }}</span>
+                    <span class="score-bar" aria-hidden="true"><i [style.width.%]="barWidth(s.averagePercent)"></i></span>
+                  </span>
+                </td>
+              </tr>
+            } @empty {
+              <tr class="no-match">
+                <td [attr.colspan]="6">
+                  @if (search().trim()) {
+                    No students match “{{ search() }}”. Check the spelling or clear the search.
+                  } @else {
+                    No marks have been captured for this selection yet.
+                  }
+                </td>
               </tr>
             }
           </tbody>
@@ -191,7 +309,7 @@
   <div class="pdf-overlay maximized" role="dialog" aria-modal="true" aria-label="Rankings PDF preview">
     <header class="pdf-toolbar">
       <div class="pdf-toolbar-title">
-        <strong>Rankings Preview</strong>
+        <strong>Rankings preview</strong>
         <span>{{ sessionLabel() }}</span>
       </div>
       <div class="pdf-toolbar-actions">

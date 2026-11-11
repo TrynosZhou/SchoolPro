@@ -30,6 +30,10 @@
         <p>{{ filterUnread() ? 'No unread notifications.' : 'No notifications yet.' }}</p>
       </div>
     } @else {
+      <div class="list-meta">
+        <span>{{ visible().length }} {{ visible().length === 1 ? 'notification' : 'notifications' }}</span>
+        <span>{{ unreadCount() }} unread</span>
+      </div>
       <ul class="notif-list">
         @for (n of visible(); track n.id) {
           <li class="notif" [class.unread]="!n.isRead" (click)="markRead(n)">

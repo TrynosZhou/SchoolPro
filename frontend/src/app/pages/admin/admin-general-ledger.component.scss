@@ -1,3 +1,6 @@
+@use '../../../styles/admin-classic' as classic;
+@use '../../../styles/finance-classic' as finance;
+
 .gl-page {
   display: flex;
   flex-direction: column;
@@ -150,3 +153,173 @@ table {
 @media (max-width: 720px) {
   .field.grow { grid-column: span 1; }
 }
+
+// ── Ledger-specific refinements ─────────────────────────────
+:host .gl-page {
+  gap: var(--space-5);
+}
+
+:host .hero .kpi-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+
+  @media (max-width: 720px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+:host .hero .kpi strong {
+  font-size: 1.6rem;
+}
+
+:host .ledger-panel {
+  padding: 0 !important;
+  overflow: hidden;
+  background: var(--color-bg) !important;
+  border: 1px solid var(--color-border) !important;
+  border-radius: 3px !important;
+  box-shadow: none !important;
+}
+
+:host .ledger-panel .filters {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-4) var(--space-5);
+  align-items: end;
+  padding: var(--space-5) var(--space-6);
+  background: var(--fin-paper);
+  border-bottom: 1px solid var(--color-border);
+
+  @media (max-width: 960px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  @media (max-width: 560px) {
+    grid-template-columns: 1fr;
+  }
+
+  .field {
+    max-width: none;
+  }
+
+  .field.grow {
+    grid-column: span 2;
+
+    @media (max-width: 560px) {
+      grid-column: auto;
+    }
+  }
+
+  .actions {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    padding-top: var(--space-4);
+    border-top: 1px solid var(--fin-rule);
+  }
+
+  .actions button {
+    padding: 0.5rem 1.1rem;
+    font-size: var(--font-size-sm);
+    cursor: pointer;
+  }
+}
+
+:host .ledger-panel .meta {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-6);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  border-bottom: 1px solid var(--fin-rule);
+}
+
+:host .ledger-panel table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-base);
+
+  th,
+  td {
+    padding: 0.7rem 0.9rem;
+    border: 0 !important;
+    border-bottom: 1px solid var(--fin-rule) !important;
+  }
+
+  th {
+    font-size: var(--font-size-xs);
+    letter-spacing: 0.07em;
+  }
+
+  th.num,
+  td.num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  tbody tr:nth-child(even) td {
+    background: var(--fin-paper);
+  }
+
+  tbody tr:hover td {
+    background: var(--fin-info-bg);
+  }
+
+  td .acct-name {
+    display: block;
+    margin-top: 0.15rem;
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+  }
+
+  td.debit {
+    color: var(--fin-bad) !important;
+  }
+
+  td.credit {
+    color: var(--fin-ok) !important;
+  }
+
+  td strong {
+    color: var(--navy);
+  }
+
+  td code {
+    padding: 0.1rem 0.4rem;
+    border: 1px solid var(--fin-rule);
+    border-radius: 2px;
+    background: var(--color-bg);
+    color: var(--color-text-secondary);
+    font-family: var(--font-family-mono);
+    font-size: 0.72rem;
+  }
+
+  tr.reversed td {
+    color: var(--color-text-muted);
+    text-decoration: line-through;
+    text-decoration-color: rgba(138, 28, 43, 0.5);
+  }
+}
+
+:host .ledger-panel .loading,
+:host .ledger-panel .empty {
+  padding: var(--space-10) var(--space-6);
+  text-align: center;
+  color: var(--color-text-secondary);
+  font-weight: 600;
+}
+
+:host .ledger-panel .pager {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-6);
+  background: var(--fin-paper);
+  border-top: 1px solid var(--color-border);
+}
+
+@include classic.page;
+@include finance.page;

@@ -15,4 +15,10 @@ export const environment = {
    *   NG_APP_API_URL='https://your-backend.example.com/api'
    */
   apiUrl: BUILD_TIME_API_URL ?? '/api',
+  /** "Follow us" links shown in the top header. Leave a value empty to hide that icon. */
+  social: {
+    facebook: 'https://www.facebook.com/',
+    instagram: 'https://www.instagram.com/',
+    website: 'https://schoolpro.ac.zw',
+  },
 };

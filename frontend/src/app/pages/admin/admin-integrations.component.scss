@@ -1,3 +1,5 @@
+@use '../../../styles/admin-classic' as classic;
+
 :host {
   display: block;
   --int-accent: #0d9488;
@@ -464,4 +466,331 @@
 
   &:hover:not(:disabled) { background: var(--int-accent-soft); }
   &:disabled { opacity: 0.6; cursor: not-allowed; }
+}
+
+// =============================================================
+// Classical navy & brass layer (shared with Login + Dashboard)
+// =============================================================
+@include classic.page;
+
+// ── Page-specific refinements ────────────────────────────────
+// Re-point the page's teal accent at the shared palette
+:host {
+  --int-accent: var(--navy);
+  --int-accent-soft: var(--brass-soft);
+  --int-border: var(--color-border);
+  --int-muted: var(--color-text-muted);
+  --int-radius: 3px;
+  --int-shadow: none;
+  --int-surface: var(--color-bg);
+
+  // ── Hero (uses .page-hero rather than .hero) ───────────────
+  .page-hero {
+    align-items: center;
+    padding: var(--space-6) var(--space-6) var(--space-5);
+    background: var(--color-bg) !important;
+    border: 1px solid var(--color-border) !important;
+    border-top: 3px solid var(--brass) !important;
+    border-radius: 3px !important;
+    box-shadow: none !important;
+  }
+
+  .hero-eyebrow {
+    margin: 0 0 var(--space-2);
+    font-size: var(--font-size-xs);
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    color: var(--brass-ink) !important;
+  }
+
+  .hero-title {
+    margin: 0 0 var(--space-2);
+    font-family: var(--serif);
+    font-size: 2.4rem;
+    font-weight: 600;
+    line-height: 1.05;
+    letter-spacing: 0;
+    color: var(--navy) !important;
+  }
+
+  .hero-sub {
+    max-width: 36rem;
+    font-size: var(--font-size-base);
+    line-height: 1.6;
+    color: var(--color-text-secondary) !important;
+
+    &--link a {
+      color: var(--navy) !important;
+      text-decoration: underline;
+      text-decoration-color: var(--brass);
+      text-decoration-thickness: 2px;
+      text-underline-offset: 3px;
+
+      &:hover {
+        color: var(--brass-ink) !important;
+      }
+    }
+  }
+
+  .hero-stats {
+    gap: var(--space-4);
+  }
+
+  .stat-chip,
+  .stat-chip.accent {
+    min-width: 6.5rem;
+    padding: var(--space-3) var(--space-5);
+    background: var(--color-bg) !important;
+    border: 1px solid var(--color-border) !important;
+    border-top: 3px solid var(--brass) !important;
+    border-radius: 3px;
+
+    .stat-val {
+      font-family: var(--serif);
+      font-size: 2.2rem;
+      font-weight: 600;
+      line-height: 1;
+      color: var(--navy) !important;
+    }
+
+    .stat-lbl {
+      margin-top: var(--space-1);
+      font-size: var(--font-size-xs);
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      color: var(--color-text-secondary) !important;
+      opacity: 1;
+    }
+  }
+
+  // ── Provider rail ──────────────────────────────────────────
+  .provider-rail {
+    gap: 0;
+    padding: 0;
+    overflow: hidden;
+    border: 1px solid var(--color-border);
+    border-top: 3px solid var(--brass);
+    border-radius: 3px;
+    background: var(--color-bg);
+  }
+
+  .provider-item {
+    border-radius: 0;
+    border-bottom: 1px solid var(--color-border);
+    border-left: 3px solid transparent;
+    padding: var(--space-3) var(--space-4);
+
+    &:last-child {
+      border-bottom: 0;
+    }
+
+    &:hover {
+      background: var(--color-bg-subtle);
+      color: var(--navy);
+    }
+
+    &.active {
+      background: var(--brass-soft);
+      border-left-color: var(--brass);
+      box-shadow: none;
+
+      .provider-label {
+        color: var(--navy);
+        font-weight: 700;
+      }
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--brass);
+      outline-offset: -2px;
+    }
+  }
+
+  .provider-icon {
+    border-radius: 50%;
+    border: 1px solid var(--color-border-strong);
+    background: transparent;
+    filter: grayscale(1) contrast(1.1);
+    font-size: 1.05rem;
+  }
+
+  .provider-item.active .provider-icon {
+    background: var(--color-bg);
+    border-color: var(--brass);
+  }
+
+  .provider-label {
+    font-size: var(--font-size-base);
+    font-weight: 600;
+    color: var(--color-text-primary);
+  }
+
+  .provider-desc {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
+  }
+
+  .status-pill {
+    border: 1px solid transparent;
+    padding: 0.2rem 0.5rem;
+
+    &.active {
+      background: rgba(22, 163, 74, 0.1);
+      border-color: rgba(22, 163, 74, 0.35);
+      color: #166534;
+    }
+
+    &.configured {
+      background: var(--brass-soft);
+      border-color: rgba(184, 146, 74, 0.5);
+      color: var(--brass-ink);
+    }
+
+    &.disabled {
+      background: var(--color-bg-muted);
+      border-color: var(--color-border);
+      color: var(--color-text-muted);
+    }
+  }
+
+  // ── Content area ───────────────────────────────────────────
+  .content-head {
+    padding-bottom: var(--space-4);
+    border-bottom: 1px solid var(--color-border);
+
+    h2 {
+      font-family: var(--serif);
+      font-size: 1.9rem;
+      font-weight: 600;
+      line-height: 1.1;
+      color: var(--navy);
+    }
+
+    p {
+      color: var(--color-text-secondary);
+    }
+  }
+
+  .enable-toggle {
+    border-radius: 2px;
+    border: 1px solid var(--color-border-strong);
+    background: var(--color-bg);
+    color: var(--navy);
+    font-weight: 600;
+  }
+
+  .panel {
+    padding: var(--space-6);
+    border: 1px solid var(--color-border);
+    border-top: 3px solid var(--brass);
+    border-radius: 3px;
+    box-shadow: none;
+  }
+
+  .field {
+    gap: var(--space-2);
+
+    small {
+      color: var(--color-text-muted);
+
+      code {
+        border-radius: 2px;
+        border: 1px solid var(--color-border);
+        background: var(--color-bg-muted);
+        color: var(--navy);
+        font-family: var(--font-family-mono);
+      }
+    }
+  }
+
+  .info-banner {
+    border-radius: 2px;
+    border: 1px solid rgba(184, 146, 74, 0.45);
+    border-left: 3px solid var(--brass);
+    background: var(--brass-soft);
+    color: var(--brass-ink);
+  }
+
+  .test-block,
+  .events-block {
+    h3 {
+      font-size: var(--font-size-xs);
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--brass-ink);
+    }
+  }
+
+  .event-chip {
+    border-radius: 2px;
+    border: 1px solid var(--color-border-strong);
+    background: var(--color-bg);
+    color: var(--color-text-secondary);
+    font-weight: 600;
+
+    &:hover {
+      border-color: var(--navy);
+      color: var(--navy);
+    }
+
+    &.selected {
+      background: var(--navy);
+      border-color: var(--navy);
+      color: #fff;
+      box-shadow: inset 0 -2px 0 var(--brass);
+      font-weight: 600;
+    }
+
+    input {
+      accent-color: var(--brass);
+    }
+  }
+
+  .form-actions {
+    padding-top: var(--space-4);
+    border-top: 1px solid var(--color-border);
+  }
+
+  // Buttons: page defines its own teal gradient versions
+  .btn-primary {
+    padding: 0.65rem 1.35rem;
+    background: var(--navy) !important;
+    background-image: none !important;
+    box-shadow: inset 0 -3px 0 var(--brass) !important;
+    transform: none;
+  }
+
+  .btn-outline {
+    padding: 0.65rem 1.2rem;
+    background: var(--color-bg) !important;
+    border: 1px solid var(--color-border-strong) !important;
+    color: var(--navy) !important;
+  }
+
+  .loading-state {
+    color: var(--color-text-secondary);
+  }
+}
+
+:host-context([data-theme='dark']) {
+  .hero-title,
+  .content-head h2,
+  .stat-chip .stat-val,
+  .stat-chip.accent .stat-val {
+    color: var(--color-text-primary) !important;
+  }
+
+  .provider-item.active .provider-label,
+  .event-chip:hover {
+    color: var(--color-text-primary);
+  }
+
+  .status-pill.active {
+    color: #86efac;
+  }
+
+  .btn-outline {
+    color: var(--color-text-primary) !important;
+  }
 }

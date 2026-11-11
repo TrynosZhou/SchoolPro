@@ -1,3 +1,5 @@
+@use '../../../styles/admin-classic' as classic;
+
 :host {
   display: block;
 }
@@ -539,3 +541,342 @@ tbody tr:hover td {
     border-color: color-mix(in srgb, var(--color-negative) 30%, var(--color-border));
   }
 }
+
+// =============================================================
+// Classic navy & brass refinements for the Custom Report Builder
+// =============================================================
+:host {
+  --paper: #fbfaf7;
+  --rule: #e3ddd0;
+  // The builder reads these tokens throughout; point them at navy
+  --color-accent: #16294a;
+  --color-accent-hover: #0f1d36;
+  --color-accent-subtle: #eef1f6;
+}
+
+// ── Header ──────────────────────────────────────────────────
+:host .greeting {
+  align-items: flex-end;
+  padding: var(--space-6) var(--space-6) var(--space-5);
+  background: var(--color-bg) !important;
+  border: 1px solid var(--color-border) !important;
+  border-top: 3px solid var(--brass) !important;
+  border-radius: 3px !important;
+}
+
+:host .greeting-copy {
+  .eyebrow {
+    margin: 0 0 var(--space-2);
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    color: var(--brass-ink);
+  }
+
+  h1 {
+    padding-bottom: var(--space-3);
+    margin-bottom: var(--space-3);
+    border-bottom: 1px solid var(--rule);
+    font-family: var(--serif);
+    font-size: 2.6rem;
+    font-weight: 600;
+    line-height: 1.05;
+    letter-spacing: 0;
+    color: var(--navy);
+  }
+}
+
+:host .cta,
+:host .btn {
+  border-radius: 2px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+:host .cta {
+  padding: 0.55rem 1.3rem;
+  border-color: var(--navy);
+  color: var(--navy);
+
+  &:hover:not(:disabled) {
+    background: #eef1f6;
+    border-color: var(--navy);
+    color: var(--navy);
+  }
+}
+
+:host .cta.primary,
+:host .btn.primary {
+  background: var(--navy);
+  border-color: var(--navy);
+  color: #fff;
+  box-shadow: inset 0 -3px 0 var(--brass);
+
+  &:hover:not(:disabled) {
+    background: var(--navy-2);
+    border-color: var(--navy-2);
+    color: #fff;
+  }
+
+  &:disabled {
+    box-shadow: none;
+  }
+}
+
+:host .btn {
+  border-color: var(--color-border-strong);
+  color: var(--navy);
+
+  &:hover:not(:disabled) {
+    background: #eef1f6;
+    border-color: var(--navy);
+    color: var(--navy);
+  }
+
+  &.danger {
+    border-color: rgba(138, 28, 43, 0.4);
+    color: #8a1c2b;
+
+    &:hover:not(:disabled) {
+      background: #f8ecee;
+      border-color: #8a1c2b;
+      color: #8a1c2b;
+    }
+  }
+}
+
+// ── Summary tiles: ledger style instead of pastel washes ────
+:host .summary-row {
+  gap: var(--space-4);
+}
+
+:host .summary-card.token-kpi-card {
+  min-height: 0;
+  padding: var(--space-4) var(--space-5);
+  background: var(--color-bg) !important;
+  border: 1px solid var(--color-border) !important;
+  border-top: 3px solid var(--brass) !important;
+  border-radius: 3px !important;
+}
+
+:host .summary-label {
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+:host .summary-card .token-kpi-number {
+  margin: var(--space-1) 0;
+  font-family: var(--serif);
+  font-size: 2.4rem;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0;
+  color: var(--navy);
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+:host .summary-caption {
+  color: var(--color-text-secondary);
+}
+
+// ── Panels ──────────────────────────────────────────────────
+:host .token-card {
+  background: var(--color-bg) !important;
+  border: 1px solid var(--color-border) !important;
+  border-radius: 3px !important;
+  box-shadow: none !important;
+}
+
+:host .builder-panel {
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+:host .builder-panel .step {
+  padding: var(--space-5);
+  border-bottom: 1px solid var(--rule);
+}
+
+:host .builder-panel .panel-actions {
+  margin: 0;
+  padding: var(--space-4) var(--space-5);
+  background: var(--paper);
+}
+
+// Steps are a real sequence, so numbering stays — as brass-ringed marks
+:host .step-head {
+  h2 {
+    font-family: var(--serif);
+    font-size: 1.35rem;
+    font-weight: 600;
+    line-height: 1.1;
+    color: var(--navy);
+  }
+}
+
+:host .step-num {
+  width: 1.7rem;
+  height: 1.7rem;
+  border: 1px solid var(--brass);
+  background: var(--color-bg);
+  color: var(--brass-ink);
+  font-family: var(--serif);
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+:host .link-btn {
+  color: var(--navy);
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-color: var(--brass);
+  text-underline-offset: 3px;
+
+  &:hover {
+    color: var(--brass-ink);
+  }
+}
+
+:host .hint {
+  color: var(--color-text-secondary);
+}
+
+:host .fld span {
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+:host .fld input,
+:host .fld select {
+  border: 1px solid var(--color-border-strong);
+  border-radius: 2px;
+  color: var(--navy);
+  transition: border-color var(--transition-base), box-shadow var(--transition-base);
+
+  &:hover:not(:disabled) {
+    border-color: var(--navy);
+  }
+
+  &:focus-visible {
+    outline: none;
+    border-color: var(--navy);
+    box-shadow: 0 0 0 3px var(--brass-soft);
+  }
+}
+
+:host .field-checks {
+  border: 1px solid var(--color-border);
+  border-radius: 2px;
+  background: var(--paper);
+}
+
+:host .check {
+  border-radius: 2px;
+  color: var(--navy);
+  font-weight: 500;
+
+  &:hover {
+    background: #eef1f6;
+  }
+
+  &:has(input:checked) {
+    box-shadow: inset 3px 0 0 var(--brass);
+    font-weight: 600;
+  }
+
+  input {
+    accent-color: var(--navy);
+  }
+}
+
+:host .toolbar,
+:host .templates-bar {
+  padding: var(--space-5) var(--space-6);
+}
+
+:host .templates-bar {
+  background: var(--paper) !important;
+}
+
+// ── Results ─────────────────────────────────────────────────
+:host .preview-head h3,
+:host .empty-state h3 {
+  font-family: var(--serif);
+  font-size: 1.6rem;
+  font-weight: 600;
+  line-height: 1.1;
+  color: var(--navy);
+}
+
+:host .preview-head {
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--rule);
+}
+
+:host .empty-state {
+  background: var(--paper);
+  border: 1px dashed var(--color-border-strong);
+  border-radius: 2px;
+}
+
+:host .spinner {
+  border-color: var(--rule);
+  border-top-color: var(--brass);
+}
+
+:host .table-scroll {
+  border: 1px solid var(--color-border);
+  border-radius: 2px;
+}
+
+:host thead th {
+  background: #1a2744;
+  color: #f8fafc;
+  border-bottom: 0;
+  box-shadow: inset 0 -2px 0 var(--brass);
+}
+
+:host tbody td {
+  border-bottom: 1px solid var(--rule);
+}
+
+:host tbody tr:nth-child(even) td {
+  background: var(--paper);
+}
+
+:host tbody tr:hover td {
+  background: #eef1f6;
+}
+
+:host .toast {
+  border-radius: 2px;
+  border-left: 3px solid var(--brass);
+}
+
+:host-context([data-theme='dark']) {
+  --paper: #16181d;
+  --rule: #2a2d35;
+}
+
+@media (max-width: 720px) {
+  :host .greeting {
+    padding: var(--space-4);
+  }
+
+  :host .greeting-copy h1 {
+    font-size: 2rem;
+  }
+
+  :host .toolbar,
+  :host .templates-bar {
+    padding: var(--space-4);
+  }
+}
+
+@include classic.page;

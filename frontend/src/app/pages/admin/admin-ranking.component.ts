@@ -108,6 +108,34 @@ export class AdminRankingComponent implements OnInit, OnDestroy {
     );
   });
 
+  /** Top three places (ties share a position, so we cap the strip at three cards). */
+  readonly honourRoll = computed(() =>
+    [...(this.rankings()?.students || [])].sort((a, b) => a.position - b.position).slice(0, 3),
+  );
+
+  /** Summary figures across every ranked student (not affected by the search box). */
+  readonly stats = computed(() => {
+    const rows = this.rankings()?.students || [];
+    const scores = rows
+      .map((s) => s.averagePercent)
+      .filter((v): v is number => typeof v === 'number');
+    if (!scores.length) {
+      return { count: rows.length, highest: null, lowest: null, mean: null };
+    }
+    return {
+      count: rows.length,
+      highest: Math.max(...scores),
+      lowest: Math.min(...scores),
+      mean: scores.reduce((a, b) => a + b, 0) / scores.length,
+    };
+  });
+
+  /** Name of the class, form or subject the rankings are scoped to. */
+  readonly scopeName = computed(() => {
+    const d = this.rankings();
+    return d?.class?.name || d?.form?.name || d?.subject?.name || '';
+  });
+
   readonly pdfFilename = computed(() => {
     const label = this.sessionLabel().replace(/[^\w\-]+/g, '-').replace(/-+/g, '-');
     return label ? `rankings-${label}.pdf` : 'rankings.pdf';
@@ -312,6 +340,47 @@ export class AdminRankingComponent implements OnInit, OnDestroy {
   private showToast(type: 'success' | 'error', msg: string): void {
     this.toast.set({ type, msg });
     setTimeout(() => this.toast.set(null), 4500);
+  }
+
+  /** Tells the user what is still needed before rankings can be shown. */
+  nextStepHint(): string {
+    const f = this.filters;
+    if (!f.examTypeId) return 'Choose an exam type to begin.';
+    if (!f.termId) return 'Choose a term.';
+    if (!f.rankingType) return 'Choose how students should be ranked.';
+    if (f.rankingType === 'class' && !f.classId) return 'Choose a class.';
+    if (f.rankingType === 'form' && !f.formId) return 'Choose a form.';
+    if (f.rankingType === 'subject' && !f.subjectId) return 'Choose a subject.';
+    return 'Ready. Select Show rankings.';
+  }
+
+  resetFilters(): void {
+    this.filters.examTypeId = '';
+    this.filters.rankingType = '';
+    this.filters.classId = '';
+    this.filters.formId = '';
+    this.filters.subjectId = '';
+    this.subjects.set([]);
+    this.search.set('');
+    this.closePdfPreview();
+    this.clearResults();
+  }
+
+  ordinal(n: number): string {
+    const v = n % 100;
+    if (v >= 11 && v <= 13) return `${n}th`;
+    switch (n % 10) {
+      case 1: return `${n}st`;
+      case 2: return `${n}nd`;
+      case 3: return `${n}rd`;
+      default: return `${n}th`;
+    }
+  }
+
+  /** Clamp a percentage to 0–100 for the inline score bar. */
+  barWidth(percent: number | null | undefined): number {
+    if (typeof percent !== 'number' || Number.isNaN(percent)) return 0;
+    return Math.max(0, Math.min(100, percent));
   }
 
   classDisplay(className?: string): string {

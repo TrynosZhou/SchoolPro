@@ -302,6 +302,21 @@ export class PortalLayoutComponent implements OnInit, OnChanges, OnDestroy {
     return '/';
   }
 
+  /** "Follow us" links for the top header (configured in environment.social). */
+  get socialLinks(): { facebook: string; instagram: string; website: string } {
+    const social = (environment as { social?: Partial<Record<'facebook' | 'instagram' | 'website', string>> }).social ?? {};
+    return {
+      facebook: (social.facebook ?? '').trim(),
+      instagram: (social.instagram ?? '').trim(),
+      website: (social.website ?? '').trim(),
+    };
+  }
+
+  get hasSocialLinks(): boolean {
+    const l = this.socialLinks;
+    return !!(l.facebook || l.instagram || l.website);
+  }
+
   get calendarPath(): string {
     const role = (this.auth.user()?.role || '').toLowerCase();
     if (role === 'admin') return '/admin/timetable/view';

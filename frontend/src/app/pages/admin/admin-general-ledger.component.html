@@ -5,7 +5,7 @@
     }
 
     <header class="hero">
-      <div>
+      <div class="hero-copy">
         <p class="eyebrow">Finance reports</p>
         <h2>General ledger</h2>
         <p class="hero-sub">
@@ -14,17 +14,30 @@
         </p>
       </div>
       @if (report(); as r) {
-        <div class="summary-pills">
-          <span class="pill">Debits: ${{ r.summary.totalDebits | number:'1.2-2' }}</span>
-          <span class="pill">Credits: ${{ r.summary.totalCredits | number:'1.2-2' }}</span>
-          <span class="pill" [class.warn]="!r.summary.balanced">
-            Variance: ${{ r.summary.variance | number:'1.2-2' }}
-          </span>
+        <div class="kpi-grid">
+          <article class="kpi">
+            <div>
+              <strong>${{ r.summary.totalDebits | number:'1.2-2' }}</strong>
+              <span>Total debits</span>
+            </div>
+          </article>
+          <article class="kpi">
+            <div>
+              <strong>${{ r.summary.totalCredits | number:'1.2-2' }}</strong>
+              <span>Total credits</span>
+            </div>
+          </article>
+          <article class="kpi" [class.ok]="r.summary.balanced" [class.bad]="!r.summary.balanced">
+            <div>
+              <strong>${{ r.summary.variance | number:'1.2-2' }}</strong>
+              <span>{{ r.summary.balanced ? 'Variance · books balanced' : 'Variance · out of balance' }}</span>
+            </div>
+          </article>
         </div>
       }
     </header>
 
-    <section class="panel">
+    <section class="panel ledger-panel">
       <form class="filters" [formGroup]="filterForm" (ngSubmit)="applyFilters()">
         <div class="field">
           <label for="startDate">From</label>
@@ -65,11 +78,11 @@
         </div>
         <div class="actions">
           <button type="submit" class="btn-primary" [disabled]="loading()">Apply</button>
-          <button type="button" class="btn-primary" (click)="clearFilters()">Reset</button>
-          <button type="button" class="btn-primary" (click)="previewPdf()" [disabled]="pdfPreviewLoading() || exporting()">
+          <button type="button" class="btn-outline" (click)="clearFilters()">Reset</button>
+          <button type="button" class="btn-outline" (click)="previewPdf()" [disabled]="pdfPreviewLoading() || exporting()">
             {{ pdfPreviewLoading() ? 'Generating…' : 'Preview PDF' }}
           </button>
-          <button type="button" class="btn-primary" (click)="export('csv')" [disabled]="exporting() || pdfPreviewLoading()">Export CSV</button>
+          <button type="button" class="btn-outline" (click)="export('csv')" [disabled]="exporting() || pdfPreviewLoading()">Export CSV</button>
           <button type="button" class="btn-primary" (click)="export('pdf')" [disabled]="exporting() || pdfPreviewLoading()">Download PDF</button>
         </div>
       </form>

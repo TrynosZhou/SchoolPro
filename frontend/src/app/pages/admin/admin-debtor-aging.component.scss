@@ -1,3 +1,6 @@
+@use '../../../styles/admin-classic' as classic;
+@use '../../../styles/finance-classic' as finance;
+
 :host {
   display: block;
 }
@@ -1162,3 +1165,7 @@
     box-shadow: none;
   }
 }
+
+// Classic navy & brass layer (shared with the other admin pages). Keep last so it wins ties.
+@include classic.page;
+@include finance.page;

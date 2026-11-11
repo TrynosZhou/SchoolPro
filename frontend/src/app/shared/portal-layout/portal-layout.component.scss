@@ -583,6 +583,29 @@ $sidebar-transition: 0.2s ease;
   margin-left: auto;
 }
 
+// "Follow us" group: sits with the other header icons, set off by a hairline
+.topbar-social {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding-right: 0.75rem;
+  margin-right: 0.1rem;
+  border-right: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+.topbar-social-link {
+  text-decoration: none;
+
+  &:hover {
+    color: #e6d3a8;
+  }
+
+  &:focus-visible {
+    outline: 2px solid #b8924a;
+    outline-offset: 2px;
+  }
+}
+
 .topbar-action-icon {
   position: relative;
   display: flex;
@@ -1895,6 +1918,11 @@ $sidebar-transition: 0.2s ease;
 
   .topbar-actions {
     gap: 0.55rem;
+  }
+
+  .topbar-social {
+    gap: 0.55rem;
+    padding-right: 0.55rem;
   }
 
   .topbar-action span {
