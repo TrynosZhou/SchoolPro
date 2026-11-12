@@ -159,6 +159,9 @@ function buildTuitionExemptionNarrative(
   isCredit: boolean,
 ): string {
   const desc = String(entry.description || '').trim();
+  if (desc.toLowerCase().includes('outstanding balance')) {
+    return desc;
+  }
   if (desc.includes('%') && desc.includes('$') && desc.length > 24) {
     return desc;
   }

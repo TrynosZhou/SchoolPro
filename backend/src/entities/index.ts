@@ -40,6 +40,7 @@ import { SchoolSettings } from './SchoolSettings';
 import { SchoolFee } from './SchoolFee';
 import { ClassPromotionRule } from './ClassPromotionRule';
 import { ResultsPublication } from './ResultsPublication';
+import { ReportCardView } from './ReportCardView';
 import { StudentTermBalance } from './StudentTermBalance';
 import { StaffPayrollProfile } from './StaffPayrollProfile';
 import { PayrollRun } from './PayrollRun';
@@ -76,6 +77,7 @@ export const entities = [
   SchoolFee,
   ClassPromotionRule,
   ResultsPublication,
+  ReportCardView,
   StudentTermBalance,
   SchoolYear,
   Term,
@@ -186,6 +188,7 @@ export {
   SchoolFee,
   ClassPromotionRule,
   ResultsPublication,
+  ReportCardView,
   StudentTermBalance,
   StaffPayrollProfile,
   PayrollRun,

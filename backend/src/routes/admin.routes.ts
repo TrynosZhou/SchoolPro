@@ -1996,15 +1996,30 @@ router.patch('/parents/:id', authorize(UserRole.ADMIN), async (req: AuthRequest,
 });
 
 router.delete('/parents/:id', authorize(UserRole.ADMIN), async (req: AuthRequest, res: Response) => {
-  const parent = await loadParentRecord(req.params.id);
-  if (!parent) return res.status(404).json({ message: 'Parent not found' });
+  try {
+    // Light lookup only (no guardianship/student joins) so deletion never depends on the heavy detail loader.
+    const parent = await AppDataSource.getRepository(Parent).findOne({ where: { id: req.params.id } });
+    if (!parent) return res.status(404).json({ message: 'Parent not found' });
 
-  if (parent.userId === req.user!.userId) {
-    return res.status(400).json({ message: 'You cannot delete your own account' });
+    if (parent.userId === req.user!.userId) {
+      return res.status(400).json({ message: 'You cannot delete your own account' });
+    }
+
+    // Deleting the user cascades to the parent profile; guardian links to children are unlinked
+    // (parentId set to null) and the parent's report-card view records are removed.
+    await AppDataSource.getRepository(User).delete({ id: parent.userId });
+    return res.json({ message: 'Parent deleted' });
+  } catch (err) {
+    console.error('Delete parent failed:', err);
+    const code = (err as { code?: string })?.code;
+    if (code === '23503') {
+      return res.status(409).json({
+        message:
+          'This parent cannot be deleted because other records (e.g. messages, payments or audit entries) still reference their account. Deactivate the account instead.',
+      });
+    }
+    return res.status(500).json({ message: err instanceof Error ? err.message : 'Failed to delete parent' });
   }
-
-  await AppDataSource.getRepository(User).delete({ id: parent.userId });
-  res.json({ message: 'Parent deleted' });
 });
 
 router.use('/permissions', permissionsRoutes);

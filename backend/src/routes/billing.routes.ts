@@ -421,8 +421,8 @@ router.post('/tuition-exemptions', authorize(...financeStaff), async (req, res: 
 
 router.delete('/tuition-exemptions/:id', authorize(...financeStaff), async (req, res: Response) => {
   try {
-    await removeTuitionExemption(req.params.id);
-    res.json({ ok: true });
+    const applied = await removeTuitionExemption(req.params.id);
+    res.json({ ok: true, applied });
   } catch (err) {
     return res.status(400).json({ message: err instanceof Error ? err.message : 'Failed to remove exemption' });
   }
@@ -449,12 +449,12 @@ router.get('/tuition-exemptions/export.pdf', authorize(...financeStaff), async (
   const pageBottom = () => doc.page.height - margin - 20;
   const exemptionLabel = (row: (typeof rows)[number]) => {
     if (row.exemptionType === 'staff_child') {
-      return 'Staff child — all fees waived';
+      return 'Staff child — balance & fees waived';
     }
     if (row.exemptionType === 'percentage') {
-      return `${row.value}% off tuition`;
+      return row.value >= 100 ? '100% — balance written off' : `${row.value}% off tuition`;
     }
-    return `$${Number(row.value).toFixed(2)} off tuition`;
+    return `$${Number(row.value).toFixed(2)} off balance & tuition`;
   };
 
   let y = margin;

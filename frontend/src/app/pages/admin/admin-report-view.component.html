@@ -1,0 +1,127 @@
+<app-portal-layout portalTitle="Admin Portal" pageTitle="Report Access" [navSections]="adminNav">
+  <div class="rv-page">
+    <header class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">Examinations · Results</p>
+        <h2>Report Access</h2>
+        <p class="hero-sub">
+          Parents who have not yet opened the report card of at least one linked child for the selected term and exam type.
+          Select a parent to see their children.
+        </p>
+      </div>
+      <div class="hero-actions">
+        <a routerLink="/admin" class="hero-link">← Dashboard</a>
+        <button type="button" class="refresh-btn" (click)="load()" [disabled]="loading()">
+          {{ loading() ? 'Refreshing…' : 'Refresh' }}
+        </button>
+      </div>
+    </header>
+
+    <section class="card filters-row">
+      <label class="field">
+        <span>Term</span>
+        <select [(ngModel)]="selectedTermId" name="term" (ngModelChange)="onFilterChange()">
+          @for (t of terms(); track t.id) {
+            <option [value]="t.id">{{ t.name }}{{ t.isCurrent ? ' (current)' : '' }}</option>
+          }
+        </select>
+      </label>
+      <label class="field">
+        <span>Exam type</span>
+        <select [(ngModel)]="selectedExamTypeId" name="examType" (ngModelChange)="onFilterChange()">
+          @for (e of examTypes(); track e.id) {
+            <option [value]="e.id">{{ e.name }}</option>
+          }
+        </select>
+      </label>
+      <label class="field grow">
+        <span>Search</span>
+        <input type="search" placeholder="Parent or child name" [ngModel]="search()" (ngModelChange)="search.set($event)" name="search" />
+      </label>
+    </section>
+
+    @if (error(); as err) {
+      <div class="notice error">{{ err }}</div>
+    }
+
+    @if (data(); as d) {
+      <section class="stats">
+        <article class="stat">
+          <span class="stat-label">Parents yet to view</span>
+          <strong>{{ d.parentsPending }}</strong>
+        </article>
+        <article class="stat">
+          <span class="stat-label">Parents fully viewed</span>
+          <strong>{{ d.parentsCompleted }}</strong>
+        </article>
+        <article class="stat">
+          <span class="stat-label">Parents with published results</span>
+          <strong>{{ d.totalParents }}</strong>
+        </article>
+      </section>
+
+      <section class="card list-card">
+        <div class="list-head">
+          <h3>
+            {{ d.term?.name || 'No term' }}
+            @if (d.examType) { · {{ d.examType.name }} }
+          </h3>
+        </div>
+
+        @if (loading()) {
+          <p class="empty">Loading…</p>
+        } @else if (!d.term || !d.examType) {
+          <p class="empty">No term or exam type is available yet.</p>
+        } @else if (!d.published) {
+          <p class="empty">Results for this term and exam type have not been published yet, so parents cannot view them.</p>
+        } @else if (!d.parentsPending) {
+          <p class="empty">Every parent has viewed all of their linked children's report cards.</p>
+        } @else if (!filteredParents().length) {
+          <p class="empty">No parents match your search.</p>
+        } @else {
+          <ul class="parent-list">
+            @for (p of filteredParents(); track p.parentId) {
+              <li class="parent-item" [class.open]="expandedParentId() === p.parentId">
+                <button
+                  type="button"
+                  class="parent-row"
+                  (click)="toggleParent(p.parentId)"
+                  [attr.aria-expanded]="expandedParentId() === p.parentId"
+                >
+                  <span class="parent-name">{{ p.name }}</span>
+                  <span class="parent-meta">{{ p.viewedChildren }} of {{ p.totalChildren }} viewed</span>
+                  <span class="chev" aria-hidden="true">{{ expandedParentId() === p.parentId ? '▾' : '▸' }}</span>
+                </button>
+
+                @if (expandedParentId() === p.parentId) {
+                  <div class="children-panel">
+                    @if (p.phone || p.email) {
+                      <p class="contact">{{ p.phone }}{{ p.phone && p.email ? ' · ' : '' }}{{ p.email }}</p>
+                    }
+                    <ul class="child-list">
+                      @for (c of p.children; track c.studentId) {
+                        <li class="child" [class.seen]="c.viewed">
+                          <span class="child-name" [class.struck]="c.viewed">{{ c.firstName }} {{ c.lastName }}</span>
+                          <span class="child-info">
+                            {{ c.admissionNumber }}{{ childClass(c) ? ' · ' + childClass(c) : '' }}
+                          </span>
+                          <span class="child-status" [class.ok]="c.viewed">
+                            @if (c.viewed) {
+                              Viewed {{ c.viewedAt | date: 'dd MMM yyyy, HH:mm' }}
+                            } @else {
+                              Not viewed
+                            }
+                          </span>
+                        </li>
+                      }
+                    </ul>
+                  </div>
+                }
+              </li>
+            }
+          </ul>
+        }
+      </section>
+    }
+  </div>
+</app-portal-layout>

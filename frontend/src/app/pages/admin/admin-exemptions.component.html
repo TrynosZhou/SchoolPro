@@ -9,8 +9,10 @@
         <p class="eyebrow">Finance</p>
         <h2>Fee exemptions</h2>
         <p class="hero-sub">
-          Staff children are exempt from desk fee, registration fee and tuition. Every other exemption is a fixed percentage
-          or fixed amount taken off tuition when bulk tuition invoices are created and on registration tuition lines.
+          Staff children are exempt from desk fee, registration fee and tuition. A 100% exemption writes off the student's
+          whole outstanding balance. A fixed percentage is calculated on the original tuition invoice amount and deducted from the
+          invoice balance, so the student pays the reduced tuition for the term. A fixed amount is deducted from the outstanding balance.
+          The same discount applies when bulk tuition invoices are created and on registration tuition lines.
         </p>
       </div>
       <div class="hero-actions">
@@ -186,7 +188,7 @@
               </div>
               @if (formType === 'staff_child') {
                 <p class="staff-child-note">
-                  Waives <strong>desk fee</strong>, <strong>registration fee</strong>, and <strong>tuition</strong> on all open invoices for this student.
+                  Waives <strong>desk fee</strong>, <strong>registration fee</strong>, and <strong>tuition</strong>, and writes off the student's entire <strong>outstanding balance</strong> on all open invoices.
                 </p>
               }
             </div>
@@ -203,6 +205,13 @@
                 step="0.01"
                 required
               />
+              @if (formType === 'percentage' && formValue >= 100) {
+                <p class="staff-child-note">A 100% exemption writes off the student's <strong>outstanding balance</strong> completely.</p>
+              } @else if (formType === 'percentage') {
+                <p class="staff-child-note">This percentage is calculated on the student's original <strong>tuition invoice amount</strong> and deducted from the invoice balance; the remainder is the tuition payable for the term.</p>
+              } @else {
+                <p class="staff-child-note">This amount is deducted from the student's <strong>outstanding balance</strong> (never more than what is owed).</p>
+              }
             </div>
             }
 

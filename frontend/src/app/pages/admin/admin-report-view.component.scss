@@ -1,0 +1,291 @@
+:host {
+  display: block;
+}
+
+.rv-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  max-width: 1100px;
+}
+
+.card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+}
+
+.hero {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 1rem;
+  padding: 1.5rem 1.75rem;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+
+  h2 {
+    margin: 0 0 0.35rem;
+    font-size: 1.5rem;
+    color: #0f172a;
+  }
+
+  .eyebrow {
+    margin: 0 0 0.25rem;
+    font-size: 0.75rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #b08d4a;
+    font-weight: 600;
+  }
+
+  .hero-sub {
+    margin: 0;
+    max-width: 40rem;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    color: #64748b;
+  }
+}
+
+.hero-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.hero-link {
+  color: #0f1b3d;
+  font-weight: 600;
+  font-size: 0.88rem;
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+.refresh-btn {
+  padding: 0.5rem 0.95rem;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  border-radius: 4px;
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
+}
+
+.filters-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    min-width: 200px;
+
+    &.grow {
+      flex: 1;
+    }
+
+    span {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    select,
+    input {
+      padding: 0.55rem 0.7rem;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      font-size: 0.9rem;
+      background: #fff;
+    }
+  }
+}
+
+.notice.error {
+  padding: 0.8rem 1rem;
+  border-radius: 8px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+
+  .stat {
+    padding: 1rem 1.25rem;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-top: 3px solid #b08d4a;
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+
+    .stat-label {
+      font-size: 0.8rem;
+      color: #64748b;
+    }
+
+    strong {
+      font-size: 1.75rem;
+      color: #0f1b3d;
+    }
+  }
+}
+
+.list-card {
+  padding: 0;
+  overflow: hidden;
+}
+
+.list-head {
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid #e2e8f0;
+
+  h3 {
+    margin: 0;
+    font-size: 1rem;
+    color: #0f172a;
+  }
+}
+
+.empty {
+  margin: 0;
+  padding: 2rem 1.25rem;
+  text-align: center;
+  color: #64748b;
+}
+
+.parent-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.parent-item {
+  border-bottom: 1px solid #eef2f7;
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  &.open {
+    background: #f8fafc;
+  }
+}
+
+.parent-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.9rem 1.25rem;
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+
+  &:hover {
+    background: #f1f5f9;
+  }
+
+  .parent-name {
+    flex: 1;
+    font-weight: 600;
+    color: #0f1b3d;
+  }
+
+  .parent-meta {
+    font-size: 0.82rem;
+    color: #64748b;
+  }
+
+  .chev {
+    color: #94a3b8;
+  }
+}
+
+.children-panel {
+  padding: 0.25rem 1.25rem 1rem 2rem;
+
+  .contact {
+    margin: 0 0 0.6rem;
+    font-size: 0.82rem;
+    color: #64748b;
+  }
+}
+
+.child-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.child {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 0.85rem;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+
+  .child-name {
+    font-weight: 600;
+    color: #0f172a;
+
+    // Report card already seen: straight line through the child's name.
+    &.struck {
+      text-decoration: line-through;
+      text-decoration-thickness: 2px;
+      color: #94a3b8;
+    }
+  }
+
+  .child-info {
+    flex: 1;
+    font-size: 0.82rem;
+    color: #64748b;
+  }
+
+  .child-status {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #b45309;
+
+    &.ok {
+      color: #047857;
+    }
+  }
+}
+
+@media (max-width: 720px) {
+  .stats {
+    grid-template-columns: 1fr;
+  }
+}

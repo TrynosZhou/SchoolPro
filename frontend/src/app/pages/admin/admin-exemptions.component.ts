@@ -33,6 +33,15 @@ interface TuitionExemptionRow {
   value: number;
   reason?: string;
   updatedAt: string;
+  applied?: ExemptionApplied;
+}
+
+interface ExemptionApplied {
+  outstandingBefore: number;
+  exemptedAmount: number;
+  outstandingAfter: number;
+  fullWriteOff: boolean;
+  invoicesAdjusted: number;
 }
 
 @Component({
@@ -143,12 +152,15 @@ export class AdminExemptionsComponent implements OnInit {
       value: this.formType === 'staff_child' ? 0 : this.formValue,
       reason: this.formReason.trim() || undefined,
     }).subscribe({
-      next: () => {
+      next: (saved) => {
         this.saving.set(false);
         this.closeAdd();
         this.loadExemptions();
         this.searchStudents();
-        this.showToast('success', `${student.lastName}, ${student.firstName} added to exemption list.`);
+        this.showToast(
+          'success',
+          `${student.lastName}, ${student.firstName} added to exemption list.${this.appliedMessage(saved?.applied)}`,
+        );
       },
       error: (e) => {
         this.saving.set(false);
@@ -160,11 +172,17 @@ export class AdminExemptionsComponent implements OnInit {
   removeExemption(row: TuitionExemptionRow): void {
     if (!confirm(`Remove tuition exemption for ${row.lastName}, ${row.firstName}?`)) return;
 
-    this.api.delete(`/billing/tuition-exemptions/${row.id}`).subscribe({
-      next: () => {
+    this.api.delete<{ ok: boolean; applied?: ExemptionApplied }>(`/billing/tuition-exemptions/${row.id}`).subscribe({
+      next: (res) => {
         this.loadExemptions();
         if (this.hasSearched()) this.searchStudents();
-        this.showToast('success', 'Exemption removed.');
+        const restored = Number(res?.applied?.outstandingBefore ?? 0);
+        this.showToast(
+          'success',
+          restored > 0
+            ? `Exemption removed. Outstanding balance restored to $${restored.toFixed(2)}.`
+            : 'Exemption removed.',
+        );
       },
       error: (e) => {
         this.showToast('error', e.error?.message || 'Failed to remove exemption.');
@@ -174,12 +192,21 @@ export class AdminExemptionsComponent implements OnInit {
 
   exemptionLabel(row: TuitionExemptionRow): string {
     if (row.exemptionType === 'staff_child') {
-      return 'Staff child — all fees waived';
+      return 'Staff child — balance & fees waived';
     }
     if (row.exemptionType === 'percentage') {
-      return `${row.value}% off tuition`;
+      return Number(row.value) >= 100 ? '100% — balance written off' : `${row.value}% off tuition`;
     }
-    return `$${Number(row.value).toFixed(2)} off tuition`;
+    return `$${Number(row.value).toFixed(2)} off balance & tuition`;
+  }
+
+  private appliedMessage(applied?: ExemptionApplied): string {
+    if (!applied || applied.outstandingBefore <= 0) return '';
+    if (applied.fullWriteOff) {
+      return ` Outstanding balance of $${applied.outstandingBefore.toFixed(2)} written off completely.`;
+    }
+    if (applied.exemptedAmount <= 0) return '';
+    return ` $${applied.exemptedAmount.toFixed(2)} exempted; outstanding balance reduced from $${applied.outstandingBefore.toFixed(2)} to $${applied.outstandingAfter.toFixed(2)}.`;
   }
 
   previewPdf(): void {

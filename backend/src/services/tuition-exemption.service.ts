@@ -28,6 +28,8 @@ export interface TuitionExemptionRow {
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+  /** Effect on the student's outstanding balance — only set when an exemption is saved. */
+  applied?: ExemptionSyncSummary;
 }
 
 export interface ExemptionStudentSearchRow {
@@ -250,7 +252,7 @@ export async function upsertTuitionExemption(input: {
   }
 
   const saved = await repo.save(row);
-  await syncTuitionExemptionToInvoices(saved.studentId);
+  const applied = await syncTuitionExemptionToInvoices(saved.studentId);
   return {
     id: saved.id,
     studentId: saved.studentId,
@@ -266,10 +268,11 @@ export async function upsertTuitionExemption(input: {
     isActive: saved.isActive,
     createdAt: saved.createdAt.toISOString(),
     updatedAt: saved.updatedAt.toISOString(),
+    applied,
   };
 }
 
-export async function removeTuitionExemption(id: string): Promise<void> {
+export async function removeTuitionExemption(id: string): Promise<ExemptionSyncSummary> {
   const repo = AppDataSource.getRepository(TuitionExemption);
   const row = await repo.findOne({ where: { id } });
   if (!row) {
@@ -277,7 +280,7 @@ export async function removeTuitionExemption(id: string): Promise<void> {
   }
   const studentId = row.studentId;
   await repo.remove(row);
-  await syncTuitionExemptionToInvoices(studentId);
+  return syncTuitionExemptionToInvoices(studentId);
 }
 
 export function buildFeeInvoiceLines(
@@ -385,14 +388,6 @@ function isChargeLine(line: Pick<InvoiceLine, 'description' | 'amount'>): boolea
   return Number(line.amount) > 0 && !isExemptionLine(line);
 }
 
-function parseTuitionLineMeta(description: string): { feeName: string; termName: string } {
-  const match = String(description || '').match(/^(.+?)\s*\(([^)]+)\)\s*$/);
-  if (match) {
-    return { feeName: match[1].trim(), termName: match[2].trim() };
-  }
-  return { feeName: String(description || 'Tuition').trim(), termName: 'Current term' };
-}
-
 function toLineInput(line: InvoiceLine): InvoiceLineInput {
   return {
     description: line.description,
@@ -400,34 +395,6 @@ function toLineInput(line: InvoiceLine): InvoiceLineInput {
     unitPrice: roundMoney(Number(line.unitPrice)),
     amount: roundMoney(Number(line.amount)),
   };
-}
-
-function rebuildInvoiceLinesWithExemption(
-  lines: InvoiceLine[],
-  exemption: TuitionExemption | null,
-): InvoiceLineInput[] | null {
-  if (!lines.some(isChargeLine)) return null;
-
-  if (isStaffChildExemption(exemption)) {
-    const rebuilt: InvoiceLineInput[] = [];
-    for (const charge of lines.filter(isChargeLine).map(toLineInput)) {
-      rebuilt.push(...buildFeeInvoiceLines(charge.description, charge.amount, exemption));
-    }
-    return rebuilt;
-  }
-
-  const tuitionBaseLine = lines.find(isTuitionBaseLine);
-  if (!tuitionBaseLine) return null;
-
-  const nonTuitionLines = lines
-    .filter((line) => !isTuitionBaseLine(line) && !isExemptionLine(line))
-    .map(toLineInput);
-
-  const { feeName, termName } = parseTuitionLineMeta(tuitionBaseLine.description);
-  const baseAmount = roundMoney(Number(tuitionBaseLine.amount));
-  const tuitionLines = buildTuitionInvoiceLines(feeName, termName, baseAmount, exemption);
-
-  return [...nonTuitionLines, ...tuitionLines];
 }
 
 function linesEqual(a: InvoiceLineInput[], b: InvoiceLineInput[]): boolean {
@@ -444,16 +411,72 @@ function linesEqual(a: InvoiceLineInput[], b: InvoiceLineInput[]): boolean {
   return true;
 }
 
+const EPS = 0.005;
+
+export interface OutstandingBalanceExemption {
+  /** Outstanding balance before the exemption is applied. */
+  outstanding: number;
+  /** Amount taken off the outstanding balance. */
+  exemptedAmount: number;
+  /** Outstanding balance after the exemption is applied. */
+  balanceAfter: number;
+  /** True when the whole outstanding balance is written off. */
+  fullWriteOff: boolean;
+}
+
+/**
+ * Work out how much of an outstanding balance an exemption covers.
+ *  - Staff child or 100% exemption: the whole outstanding balance is written off.
+ *  - Fixed percentage (below 100%): applied to the tuition invoice amount per invoice in
+ *    syncTuitionExemptionToInvoices; here it only caps the total at the outstanding balance.
+ *  - Fixed amount: the amount is deducted, never more than the outstanding balance.
+ */
+export function computeOutstandingBalanceExemption(
+  outstandingBalance: number,
+  exemption: Pick<TuitionExemption, 'exemptionType' | 'value'> | null | undefined,
+): OutstandingBalanceExemption {
+  const outstanding = roundMoney(Math.max(0, Number(outstandingBalance || 0)));
+  if (!exemption || outstanding <= EPS) {
+    return { outstanding, exemptedAmount: 0, balanceAfter: outstanding, fullWriteOff: false };
+  }
+
+  const value = Number(exemption.value || 0);
+  let exempted: number;
+  if (isStaffChildExemption(exemption)) {
+    exempted = outstanding;
+  } else if (exemption.exemptionType === TuitionExemptionType.PERCENTAGE) {
+    const pct = Math.min(100, Math.max(0, value));
+    exempted = pct >= 100 ? outstanding : roundMoney((outstanding * pct) / 100);
+  } else {
+    exempted = roundMoney(Math.min(outstanding, Math.max(0, value)));
+  }
+
+  exempted = roundMoney(Math.min(outstanding, exempted));
+  const balanceAfter = roundMoney(Math.max(0, outstanding - exempted));
+  return { outstanding, exemptedAmount: exempted, balanceAfter, fullWriteOff: balanceAfter <= EPS };
+}
+
+function outstandingExemptionLineLabel(exemption: TuitionExemption, fullWriteOff: boolean): string {
+  if (isStaffChildExemption(exemption)) {
+    return 'Staff child exemption — outstanding balance written off';
+  }
+  const base = formatExemptionLabel(exemption.exemptionType, Number(exemption.value));
+  return fullWriteOff
+    ? `${base} — outstanding balance written off`
+    : `${base} — deducted from invoice balance`;
+}
+
 async function appendLedgerAdjustment(input: {
   studentId: string;
   termId?: string;
   invoiceNumber: string;
   invoiceId: string;
   delta: number;
+  outstandingBefore: number;
   exemption: TuitionExemption | null;
 }): Promise<void> {
   const delta = roundMoney(input.delta);
-  if (Math.abs(delta) < 0.005) return;
+  if (Math.abs(delta) < EPS) return;
 
   const ledgerRepo = AppDataSource.getRepository(LedgerEntry);
   const lastLedger = await ledgerRepo.findOne({
@@ -469,11 +492,10 @@ async function appendLedgerAdjustment(input: {
     const label = input.exemption
       ? formatExemptionLabel(input.exemption.exemptionType, Number(input.exemption.value))
       : 'Tuition exemption';
-    if (input.exemption && isStaffChildExemption(input.exemption)) {
-      description = `${label} — $${amount.toFixed(2)} waived on ${input.invoiceNumber}. All fees cancelled for staff child.`;
-    } else {
-      description = `${label} — $${amount.toFixed(2)} tuition discount applied on ${input.invoiceNumber}. Gross tuition was invoiced at full amount before this exemption.`;
-    }
+    const fullWriteOff = amount >= roundMoney(input.outstandingBefore) - EPS;
+    description = fullWriteOff
+      ? `${label} — $${amount.toFixed(2)} outstanding balance written off on ${input.invoiceNumber}.`
+      : `${label} — $${amount.toFixed(2)} deducted from invoice ${input.invoiceNumber} (balance before exemption $${roundMoney(input.outstandingBefore).toFixed(2)}).`;
   } else {
     description = input.exemption && isStaffChildExemption(input.exemption)
       ? `Staff child exemption removed — $${amount.toFixed(2)} restored to ${input.invoiceNumber}.`
@@ -495,8 +517,24 @@ async function appendLedgerAdjustment(input: {
   );
 }
 
-/** Re-apply the active tuition exemption (or remove it) on all open invoices for a student. */
-export async function syncTuitionExemptionToInvoices(studentId: string): Promise<void> {
+export interface ExemptionSyncSummary {
+  /** Outstanding balance across the student's invoices before any exemption (gross charges less payments). */
+  outstandingBefore: number;
+  /** Amount currently exempted from that balance. */
+  exemptedAmount: number;
+  /** Outstanding balance remaining after the exemption. */
+  outstandingAfter: number;
+  fullWriteOff: boolean;
+  invoicesAdjusted: number;
+}
+
+/**
+ * Apply the active exemption (or remove it) on the student's existing invoices, including any
+ * balance brought forward from earlier terms. The calculation always starts from the ORIGINAL
+ * invoice balance (gross charges less payments), so saving or editing an exemption repeatedly
+ * never double-counts.
+ */
+export async function syncTuitionExemptionToInvoices(studentId: string): Promise<ExemptionSyncSummary> {
   const exemption = await getActiveExemptionForStudent(studentId);
   const invoiceRepo = AppDataSource.getRepository(Invoice);
   const lineRepo = AppDataSource.getRepository(InvoiceLine);
@@ -507,21 +545,90 @@ export async function syncTuitionExemptionToInvoices(studentId: string): Promise
     order: { createdAt: 'ASC' },
   });
 
-  const affectedTermIds = new Set<string>();
+  interface Candidate {
+    invoice: Invoice;
+    charges: InvoiceLineInput[];
+    /** Original (gross) tuition invoiced on this invoice — the base for a percentage exemption. */
+    tuitionBase: number;
+    originalOutstanding: number;
+    }
 
+  const candidates: Candidate[] = [];
   for (const invoice of invoices) {
-    if (invoice.feeType === BALANCE_FORWARD_FEE_TYPE) continue;
-    if (!['sent', 'partial', 'overdue'].includes(invoice.status)) continue;
+    if (invoice.status === InvoiceStatus.CANCELLED || invoice.status === InvoiceStatus.DRAFT) continue;
+    const lines = invoice.lines || [];
+    const hasExemptionLine = lines.some(isExemptionLine);
+    const isOpen = ['sent', 'partial', 'overdue'].includes(invoice.status);
+    // Paid invoices are only revisited to restore a balance that an earlier exemption wrote off.
+    if (!isOpen && !hasExemptionLine) continue;
+
+    const charges = lines.filter(isChargeLine).map(toLineInput);
+    if (!charges.length) continue;
+
+    const gross = roundMoney(charges.reduce((sum, line) => sum + Number(line.amount), 0));
+    const paid = roundMoney(Number(invoice.amountPaid));
+    const tuitionBase = invoice.feeType === BALANCE_FORWARD_FEE_TYPE
+      ? 0
+      : roundMoney(lines.filter(isTuitionBaseLine).reduce((sum, line) => sum + Number(line.amount), 0));
+    candidates.push({
+      invoice,
+      charges,
+      tuitionBase,
+      originalOutstanding: roundMoney(Math.max(0, gross - paid)),
+    });
+  }
+
+  const totalOutstanding = roundMoney(candidates.reduce((sum, c) => sum + c.originalOutstanding, 0));
+  const plan = computeOutstandingBalanceExemption(totalOutstanding, exemption);
+  const isPercentage = exemption?.exemptionType === TuitionExemptionType.PERCENTAGE;
+  const withBalance = candidates.filter((c) => c.originalOutstanding > EPS);
+
+  // How much of the outstanding balance is exempted on each invoice.
+  //  - Full write-off (staff child / 100%): the whole balance on every invoice.
+  //  - Fixed percentage: the percentage of the ORIGINAL tuition invoice amount, deducted from that
+  //    invoice's balance, so the student pays the reduced tuition for the term.
+  //  - Fixed amount: deducted from the outstanding balance, oldest invoice first.
+  const allocation = new Map<string, number>();
+  let exemptedTotal = 0;
+  let remaining = plan.exemptedAmount;
+  for (const c of withBalance) {
+    let share: number;
+    if (plan.fullWriteOff) {
+      share = c.originalOutstanding;
+    } else if (isPercentage) {
+      const pct = Math.min(100, Math.max(0, Number(exemption?.value || 0)));
+      share = roundMoney((c.tuitionBase * pct) / 100);
+    } else {
+      share = remaining;
+    }
+    share = roundMoney(Math.min(c.originalOutstanding, Math.max(0, share)));
+    if (!isPercentage && !plan.fullWriteOff) remaining = roundMoney(remaining - share);
+    exemptedTotal = roundMoney(exemptedTotal + share);
+    allocation.set(c.invoice.id, share);
+  }
+  const summaryExempted = plan.fullWriteOff || !isPercentage ? plan.exemptedAmount : exemptedTotal;
+
+  const affectedTermIds = new Set<string>();
+  let invoicesAdjusted = 0;
+
+  for (const candidate of candidates) {
+    const { invoice, charges } = candidate;
+    const share = allocation.get(invoice.id) ?? 0;
+
+    const rebuilt: InvoiceLineInput[] = [...charges];
+    if (share > EPS && exemption) {
+      rebuilt.push({
+        description: outstandingExemptionLineLabel(exemption, share >= candidate.originalOutstanding - EPS),
+        quantity: 1,
+        unitPrice: -share,
+        amount: -share,
+      });
+    }
 
     const lines = invoice.lines || [];
-    const rebuilt = rebuildInvoiceLinesWithExemption(lines, exemption);
-    if (!rebuilt) continue;
-
     const oldTotal = roundMoney(Number(invoice.totalAmount));
     const newTotal = roundMoney(rebuilt.reduce((sum, line) => sum + Number(line.amount), 0));
-    const currentInputs = lines.map(toLineInput);
-
-    if (linesEqual(currentInputs, rebuilt) && oldTotal === newTotal) continue;
+    if (linesEqual(lines.map(toLineInput), rebuilt) && oldTotal === newTotal) continue;
 
     await lineRepo.delete({ invoiceId: invoice.id });
     for (const line of rebuilt) {
@@ -540,6 +647,7 @@ export async function syncTuitionExemptionToInvoices(studentId: string): Promise
     invoice.totalAmount = newTotal;
     refreshInvoiceStatus(invoice);
     await invoiceRepo.save(invoice);
+    invoicesAdjusted += 1;
 
     await appendLedgerAdjustment({
       studentId,
@@ -547,6 +655,7 @@ export async function syncTuitionExemptionToInvoices(studentId: string): Promise
       invoiceNumber: invoice.invoiceNumber,
       invoiceId: invoice.id,
       delta,
+      outstandingBefore: candidate.originalOutstanding,
       exemption,
     });
 
@@ -559,4 +668,12 @@ export async function syncTuitionExemptionToInvoices(studentId: string): Promise
   for (const termId of affectedTermIds) {
     await refreshTermClosingBalance(studentId, termId);
   }
+
+  return {
+    outstandingBefore: plan.outstanding,
+    exemptedAmount: summaryExempted,
+    outstandingAfter: roundMoney(Math.max(0, plan.outstanding - summaryExempted)),
+    fullWriteOff: plan.fullWriteOff || (summaryExempted > 0 && roundMoney(plan.outstanding - summaryExempted) <= EPS),
+    invoicesAdjusted,
+  };
 }

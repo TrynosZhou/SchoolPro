@@ -15,6 +15,7 @@ import { AdminSettingsComponent } from './pages/admin/admin-settings.component';
 import { AdminEnrollmentComponent } from './pages/admin/admin-enrollment.component';
 import { ClassListComponent } from './pages/students/class-list.component';
 import { AdminReportCardsComponent } from './pages/admin/admin-report-cards.component';
+import { AdminReportViewComponent } from './pages/admin/admin-report-view.component';
 import { AdminStaffComponent } from './pages/admin/admin-staff.component';
 import { AdminStaffAttendanceComponent } from './pages/admin/admin-staff-attendance.component';
 import { AdminLeaveRequestsComponent } from './pages/admin/admin-leave-requests.component';
@@ -138,6 +139,7 @@ export const routes: Routes = [
       { path: '', component: AdminDashboardComponent },
       { path: 'students', component: AdminStudentsComponent },
       { path: 'admissions', component: AdminAdmissionsComponent },
+      { path: 'report-view', component: AdminReportViewComponent },
       { path: 'parents', component: AdminParentsComponent },
       { path: 'parents/:id', component: AdminParentDetailComponent },
       { path: 'enrollment', component: AdminEnrollmentComponent },

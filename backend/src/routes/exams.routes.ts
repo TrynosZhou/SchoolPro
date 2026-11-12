@@ -43,6 +43,7 @@ import {
   publishResults,
   unpublishResults,
 } from '../services/publish-results.service';
+import { buildReportAccessReport, recordParentReportView } from '../services/report-access.service';
 import { sendReportCardsViaWhatsApp } from '../services/report-card-whatsapp.service';
 import { listResultNotificationLogsForExam } from '../services/notification-log.service';
 import { ResultsPublication } from '../entities/ResultsPublication';
@@ -1072,6 +1073,24 @@ router.get(
   },
 );
 
+router.get(
+  '/report-access',
+  authorize(UserRole.ADMIN, UserRole.PRINCIPAL, UserRole.DIRECTOR),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      res.json(
+        await buildReportAccessReport({
+          termId: (req.query.termId as string) || undefined,
+          examTypeId: (req.query.examTypeId as string) || undefined,
+        }),
+      );
+    } catch (err) {
+      console.error('Report access report failed:', err);
+      res.status(500).json({ message: err instanceof Error ? err.message : 'Failed to load report access' });
+    }
+  },
+);
+
 router.get('/report-cards/:studentId/:termId', authorize(UserRole.ADMIN, UserRole.PRINCIPAL, UserRole.DIRECTOR, UserRole.TEACHER, UserRole.PARENT, UserRole.STUDENT), acadView, async (req: AuthRequest, res: Response) => {
   const repo = AppDataSource.getRepository(ReportCard);
   const where: { studentId: string; termId: string; examTypeId?: string } = {
@@ -1108,6 +1127,15 @@ router.get('/report-cards/:studentId/:termId', authorize(UserRole.ADMIN, UserRol
     req.query.examTypeId as string | undefined,
   );
   if (portalBlock) return res.status(403).json({ message: portalBlock });
+
+  if (req.user!.role === UserRole.PARENT && req.user!.parentId) {
+    await recordParentReportView({
+      parentId: req.user!.parentId,
+      studentId: report.studentId,
+      termId: report.termId,
+      examTypeId: report.examTypeId,
+    });
+  }
 
   // Recompute class & form position (and totals) so the rank always shows on the
   // portal view, even for reports created via paths that didn't persist positions.
@@ -1153,6 +1181,15 @@ router.get('/report-cards/:studentId/:termId/pdf', authorize(UserRole.ADMIN, Use
       req.query.examTypeId as string | undefined,
     );
     if (portalBlock) return res.status(403).json({ message: portalBlock });
+
+    if (req.user!.role === UserRole.PARENT && req.user!.parentId) {
+      await recordParentReportView({
+        parentId: req.user!.parentId,
+        studentId: report.studentId,
+        termId: report.termId,
+        examTypeId: report.examTypeId,
+      });
+    }
 
     const settings = await AppDataSource.getRepository(SchoolSettings).findOne({ where: { id: 'default' } });
     const inline = req.query.preview === 'true';
