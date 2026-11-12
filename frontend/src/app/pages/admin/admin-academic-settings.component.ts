@@ -3,7 +3,7 @@ import { DatePipe, NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { forkJoin, of } from 'rxjs';
-import { catchError } from 'rxjs/operators';
+import { catchError, map } from 'rxjs/operators';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
 import { ApiService } from '../../core/services/api.service';
@@ -159,7 +159,7 @@ interface ClassSubjectRow {
 interface StaffRow {
   id: string;
   employeeNumber: string;
-  user?: { firstName: string; lastName: string };
+  user?: { firstName: string; lastName: string; role?: string };
 }
 
 interface ExamTypeRow {
@@ -227,6 +227,8 @@ export class AdminAcademicSettingsComponent implements OnInit {
   departments = signal<DepartmentRow[]>([]);
   classSubjects = signal<ClassSubjectRow[]>([]);
   staff = signal<StaffRow[]>([]);
+  staffLoading = signal(false);
+  staffLoadFailed = signal(false);
   examTypes = signal<ExamTypeRow[]>([]);
   gradeBoundaries = signal<GradeBoundaryRow[]>([]);
   gradePreviewMarks = signal(65);
@@ -586,7 +588,7 @@ export class AdminAcademicSettingsComponent implements OnInit {
       subjects: this.api.get<SubjectRow[]>('/admin/subjects'),
       departments: this.api.get<DepartmentRow[]>('/admin/departments'),
       classSubjects: this.api.get<ClassSubjectRow[]>('/admin/class-subjects'),
-      staff: this.api.get<StaffRow[]>('/admin/staff'),
+      staff: this.fetchStaff$(),
       examTypes: this.api.get<ExamTypeRow[]>('/admin/exam-types'),
       promotionRules: this.api
         .get<PromotionRuleRow[]>('/admin/promotion-rules')
@@ -604,7 +606,8 @@ export class AdminAcademicSettingsComponent implements OnInit {
         this.subjects.set(data.subjects);
         this.departments.set(data.departments);
         this.classSubjects.set(data.classSubjects);
-        this.staff.set(data.staff);
+        this.staff.set(data.staff ?? []);
+        this.staffLoadFailed.set(data.staff === null);
         this.examTypes.set(data.examTypes);
         this.applyPromotionRules(data.promotionRules);
         const currentYear = data.years.find((y) => y.isCurrent) || data.years[0];
@@ -1219,6 +1222,27 @@ export class AdminAcademicSettingsComponent implements OnInit {
     });
   }
 
+  /** Active staff for the class-teacher dropdown. Accepts a plain array or a wrapped response. */
+  private fetchStaff$() {
+    return this.api.get<unknown>('/admin/staff', { status: 'active' }).pipe(
+      map((res): StaffRow[] => {
+        const r = res as any;
+        const list = Array.isArray(r) ? r : (r?.data ?? r?.items ?? r?.staff ?? r?.rows ?? []);
+        return Array.isArray(list) ? (list as StaffRow[]) : [];
+      }),
+      catchError(() => of(null as StaffRow[] | null)),
+    );
+  }
+
+  reloadStaff() {
+    this.staffLoading.set(true);
+    this.fetchStaff$().subscribe((list) => {
+      this.staff.set(list ?? []);
+      this.staffLoadFailed.set(list === null);
+      this.staffLoading.set(false);
+    });
+  }
+
   staffName(s: StaffRow): string {
     if (s.user) return `${s.user.firstName} ${s.user.lastName}`;
     return s.employeeNumber;
@@ -1231,7 +1255,10 @@ export class AdminAcademicSettingsComponent implements OnInit {
         .filter((c) => c.id !== forClass.id && c.classTeacherId)
         .map((c) => c.classTeacherId as string),
     );
-    return this.staff().filter((s) => s.id === forClass.classTeacherId || !takenElsewhere.has(s.id));
+    // Only teaching staff (admins, principals and accountants are skipped); the current
+    // class teacher is always kept so an existing assignment still displays.
+    const teachers = this.staff().filter((s) => !s.user?.role || s.user.role === 'teacher');
+    return teachers.filter((s) => s.id === forClass.classTeacherId || !takenElsewhere.has(s.id));
   }
 
   subjectHue(code: string): string {

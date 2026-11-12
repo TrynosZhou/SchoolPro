@@ -339,6 +339,23 @@
                 <input type="number" [(ngModel)]="newClass.capacity" name="clsCap" min="1" class="input-xs" placeholder="Cap" />
                 <button type="button" class="btn-primary btn-sm" (click)="addClass()">Add</button>
               </div>
+              @if (staffLoadFailed() || !staff().length) {
+                <div class="staff-notice" role="alert">
+                  <span>
+                    @if (staffLoadFailed()) {
+                      Couldn't load staff, so teachers can't be selected yet.
+                    } @else {
+                      No active staff found. Add teachers under Staff, then reload the list.
+                    }
+                  </span>
+                  <span class="staff-notice-actions">
+                    <a routerLink="/admin/staff" class="btn-outline btn-sm">Open staff</a>
+                    <button type="button" class="btn-primary btn-sm" (click)="reloadStaff()" [disabled]="staffLoading()">
+                      {{ staffLoading() ? 'Loading…' : 'Reload staff' }}
+                    </button>
+                  </span>
+                </div>
+              }
               <div class="table-wrap">
                 <table class="data-table classes-table">
                   <colgroup>
@@ -377,6 +394,10 @@
                             <option value="">Unassigned — select teacher</option>
                             @for (s of classTeacherOptions(c); track s.id) {
                               <option [value]="s.id">{{ staffName(s) }}</option>
+                            } @empty {
+                              <option value="" disabled>
+                                {{ staff().length ? 'No free teachers — all lead another class' : 'No staff available' }}
+                              </option>
                             }
                           </select>
                         </td>

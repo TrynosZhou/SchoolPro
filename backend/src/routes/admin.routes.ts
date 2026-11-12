@@ -475,10 +475,11 @@ async function resolveClassTeacherAssignment(
   repo: ReturnType<typeof AppDataSource.getRepository<SchoolClass>>,
   classId: string | undefined,
   classTeacherId: string | null | undefined,
-): Promise<{ error?: string; classTeacherId?: string }> {
+): Promise<{ error?: string; classTeacherId?: string | null }> {
   if (classTeacherId === undefined) return {};
   const teacherId = classTeacherId ? String(classTeacherId).trim() : '';
-  if (!teacherId) return { classTeacherId: undefined };
+  // Empty value means "unassign": return null so the column is actually cleared.
+  if (!teacherId) return { classTeacherId: null };
 
   const staff = await AppDataSource.getRepository(Staff).findOne({ where: { id: teacherId } });
   if (!staff) return { error: 'Class teacher not found' };
@@ -501,7 +502,7 @@ router.post('/classes', authorize(UserRole.ADMIN), async (req, res: Response) =>
 
   const cls = repo.create({
     ...rest,
-    ...(assignment.classTeacherId !== undefined ? { classTeacherId: assignment.classTeacherId } : {}),
+    ...(assignment.classTeacherId ? { classTeacherId: assignment.classTeacherId } : {}),
   });
   const saved = await repo.save(cls);
   res.status(201).json(saved);
@@ -738,7 +739,8 @@ router.patch('/classes/:id', authorize(UserRole.ADMIN), async (req, res: Respons
   if (classTeacherId !== undefined) {
     const assignment = await resolveClassTeacherAssignment(repo, cls.id, classTeacherId);
     if (assignment.error) return res.status(409).json({ message: assignment.error });
-    cls.classTeacherId = assignment.classTeacherId;
+    // null clears the teacher (column is nullable); entity type is `string | undefined`.
+    cls.classTeacherId = assignment.classTeacherId as string | undefined;
   }
 
   const saved = await repo.save(cls);
