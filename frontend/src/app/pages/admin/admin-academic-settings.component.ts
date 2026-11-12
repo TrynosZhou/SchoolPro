@@ -1241,6 +1241,10 @@ export class AdminAcademicSettingsComponent implements OnInit {
     return hues[Math.abs(hash) % hues.length];
   }
 
+  unassignedClassCount(): number {
+    return this.classes().filter((c) => !c.classTeacherId).length;
+  }
+
   classStudentCount(cls: ClassRow): number {
     return cls.students?.length ?? 0;
   }

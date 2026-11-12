@@ -2346,3 +2346,146 @@ tr.row-completion td {
 
   &:focus { outline: none; border-color: var(--brass); box-shadow: var(--ac-ring); }
 }
+
+/* ═══════════════════════════════════════════════════════════
+   Classes tab — full-width classes table so the Class Teacher
+   column is always visible and easy to assign.
+   ═══════════════════════════════════════════════════════════ */
+.layout-classes {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+
+  > .panel {
+    min-width: 0;
+  }
+
+  // Classes (and teacher assignment) first; Forms is secondary.
+  > .classes-panel {
+    order: -1;
+  }
+}
+
+.classes-panel .panel-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.count-badge.warn {
+  background: #fef3c7;
+  border-color: #f59e0b;
+  color: #92400e;
+  text-transform: none;
+  letter-spacing: 0.01em;
+}
+
+.count-badge.ok {
+  background: #ecfdf5;
+  border-color: #6ee7b7;
+  color: #047857;
+  text-transform: none;
+  letter-spacing: 0.01em;
+}
+
+.classes-panel .table-wrap {
+  overflow-x: auto;
+}
+
+.classes-table {
+  width: 100%;
+  min-width: 34rem;
+  table-layout: fixed;
+
+  .col-class { width: 7rem; }
+  .col-form { width: 8.5rem; }
+  .col-students { width: 6.5rem; }
+  .col-teacher { width: auto; }
+
+  th,
+  td {
+    vertical-align: middle;
+  }
+
+  td:first-child,
+  .class-name-btn {
+    white-space: nowrap;
+  }
+
+  .teacher-cell {
+    min-width: 15rem;
+  }
+
+  .teacher-select {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    height: 2.5rem;
+    padding: 0 0.75rem;
+    font-size: 0.9rem;
+    text-overflow: ellipsis;
+    cursor: pointer;
+  }
+
+  // Unassigned classes stand out so the admin can spot what still needs a teacher.
+  tr.no-teacher .teacher-select {
+    border-color: #f59e0b;
+    background: #fffbeb;
+    color: #92400e;
+  }
+
+  tr.no-teacher td:first-child {
+    box-shadow: inset 3px 0 0 #f59e0b;
+  }
+}
+
+// Phones: each class becomes a card with the teacher select full width.
+@media (max-width: 640px) {
+  .classes-table {
+    min-width: 0;
+    table-layout: auto;
+
+    colgroup,
+    thead {
+      display: none;
+    }
+
+    tbody tr {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 0.5rem 0.75rem;
+      padding: 0.75rem;
+      border-bottom: 1px solid var(--color-border);
+    }
+
+    td {
+      display: block;
+      padding: 0 !important;
+      border: none !important;
+      background: transparent !important;
+      min-width: 0;
+
+      &::before {
+        content: attr(data-label);
+        display: block;
+        margin-bottom: 0.2rem;
+        font-size: 0.68rem;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: #64748b;
+      }
+    }
+
+    .teacher-cell {
+      grid-column: 1 / -1;
+      min-width: 0;
+    }
+
+    tr.no-teacher td:first-child {
+      box-shadow: none;
+    }
+  }
+}

@@ -283,8 +283,8 @@
         }
 
         @if (activeTab() === 'classes') {
-          <div class="layout-2">
-            <section class="panel">
+          <div class="layout-classes">
+            <section class="panel forms-panel">
               <div class="panel-head"><h3>Forms</h3><span class="count-badge">{{ forms().length }}</span></div>
               <div class="add-bar">
                 <input [(ngModel)]="newForm.name" name="formName" placeholder="Form name e.g. Form 1" class="grow" />
@@ -318,8 +318,16 @@
               </div>
             </section>
 
-            <section class="panel">
-              <div class="panel-head"><h3>Classes</h3><span class="count-badge">{{ classes().length }}</span></div>
+            <section class="panel classes-panel">
+              <div class="panel-head">
+                <h3>Classes</h3>
+                <span class="count-badge">{{ classes().length }}</span>
+                @if (unassignedClassCount() > 0) {
+                  <span class="count-badge warn" title="Classes without a class teacher">{{ unassignedClassCount() }} without class teacher</span>
+                } @else if (classes().length) {
+                  <span class="count-badge ok">All classes have a class teacher</span>
+                }
+              </div>
               <div class="add-bar">
                 <input [(ngModel)]="newClass.name" name="clsName" placeholder="Class e.g. 4A" class="input-sm" />
                 <select [(ngModel)]="newClass.formId" name="clsForm" class="input-sm">
@@ -332,14 +340,20 @@
                 <button type="button" class="btn-primary btn-sm" (click)="addClass()">Add</button>
               </div>
               <div class="table-wrap">
-                <table class="data-table">
+                <table class="data-table classes-table">
+                  <colgroup>
+                    <col class="col-class" />
+                    <col class="col-form" />
+                    <col class="col-students" />
+                    <col class="col-teacher" />
+                  </colgroup>
                   <thead>
                     <tr><th>Class</th><th>Form</th><th>Students</th><th>Class Teacher</th></tr>
                   </thead>
                   <tbody>
                     @for (c of classes(); track c.id) {
-                      <tr>
-                        <td>
+                      <tr [class.no-teacher]="!c.classTeacherId">
+                        <td data-label="Class">
                           <button
                             type="button"
                             class="class-name-btn"
@@ -350,11 +364,17 @@
                             <span class="edit-hint" aria-hidden="true">✎</span>
                           </button>
                         </td>
-                        <td><span class="pill">{{ c.form?.name || '—' }}</span></td>
-                        <td>{{ classStudentCount(c) }} / {{ c.capacity }}</td>
-                        <td>
-                          <select class="select-inline" [ngModel]="c.classTeacherId || ''" (ngModelChange)="updateClassTeacher(c, $event)" [name]="'ct' + c.id">
-                            <option value="">Unassigned</option>
+                        <td data-label="Form"><span class="pill">{{ c.form?.name || '—' }}</span></td>
+                        <td data-label="Students">{{ classStudentCount(c) }} / {{ c.capacity }}</td>
+                        <td data-label="Class Teacher" class="teacher-cell">
+                          <select
+                            class="select-inline teacher-select"
+                            [ngModel]="c.classTeacherId || ''"
+                            (ngModelChange)="updateClassTeacher(c, $event)"
+                            [name]="'ct' + c.id"
+                            [attr.aria-label]="'Class teacher for ' + c.name"
+                          >
+                            <option value="">Unassigned — select teacher</option>
                             @for (s of classTeacherOptions(c); track s.id) {
                               <option [value]="s.id">{{ staffName(s) }}</option>
                             }
