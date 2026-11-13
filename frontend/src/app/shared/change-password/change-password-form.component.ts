@@ -49,6 +49,26 @@ export class ChangePasswordFormComponent implements OnInit {
     return passwordPolicyRules(this.passwordPolicy()).join(', ');
   }
 
+  /** 0 = empty · 1–3 = weak/fair/good · 4 = every policy rule met. */
+  strengthLevel(): number {
+    if (!this.newPassword) return 0;
+    const checks = this.newPasswordChecks();
+    if (!checks.length) return Math.min(4, Math.max(1, Math.floor(this.newPassword.length / 3)));
+    const met = checks.filter((c) => c.met).length;
+    if (met === checks.length) return 4;
+    return Math.min(3, Math.max(1, Math.floor((met / checks.length) * 4)));
+  }
+
+  strengthLabel(): string {
+    return ['', 'Weak', 'Fair', 'Good', 'Strong'][this.strengthLevel()];
+  }
+
+  /** State of the confirmation field, for inline feedback. */
+  confirmState(): 'none' | 'match' | 'mismatch' {
+    if (!this.confirmPassword) return 'none';
+    return this.confirmPassword === this.newPassword ? 'match' : 'mismatch';
+  }
+
   toggleCurrentPassword(): void {
     this.showCurrentPassword.update((v) => !v);
   }

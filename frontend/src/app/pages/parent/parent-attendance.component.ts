@@ -88,6 +88,14 @@ export class ParentAttendanceComponent implements OnInit {
   loadingTerms = signal(true);
   generating = signal(false);
   hasGenerated = signal(false);
+  statusFilter = signal<'all' | 'present' | 'late' | 'absent' | 'excused'>('all');
+
+  readonly filteredRecords = computed(() => {
+    const r = this.report();
+    if (!r) return [];
+    const f = this.statusFilter();
+    return f === 'all' ? r.records : r.records.filter((row) => row.status === f);
+  });
   toast = signal<{ type: 'success' | 'error'; msg: string } | null>(null);
 
   ngOnInit() {
@@ -178,6 +186,7 @@ export class ParentAttendanceComponent implements OnInit {
         next: (data) => {
           this.report.set(data);
           this.generating.set(false);
+          this.statusFilter.set('all');
           this.hasGenerated.set(true);
         },
         error: (e) => {
@@ -185,6 +194,45 @@ export class ParentAttendanceComponent implements OnInit {
           this.showToast('error', e.error?.message || 'Failed to generate attendance report.');
         },
       });
+  }
+
+  initials(first?: string, last?: string): string {
+    return `${first?.charAt(0) ?? ''}${last?.charAt(0) ?? ''}`.toUpperCase() || '—';
+  }
+
+  /** "Mon, 12 May 2026" from an ISO date string (timezone-safe: uses the date part only). */
+  formatDate(iso: string): string {
+    const [y, m, d] = iso.slice(0, 10).split('-').map(Number);
+    if (!y || !m || !d) return iso.slice(0, 10);
+    return new Date(y, m - 1, d).toLocaleDateString('en-GB', {
+      weekday: 'short',
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    });
+  }
+
+  /** Share of marked days for a status, as a % (for the distribution bar). */
+  share(count: number, total: number): number {
+    return total > 0 ? (count / total) * 100 : 0;
+  }
+
+  /** Qualitative standing used for the rate badge. */
+  rateTone(percent: number | null): 'good' | 'fair' | 'poor' | 'none' {
+    if (percent == null) return 'none';
+    if (percent >= 90) return 'good';
+    if (percent >= 75) return 'fair';
+    return 'poor';
+  }
+
+  rateLabel(percent: number | null): string {
+    return { good: 'Excellent standing', fair: 'Satisfactory', poor: 'Needs attention', none: 'No data yet' }[
+      this.rateTone(percent)
+    ];
+  }
+
+  print() {
+    window.print();
   }
 
   statusLabel(status: string): string {

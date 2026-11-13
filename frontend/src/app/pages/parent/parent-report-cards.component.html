@@ -23,7 +23,7 @@
         </p>
       </div>
       <div class="hero-actions">
-        <a [routerLink]="homeLink()" class="hero-link">← Back to {{ isStudent() ? 'dashboard' : 'My Children' }}</a>
+        <a [routerLink]="homeLink()" class="hero-link">← Back to {{ isStudent() ? 'dashboard' : 'Dashboard' }}</a>
       </div>
     </header>
 
@@ -40,7 +40,7 @@
         } @else {
           <p>
             No children are linked to your account. Link a student on
-            <a [routerLink]="homeLink()">My Children</a> to see their report cards.
+            <a [routerLink]="homeLink()">Dashboard</a> to see their report cards.
           </p>
         }
       </section>

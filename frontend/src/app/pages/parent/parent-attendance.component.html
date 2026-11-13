@@ -6,162 +6,268 @@
   [navItems]="navItems()"
 >
   @if (toast(); as t) {
-    <div class="toast" [class.error]="t.type === 'error'">{{ t.msg }}</div>
+    <div class="toast" role="status" aria-live="polite" [class.error]="t.type === 'error'">{{ t.msg }}</div>
   }
 
-  <header class="page-intro">
-    <p>
+  <!-- ── Letterhead ─────────────────────────────────────────── -->
+  <header class="letterhead">
+    <a [routerLink]="homeLink()" class="back-link">
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Back to {{ isStudent() ? 'Dashboard' : 'Dashboard' }}
+    </a>
+    <p class="eyebrow">{{ portalTitle() }}</p>
+    <h1 class="lh-title">Attendance record</h1>
+    <p class="lh-sub">
       @if (isStudent()) {
-        Select a term, then click <strong>Generate</strong> to view your attendance report.
+        Choose a term and select <strong>Generate</strong> to view your attendance report.
       } @else {
-        Select a linked student and term, then click <strong>Generate</strong> to view their attendance report.
+        Choose a linked student and term, then select <strong>Generate</strong> to view their attendance report.
       }
     </p>
-    <a [routerLink]="homeLink()" class="back-link">← Back to {{ isStudent() ? 'Dashboard' : 'My Children' }}</a>
   </header>
 
   @if (loading()) {
-    <div class="empty card"><p>Loading…</p></div>
+    <div class="loading-state" role="status">
+      <div class="spinner"></div>
+      <p>Loading…</p>
+    </div>
   } @else if (!children().length) {
-    <div class="empty card">
+    <section class="empty-state">
+      <span class="seal" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none"><circle cx="9" cy="8" r="3.2" stroke="currentColor" stroke-width="1.6"/><path d="M3 19c.6-3.2 3.1-5 6-5s5.4 1.8 6 5M17 6v6M14 9h6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      </span>
       @if (isStudent()) {
+        <h2>Profile not available</h2>
         <p>Your student profile could not be loaded. Please contact the school office.</p>
       } @else {
-        <p>No linked children found. Link a student on <a [routerLink]="homeLink()">My Children</a> first.</p>
+        <h2>No linked children</h2>
+        <p>Link a student on <a [routerLink]="homeLink()">Dashboard</a> first to view their attendance.</p>
       }
-    </div>
+    </section>
   } @else {
-    <section class="card filter-card">
+    <!-- ── Report parameters ──────────────────────────────────── -->
+    <section class="panel params" aria-label="Report parameters">
+      <div class="panel-head">
+        <h2>Report parameters</h2>
+      </div>
       <div class="filter-row">
         @if (children().length > 1) {
           <div class="field">
             <label for="studentSelect">Student</label>
-            <select id="studentSelect" [(ngModel)]="selectedStudentId" name="student">
-              <option value="">— Select student —</option>
-              @for (c of children(); track c.student.id) {
-                <option [value]="c.student.id">{{ childLabel(c) }}</option>
-              }
-            </select>
+            <div class="select-wrap">
+              <select id="studentSelect" [(ngModel)]="selectedStudentId" name="student">
+                <option value="">— Select student —</option>
+                @for (c of children(); track c.student.id) {
+                  <option [value]="c.student.id">{{ childLabel(c) }}</option>
+                }
+              </select>
+            </div>
           </div>
         } @else {
           @if (children()[0]; as onlyChild) {
-            <div class="selected-student">
+            <div class="field">
               <span class="field-label">Student</span>
-              <strong>{{ onlyChild.student.firstName }} {{ onlyChild.student.lastName }}</strong>
-              @if (onlyChild.student.admissionNumber) {
-                <span class="student-id">{{ onlyChild.student.admissionNumber }}</span>
-              }
+              <div class="student-fixed">
+                <span class="monogram monogram--sm" aria-hidden="true">{{ initials(onlyChild.student.firstName, onlyChild.student.lastName) }}</span>
+                <div>
+                  <strong>{{ onlyChild.student.firstName }} {{ onlyChild.student.lastName }}</strong>
+                  @if (onlyChild.student.admissionNumber) {
+                    <span class="student-id">{{ onlyChild.student.admissionNumber }}</span>
+                  }
+                </div>
+              </div>
             </div>
           }
         }
 
         <div class="field">
           <label for="termSelect">Term</label>
-          <select id="termSelect" [(ngModel)]="selectedTermId" name="term" [disabled]="loadingTerms() || !terms().length">
-            @if (!terms().length) {
-              <option value="">No terms available</option>
-            } @else {
-              <option value="">— Select term —</option>
-              @for (t of terms(); track t.id) {
-                <option [value]="t.id">{{ t.name }}{{ t.isCurrent ? ' (current)' : '' }}</option>
+          <div class="select-wrap">
+            <select id="termSelect" [(ngModel)]="selectedTermId" name="term" [disabled]="loadingTerms() || !terms().length">
+              @if (!terms().length) {
+                <option value="">No terms available</option>
+              } @else {
+                <option value="">— Select term —</option>
+                @for (t of terms(); track t.id) {
+                  <option [value]="t.id">{{ t.name }}{{ t.isCurrent ? ' (current)' : '' }}</option>
+                }
               }
-            }
-          </select>
+            </select>
+          </div>
         </div>
 
         <div class="field field-actions">
-          <label class="sr-only">Generate</label>
-          <button type="button" class="btn-primary" [disabled]="generating() || !canGenerate()" (click)="generateReport()">
-            {{ generating() ? 'Generating…' : 'Generate' }}
+          <button type="button" class="btn btn--solid" [disabled]="generating() || !canGenerate()" (click)="generateReport()">
+            @if (generating()) {
+              <span class="btn-spinner" aria-hidden="true"></span>
+              Generating…
+            } @else {
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 19V5M4 19h16M8 15v-4M12 15V8M16 15v-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+              Generate report
+            }
           </button>
         </div>
       </div>
     </section>
+
+    @if (!hasGenerated() && !generating()) {
+      <section class="empty-state empty-state--ready">
+        <span class="seal" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none"><rect x="4" y="5" width="16" height="15" rx="1.5" stroke="currentColor" stroke-width="1.6"/><path d="M4 9.5h16M8 3.5v3M16 3.5v3M8.5 14.5l2.2 2.2 4.3-4.4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </span>
+        <h2>Ready when you are</h2>
+        <p>Your attendance summary and daily log will appear here once you generate a report.</p>
+      </section>
+    }
+  }
+
+  @if (generating()) {
+    <div class="loading-state" role="status">
+      <div class="spinner"></div>
+      <p>Preparing attendance report…</p>
+    </div>
   }
 
   @if (hasGenerated() && report(); as r) {
-    <section class="card report-header">
-      <div>
-        <h2>{{ r.student.firstName }} {{ r.student.lastName }}</h2>
-        <p class="meta">
-          Student ID: <strong>{{ r.student.admissionNumber }}</strong>
-          @if (r.student.className) {
-            · {{ formatStudentClassLabel(r.student.className) }}
-          }
-          @if (r.student.gender) {
-            · Gender: {{ formatGenderLabel(r.student.gender) }}
-          }
-        </p>
-        <p class="meta">
-          {{ r.term.name }}
-          @if (r.term.schoolYear) {
-            · {{ r.term.schoolYear }}
-          }
-          · {{ r.term.startDate | slice:0:10 }} to {{ r.term.endDate | slice:0:10 }}
-          @if (r.term.extendedEnd) {
-            <span class="range-note">(includes attendance through today)</span>
-          }
-        </p>
+    <!-- ── Student & term ─────────────────────────────────────── -->
+    <section class="panel profile">
+      <div class="profile-main">
+        <span class="monogram" aria-hidden="true">{{ initials(r.student.firstName, r.student.lastName) }}</span>
+        <div class="profile-text">
+          <h2>{{ r.student.firstName }} {{ r.student.lastName }}</h2>
+          <ul class="chips">
+            <li><span>Student ID</span> {{ r.student.admissionNumber }}</li>
+            @if (r.student.className) {
+              <li><span>Class</span> {{ formatStudentClassLabel(r.student.className) }}</li>
+            }
+            @if (r.student.gender) {
+              <li><span>Gender</span> {{ formatGenderLabel(r.student.gender) }}</li>
+            }
+          </ul>
+        </div>
       </div>
+
+      <div class="profile-term">
+        <span class="term-label">Reporting period</span>
+        <strong class="term-name">
+          {{ r.term.name }}@if (r.term.schoolYear) {<span class="term-year"> · {{ r.term.schoolYear }}</span>}
+        </strong>
+        <span class="term-range">{{ formatDate(r.term.startDate) }} — {{ formatDate(r.term.endDate) }}</span>
+        @if (r.term.extendedEnd) {
+          <span class="range-note">Includes attendance through today</span>
+        }
+      </div>
+
+      <button type="button" class="btn btn--line btn--sm no-print" (click)="print()">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 9V4h10v5M7 17H5a1 1 0 0 1-1-1v-5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v5a1 1 0 0 1-1 1h-2M7 14h10v6H7z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+        Print
+      </button>
     </section>
 
-    <section class="stats-grid">
-      <div class="stat-card">
-        <span class="stat-value">{{ r.summary.daysMarked }}</span>
-        <span class="stat-label">Days marked</span>
-      </div>
-      <div class="stat-card present">
-        <span class="stat-value">{{ r.summary.present }}</span>
-        <span class="stat-label">Present</span>
-      </div>
-      <div class="stat-card late">
-        <span class="stat-value">{{ r.summary.late }}</span>
-        <span class="stat-label">Late</span>
-      </div>
-      <div class="stat-card absent">
-        <span class="stat-value">{{ r.summary.absent }}</span>
-        <span class="stat-label">Absent</span>
-      </div>
-      <div class="stat-card excused">
-        <span class="stat-value">{{ r.summary.excused }}</span>
-        <span class="stat-label">Excused</span>
-      </div>
-      <div class="stat-card highlight">
-        <span class="stat-value">
+    <!-- ── Summary ────────────────────────────────────────────── -->
+    <section class="summary" aria-label="Attendance summary">
+      <div class="rate-card" [attr.data-tone]="rateTone(r.summary.attendancePercent)">
+        <span class="rate-label">Attendance rate</span>
+        <span class="rate-value">
           @if (r.summary.attendancePercent != null) {
-            {{ r.summary.attendancePercent | number:'1.0-1' }}%
+            {{ r.summary.attendancePercent | number:'1.0-1' }}<small>%</small>
           } @else {
             —
           }
         </span>
-        <span class="stat-label">Attendance rate</span>
+        <span class="rate-meter" aria-hidden="true">
+          <i [style.width.%]="r.summary.attendancePercent ?? 0"></i>
+        </span>
+        <span class="rate-note">{{ rateLabel(r.summary.attendancePercent) }}</span>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat">
+          <span class="stat-value">{{ r.summary.daysMarked }}</span>
+          <span class="stat-label">Days marked</span>
+        </div>
+        <div class="stat present">
+          <span class="stat-value">{{ r.summary.present }}</span>
+          <span class="stat-label">Present</span>
+        </div>
+        <div class="stat late">
+          <span class="stat-value">{{ r.summary.late }}</span>
+          <span class="stat-label">Late</span>
+        </div>
+        <div class="stat absent">
+          <span class="stat-value">{{ r.summary.absent }}</span>
+          <span class="stat-label">Absent</span>
+        </div>
+        <div class="stat excused">
+          <span class="stat-value">{{ r.summary.excused }}</span>
+          <span class="stat-label">Excused</span>
+        </div>
       </div>
     </section>
 
+    @if (r.summary.daysMarked > 0) {
+      <section class="panel distribution" aria-label="Attendance distribution">
+        <div class="bar" role="img"
+          [attr.aria-label]="r.summary.present + ' present, ' + r.summary.late + ' late, ' + r.summary.excused + ' excused, ' + r.summary.absent + ' absent'">
+          <i class="seg present" [style.width.%]="share(r.summary.present, r.summary.daysMarked)"></i>
+          <i class="seg late" [style.width.%]="share(r.summary.late, r.summary.daysMarked)"></i>
+          <i class="seg excused" [style.width.%]="share(r.summary.excused, r.summary.daysMarked)"></i>
+          <i class="seg absent" [style.width.%]="share(r.summary.absent, r.summary.daysMarked)"></i>
+        </div>
+        <ul class="legend">
+          <li class="present"><i></i>Present</li>
+          <li class="late"><i></i>Late</li>
+          <li class="excused"><i></i>Excused</li>
+          <li class="absent"><i></i>Absent</li>
+        </ul>
+      </section>
+    }
+
+    <!-- ── Daily log ──────────────────────────────────────────── -->
     @if (r.records.length) {
-      <section class="card table-wrap">
-        <h3 class="table-title">Daily attendance log</h3>
-        <table class="report-table">
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th>Status</th>
-              <th>Remarks</th>
-            </tr>
-          </thead>
-          <tbody>
-            @for (row of r.records; track row.date) {
-              <tr>
-                <td>{{ row.date | slice:0:10 }}</td>
-                <td [class]="row.status">{{ statusLabel(row.status) }}</td>
-                <td>{{ row.remarks || '—' }}</td>
-              </tr>
+      <section class="panel log">
+        <div class="panel-head panel-head--split">
+          <h2>Daily attendance log <span class="count">{{ filteredRecords().length }} of {{ r.records.length }}</span></h2>
+          <div class="filters no-print" role="group" aria-label="Filter by status">
+            @for (f of ['all', 'present', 'late', 'excused', 'absent']; track f) {
+              <button type="button" class="filter" [class.is-active]="statusFilter() === f" [attr.aria-pressed]="statusFilter() === f" (click)="statusFilter.set($any(f))">
+                {{ statusLabel(f) }}
+              </button>
             }
-          </tbody>
-        </table>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table class="ledger-table">
+            <thead>
+              <tr>
+                <th scope="col">Date</th>
+                <th scope="col">Status</th>
+                <th scope="col">Remarks</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of filteredRecords(); track row.date) {
+                <tr>
+                  <td class="date">{{ formatDate(row.date) }}</td>
+                  <td><span class="badge" [class]="row.status"><i></i>{{ statusLabel(row.status) }}</span></td>
+                  <td class="remarks">{{ row.remarks || '—' }}</td>
+                </tr>
+              } @empty {
+                <tr><td colspan="3" class="empty-cell">No {{ statusFilter() }} days in this term.</td></tr>
+              }
+            </tbody>
+          </table>
+        </div>
       </section>
     } @else {
-      <p class="empty card">No attendance records for this student in the selected term.</p>
+      <section class="empty-state empty-state--inline">
+        <span class="seal" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none"><rect x="4" y="5" width="16" height="15" rx="1.5" stroke="currentColor" stroke-width="1.6"/><path d="M4 9.5h16M8 3.5v3M16 3.5v3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        </span>
+        <h2>No records yet</h2>
+        <p>No attendance has been recorded for this student in the selected term.</p>
+      </section>
     }
   }
 </app-portal-layout>

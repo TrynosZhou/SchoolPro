@@ -1,7 +1,7 @@
 <div class="public-shell">
   <header class="public-topbar">
     <div class="brand">
-      <span class="brand-badge">SP</span>
+      <span class="brand-badge" aria-hidden="true">SP</span>
       <div class="brand-text">
         <strong>School Pro Academy</strong>
         <small>Admissions</small>
@@ -34,7 +34,10 @@
   <main class="public-main">
     @if (submitted(); as result) {
       <section class="card success-card" aria-live="polite">
-        <div class="success-icon" aria-hidden="true">✓</div>
+        <div class="success-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M5 12.5l4.5 4.5L19 7.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <p class="eyebrow">Admissions</p>
         <h1>Application submitted</h1>
         <p class="lead">
           Thank you for applying. We've sent a confirmation to
@@ -61,29 +64,30 @@
         </div>
       </section>
     } @else {
-      <section class="card form-card">
-        <div class="form-head">
-          <p class="eyebrow">Admissions</p>
-          <h1>Online application form</h1>
-          <p class="lead">
-            Complete the form below to apply for enrollment. Fields marked with
-            <span class="req">*</span> are required.
-          </p>
+      <header class="letterhead">
+        <p class="eyebrow">Admissions</p>
+        <h1 class="lh-title">Online application form</h1>
+        <p class="lh-sub">
+          Complete the form below to apply for enrollment. Fields marked with
+          <span class="req">*</span> are required.
+        </p>
+      </header>
+
+      @if (prefilled()) {
+        <div class="alert info" role="status">
+          Welcome back! We've pre-filled your contact details from your account. Just add the new child's information below.
         </div>
+      }
 
-        @if (prefilled()) {
-          <div class="alert info" role="status">
-            Welcome back! We've pre-filled your contact details from your account. Just add the new child's information below.
-          </div>
-        }
+      @if (error()) {
+        <div class="alert error" role="alert">{{ error() }}</div>
+      }
 
-        @if (error()) {
-          <div class="alert error" role="alert">{{ error() }}</div>
-        }
-
+      <div class="layout">
+      <section class="card form-card">
         <form (ngSubmit)="submit()" novalidate>
           <fieldset class="section">
-            <legend>Student details</legend>
+            <legend><span class="sec-no">I</span>Student details</legend>
             <div class="grid">
               <div class="field">
                 <label>First name <span class="req">*</span></label>
@@ -126,7 +130,7 @@
           </fieldset>
 
           <fieldset class="section">
-            <legend>Parent / guardian &amp; contact</legend>
+            <legend><span class="sec-no">II</span>Parent / guardian &amp; contact</legend>
             <div class="grid">
               <div class="field">
                 <label>Parent / guardian name <span class="req">*</span></label>
@@ -156,7 +160,7 @@
           </fieldset>
 
           <fieldset class="section">
-            <legend>Supporting documents</legend>
+            <legend><span class="sec-no">III</span>Supporting documents</legend>
             <p class="section-hint">Accepted formats: PDF, JPG, PNG · Max 5MB per file.</p>
             <div class="doc-list">
               @for (slot of docSlots; track slot.field) {
@@ -174,10 +178,13 @@
                       <div class="doc-file">
                         <span class="doc-file-name" [title]="file.name">{{ file.name }}</span>
                         <span class="doc-file-size">{{ formatBytes(file.size) }}</span>
-                        <button type="button" class="doc-remove" (click)="clearFile(slot.field)" aria-label="Remove file">×</button>
+                        <button type="button" class="doc-remove" (click)="clearFile(slot.field)" aria-label="Remove file">
+                          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                        </button>
                       </div>
                     } @else {
                       <label class="doc-upload-btn">
+                        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 16V5M12 5l-4 4M12 5l4 4M5 15v3a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-3" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
                         <span>Choose file</span>
                         <input
                           type="file"
@@ -204,11 +211,43 @@
               <a routerLink="/login" class="btn-secondary">Cancel</a>
             }
             <button type="submit" class="btn-primary" [disabled]="submitting()">
-              {{ submitting() ? 'Submitting…' : 'Submit application' }}
+              @if (submitting()) {
+                <span class="spinner" aria-hidden="true"></span>
+                Submitting…
+              } @else {
+                Submit application
+              }
             </button>
           </div>
         </form>
       </section>
+
+      <aside class="side-stack">
+        <section class="card side-card">
+          <h2>How it works</h2>
+          <ol class="steps">
+            <li><strong>Submit the form</strong><span>Complete all three sections and upload your documents.</span></li>
+            <li><strong>Get your reference</strong><span>A confirmation is sent by email and SMS.</span></li>
+            <li><strong>Track your status</strong><span>Use your reference and email at any time.</span></li>
+          </ol>
+        </section>
+
+        <section class="card side-card">
+          <h2>Documents needed</h2>
+          <ul class="doc-checklist">
+            @for (slot of docSlots; track slot.field) {
+              <li>
+                <span class="tick" [class.done]="!!files[slot.field]" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none"><path d="M5 12.5l4.5 4.5L19 7.5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </span>
+                <span>{{ slot.label }}</span>
+                <small>{{ slot.required ? 'Required' : 'Optional' }}</small>
+              </li>
+            }
+          </ul>
+        </section>
+      </aside>
+      </div>
     }
 
     <p class="public-foot">© {{ currentYear }} School Pro Academy · <a routerLink="/apply/status">Track an existing application</a></p>

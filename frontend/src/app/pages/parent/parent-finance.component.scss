@@ -743,29 +743,28 @@ button:focus-visible {
 .pdf-overlay {
   position: fixed;
   inset: 0;
-  z-index: 1000;
+  z-index: 1200; // above the portal sidebar and top bar
   display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1rem;
-  background: rgba(15, 29, 54, 0.62);
+  background: var(--paper);
 }
 
+// Full-page viewer: fills the whole window whenever it opens
 .pdf-modal {
   display: flex;
   flex-direction: column;
-  width: min(960px, 100%);
-  height: min(86vh, 900px);
+  width: 100%;
+  height: 100%;
+  height: 100dvh;
   overflow: hidden;
   background: var(--paper);
   border-top: 3px solid var(--brass);
-  border-radius: 3px;
-  box-shadow: 0 30px 60px -20px rgba(15, 29, 54, 0.55);
 
   iframe {
     flex: 1;
+    min-height: 0;
     width: 100%;
     border: 0;
+    background: #525659;
   }
 }
 
@@ -774,7 +773,8 @@ button:focus-visible {
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  padding: 0.8rem 1.25rem;
+  flex-shrink: 0;
+  padding: 0.7rem 1.25rem;
   border-bottom: 1px solid var(--rule);
 
   h2 {

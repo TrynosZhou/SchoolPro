@@ -14,7 +14,7 @@
     <div class="lh-text">
       <a [routerLink]="homeLink()" class="back-link">
         <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        {{ isStudent() ? 'Back to dashboard' : 'Back to My Children' }}
+        {{ isStudent() ? 'Back to dashboard' : 'Back to Dashboard' }}
       </a>
       <h1 class="lh-title">Statement of account</h1>
       <p class="lh-sub">
@@ -42,7 +42,7 @@
         <p>Your student profile could not be loaded. Please contact the school office.</p>
       } @else {
         <h2>No linked children</h2>
-        <p>Link a student on <a [routerLink]="homeLink()">My Children</a> to see their fees and payments here.</p>
+        <p>Link a student on <a [routerLink]="homeLink()">Dashboard</a> to see their fees and payments here.</p>
       }
     </section>
   } @else {
@@ -286,8 +286,8 @@
 
   <!-- ── Statement PDF preview ──────────────────────────────── -->
   @if (statementPdfPreviewOpen()) {
-    <div class="pdf-overlay" (click)="closeStatementPdfPreview()">
-      <div class="pdf-modal" role="dialog" aria-modal="true" aria-labelledby="pdf-title" (click)="$event.stopPropagation()">
+    <div class="pdf-overlay">
+      <div class="pdf-modal" role="dialog" aria-modal="true" aria-labelledby="pdf-title">
         <div class="pdf-modal-head">
           <h2 id="pdf-title">Statement preview</h2>
           <button type="button" class="btn btn--line btn--sm" (click)="closeStatementPdfPreview()">Close</button>

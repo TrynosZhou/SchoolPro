@@ -6,16 +6,16 @@
   [navSections]="navSections"
 >
   @if (toast(); as t) {
-    <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">
+    <div class="toast" role="status" aria-live="polite" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">
       {{ t.msg }}
     </div>
   }
 
-  <header class="page-hero">
-    <div class="hero-text">
-      <p class="hero-eyebrow">Communication</p>
-      <h1>Messages</h1>
-      <p>
+  <header class="letterhead">
+    <div class="lh-text">
+      <p class="eyebrow">Communication</p>
+      <h1 class="lh-title">Messages</h1>
+      <p class="lh-sub">
         @if (isTeacher) {
           Chat directly with the parents and students of the classes you teach.
         } @else if (isStudent) {
@@ -25,25 +25,31 @@
         }
       </p>
     </div>
-    <div class="hero-actions">
-      <button type="button" class="btn-primary" (click)="openCompose()">✎ New message</button>
+    <div class="lh-actions">
+      <button type="button" class="btn-primary" (click)="openCompose()">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 20l1-4L16.5 4.5a2 2 0 0 1 2.8 0l.2.2a2 2 0 0 1 0 2.8L8 19l-4 1zM14 7l3 3" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        New message
+      </button>
     </div>
   </header>
 
   <div class="messaging-grid">
     <!-- Thread list -->
-    <aside class="thread-list card">
+    <aside class="thread-list pane">
       <div class="thread-list-head">
-        <span>Conversations</span>
+        <h2>Conversations</h2>
         @if (totalUnread() > 0) {
           <span class="unread-pill">{{ totalUnread() }}</span>
         }
       </div>
 
       @if (loadingThreads()) {
-        <p class="muted pad">Loading conversations…</p>
+        <div class="state pad" role="status"><span class="spinner" aria-hidden="true"></span><p>Loading conversations…</p></div>
       } @else if (!threads().length) {
         <div class="empty pad">
+          <span class="seal seal--sm" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v7a2.5 2.5 0 0 1-2.5 2.5H11l-4 3.5V16h-.5A2.5 2.5 0 0 1 4 13.5v-7z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+          </span>
           <p>No conversations yet.</p>
           <button type="button" class="btn-outline" (click)="openCompose()">Start a conversation</button>
         </div>
@@ -54,6 +60,7 @@
               <button
                 type="button"
                 class="thread-item"
+                [attr.aria-current]="activeThread()?.threadId === t.threadId ? 'true' : null"
                 [class.active]="activeThread()?.threadId === t.threadId"
                 [class.unread]="t.unreadCount > 0"
                 (click)="openThread(t)"
@@ -80,12 +87,14 @@
     </aside>
 
     <!-- Conversation / compose pane -->
-    <section class="conversation card">
+    <section class="conversation pane">
       @if (showCompose()) {
         <div class="compose">
           <div class="compose-head">
             <h2>New message</h2>
-            <button type="button" class="icon-btn" (click)="cancelCompose()">✕</button>
+            <button type="button" class="icon-btn" aria-label="Close" (click)="cancelCompose()">
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+            </button>
           </div>
 
           <label class="field-label">To</label>
@@ -206,19 +215,30 @@
             class="input"
             rows="2"
             [(ngModel)]="replyBody"
-            placeholder="Write a reply…"
+            placeholder="Write a reply…  (Enter to send)"
+            aria-label="Reply"
             (keydown.enter)="$event.preventDefault(); sendReply()"
           ></textarea>
           <button type="button" class="btn-primary" [disabled]="sendingReply() || !replyBody.trim()" (click)="sendReply()">
-            {{ sendingReply() ? '…' : 'Send' }}
+            @if (sendingReply()) {
+              <span class="spinner spinner--btn" aria-hidden="true"></span>
+            } @else {
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M21 3L10 14M21 3l-7 18-4-7-7-4 18-7z" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Send
+            }
           </button>
         </div>
       } @else {
         <div class="conversation-empty">
-          <div class="empty-emoji">💬</div>
+          <span class="seal" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v7a2.5 2.5 0 0 1-2.5 2.5H11l-4 3.5V16h-.5A2.5 2.5 0 0 1 4 13.5v-7z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M8.5 9.5h7M8.5 12.5h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+          </span>
           <h2>Select a conversation</h2>
           <p>Choose a conversation on the left, or start a new message.</p>
-          <button type="button" class="btn-primary" (click)="openCompose()">✎ New message</button>
+          <button type="button" class="btn-primary" (click)="openCompose()">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 20l1-4L16.5 4.5a2 2 0 0 1 2.8 0l.2.2a2 2 0 0 1 0 2.8L8 19l-4 1zM14 7l3 3" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            New message
+          </button>
         </div>
       }
     </section>

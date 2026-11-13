@@ -1,4 +1,4 @@
-import { Component, computed, HostListener, inject, OnInit, signal } from '@angular/core';
+import { Component, computed, HostListener, inject, OnInit, signal, OnDestroy } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
@@ -77,7 +77,7 @@ interface ReceiptRow {
   templateUrl: './parent-finance.component.html',
   styleUrl: './parent-finance.component.scss',
 })
-export class ParentFinanceComponent implements OnInit {
+export class ParentFinanceComponent implements OnInit, OnDestroy {
   private api = inject(ApiService);
   private auth = inject(AuthService);
   private route = inject(ActivatedRoute);
@@ -293,6 +293,7 @@ export class ParentFinanceComponent implements OnInit {
         this.statementPdfObjectUrl = URL.createObjectURL(blob);
         this.statementPdfPreviewUrl.set(this.sanitizer.bypassSecurityTrustResourceUrl(this.statementPdfObjectUrl));
         this.statementPdfPreviewOpen.set(true);
+        this.lockPageScroll(true);
       },
       error: async (e) => {
         this.pdfLoading.set(false);
@@ -337,8 +338,20 @@ export class ParentFinanceComponent implements OnInit {
     });
   }
 
+  ngOnDestroy() {
+    this.closeStatementPdfPreview();
+  }
+
+  /** Stops the page behind the full-screen preview from scrolling. */
+  private lockPageScroll(lock: boolean) {
+    const overflow = lock ? 'hidden' : '';
+    document.documentElement.style.overflow = overflow;
+    document.body.style.overflow = overflow;
+  }
+
   closeStatementPdfPreview() {
     this.statementPdfPreviewOpen.set(false);
+    this.lockPageScroll(false);
     if (this.statementPdfObjectUrl) {
       URL.revokeObjectURL(this.statementPdfObjectUrl);
       this.statementPdfObjectUrl = null;
