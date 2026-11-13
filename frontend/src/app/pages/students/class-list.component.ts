@@ -1,4 +1,5 @@
 import { Component, computed, inject, OnDestroy, OnInit, signal } from '@angular/core';
+import { firstValueFrom } from 'rxjs';
 import { FormsModule } from '@angular/forms';
 import { DatePipe } from '@angular/common';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
@@ -9,6 +10,9 @@ import { buildTeacherNavSections } from '../../core/config/teacher-nav';
 import { AuthService } from '../../core/services/auth.service';
 import { ApiService } from '../../core/services/api.service';
 import { classDisplayName } from '../../core/utils/class-display';
+import { buildClassListPdfBlob, ClassListPdfBranding } from '../../core/utils/class-list-pdf.util';
+import { resolveLogoUrl } from '../../core/utils/payslip-print.util';
+import { environment } from '../../../environments/environment';
 import { Student } from '../../core/models';
 
 interface ClassOption {
@@ -17,6 +21,8 @@ interface ClassOption {
   capacity?: number;
   form?: { id?: string; name: string };
   students?: { id: string }[];
+  studentCount?: number;
+  _count?: { students?: number };
 }
 
 interface EditForm {
@@ -163,9 +169,30 @@ export class ClassListComponent implements OnInit, OnDestroy {
     });
 
     if (this.isTeacherPortal) {
-      this.api.get<{ assignedClasses: ClassOption[] }>('/dashboard/teacher').subscribe({
+      this.api
+        .get<{
+          assignedClasses?: ClassOption[];
+          assignments?: { classId: string; className?: string; formName?: string; studentCount?: number }[];
+          classTeacherOf?: { classId: string; className?: string; formName?: string; studentCount?: number }[];
+        }>('/dashboard/teacher')
+        .subscribe({
         next: (d) => {
-          this.classes.set(d.assignedClasses || []);
+          // Student counts come back on assignments / classTeacherOf, not on assignedClasses.
+          const counts = new Map<string, number>();
+          for (const r of [...(d.assignments ?? []), ...(d.classTeacherOf ?? [])]) {
+            if (r.studentCount != null) counts.set(r.classId, Math.max(counts.get(r.classId) ?? 0, r.studentCount));
+          }
+          let source: ClassOption[] = d.assignedClasses ?? [];
+          if (!source.length) {
+            const seen = new Map<string, ClassOption>();
+            for (const r of [...(d.classTeacherOf ?? []), ...(d.assignments ?? [])]) {
+              if (r.classId && r.className && !seen.has(r.classId)) {
+                seen.set(r.classId, { id: r.classId, name: r.className, form: r.formName ? { name: r.formName } : undefined });
+              }
+            }
+            source = [...seen.values()];
+          }
+          this.classes.set(source.map((c) => ({ ...c, studentCount: c.studentCount ?? counts.get(c.id) })));
           this.loadingClasses.set(false);
         },
         error: () => {
@@ -192,8 +219,13 @@ export class ClassListComponent implements OnInit, OnDestroy {
     this.revokePdfUrl();
   }
 
+  /**
+   * Enrolled learners in a class. The selected class uses the roster actually loaded;
+   * otherwise fall back to whatever count the API supplied for that class.
+   */
   classEnrollmentCount(c: ClassOption): number {
-    return c.students?.length ?? 0;
+    if (c.id === this.selectedClassId && this.hasFetched()) return this.students().length;
+    return c.students?.length ?? c._count?.students ?? c.studentCount ?? 0;
   }
 
   selectClass(classId: string): void {
@@ -536,6 +568,44 @@ export class ClassListComponent implements OnInit, OnDestroy {
     }
 
     this.pdfLoading.set(true);
+    return this.renderClassListPdf()
+      .catch(() => this.fetchServerPdf(preview))
+      .then((blob) => {
+        this.pdfLoading.set(false);
+        return blob;
+      });
+  }
+
+  /** Builds the redesigned class list PDF in the browser. */
+  private async renderClassListPdf(): Promise<Blob> {
+    let branding: ClassListPdfBranding = {};
+    try {
+      const b = await firstValueFrom(
+        this.api.get<{
+          schoolName?: string;
+          tagline?: string;
+          logoUrl?: string;
+          address?: string;
+          phone?: string;
+          email?: string;
+        }>('/exams/school-branding'),
+      );
+      branding = { ...b, logoUrl: resolveLogoUrl(b.logoUrl, environment.apiUrl) };
+    } catch {
+      /* the PDF still renders with the default school name and a monogram crest */
+    }
+
+    return buildClassListPdfBlob({
+      className: this.selectedClassLabel() || 'Class',
+      termName: this.selectedTermLabel() || undefined,
+      generatedAt: new Date(),
+      students: this.students(),
+      branding,
+    });
+  }
+
+  /** Fallback: the server-rendered PDF, used only if client-side generation fails. */
+  private fetchServerPdf(preview: boolean): Promise<Blob | null> {
     return new Promise((resolve) => {
       this.api
         .getBlob('/students/class-list/pdf', {
@@ -545,7 +615,6 @@ export class ClassListComponent implements OnInit, OnDestroy {
         })
         .subscribe({
           next: (blob) => {
-            this.pdfLoading.set(false);
             if (blob.type && !blob.type.includes('pdf')) {
               this.showToast('error', 'Could not generate class list PDF.');
               resolve(null);
@@ -554,7 +623,6 @@ export class ClassListComponent implements OnInit, OnDestroy {
             resolve(blob);
           },
           error: async (e) => {
-            this.pdfLoading.set(false);
             let msg = 'Could not generate class list PDF.';
             if (e.error instanceof Blob) {
               try {

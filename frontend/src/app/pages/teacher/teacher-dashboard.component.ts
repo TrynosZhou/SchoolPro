@@ -106,6 +106,7 @@ export class TeacherDashboardComponent implements OnInit {
   }
 
   data = signal<TeacherDashboardData | null>(null);
+  readonly schoolName = signal('School Pro');
   loading = signal(true);
 
   readonly todayLabel = new Intl.DateTimeFormat('en-US', {
@@ -170,6 +171,43 @@ export class TeacherDashboardComponent implements OnInit {
   readonly attendanceTotal = computed(() =>
     (this.data()?.attendanceToday ?? []).reduce((sum, row) => sum + Number(row.count || 0), 0),
   );
+
+  readonly attendance = computed(() => {
+    const rows = this.data()?.attendanceToday ?? [];
+    const sum = (match: string) =>
+      rows.filter((r) => r.status.toLowerCase().includes(match)).reduce((n, r) => n + Number(r.count || 0), 0);
+    const total = rows.reduce((n, r) => n + Number(r.count || 0), 0);
+    const present = sum('present');
+    const late = sum('late');
+    const absent = sum('absent');
+    const pct = (n: number) => (total ? Math.round((n / total) * 1000) / 10 : 0);
+    return {
+      total,
+      present,
+      late,
+      absent,
+      presentPct: pct(present),
+      latePct: pct(late),
+      absentPct: pct(absent),
+      rate: total ? Math.round((present / total) * 100) : null,
+    };
+  });
+
+  readonly classBars = computed(() => {
+    const groups = this.classGroups();
+    const max = Math.max(1, ...groups.map((g) => g.studentCount));
+    return groups.slice(0, 8).map((g) => ({
+      classId: g.classId,
+      label: g.classLabel,
+      students: g.studentCount,
+      pct: Math.round((g.studentCount / max) * 100),
+    }));
+  });
+
+  readonly attendanceLessSummary = computed(() => {
+    const n = this.classGroups().length;
+    return `${n} class${n === 1 ? '' : 'es'} you teach or lead`;
+  });
 
   readonly attendancePendingClasses = computed(() =>
     (this.data()?.classTeacherOf ?? []).filter((c) => !c.attendanceMarkedToday),
@@ -327,6 +365,13 @@ export class TeacherDashboardComponent implements OnInit {
       },
     });
 
+    this.api.get<{ schoolName: string | null }>('/dashboard/school-links').subscribe({
+      next: (d) => {
+        if (d?.schoolName) this.schoolName.set(d.schoolName);
+      },
+      error: () => {},
+    });
+
     this.api.get<TeacherDashboardData>('/dashboard/teacher').subscribe({
       next: (d) => {
         this.data.set(d);
@@ -347,6 +392,16 @@ export class TeacherDashboardComponent implements OnInit {
     if (s.includes('late')) return 'late';
     if (s.includes('excus')) return 'excused';
     return '';
+  }
+
+  isNow(slot: ScheduleSlot): boolean {
+    const toMin = (v: string) => {
+      const [h, m] = (v || '').split(':').map(Number);
+      return Number.isNaN(h) ? NaN : h * 60 + (m || 0);
+    };
+    const now = new Date();
+    const cur = now.getHours() * 60 + now.getMinutes();
+    return cur >= toMin(slot.startTime) && cur < toMin(slot.endTime);
   }
 
   formatTime(value: string): string {

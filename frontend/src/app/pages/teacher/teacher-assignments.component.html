@@ -6,11 +6,13 @@
   [navItems]="portalLayout.navItems || []"
 >
   <header class="page-hero">
-    <p class="eyebrow">Academics · Class work</p>
-    <h1>Assignments</h1>
-    <p class="hero-sub">
-      Select a class, enter the assignment details, upload a file, and send it to every student in that class.
-    </p>
+    <div>
+      <p class="eyebrow">Academics · Class work</p>
+      <h1>Assignments</h1>
+      <p class="hero-sub">
+        Select a class, enter the assignment details, upload a file, and send it to every student in that class.
+      </p>
+    </div>
   </header>
 
   <section class="upload-card card">
@@ -20,7 +22,7 @@
       <p class="muted">Loading your classes…</p>
     } @else {
       <div class="form-grid">
-        <label class="field">
+        <label class="field full">
           <span>Class <span class="req">*</span></span>
           <select
             [(ngModel)]="selectedClassId"
@@ -95,7 +97,7 @@
         <p class="muted">Loading…</p>
       } @else if (!assignments().length) {
         <div class="empty-state">
-          <span class="empty-icon">📤</span>
+          <span class="empty-icon" aria-hidden="true">📤</span>
           <p>No assignments posted yet for this class.</p>
         </div>
       } @else {

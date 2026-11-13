@@ -35,6 +35,24 @@ export interface NavSection {
   path?: string;
 }
 
+const PORTAL_PREFIXES = ['/admin', '/teacher', '/director', '/principal', '/accountant', '/parent', '/student'];
+
+/**
+ * Defence in depth: a signed-in teacher only ever sees /teacher menus and an admin only /admin menus.
+ * Entries pointing into another role's portal are dropped (routes are separately protected by roleGuard).
+ */
+function confineNavToRole(sections: NavSection[], role: string): NavSection[] {
+  if (role !== 'admin' && role !== 'teacher') return sections;
+  const own = `/${role}`;
+  const foreign = (path?: string) =>
+    !!path &&
+    PORTAL_PREFIXES.some((p) => p !== own && (path === p || path.startsWith(p + '/'))) ;
+  return sections
+    .filter((section) => !foreign(section.path))
+    .map((section) => ({ ...section, items: section.items.filter((item) => !foreign(item.path)) }))
+    .filter((section) => section.path || section.items.length > 0);
+}
+
 interface BalanceEnquiryRow {
   id: string;
   admissionNumber: string;
@@ -63,7 +81,23 @@ export class PortalLayoutComponent implements OnInit, OnChanges, OnDestroy {
   /** Flat list (legacy / teacher & parent portals). */
   @Input() navItems: NavItem[] = [];
   /** Grouped navigation with section headings (admin portal). */
-  @Input() navSections: NavSection[] = [];
+  @Input()
+  set navSections(value: NavSection[]) {
+    this._navSectionsSource = value ?? [];
+  }
+  get navSections(): NavSection[] {
+    const role = (this.auth?.user()?.role || '').toLowerCase();
+    if (this._navConfinedSource !== this._navSectionsSource || this._navConfinedRole !== role) {
+      this._navConfinedSource = this._navSectionsSource;
+      this._navConfinedRole = role;
+      this._navConfined = confineNavToRole(this._navSectionsSource, role);
+    }
+    return this._navConfined;
+  }
+  private _navSectionsSource: NavSection[] = [];
+  private _navConfined: NavSection[] = [];
+  private _navConfinedSource: NavSection[] | null = null;
+  private _navConfinedRole = '';
   auth = inject(AuthService);
   private api = inject(ApiService);
   private messageBadge = inject(MessageBadgeService);
@@ -683,6 +717,8 @@ export class PortalLayoutComponent implements OnInit, OnChanges, OnDestroy {
 
   sectionGroup(heading: string): string {
     const h = heading.toLowerCase();
+    // Teacher portal: Account sits under ADMINISTRATION, right after Communication.
+    if (h === 'account' && this.portalTitle === 'Teacher Portal') return 'ADMINISTRATION';
     if (['dashboard', 'students', 'parents', 'staff', 'teachers', 'account'].includes(h)) return 'MAIN';
     if (['classes & subjects', 'classes', 'subjects', 'attendance', 'examinations', 'timetable', 'learning', 'academics'].includes(h)) {
       return 'ACADEMICS';
