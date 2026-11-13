@@ -1,6 +1,6 @@
 import { Component, inject, OnInit, signal, computed } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { DecimalPipe } from '@angular/common';
+import { DatePipe, DecimalPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { ApiService } from '../../core/services/api.service';
@@ -25,6 +25,20 @@ interface ParentChildSummary {
   attendance: { status: string; count: string }[];
 }
 
+interface AttendanceSegment {
+  key: 'present' | 'late' | 'excused' | 'absent';
+  label: string;
+  count: number;
+  percent: number;
+}
+
+interface AttendanceBreakdown {
+  total: number;
+  present: number;
+  rate: number;
+  segments: AttendanceSegment[];
+}
+
 interface StudentMatch {
   id: string;
   admissionNumber?: string;
@@ -39,7 +53,7 @@ interface StudentMatch {
 @Component({
   selector: 'app-parent-dashboard',
   standalone: true,
-  imports: [PortalLayoutComponent, DecimalPipe, RouterLink, FormsModule],
+  imports: [PortalLayoutComponent, DecimalPipe, DatePipe, RouterLink, FormsModule],
   templateUrl: './parent-dashboard.component.html',
   styleUrl: './parent-dashboard.component.scss',
 })
@@ -74,6 +88,13 @@ export class ParentDashboardComponent implements OnInit {
     year: 'numeric',
   }).format(new Date());
 
+  readonly greeting = (() => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Good morning';
+    if (hour < 17) return 'Good afternoon';
+    return 'Good evening';
+  })();
+
   readonly greetingName = computed(() => {
     const u = this.auth.user();
     if (!u) return 'Parent';
@@ -82,6 +103,9 @@ export class ParentDashboardComponent implements OnInit {
   });
 
   childCount = computed(() => this.children().length);
+
+  /** Combined outstanding fees across every linked child. */
+  totalOwed = computed(() => this.children().reduce((sum, c) => sum + (c.balanceOwed || 0), 0));
 
   isParent = computed(() => this.auth.user()?.role === 'parent');
 
@@ -208,13 +232,44 @@ export class ParentDashboardComponent implements OnInit {
     return formatStudentClassLabel(child.student.className);
   }
 
-  attendanceSummary(child: ParentChildSummary): string {
-    const present = child.attendance.find((a) => a.status === 'present')?.count;
-    if (present) return `${present} present (30 days)`;
-    if (child.attendance.length) {
-      return child.attendance.map((a) => `${a.status}: ${a.count}`).join(', ');
+  initials(first?: string, last?: string): string {
+    return `${(first || '').charAt(0)}${(last || '').charAt(0)}`.toUpperCase();
+  }
+
+  /** Last-30-day attendance split into present / late / excused / absent, or null when nothing is recorded. */
+  attendanceBreakdown(child: ParentChildSummary): AttendanceBreakdown | null {
+    const counts: Record<string, number> = {};
+    for (const row of child.attendance || []) {
+      const key = String(row.status || '').toLowerCase();
+      counts[key] = (counts[key] || 0) + (Number(row.count) || 0);
     }
-    return 'No attendance records yet';
+    const total = Object.values(counts).reduce((a, b) => a + b, 0);
+    if (!total) return null;
+
+    const order: { key: AttendanceSegment['key']; label: string }[] = [
+      { key: 'present', label: 'Present' },
+      { key: 'late', label: 'Late' },
+      { key: 'excused', label: 'Excused' },
+      { key: 'absent', label: 'Absent' },
+    ];
+    const segments = order
+      .filter((o) => counts[o.key] > 0)
+      .map((o) => ({
+        key: o.key,
+        label: o.label,
+        count: counts[o.key],
+        percent: (counts[o.key] / total) * 100,
+      }));
+    const present = counts['present'] || 0;
+    return { total, present, rate: Math.round((present / total) * 100), segments };
+  }
+
+  /** Score as a 0–100 percentage for the small bar, or null when the score is incomplete. */
+  assessmentPercent(a: { score?: number; maxScore?: number }): number | null {
+    const score = Number(a.score);
+    const max = Number(a.maxScore);
+    if (a.score == null || a.maxScore == null || !isFinite(score) || !isFinite(max) || max <= 0) return null;
+    return Math.max(0, Math.min(100, (score / max) * 100));
   }
 
   private showToast(type: 'success' | 'error', msg: string) {

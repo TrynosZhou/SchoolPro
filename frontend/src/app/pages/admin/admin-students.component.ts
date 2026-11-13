@@ -2,6 +2,7 @@ import { Component, inject, OnInit, signal, computed } from '@angular/core';
 import { NgTemplateOutlet, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink, NavigationExtras } from '@angular/router';
+import { AccountResetModalComponent } from '../../shared/account-reset-modal/account-reset-modal.component';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
 import { ApiService } from '../../core/services/api.service';
@@ -48,7 +49,7 @@ interface RegisterStudentResponse extends Student {
 @Component({
   selector: 'app-admin-students',
   standalone: true,
-  imports: [PortalLayoutComponent, FormsModule, RouterLink, NgTemplateOutlet, DatePipe, UnlessDemoDirective, TranslatePipe],
+  imports: [PortalLayoutComponent, AccountResetModalComponent, FormsModule, RouterLink, NgTemplateOutlet, DatePipe, UnlessDemoDirective, TranslatePipe],
   templateUrl: './admin-students.component.html',
   styleUrl: './admin-students.component.scss',
 })
@@ -77,6 +78,8 @@ export class AdminStudentsComponent implements OnInit {
   detailStudent = signal<Student | null>(null);
   idCardPdfLoading = signal<string | null>(null);
   toast = signal<{ type: 'success' | 'error'; msg: string } | null>(null);
+  /** Account reset modal (opened by double-clicking a user's name). */
+  resetAccountUser = signal<{ userId: string; name: string } | null>(null);
 
   enrollmentFilter = signal<EnrollmentFilter>('all');
   typeFilter = signal<TypeFilter>('all');
@@ -304,6 +307,24 @@ export class AdminStudentsComponent implements OnInit {
     }
     event?.stopPropagation();
     this.deleteTarget.set(student);
+  }
+
+  /** Double-click on a user's name opens the reset-account modal (username and/or password). */
+  openAccountReset(userId: string | null | undefined, name: string, event?: Event) {
+    event?.stopPropagation();
+    if (!userId) {
+      this.showToast('error', `${name} does not have a portal account yet`);
+      return;
+    }
+    this.resetAccountUser.set({ userId, name });
+  }
+
+  closeAccountReset() {
+    this.resetAccountUser.set(null);
+  }
+
+  onAccountResetSaved(result: { message: string; username: string | null }) {
+    this.showToast('success', result.message);
   }
 
   openStudentDetail(student: Student) {

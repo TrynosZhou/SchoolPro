@@ -34,6 +34,8 @@ export interface DemoAccount {
 
 export interface Student {
   id: string;
+  /** Linked portal user account (users.id), when the student has one. */
+  userId?: string | null;
   /** Display label: Student ID (stored as admissionNumber) */
   admissionNumber: string;
   firstName: string;

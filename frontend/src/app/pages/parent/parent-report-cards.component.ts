@@ -160,6 +160,36 @@ export class ParentReportCardsComponent implements OnInit {
     return `${s.firstName} ${s.lastName}${id}${cls ? ` — ${cls}` : ''}`;
   }
 
+  selectedChild(): LinkedChild['student'] | null {
+    return this.children().find((c) => c.student.id === this.selectedStudentId)?.student ?? null;
+  }
+
+  childName(): string {
+    const s = this.selectedChild();
+    return s ? `${s.firstName} ${s.lastName}` : '';
+  }
+
+  childClass(): string {
+    const s = this.selectedChild();
+    return s ? [s.schoolClass?.form?.name, s.schoolClass?.name].filter(Boolean).join(' ') : '';
+  }
+
+  selectedTermName(): string {
+    return this.terms().find((t) => t.id === this.selectedTermId)?.name ?? '';
+  }
+
+  selectedExamName(): string {
+    return this.examTypes().find((e) => e.id === this.selectedExamTypeId)?.name ?? '';
+  }
+
+  /** Plain-language hint about what is still missing before the report can open. */
+  missingHint(): string {
+    if (!this.selectedStudentId) return this.isStudent() ? 'Your profile is still loading.' : 'Choose a child to continue.';
+    if (!this.selectedTermId) return 'Choose a term to continue.';
+    if (!this.selectedExamTypeId) return 'No published results for this term yet.';
+    return '';
+  }
+
   canView(): boolean {
     return !!(this.selectedStudentId && this.selectedTermId && this.selectedExamTypeId);
   }

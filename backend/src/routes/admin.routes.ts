@@ -1312,6 +1312,7 @@ const STAFF_PORTAL_ROLES = [UserRole.DIRECTOR, UserRole.PRINCIPAL, UserRole.ADMI
 function serializeManagedUser(user: User) {
   return {
     id: user.id,
+    username: user.username ?? null,
     email: user.email,
     firstName: user.firstName,
     lastName: user.lastName,
@@ -1630,6 +1631,78 @@ router.post('/users/:id/unlock', authorize(UserRole.ADMIN), async (req, res: Res
   const full = await loadManagedUser(user.id);
   res.json(serializeManagedUser(full!));
 });
+
+/**
+ * Admin-initiated account reset for a selected user.
+ * Body: { username?: string; password?: string } — send the username only, the password only, or both.
+ * Passwords must satisfy the school security policy; usernames must be unique (case-insensitive).
+ */
+const USERNAME_PATTERN = /^[A-Za-z0-9._-]{3,50}$/;
+
+async function resetUserAccountHandler(req: AuthRequest, res: Response) {
+  const userRepo = AppDataSource.getRepository(User);
+  const user = await userRepo.findOne({ where: { id: req.params.id } });
+  if (!user) return res.status(404).json({ message: 'User not found' });
+
+  const rawUsername = typeof req.body?.username === 'string' ? req.body.username.trim() : '';
+  const password = typeof req.body?.password === 'string' ? req.body.password : '';
+
+  const wantsUsername = rawUsername.length > 0 && rawUsername !== (user.username ?? '');
+  const wantsPassword = password.trim().length > 0;
+
+  if (!wantsUsername && !wantsPassword) {
+    return res.status(400).json({ message: 'Enter a new username, a new password, or both' });
+  }
+
+  const changes: string[] = [];
+
+  if (wantsUsername) {
+    if (user.role === UserRole.STUDENT) {
+      return res.status(400).json({
+        message: 'Student accounts sign in with their Student ID, so the username cannot be changed. You can still reset the password.',
+      });
+    }
+    if (!USERNAME_PATTERN.test(rawUsername)) {
+      return res.status(400).json({
+        message: 'Username must be 3–50 characters and may only contain letters, numbers, dots, underscores and hyphens',
+      });
+    }
+    const lowered = rawUsername.toLowerCase();
+    const clash = await userRepo
+      .createQueryBuilder('u')
+      .where('u.id != :id', { id: user.id })
+      .andWhere('(LOWER(u.username) = :v OR LOWER(u.email) = :v)', { v: lowered })
+      .getOne();
+    if (clash) return res.status(409).json({ message: 'That username is already in use' });
+    user.username = rawUsername;
+    changes.push('username');
+  }
+
+  if (wantsPassword) {
+    const policy = await getSecurityPolicy();
+    const pwdErr = validatePasswordAgainstPolicy(password, policy);
+    if (pwdErr) return res.status(400).json({ message: pwdErr });
+    user.passwordHash = await bcrypt.hash(password, 10);
+    if (user.role === UserRole.STUDENT) {
+      user.portalPasswordCustomized = true;
+    }
+    changes.push('password');
+  }
+
+  user.failedLoginAttempts = 0;
+  user.lockedUntil = null;
+  await userRepo.save(user);
+
+  res.json({
+    message: `${changes.join(' and ').replace(/^./, (c) => c.toUpperCase())} updated for ${user.firstName} ${user.lastName}`,
+    username: user.username ?? null,
+    changed: changes,
+  });
+}
+
+router.post('/users/:id/reset-account', authorize(UserRole.ADMIN), resetUserAccountHandler);
+// Kept for backwards compatibility with the password-only modal.
+router.post('/users/:id/reset-password', authorize(UserRole.ADMIN), resetUserAccountHandler);
 
 async function loadParentRecord(parentId: string) {
   return AppDataSource.getRepository(Parent).findOne({

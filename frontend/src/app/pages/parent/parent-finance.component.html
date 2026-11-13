@@ -6,212 +6,291 @@
   [navItems]="navItems()"
 >
   @if (toast(); as t) {
-    <div class="toast" [class.error]="t.type === 'error'" [class.success]="t.type === 'success'">{{ t.msg }}</div>
+    <div class="toast" role="status" aria-live="polite" [class.error]="t.type === 'error'" [class.success]="t.type === 'success'">{{ t.msg }}</div>
   }
 
-  <header class="page-intro">
-    <p>
-      @if (isStudent()) {
-        View your statement of account, invoice statements, and payment receipts.
-      } @else {
-        View the statement of account, invoice statements, and payment receipts for a linked student.
-      }
-    </p>
-    @if (!isStudent()) {
-      <a [routerLink]="homeLink()" class="back-link">← Back to My Children</a>
-    } @else {
-      <a [routerLink]="homeLink()" class="back-link">← Back to Dashboard</a>
-    }
+  <!-- ── Letterhead ─────────────────────────────────────────── -->
+  <header class="letterhead">
+    <div class="lh-text">
+      <a [routerLink]="homeLink()" class="back-link">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        {{ isStudent() ? 'Back to dashboard' : 'Back to My Children' }}
+      </a>
+      <h1 class="lh-title">Statement of account</h1>
+      <p class="lh-sub">
+        @if (isStudent()) {
+          Your invoices, payments and receipts, with a PDF of each to keep.
+        } @else {
+          Invoices, payments and receipts for each linked student, with a PDF of each to keep.
+        }
+      </p>
+    </div>
   </header>
 
   @if (loading()) {
-    <div class="empty card"><p>Loading…</p></div>
+    <div class="loading-state" role="status">
+      <div class="spinner"></div>
+      <p>Loading finance records…</p>
+    </div>
   } @else if (!children().length) {
-    <div class="empty card">
+    <section class="empty-state">
+      <span class="seal" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="6" width="18" height="12" rx="1.5" stroke="currentColor" stroke-width="1.6"/><path d="M3 10h18M7 15h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      </span>
       @if (isStudent()) {
+        <h2>Profile not available</h2>
         <p>Your student profile could not be loaded. Please contact the school office.</p>
       } @else {
-        <p>No linked children found. Link a student on <a [routerLink]="homeLink()">My Children</a> first.</p>
+        <h2>No linked children</h2>
+        <p>Link a student on <a [routerLink]="homeLink()">My Children</a> to see their fees and payments here.</p>
       }
-    </div>
+    </section>
   } @else {
-    <section class="card filter-card">
-      <div class="filter-row">
-        @if (children().length > 1) {
-          <div class="field">
-            <label for="studentSelect">Student</label>
-            <select id="studentSelect" [(ngModel)]="selectedStudentId" name="student" (ngModelChange)="onStudentChange()">
-              <option value="">— Select student —</option>
-              @for (c of children(); track c.student.id) {
-                <option [value]="c.student.id">{{ childLabel(c) }}</option>
-              }
-            </select>
-          </div>
-        } @else {
-          @if (children()[0]; as onlyChild) {
-            <div class="selected-student">
-              <span class="field-label">Student</span>
-              <strong>{{ onlyChild.student.firstName }} {{ onlyChild.student.lastName }}</strong>
-              @if (onlyChild.student.admissionNumber) {
-                <span class="student-id">{{ onlyChild.student.admissionNumber }}</span>
-              }
-            </div>
-          }
-        }
 
-        <div class="field field-actions">
-          <label class="sr-only">Statement PDF</label>
-          <button type="button" class="btn-outline" [disabled]="pdfLoading() || !selectedStudentId" (click)="previewStatementPdf()">
-            {{ pdfLoading() ? 'Generating…' : 'Preview statement PDF' }}
+    <!-- ── Student + actions ────────────────────────────────── -->
+    <section class="account" aria-label="Student account">
+      <div class="child-switch" role="group" [attr.aria-label]="children().length > 1 ? 'Choose a student' : 'Student'">
+        @for (c of children(); track c.student.id) {
+          <button
+            type="button"
+            class="child-chip"
+            [class.is-active]="c.student.id === selectedStudentId"
+            [attr.aria-pressed]="c.student.id === selectedStudentId"
+            [disabled]="children().length === 1"
+            (click)="selectChild(c.student.id)"
+          >
+            <span class="monogram" aria-hidden="true">{{ initials(c) }}</span>
+            <span class="chip-text">
+              <span class="chip-name">{{ c.student.firstName }} {{ c.student.lastName }}</span>
+              <span class="chip-meta">
+                @if (c.student.admissionNumber) { <span class="chip-id">{{ c.student.admissionNumber }}</span> }
+                @if (classOf(c)) { <span>{{ classOf(c) }}</span> }
+              </span>
+            </span>
           </button>
-          <button type="button" class="btn-primary" [disabled]="pdfLoading() || !selectedStudentId" (click)="downloadStatementPdf()">
-            Download statement
-          </button>
-        </div>
+        }
+      </div>
+
+      <div class="account-actions">
+        <button type="button" class="btn btn--line" [disabled]="pdfLoading() || !selectedStudentId" (click)="previewStatementPdf()">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><circle cx="12" cy="12" r="2.8" stroke="currentColor" stroke-width="1.7"/></svg>
+          {{ pdfLoading() ? 'Generating…' : 'Preview PDF' }}
+        </button>
+        <button type="button" class="btn btn--solid" [disabled]="pdfLoading() || !selectedStudentId" (click)="downloadStatementPdf()">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 4v11M7 10.5l5 5 5-5M5 19.5h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Download statement
+        </button>
       </div>
     </section>
 
     @if (!selectedStudentId) {
-      <div class="empty card"><p>Select a student to view their finance records.</p></div>
+      <section class="empty-state empty-state--inline">
+        <p>Choose a student above to see their fees and payments.</p>
+      </section>
     } @else if (loadingStatement()) {
-      <div class="empty card"><p>Loading statement…</p></div>
+      <div class="loading-state" role="status">
+        <div class="spinner"></div>
+        <p>Loading statement…</p>
+      </div>
     } @else {
-      @if (statement(); as stmt) {
-      <div class="kpi-row">
-        <div class="kpi">
-          <span>Total invoiced</span>
-          <strong>{{ '$' + (stmt.summary.totalInvoiced | number:'1.2-2') }}</strong>
+    @if (statement(); as stmt) {
+
+      <!-- ── Account summary ──────────────────────────────── -->
+      <section class="summary" aria-label="Account summary">
+        <div class="summary-figures">
+          <div class="figure">
+            <h2 class="figure-label">Total invoiced</h2>
+            <p class="figure-value">{{ money(stmt.summary.totalInvoiced) }}</p>
+          </div>
+          <div class="figure figure--paid">
+            <h2 class="figure-label">Total paid</h2>
+            <p class="figure-value">{{ money(stmt.summary.totalPaid) }}</p>
+          </div>
+          <div
+            class="figure figure--balance"
+            [class.is-owing]="stmt.summary.balance > 0"
+            [class.is-credit]="stmt.summary.balance < 0"
+          >
+            <h2 class="figure-label">{{ balanceLabel(stmt.summary.balance) }}</h2>
+            <p class="figure-value">{{ money(stmt.summary.balance) }}</p>
+          </div>
         </div>
-        <div class="kpi paid">
-          <span>Total paid</span>
-          <strong>{{ '$' + (stmt.summary.totalPaid | number:'1.2-2') }}</strong>
-        </div>
-        <div class="kpi balance" [class.overdue]="stmt.summary.balance > 0">
-          <span>Balance due</span>
-          <strong>{{ '$' + (stmt.summary.balance | number:'1.2-2') }}</strong>
-        </div>
+
+        @if (stmt.summary.totalInvoiced > 0) {
+          <div class="progress">
+            <div class="progress-bar" role="img" [attr.aria-label]="paidPercent(stmt.summary).toFixed(0) + ' percent of invoiced fees paid'">
+              <span class="progress-fill" [style.width.%]="paidPercent(stmt.summary)"></span>
+            </div>
+            <p class="progress-note">{{ paidPercent(stmt.summary).toFixed(0) }}% of invoiced fees paid</p>
+          </div>
+        }
+      </section>
+
+      <!-- ── Tabs ─────────────────────────────────────────── -->
+      <div class="tab-rail" role="tablist" aria-label="Finance records">
+        <button type="button" role="tab" id="tab-statement" class="tab" [class.is-active]="activeTab() === 'statement'"
+          [attr.aria-selected]="activeTab() === 'statement'" aria-controls="panel-statement" (click)="setTab('statement')">
+          Statement <span class="tab-count">{{ stmt.ledger.length }}</span>
+        </button>
+        <button type="button" role="tab" id="tab-invoices" class="tab" [class.is-active]="activeTab() === 'invoices'"
+          [attr.aria-selected]="activeTab() === 'invoices'" aria-controls="panel-invoices" (click)="setTab('invoices')">
+          Invoices <span class="tab-count">{{ stmt.invoices.length }}</span>
+        </button>
+        <button type="button" role="tab" id="tab-receipts" class="tab" [class.is-active]="activeTab() === 'receipts'"
+          [attr.aria-selected]="activeTab() === 'receipts'" aria-controls="panel-receipts" (click)="setTab('receipts')">
+          Receipts <span class="tab-count">{{ receipts().length }}</span>
+        </button>
       </div>
 
-      <section class="card">
-        <div class="section-head">
-          <h3>Statement of account</h3>
-          <p>Ledger entries showing invoices and payments.</p>
-        </div>
-        <div class="table-wrap">
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Description</th>
-                <th class="num">Debit</th>
-                <th class="num">Credit</th>
-                <th class="num">Balance</th>
-              </tr>
-            </thead>
-            <tbody>
-              @for (row of stmt.ledger; track row.id || row.entryDate + row.description) {
-                <tr>
-                  <td>{{ row.entryDate | date:'mediumDate' }}</td>
-                  <td>{{ row.description }}</td>
-                  <td class="num">{{ row.debit ? ('$' + (row.debit | number:'1.2-2')) : '—' }}</td>
-                  <td class="num">{{ row.credit ? ('$' + (row.credit | number:'1.2-2')) : '—' }}</td>
-                  <td class="num">{{ '$' + (row.balance | number:'1.2-2') }}</td>
-                </tr>
-              } @empty {
-                <tr><td colspan="5" class="empty-cell">No ledger entries yet</td></tr>
-              }
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section class="card">
-        <div class="section-head">
-          <h3>Invoice statements</h3>
-          <p>Download a PDF for any invoice issued to this student.</p>
-        </div>
-        <div class="table-wrap">
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th>Invoice #</th>
-                <th>Description</th>
-                <th class="num">Total</th>
-                <th class="num">Paid</th>
-                <th>Status</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              @for (inv of stmt.invoices; track inv.id) {
-                <tr>
-                  <td>{{ inv.invoiceNumber }}</td>
-                  <td>{{ inv.description }}</td>
-                  <td class="num">{{ '$' + (inv.totalAmount | number:'1.2-2') }}</td>
-                  <td class="num">{{ '$' + (inv.amountPaid | number:'1.2-2') }}</td>
-                  <td><span class="status-pill" [attr.data-status]="inv.status">{{ inv.status }}</span></td>
-                  <td class="actions">
-                    <button type="button" class="btn-ghost btn-sm" (click)="downloadInvoicePdf(inv)">Download PDF</button>
-                  </td>
-                </tr>
-              } @empty {
-                <tr><td colspan="6" class="empty-cell">No invoices</td></tr>
-              }
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section class="card">
-        <div class="section-head">
-          <h3>Payment receipts</h3>
-          <p>All receipts generated when payments are recorded. A copy is also sent to your Messages inbox.</p>
-        </div>
-        @if (loadingReceipts()) {
-          <p class="muted">Loading receipts…</p>
-        } @else {
+      <!-- Statement of account -->
+      @if (activeTab() === 'statement') {
+        <section class="sheet" role="tabpanel" id="panel-statement" aria-labelledby="tab-statement">
+          <div class="sheet-head">
+            <h2>Ledger</h2>
+            <p>Every invoice and payment on this account, in date order.</p>
+          </div>
           <div class="table-wrap">
-            <table class="data-table">
+            <table class="ledger-table">
               <thead>
                 <tr>
-                  <th>Receipt #</th>
-                  <th>Date</th>
-                  <th>Description</th>
-                  <th>Method</th>
-                  <th class="num">Amount</th>
-                  <th></th>
+                  <th scope="col">Date</th>
+                  <th scope="col">Description</th>
+                  <th scope="col" class="num">Debit</th>
+                  <th scope="col" class="num">Credit</th>
+                  <th scope="col" class="num">Balance</th>
                 </tr>
               </thead>
               <tbody>
-                @for (r of receipts(); track r.id) {
+                @for (row of stmt.ledger; track row.id || row.entryDate + row.description) {
                   <tr>
-                    <td>{{ r.receiptNumber }}</td>
-                    <td>{{ r.payment?.paidAt ? (r.payment!.paidAt | date:'mediumDate') : '—' }}</td>
-                    <td>{{ r.payment?.label || '—' }}</td>
-                    <td>{{ formatMethod(r.payment?.method) }}</td>
-                    <td class="num">{{ '$' + ((r.payment?.amount ?? 0) | number:'1.2-2') }}</td>
-                    <td class="actions">
-                      <button type="button" class="btn-ghost btn-sm" (click)="downloadReceiptPdf(r)">Download PDF</button>
-                    </td>
+                    <td class="date">{{ row.entryDate | date:'d MMM yyyy' }}</td>
+                    <td>{{ row.description }}</td>
+                    <td class="num">{{ row.debit ? money(row.debit) : '—' }}</td>
+                    <td class="num">{{ row.credit ? money(row.credit) : '—' }}</td>
+                    <td class="num balance" [class.is-credit]="row.balance < 0" [title]="row.balance < 0 ? 'Credit in favour of the student' : ''">{{ money(row.balance) }}</td>
                   </tr>
                 } @empty {
-                  <tr><td colspan="6" class="empty-cell">No receipts yet</td></tr>
+                  <tr><td colspan="5" class="empty-cell">No ledger entries yet. Invoices and payments will appear here.</td></tr>
                 }
               </tbody>
             </table>
           </div>
-        }
-      </section>
+        </section>
       }
+
+      <!-- Invoices -->
+      @if (activeTab() === 'invoices') {
+        <section class="sheet" role="tabpanel" id="panel-invoices" aria-labelledby="tab-invoices">
+          <div class="sheet-head">
+            <h2>Invoices</h2>
+            <p>Download a PDF copy of any invoice issued to this student.</p>
+          </div>
+          <div class="table-wrap">
+            <table class="ledger-table">
+              <thead>
+                <tr>
+                  <th scope="col">Invoice</th>
+                  <th scope="col">Description</th>
+                  <th scope="col">Due</th>
+                  <th scope="col" class="num">Total</th>
+                  <th scope="col" class="num">Paid</th>
+                  <th scope="col" class="num">Balance</th>
+                  <th scope="col">Status</th>
+                  <th scope="col"><span class="sr-only">Download</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (inv of stmt.invoices; track inv.id) {
+                  <tr>
+                    <td><span class="ref">{{ inv.invoiceNumber }}</span></td>
+                    <td>{{ inv.description }}</td>
+                    <td class="date" [class.is-late]="isOverdue(inv)">{{ inv.dueDate ? (inv.dueDate | date:'d MMM yyyy') : '—' }}</td>
+                    <td class="num">{{ money(inv.totalAmount) }}</td>
+                    <td class="num">{{ money(inv.amountPaid) }}</td>
+                    <td class="num balance" [class.is-owing]="invoiceBalance(inv) > 0">{{ money(invoiceBalance(inv)) }}</td>
+                    <td><span class="status" [attr.data-status]="inv.status">{{ inv.status }}</span></td>
+                    <td class="actions">
+                      <button type="button" class="btn btn--quiet btn--sm" (click)="downloadInvoicePdf(inv)" [attr.aria-label]="'Download PDF for invoice ' + inv.invoiceNumber">
+                        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 4v11M7 10.5l5 5 5-5M5 19.5h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        PDF
+                      </button>
+                    </td>
+                  </tr>
+                } @empty {
+                  <tr><td colspan="8" class="empty-cell">No invoices have been issued yet.</td></tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </section>
+      }
+
+      <!-- Receipts -->
+      @if (activeTab() === 'receipts') {
+        <section class="sheet" role="tabpanel" id="panel-receipts" aria-labelledby="tab-receipts">
+          <div class="sheet-head">
+            <h2>Payment receipts</h2>
+            <p>A receipt is issued each time a payment is recorded, and a copy is sent to your Messages inbox.</p>
+          </div>
+          @if (loadingReceipts()) {
+            <div class="loading-state loading-state--sm" role="status">
+              <div class="spinner"></div>
+              <p>Loading receipts…</p>
+            </div>
+          } @else {
+            <div class="table-wrap">
+              <table class="ledger-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Receipt</th>
+                    <th scope="col">Date</th>
+                    <th scope="col">Description</th>
+                    <th scope="col">Method</th>
+                    <th scope="col" class="num">Amount</th>
+                    <th scope="col"><span class="sr-only">Download</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (r of receipts(); track r.id) {
+                    <tr>
+                      <td><span class="ref">{{ r.receiptNumber }}</span></td>
+                      <td class="date">{{ r.payment?.paidAt ? (r.payment!.paidAt | date:'d MMM yyyy') : '—' }}</td>
+                      <td>{{ r.payment?.label || '—' }}</td>
+                      <td>{{ formatMethod(r.payment?.method) }}</td>
+                      <td class="num balance">{{ money(r.payment?.amount ?? 0) }}</td>
+                      <td class="actions">
+                        <button type="button" class="btn btn--quiet btn--sm" (click)="downloadReceiptPdf(r)" [attr.aria-label]="'Download PDF for receipt ' + r.receiptNumber">
+                          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 4v11M7 10.5l5 5 5-5M5 19.5h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                          PDF
+                        </button>
+                      </td>
+                    </tr>
+                  } @empty {
+                    <tr><td colspan="6" class="empty-cell">No receipts yet. They appear here as soon as a payment is recorded.</td></tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
+        </section>
+      }
+
+    } @else {
+      <section class="empty-state empty-state--inline">
+        <p>The statement could not be loaded.</p>
+        <button type="button" class="btn btn--line" (click)="loadFinance()">Try again</button>
+      </section>
+    }
     }
   }
 
+  <!-- ── Statement PDF preview ──────────────────────────────── -->
   @if (statementPdfPreviewOpen()) {
     <div class="pdf-overlay" (click)="closeStatementPdfPreview()">
-      <div class="pdf-modal" (click)="$event.stopPropagation()">
+      <div class="pdf-modal" role="dialog" aria-modal="true" aria-labelledby="pdf-title" (click)="$event.stopPropagation()">
         <div class="pdf-modal-head">
-          <h4>Statement preview</h4>
-          <button type="button" class="btn-ghost btn-sm" (click)="closeStatementPdfPreview()">Close</button>
+          <h2 id="pdf-title">Statement preview</h2>
+          <button type="button" class="btn btn--line btn--sm" (click)="closeStatementPdfPreview()">Close</button>
         </div>
         @if (statementPdfPreviewUrl(); as url) {
           <iframe [src]="url" title="Statement PDF preview"></iframe>

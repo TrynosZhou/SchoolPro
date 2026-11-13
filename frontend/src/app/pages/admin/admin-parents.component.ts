@@ -2,6 +2,7 @@ import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { DatePipe } from '@angular/common';
 import { Router, RouterLink } from '@angular/router';
+import { AccountResetModalComponent } from '../../shared/account-reset-modal/account-reset-modal.component';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
 import { ApiService } from '../../core/services/api.service';
@@ -40,7 +41,7 @@ interface ParentRow {
 @Component({
   selector: 'app-admin-parents',
   standalone: true,
-  imports: [PortalLayoutComponent, FormsModule, DatePipe, RouterLink],
+  imports: [PortalLayoutComponent, AccountResetModalComponent, FormsModule, DatePipe, RouterLink],
   templateUrl: './admin-parents.component.html',
   styleUrl: './admin-parents.component.scss',
 })
@@ -59,6 +60,8 @@ export class AdminParentsComponent implements OnInit {
   refreshing = signal(false);
   submitting = signal(false);
   toast = signal<{ type: 'success' | 'error'; msg: string } | null>(null);
+  /** Account reset modal (opened by double-clicking a user's name). */
+  resetAccountUser = signal<{ userId: string; name: string } | null>(null);
 
   search = signal('');
   statusFilter = signal<StatusFilter>('active');
@@ -202,6 +205,27 @@ export class AdminParentsComponent implements OnInit {
     void this.router.navigate(['/admin/parents', parent.id]);
   }
 
+  private openClickTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /**
+   * Single-click opens the parent's detail page, but only after a short delay so that a
+   * double-click on the name (reset account) can cancel it before the page changes.
+   */
+  scheduleOpenParent(parent: ParentRow) {
+    this.cancelPendingOpen();
+    this.openClickTimer = setTimeout(() => {
+      this.openClickTimer = null;
+      this.openParent(parent);
+    }, 300);
+  }
+
+  private cancelPendingOpen() {
+    if (this.openClickTimer) {
+      clearTimeout(this.openClickTimer);
+      this.openClickTimer = null;
+    }
+  }
+
   openEdit(parent: ParentRow, event?: Event) {
     event?.stopPropagation();
     this.drawerMode.set('edit');
@@ -305,6 +329,26 @@ export class AdminParentsComponent implements OnInit {
 
   initials(parent: ParentRow): string {
     return `${parent.firstName.charAt(0)}${parent.lastName.charAt(0)}`.toUpperCase();
+  }
+
+  /** Double-click on a user's name opens the reset-account modal (username and/or password). */
+  openAccountReset(userId: string | null | undefined, name: string, event?: Event) {
+    event?.stopPropagation();
+    this.cancelPendingOpen();
+    if (!userId) {
+      this.showToast('error', `${name} does not have a portal account yet`);
+      return;
+    }
+    this.closeDrawer();
+    this.resetAccountUser.set({ userId, name });
+  }
+
+  closeAccountReset() {
+    this.resetAccountUser.set(null);
+  }
+
+  onAccountResetSaved(result: { message: string; username: string | null }) {
+    this.showToast('success', result.message);
   }
 
   private showToast(type: 'success' | 'error', msg: string) {

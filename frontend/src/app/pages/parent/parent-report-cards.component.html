@@ -5,95 +5,169 @@
   [navSections]="navSections()"
   [navItems]="navItems()"
 >
-  @if (toast(); as t) {
-    <div class="toast" [class.error]="t.type === 'error'">{{ t.msg }}</div>
-  }
+  <div class="report-page">
+    @if (toast(); as t) {
+      <div class="toast" [class.error]="t.type === 'error'" role="status">{{ t.msg }}</div>
+    }
 
-  <section class="page-intro card">
-    <h3>View report cards</h3>
-    <p class="sub">
-      @if (isStudent()) {
-        Select term and exam type, then click <strong>View</strong> to open your report card PDF.
-      } @else {
-        Select your child, term, and exam type, then click <strong>View</strong> to open the report card PDF.
-      }
-    </p>
-    <a [routerLink]="homeLink()" class="back-link">← Back to {{ isStudent() ? 'Dashboard' : 'My Children' }}</a>
-  </section>
-
-  @if (loading()) {
-    <div class="empty card"><p>Loading…</p></div>
-  } @else if (!children().length) {
-    <div class="empty card">
-      @if (isStudent()) {
-        <p>Your student profile could not be loaded. Please contact the school office.</p>
-      } @else {
-        <p>No linked children found. Link a student on <a [routerLink]="homeLink()">My Children</a> first.</p>
-      }
-    </div>
-  } @else {
-    <section class="toolbar card">
-      @if (children().length > 1) {
-        <label class="field">
-          <span>Child</span>
-          <select [(ngModel)]="selectedStudentId" name="student">
-            <option value="">Select child</option>
-            @for (c of children(); track c.student.id) {
-              <option [value]="c.student.id">{{ childLabel(c) }}</option>
-            }
-          </select>
-        </label>
-      } @else {
-        @if (children()[0]; as onlyChild) {
-          <div class="selected-child">
-            <span class="field-label">Student</span>
-            <strong>{{ onlyChild.student.firstName }} {{ onlyChild.student.lastName }}</strong>
-            @if (onlyChild.student.admissionNumber) {
-              <span class="child-id">{{ onlyChild.student.admissionNumber }}</span>
-            }
-          </div>
-        }
-      }
-
-      <label class="field">
-        <span>Term</span>
-        <select
-          [ngModel]="selectedTermId"
-          (ngModelChange)="onTermChange($event)"
-          name="term"
-          [disabled]="!terms().length"
-        >
-          @if (!terms().length) {
-            <option value="">No terms available</option>
+    <header class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">Academic records</p>
+        <h2>Report cards</h2>
+        <p class="hero-sub">
+          @if (isStudent()) {
+            Open your termly report card, or save a copy as a PDF.
           } @else {
-            <option value="">Select term</option>
-            @for (t of terms(); track t.id) {
-              <option [value]="t.id">{{ t.name }}{{ t.isCurrent ? ' (Current)' : '' }}</option>
-            }
+            Open your child's termly report card, or save a copy as a PDF.
           }
-        </select>
-      </label>
-
-      <label class="field">
-        <span>Exam type</span>
-        <select [(ngModel)]="selectedExamTypeId" name="examType" [disabled]="!examTypes().length">
-          @if (!examTypes().length) {
-            <option value="">No exam types available</option>
-          } @else {
-            @for (e of examTypes(); track e.id) {
-              <option [value]="e.id">{{ e.name }}</option>
-            }
-          }
-        </select>
-      </label>
-
-      <div class="toolbar-actions">
-        <button type="button" class="btn-primary" (click)="viewReportCard()" [disabled]="pdfLoading() || !canView()">
-          {{ pdfLoading() ? 'Loading…' : 'View' }}
-        </button>
+        </p>
       </div>
-    </section>
-  }
+      <div class="hero-actions">
+        <a [routerLink]="homeLink()" class="hero-link">← Back to {{ isStudent() ? 'dashboard' : 'My Children' }}</a>
+      </div>
+    </header>
+
+    @if (loading()) {
+      <section class="card loading-panel" aria-busy="true">
+        <span class="spinner" aria-hidden="true"></span>
+        <p>Loading report card options…</p>
+      </section>
+    } @else if (!children().length) {
+      <section class="card empty-state">
+        <h3>No report cards to show yet</h3>
+        @if (isStudent()) {
+          <p>Your student profile could not be loaded. Please contact the school office.</p>
+        } @else {
+          <p>
+            No children are linked to your account. Link a student on
+            <a [routerLink]="homeLink()">My Children</a> to see their report cards.
+          </p>
+        }
+      </section>
+    } @else {
+      <div class="report-layout">
+        <section class="card filters-card" aria-labelledby="rc-select-title">
+          <div class="filters-card-head">
+            <span class="filters-icon" aria-hidden="true">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+                <path d="M14 3v5h5" />
+                <path d="M9 13h6M9 17h4" />
+              </svg>
+            </span>
+            <div class="filters-card-copy">
+              <h2 id="rc-select-title">Choose a report</h2>
+              <p>
+                @if (isStudent()) {
+                  Pick a term and exam type, then open the report.
+                } @else {
+                  Pick a child, term and exam type, then open the report.
+                }
+              </p>
+            </div>
+          </div>
+
+          <div class="filters-row">
+            @if (children().length > 1) {
+              <label class="field field-wide">
+                <span>Child</span>
+                <select [(ngModel)]="selectedStudentId" name="student">
+                  <option value="">Select child</option>
+                  @for (c of children(); track c.student.id) {
+                    <option [value]="c.student.id">{{ childLabel(c) }}</option>
+                  }
+                </select>
+              </label>
+            } @else {
+              @if (children()[0]; as onlyChild) {
+                <div class="field field-wide">
+                  <span>{{ isStudent() ? 'Student' : 'Child' }}</span>
+                  <div class="single-child">
+                    <strong>{{ onlyChild.student.firstName }} {{ onlyChild.student.lastName }}</strong>
+                    @if (onlyChild.student.admissionNumber) {
+                      <em>{{ onlyChild.student.admissionNumber }}</em>
+                    }
+                  </div>
+                </div>
+              }
+            }
+
+            <label class="field">
+              <span>Term</span>
+              <select
+                [ngModel]="selectedTermId"
+                (ngModelChange)="onTermChange($event)"
+                name="term"
+                [disabled]="!terms().length"
+              >
+                @if (!terms().length) {
+                  <option value="">No terms available</option>
+                } @else {
+                  <option value="">Select term</option>
+                  @for (t of terms(); track t.id) {
+                    <option [value]="t.id">{{ t.name }}{{ t.isCurrent ? ' (Current)' : '' }}</option>
+                  }
+                }
+              </select>
+            </label>
+
+            <label class="field">
+              <span>Exam type</span>
+              <select [(ngModel)]="selectedExamTypeId" name="examType" [disabled]="!examTypes().length">
+                @if (!examTypes().length) {
+                  <option value="">No exam types available</option>
+                } @else {
+                  @for (e of examTypes(); track e.id) {
+                    <option [value]="e.id">{{ e.name }}</option>
+                  }
+                }
+              </select>
+            </label>
+          </div>
+
+          <div class="action-row">
+            <button type="button" class="btn-generate" (click)="viewReportCard()" [disabled]="pdfLoading() || !canView()">
+              @if (pdfLoading()) {
+                <span class="spinner" aria-hidden="true"></span>
+                Opening…
+              } @else {
+                View report card
+              }
+            </button>
+            <button type="button" class="btn-ghost" (click)="downloadPdf()" [disabled]="pdfLoading() || !canView()">
+              Download PDF
+            </button>
+          </div>
+        </section>
+
+        <aside class="sheet" aria-label="Selected report card" [class.is-ready]="canView()">
+          <p class="sheet-kicker">Your selection</p>
+          <h3 class="sheet-title">{{ childName() || (isStudent() ? 'Your report card' : 'No child selected') }}</h3>
+          <dl class="sheet-list">
+            <div>
+              <dt>Class</dt>
+              <dd [class.is-empty]="!childClass()">{{ childClass() || 'Not set' }}</dd>
+            </div>
+            <div>
+              <dt>Term</dt>
+              <dd [class.is-empty]="!selectedTermName()">{{ selectedTermName() || 'Not selected' }}</dd>
+            </div>
+            <div>
+              <dt>Exam</dt>
+              <dd [class.is-empty]="!selectedExamName()">{{ selectedExamName() || 'Not selected' }}</dd>
+            </div>
+          </dl>
+          <p class="sheet-status" [class.ready]="canView()">
+            @if (canView()) {
+              <span class="status-dot" aria-hidden="true"></span> Ready to open
+            } @else {
+              {{ missingHint() }}
+            }
+          </p>
+        </aside>
+      </div>
+    }
+  </div>
 </app-portal-layout>
 
 @if (pdfPreviewOpen() && pdfPreviewUrl()) {
@@ -101,10 +175,10 @@
     <header class="pdf-toolbar">
       <div class="pdf-toolbar-title">
         <strong>{{ pdfPreviewTitle() }}</strong>
-        <span>Report card preview — scroll to view the full document</span>
+        <span>Scroll to read the full report card.</span>
       </div>
       <div class="pdf-toolbar-actions">
-        <button type="button" class="btn-outline-light" (click)="downloadPdf()">Download</button>
+        <button type="button" class="btn-outline-light" (click)="downloadPdf()">Download PDF</button>
         <button type="button" class="btn-close-pdf" (click)="closePdfPreview()">Close</button>
       </div>
     </header>

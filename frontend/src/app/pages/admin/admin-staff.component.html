@@ -151,11 +151,11 @@
         } @else if (viewMode() === 'cards') {
           <div class="card-grid">
             @for (s of sortedStaff(); track s.id) {
-              <article class="staff-card" [class.inactive]="!s.isActive" (click)="openProfile(s)">
+              <article class="staff-card" [class.inactive]="!s.isActive" (click)="scheduleOpenProfile(s)">
                 <div class="card-top">
                   <span class="avatar" [attr.data-role]="s.user.role">{{ initials(s) }}</span>
                   <div class="card-head-text">
-                    <strong>{{ directoryName(s) }}</strong>
+                    <strong class="dbl-name" (dblclick)="openAccountReset(s.userId, directoryName(s), $event)" title="Double-click to reset account">{{ directoryName(s) }}</strong>
                     <code class="emp-id">{{ s.employeeNumber }}</code>
                   </div>
                   @if (s.isActive) {
@@ -198,8 +198,8 @@
                   </div>
                   <div class="col-id"><code class="emp-id">{{ s.employeeNumber }}</code></div>
                   <div class="col-name">
-                    <button type="button" class="name-link" (click)="openProfile(s)">
-                      <strong class="list-name">{{ directoryName(s) }}</strong>
+                    <button type="button" class="name-link" (click)="scheduleOpenProfile(s)">
+                      <strong class="list-name dbl-name" (dblclick)="openAccountReset(s.userId, directoryName(s), $event)" title="Double-click to reset account">{{ directoryName(s) }}</strong>
                     </button>
                     @if (s.qualification) {
                       <small class="list-sub">{{ s.qualification }}</small>
@@ -418,6 +418,14 @@
       }
     </section>
   </div>
+  @if (resetAccountUser(); as ra) {
+    <app-account-reset-modal
+      [userId]="ra.userId"
+      [displayName]="ra.name"
+      (closed)="closeAccountReset()"
+      (saved)="onAccountResetSaved($event)"
+    />
+  }
 </app-portal-layout>
 
 @if (registerDrawerOpen()) {

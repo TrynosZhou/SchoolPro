@@ -2,6 +2,7 @@ import { Component, inject, OnInit, signal, computed } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { DatePipe } from '@angular/common';
 import { ActivatedRoute, RouterLink } from '@angular/router';
+import { AccountResetModalComponent } from '../../shared/account-reset-modal/account-reset-modal.component';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { ChangePasswordFormComponent } from '../../shared/change-password/change-password-form.component';
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
@@ -61,7 +62,7 @@ interface PasswordPolicy {
 @Component({
   selector: 'app-admin-user-management',
   standalone: true,
-  imports: [PortalLayoutComponent, FormsModule, DatePipe, RouterLink, ChangePasswordFormComponent],
+  imports: [PortalLayoutComponent, AccountResetModalComponent, FormsModule, DatePipe, RouterLink, ChangePasswordFormComponent],
   templateUrl: './admin-user-management.component.html',
   styleUrl: './admin-user-management.component.scss',
 })
@@ -81,6 +82,8 @@ export class AdminUserManagementComponent implements OnInit {
   loading = signal(true);
   submitting = signal(false);
   toast = signal<{ type: 'success' | 'error'; msg: string } | null>(null);
+  /** Account reset modal (opened by double-clicking a user's name). */
+  resetAccountUser = signal<{ userId: string; name: string } | null>(null);
 
   search = signal('');
   roleFilter = signal('');
@@ -93,6 +96,15 @@ export class AdminUserManagementComponent implements OnInit {
   drawerMode = signal<DrawerMode>(null);
   editingUser = signal<ManagedUser | null>(null);
   showPassword = signal(false);
+
+  // Reset-password modal
+  resetModalOpen = signal(false);
+  resetUserId = signal('');
+  resetNewPassword = signal('');
+  resetConfirmPassword = signal('');
+  resetShowPassword = signal(false);
+  resetSubmitting = signal(false);
+  resetError = signal('');
 
   form = {
     firstName: '',
@@ -177,6 +189,12 @@ export class AdminUserManagementComponent implements OnInit {
   isStaffRole = computed(() => ['director', 'principal', 'admin', 'accountant', 'teacher'].includes(this.form.role));
   isParentRole = computed(() => this.form.role === 'parent');
   isStudentRole = computed(() => this.form.role === 'student');
+  resetCandidates = computed(() =>
+    [...this.users()].sort((a, b) =>
+      `${a.lastName} ${a.firstName}`.toLowerCase().localeCompare(`${b.lastName} ${b.firstName}`.toLowerCase()),
+    ),
+  );
+  resetTargetUser = computed(() => this.users().find((u) => u.id === this.resetUserId()) ?? null);
   isEditMode = computed(() => this.drawerMode() === 'edit');
   isEditingSelf = computed(() => {
     const editing = this.editingUser();
@@ -401,6 +419,83 @@ export class AdminUserManagementComponent implements OnInit {
       error: (e) => {
         this.submitting.set(false);
         this.showToast('error', e?.error?.message || 'Could not create user');
+      },
+    });
+  }
+
+  /** Double-click on a user's name opens the reset-account modal (username and/or password). */
+  openAccountReset(userId: string | null | undefined, name: string, event?: Event) {
+    event?.stopPropagation();
+    if (!userId) {
+      this.showToast('error', `${name} does not have a portal account yet`);
+      return;
+    }
+    this.closeDrawer();
+    this.resetAccountUser.set({ userId, name });
+  }
+
+  closeAccountReset() {
+    this.resetAccountUser.set(null);
+  }
+
+  onAccountResetSaved(result: { message: string; username: string | null }) {
+    this.showToast('success', result.message);
+  }
+
+  /** Open the reset-password modal, optionally pre-selecting a user. */
+  openResetPassword(user?: ManagedUser) {
+    this.resetUserId.set(user?.id ?? '');
+    this.resetNewPassword.set('');
+    this.resetConfirmPassword.set('');
+    this.resetShowPassword.set(false);
+    this.resetError.set('');
+    this.resetSubmitting.set(false);
+    this.resetModalOpen.set(true);
+  }
+
+  closeResetPassword() {
+    if (this.resetSubmitting()) return;
+    this.resetModalOpen.set(false);
+    this.resetNewPassword.set('');
+    this.resetConfirmPassword.set('');
+    this.resetError.set('');
+  }
+
+  saveResetPassword() {
+    const userId = this.resetUserId();
+    const password = this.resetNewPassword();
+    if (!userId) {
+      this.resetError.set('Please select a user');
+      return;
+    }
+    if (!password.trim()) {
+      this.resetError.set('Enter a new password');
+      return;
+    }
+    if (password !== this.resetConfirmPassword()) {
+      this.resetError.set('Passwords do not match');
+      return;
+    }
+
+    this.resetError.set('');
+    this.resetSubmitting.set(true);
+    const target = this.resetTargetUser();
+
+    this.api.post<{ message: string }>(`/admin/users/${userId}/reset-password`, { password }).subscribe({
+      next: (res) => {
+        this.resetSubmitting.set(false);
+        this.resetModalOpen.set(false);
+        this.resetNewPassword.set('');
+        this.resetConfirmPassword.set('');
+        this.showToast(
+          'success',
+          res?.message || `Password reset for ${target ? target.firstName + ' ' + target.lastName : 'user'}`,
+        );
+        this.loadUsers();
+      },
+      error: (e) => {
+        this.resetSubmitting.set(false);
+        this.resetError.set(e?.error?.message || 'Could not reset password');
       },
     });
   }

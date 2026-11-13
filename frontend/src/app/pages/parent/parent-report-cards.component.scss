@@ -1,144 +1,220 @@
-.card {
-  background: #fff;
-  border: 1px solid #e8eef5;
-  border-radius: 16px;
-  padding: 1.1rem 1.2rem;
-  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.04);
-  margin-bottom: 1rem;
+@use '../../../styles/admin-classic' as classic;
+@use '../../../styles/classic-academics' as academics;
+
+.report-page {
+  max-width: 68rem;
 }
 
-.page-intro {
-  h3 {
-    margin: 0 0 0.35rem;
-    color: #0f172a;
-  }
-
-  .sub {
-    margin: 0 0 0.75rem;
-    color: #64748b;
-    font-size: 0.9rem;
-    line-height: 1.45;
-  }
+// ── Layout: selector + selection sheet ───────────────────────
+.report-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 19rem;
+  gap: 1.25rem;
+  align-items: start;
 }
 
-.back-link {
-  color: #2563eb;
-  font-weight: 600;
-  font-size: 0.88rem;
-  text-decoration: none;
-
-  &:hover {
-    text-decoration: underline;
-  }
+.filters-card {
+  margin-bottom: 0;
 }
 
-.toast {
-  margin-bottom: 1rem;
-  border-radius: 10px;
-  padding: 0.65rem 0.85rem;
-  background: #dcfce7;
-  border: 1px solid #86efac;
-  color: #166534;
-  font-size: 0.88rem;
+.filters-row {
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    flex: 1 1 11rem;
+    min-width: 0;
+  }
 
-  &.error {
-    background: #fee2e2;
-    border-color: #fecaca;
-    color: #991b1b;
+  .field-wide {
+    flex: 1 1 100%;
   }
 }
 
-.toolbar {
+.single-child {
   display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 1rem;
-}
-
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  min-width: 12rem;
-
-  span {
-    font-size: 0.75rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    color: #64748b;
-  }
-
-  select {
-    padding: 0.5rem 0.65rem;
-    border-radius: 8px;
-    border: 1px solid #e2e8f0;
-    font-size: 0.9rem;
-    background: #fff;
-  }
-}
-
-.selected-child {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-  min-width: 12rem;
-
-  .field-label {
-    font-size: 0.75rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    color: #64748b;
-  }
+  align-items: baseline;
+  gap: 0.75rem;
+  min-height: 2.75rem;
+  padding: 0.5rem 0.85rem;
+  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--brass);
+  border-radius: 2px;
+  background: var(--ivory);
 
   strong {
-    color: #0f172a;
-    font-size: 0.95rem;
+    font-family: var(--serif);
+    font-size: 1.3rem;
+    font-weight: 600;
+    color: var(--navy);
   }
 
-  .child-id {
-    color: #64748b;
-    font-size: 0.82rem;
+  em {
+    font-family: var(--numeric);
+    font-style: normal;
+    font-size: 0.85rem;
+    color: var(--color-text-secondary);
   }
 }
 
-.toolbar-actions {
+.action-row {
   display: flex;
-  gap: 0.5rem;
-  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1.4rem;
+  padding-top: 1.2rem;
+  border-top: 1px solid var(--color-border);
 }
 
-.btn-primary {
-  border: 0;
-  border-radius: 10px;
-  padding: 0.58rem 1.1rem;
-  background: #2563eb;
-  color: #fff;
-  font-weight: 600;
-  cursor: pointer;
+// ── Selection sheet — reads like the head of a report card ───
+.sheet {
+  position: sticky;
+  top: 1rem;
+  padding: 1.35rem 1.4rem 1.25rem;
+  background: var(--ivory);
+  border: 1px solid var(--color-border);
+  border-top: 3px solid var(--brass);
+  border-radius: 3px;
+  transition: border-color 0.2s ease;
 
-  &:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
+  &.is-ready {
+    border-color: var(--brass-line);
+    border-top-color: var(--navy);
   }
 }
 
-.empty {
-  padding: 2rem;
+.sheet-kicker {
+  margin: 0 0 0.35rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--brass-ink);
+}
+
+.sheet-title {
+  margin: 0 0 1rem;
+  padding-bottom: 0.85rem;
+  border-bottom: 1px solid var(--brass-line);
+  font-family: var(--serif);
+  font-size: 1.7rem;
+  font-weight: 600;
+  line-height: 1.1;
+  color: var(--navy) !important;
+}
+
+.sheet-list {
+  margin: 0;
+
+  > div {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.55rem 0;
+    border-bottom: 1px dotted var(--color-border-strong);
+
+    &:last-child {
+      border-bottom: 0;
+    }
+  }
+
+  dt {
+    font-size: 0.8rem;
+    color: var(--color-text-secondary);
+  }
+
+  dd {
+    margin: 0;
+    text-align: right;
+    font-weight: 600;
+    font-size: 0.88rem;
+    color: var(--navy);
+
+    &.is-empty {
+      font-weight: 400;
+      color: var(--color-text-muted);
+    }
+  }
+}
+
+.sheet-status {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.9rem 0 0;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--color-border);
+  font-size: 0.82rem;
+  color: var(--color-text-secondary);
+
+  &.ready {
+    font-weight: 700;
+    color: #1f6b46;
+  }
+}
+
+.status-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: #1f9d63;
+}
+
+// ── Loading and empty states ─────────────────────────────────
+.loading-panel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.85rem;
+  padding: 2.5rem 1.5rem !important;
+  color: var(--color-text-secondary);
+
+  p {
+    margin: 0;
+  }
+
+  .spinner {
+    border-color: var(--brass-soft);
+    border-top-color: var(--brass);
+  }
+}
+
+.empty-state {
+  padding: 2.5rem 1.75rem !important;
   text-align: center;
-  color: #64748b;
+
+  h3 {
+    margin: 0 0 0.4rem;
+    font-family: var(--serif);
+    font-size: 1.6rem;
+    font-weight: 600;
+    color: var(--navy) !important;
+  }
+
+  p {
+    max-width: 32rem;
+    margin: 0 auto;
+    line-height: 1.6;
+    color: var(--color-text-secondary);
+  }
 
   a {
-    color: #2563eb;
+    color: var(--navy);
+    font-weight: 700;
+    text-decoration-color: var(--brass);
+    text-decoration-thickness: 2px;
+    text-underline-offset: 3px;
   }
 }
 
+// ── PDF preview overlay ──────────────────────────────────────
 .pdf-overlay {
   position: fixed;
   inset: 0;
   z-index: 1200;
   display: flex;
   flex-direction: column;
-  background: #0f172a;
+  background: #0f1d36;
 }
 
 .pdf-toolbar {
@@ -146,45 +222,71 @@
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  padding: 0.65rem 1rem;
-  background: #1e293b;
-  color: #f8fafc;
+  padding: 0.8rem 1.25rem;
+  background: #0f1d36;
+  border-bottom: 3px solid #b8924a;
+  color: #fbf9f4;
   flex-shrink: 0;
 }
 
 .pdf-toolbar-title {
   display: flex;
   flex-direction: column;
-  gap: 0.1rem;
+  gap: 0.15rem;
+  min-width: 0;
 
   strong {
-    font-size: 0.95rem;
+    overflow: hidden;
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-size: 1.3rem;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   span {
     font-size: 0.78rem;
-    color: #94a3b8;
+    color: #aab4c6;
   }
 }
 
 .pdf-toolbar-actions {
   display: flex;
-  gap: 0.5rem;
-  align-items: center;
+  gap: 0.6rem;
+  flex-shrink: 0;
 }
 
 .btn-outline-light,
 .btn-close-pdf {
-  padding: 0.5rem 1rem;
-  border: 1px solid #475569;
-  border-radius: 10px;
+  min-height: 2.5rem;
+  padding: 0.5rem 1.1rem;
+  border: 1px solid #b8924a;
+  border-radius: 2px;
   background: transparent;
-  color: #e2e8f0;
+  color: #fbf9f4;
+  font-size: 0.84rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
   cursor: pointer;
-  font-weight: 600;
+  transition: background 0.15s ease;
 
   &:hover {
-    background: rgba(255, 255, 255, 0.08);
+    background: rgba(184, 146, 74, 0.18);
+  }
+
+  &:focus-visible {
+    outline: 2px solid #e6d3a8;
+    outline-offset: 2px;
+  }
+}
+
+.btn-close-pdf {
+  background: #b8924a;
+  border-color: #b8924a;
+  color: #0f1d36;
+
+  &:hover {
+    background: #c9a45c;
   }
 }
 
@@ -201,3 +303,33 @@
   min-height: 100%;
   border: 0;
 }
+
+// ── Responsive ───────────────────────────────────────────────
+@media (max-width: 980px) {
+  .report-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .sheet {
+    position: static;
+    order: -1;
+  }
+}
+
+@media (max-width: 640px) {
+  .action-row > button {
+    flex: 1 1 100%;
+  }
+
+  .pdf-toolbar {
+    padding: 0.65rem 0.85rem;
+  }
+
+  .pdf-toolbar-title span {
+    display: none;
+  }
+}
+
+// Classical navy & brass layer (shared with the other portal pages)
+@include classic.page;
+@include academics.page;

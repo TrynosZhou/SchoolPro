@@ -182,11 +182,11 @@
       } @else if (viewMode() === 'cards') {
         <div class="card-grid">
           @for (p of visibleParents(); track p.id) {
-            <article class="parent-card" [class.inactive-card]="!p.isActive" (click)="openParent(p)">
+            <article class="parent-card" [class.inactive-card]="!p.isActive" (click)="scheduleOpenParent(p)">
               <div class="card-head">
                 <span class="avatar">{{ initials(p) }}</span>
                 <div class="card-title">
-                  <strong>{{ p.firstName }} {{ p.lastName }}</strong>
+                  <strong class="dbl-name" (dblclick)="openAccountReset(p.userId, p.firstName + ' ' + p.lastName, $event)" title="Double-click to reset account">{{ p.firstName }} {{ p.lastName }}</strong>
                   @if (p.occupation) {
                     <span class="muted">{{ p.occupation }}</span>
                   }
@@ -245,12 +245,12 @@
             </thead>
             <tbody>
               @for (p of visibleParents(); track p.id) {
-                <tr class="clickable-row" [class.inactive-row]="!p.isActive" (click)="openParent(p)">
+                <tr class="clickable-row" [class.inactive-row]="!p.isActive" (click)="scheduleOpenParent(p)">
                   <td>
                     <div class="user-cell">
                       <span class="avatar">{{ initials(p) }}</span>
                       <div>
-                        <strong>{{ p.firstName }} {{ p.lastName }}</strong>
+                        <strong class="dbl-name" (dblclick)="openAccountReset(p.userId, p.firstName + ' ' + p.lastName, $event)" title="Double-click to reset account">{{ p.firstName }} {{ p.lastName }}</strong>
                         @if (p.occupation) {
                           <span class="muted">{{ p.occupation }}</span>
                         }
@@ -407,5 +407,13 @@
         </button>
       </div>
     </aside>
+  }
+  @if (resetAccountUser(); as ra) {
+    <app-account-reset-modal
+      [userId]="ra.userId"
+      [displayName]="ra.name"
+      (closed)="closeAccountReset()"
+      (saved)="onAccountResetSaved($event)"
+    />
   }
 </app-portal-layout>

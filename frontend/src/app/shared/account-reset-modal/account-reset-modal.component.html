@@ -1,0 +1,172 @@
+<div class="arm-backdrop" (click)="close()"></div>
+
+<div class="arm-modal" role="dialog" aria-modal="true" aria-labelledby="arm-title" (click)="$event.stopPropagation()">
+  <header class="arm-head">
+    <div class="arm-monogram" aria-hidden="true">{{ initials }}</div>
+    <div class="arm-id">
+      <p class="arm-eyebrow">Reset account</p>
+      <h3 id="arm-title">{{ title }}</h3>
+      @if (account(); as a) {
+        <p class="arm-meta">
+          <span class="arm-role">{{ a.roleLabel }}</span>
+          <span class="arm-email">{{ a.email }}</span>
+        </p>
+      }
+    </div>
+    <button type="button" class="arm-close" (click)="close()" aria-label="Close">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
+    </button>
+  </header>
+
+  @if (loading()) {
+    <div class="arm-body" aria-busy="true">
+      <div class="arm-skel w60"></div>
+      <div class="arm-skel"></div>
+      <div class="arm-skel w60"></div>
+      <div class="arm-skel"></div>
+      <div class="arm-skel"></div>
+    </div>
+  } @else if (!account()) {
+    <div class="arm-body">
+      <p class="arm-alert" role="alert">{{ error() }}</p>
+      <footer class="arm-foot">
+        <span></span>
+        <button type="button" class="arm-btn outline" (click)="close()">Close</button>
+      </footer>
+    </div>
+  } @else {
+    <form class="arm-body" (ngSubmit)="save()" autocomplete="off" novalidate>
+      <p class="arm-lead">
+        Update the sign-in credentials for this account. You may change the username only, the password only, or both.
+        Anything left untouched stays as it is.
+      </p>
+
+      <!-- Username -->
+      <div class="arm-field">
+        <label for="arm-username">
+          Username
+          @if (usernameChanged && !usernameInvalid) {
+            <span class="arm-tag">Will change</span>
+          }
+        </label>
+        <div class="arm-input" [class.invalid]="usernameInvalid" [class.disabled]="isStudent">
+          <svg class="arm-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /></svg>
+          <input
+            id="arm-username"
+            [(ngModel)]="username"
+            name="arm-username"
+            autocomplete="off"
+            spellcheck="false"
+            [disabled]="isStudent"
+            placeholder="Enter new username"
+          />
+        </div>
+        @if (isStudent) {
+          <span class="arm-hint">Students sign in with their Student ID, so only the password can be reset.</span>
+        } @else if (usernameInvalid) {
+          <span class="arm-hint bad">3–50 characters: letters, numbers, dots, underscores and hyphens only.</span>
+        } @else {
+          <span class="arm-hint">Current username: <strong>{{ account()?.username || 'not set' }}</strong></span>
+        }
+      </div>
+
+      <div class="arm-divider"><span>Password</span></div>
+
+      <!-- New password -->
+      <div class="arm-field">
+        <label for="arm-password">
+          New password
+          @if (passwordEntered) {
+            <span class="arm-tag">Will change</span>
+          }
+        </label>
+        <div class="arm-input">
+          <svg class="arm-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg>
+          <input
+            id="arm-password"
+            [type]="showPassword ? 'text' : 'password'"
+            [(ngModel)]="password"
+            name="arm-password"
+            autocomplete="new-password"
+            placeholder="Leave blank to keep the current password"
+          />
+          @if (password) {
+            <button type="button" class="arm-icon-btn" (click)="copyPassword()" [attr.aria-label]="'Copy password'" title="Copy password">
+              @if (copied()) {
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
+              } @else {
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15V5a2 2 0 0 1 2-2h10" /></svg>
+              }
+            </button>
+          }
+          <button type="button" class="arm-icon-btn" (click)="showPassword = !showPassword" [attr.aria-label]="showPassword ? 'Hide password' : 'Show password'" [title]="showPassword ? 'Hide password' : 'Show password'">
+            @if (showPassword) {
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" /><path d="m1 1 22 22" /></svg>
+            } @else {
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>
+            }
+          </button>
+        </div>
+
+        <div class="arm-meter-row">
+          <div class="arm-meter" [attr.data-level]="strength" aria-hidden="true">
+            <span></span><span></span><span></span><span></span>
+          </div>
+          <span class="arm-meter-label" [attr.data-level]="strength">{{ strengthLabel }}</span>
+          <button type="button" class="arm-link" (click)="generatePassword()">Generate strong password</button>
+        </div>
+
+        @if (ruleChecks.length) {
+          <ul class="arm-rules">
+            @for (r of ruleChecks; track r.label) {
+              <li [class.met]="r.met">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  @if (r.met) { <path d="M20 6 9 17l-5-5" /> } @else { <circle cx="12" cy="12" r="2" /> }
+                </svg>
+                {{ r.label }}
+              </li>
+            }
+          </ul>
+        }
+      </div>
+
+      <!-- Confirm -->
+      <div class="arm-field">
+        <label for="arm-confirm">Confirm new password</label>
+        <div class="arm-input" [class.invalid]="passwordsMismatch" [class.valid]="passwordsMatch">
+          <svg class="arm-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4 6v6c0 4.5 3.2 7.7 8 9 4.8-1.3 8-4.5 8-9V6l-8-3z" /><path d="m9 12 2 2 4-4" /></svg>
+          <input
+            id="arm-confirm"
+            [type]="showPassword ? 'text' : 'password'"
+            [(ngModel)]="confirmPassword"
+            name="arm-confirm"
+            autocomplete="new-password"
+            placeholder="Re-enter the new password"
+          />
+        </div>
+        @if (passwordsMismatch) {
+          <span class="arm-hint bad">Passwords do not match yet.</span>
+        } @else if (passwordsMatch) {
+          <span class="arm-hint good">Passwords match.</span>
+        }
+      </div>
+
+      @if (error()) {
+        <p class="arm-alert" role="alert">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10" /><path d="M12 8v4M12 16h.01" /></svg>
+          {{ error() }}
+        </p>
+      }
+
+      <footer class="arm-foot">
+        <span class="arm-summary" [class.active]="canSave">{{ pendingSummary }}</span>
+        <div class="arm-actions">
+          <button type="button" class="arm-btn outline" (click)="close()" [disabled]="submitting()">Cancel</button>
+          <button type="submit" class="arm-btn primary" [disabled]="!canSave">
+            @if (submitting()) { <span class="arm-spinner" aria-hidden="true"></span> Saving… } @else { Save }
+          </button>
+        </div>
+      </footer>
+    </form>
+  }
+</div>

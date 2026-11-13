@@ -34,6 +34,14 @@
           >
             Change Password
           </button>
+          <button
+            type="button"
+            class="secondary-action tab-action"
+            (click)="openResetPassword()"
+            [disabled]="pageTab() !== 'users' || !users().length"
+          >
+            Reset Password
+          </button>
           <a routerLink="/admin/user-permissions" class="secondary-action">User permissions</a>
           <button type="button" class="refresh-action" (click)="loadUsers()" [disabled]="loading() || pageTab() !== 'users'">
             {{ loading() ? 'Refreshing…' : 'Refresh list' }}
@@ -196,7 +204,7 @@
               <div class="card-head">
                 <span class="avatar" [class]="roleBadgeClass(u.role)">{{ initials(u) }}</span>
                 <div class="card-title">
-                  <strong>{{ u.firstName }} {{ u.lastName }}</strong>
+                  <strong class="dbl-name" (dblclick)="openAccountReset(u.id, u.firstName + ' ' + u.lastName, $event)" title="Double-click to reset account">{{ u.firstName }} {{ u.lastName }}</strong>
                   <span class="email">{{ u.email }}</span>
                 </div>
                 @if (isLocked(u)) {
@@ -234,6 +242,7 @@
 
               <div class="card-actions">
                 <button type="button" class="btn-ghost btn-sm" (click)="openEdit(u)">Edit</button>
+                <button type="button" class="btn-ghost btn-sm" (click)="openAccountReset(u.id, u.firstName + ' ' + u.lastName)">Reset account</button>
                 @if (isLocked(u)) {
                   <button type="button" class="btn-ghost btn-sm unlock" (click)="unlockUser(u)">Unlock</button>
                 }
@@ -265,7 +274,7 @@
                     <div class="user-cell">
                       <span class="avatar" [class]="roleBadgeClass(u.role)">{{ initials(u) }}</span>
                       <div>
-                        <strong>{{ u.firstName }} {{ u.lastName }}</strong>
+                        <strong class="dbl-name" (dblclick)="openAccountReset(u.id, u.firstName + ' ' + u.lastName, $event)" title="Double-click to reset account">{{ u.firstName }} {{ u.lastName }}</strong>
                         @if (u.phone) { <span class="muted">{{ u.phone }}</span> }
                       </div>
                     </div>
@@ -290,6 +299,7 @@
                   <td>{{ u.createdAt | date:'mediumDate' }}</td>
                   <td class="actions">
                     <button type="button" class="btn-ghost btn-sm" (click)="openEdit(u)">Edit</button>
+                    <button type="button" class="btn-ghost btn-sm" (click)="openAccountReset(u.id, u.firstName + ' ' + u.lastName)">Reset account</button>
                     @if (isLocked(u)) {
                       <button type="button" class="btn-ghost btn-sm unlock" (click)="unlockUser(u)">Unlock</button>
                     }
@@ -433,6 +443,80 @@
           </footer>
         </form>
       </aside>
+    }
+
+    @if (resetModalOpen()) {
+      <div class="modal-backdrop" (click)="closeResetPassword()"></div>
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="reset-pwd-title" (click)="$event.stopPropagation()">
+        <header class="modal-head">
+          <div>
+            <p class="eyebrow">Security</p>
+            <h3 id="reset-pwd-title">Reset password</h3>
+          </div>
+          <button type="button" class="btn-icon" (click)="closeResetPassword()" aria-label="Close">×</button>
+        </header>
+
+        <form class="modal-body" (ngSubmit)="saveResetPassword()" autocomplete="off">
+          <label>
+            Select user
+            <select [ngModel]="resetUserId()" (ngModelChange)="resetUserId.set($event)" name="resetUser" required>
+              <option value="">— Choose a user —</option>
+              @for (u of resetCandidates(); track u.id) {
+                <option [value]="u.id">{{ u.firstName }} {{ u.lastName }} ({{ u.roleLabel }}) — {{ u.email }}</option>
+              }
+            </select>
+          </label>
+
+          <label>
+            New password
+            <div class="password-field">
+              <input
+                [type]="resetShowPassword() ? 'text' : 'password'"
+                [ngModel]="resetNewPassword()"
+                (ngModelChange)="resetNewPassword.set($event)"
+                name="resetNewPassword"
+                autocomplete="new-password"
+                required
+              />
+              <button type="button" class="btn-ghost btn-sm" (click)="resetShowPassword.set(!resetShowPassword())">
+                {{ resetShowPassword() ? 'Hide' : 'Show' }}
+              </button>
+            </div>
+            <span class="hint">{{ passwordHint() }}</span>
+          </label>
+
+          <label>
+            Confirm new password
+            <input
+              [type]="resetShowPassword() ? 'text' : 'password'"
+              [ngModel]="resetConfirmPassword()"
+              (ngModelChange)="resetConfirmPassword.set($event)"
+              name="resetConfirmPassword"
+              autocomplete="new-password"
+              required
+            />
+          </label>
+
+          @if (resetError()) {
+            <p class="modal-error" role="alert">{{ resetError() }}</p>
+          }
+
+          <footer class="modal-foot">
+            <button type="button" class="btn-ghost" (click)="closeResetPassword()" [disabled]="resetSubmitting()">Cancel</button>
+            <button type="submit" class="btn-primary" [disabled]="resetSubmitting() || !resetUserId()">
+              {{ resetSubmitting() ? 'Saving…' : 'Save' }}
+            </button>
+          </footer>
+        </form>
+      </div>
+    }
+    @if (resetAccountUser(); as ra) {
+      <app-account-reset-modal
+        [userId]="ra.userId"
+        [displayName]="ra.name"
+        (closed)="closeAccountReset()"
+        (saved)="onAccountResetSaved($event)"
+      />
     }
   </div>
 </app-portal-layout>

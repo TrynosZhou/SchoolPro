@@ -1,5 +1,6 @@
 import { Component, inject, OnInit, signal, computed } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { AccountResetModalComponent } from '../../shared/account-reset-modal/account-reset-modal.component';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
 import { ApiService } from '../../core/services/api.service';
@@ -125,7 +126,7 @@ interface DepartmentRow {
 @Component({
   selector: 'app-admin-staff',
   standalone: true,
-  imports: [PortalLayoutComponent, FormsModule],
+  imports: [PortalLayoutComponent, AccountResetModalComponent, FormsModule],
   templateUrl: './admin-staff.component.html',
   styleUrl: './admin-staff.component.scss',
 })
@@ -153,6 +154,8 @@ export class AdminStaffComponent implements OnInit {
   refreshing = signal(false);
   submitting = signal(false);
   toast = signal<{ type: 'success' | 'error'; msg: string } | null>(null);
+  /** Account reset modal (opened by double-clicking a user's name). */
+  resetAccountUser = signal<{ userId: string; name: string } | null>(null);
 
   search = signal('');
   roleFilter = signal('');
@@ -754,8 +757,49 @@ export class AdminStaffComponent implements OnInit {
     this.showInitialPassword.update((v) => !v);
   }
 
+  /** Double-click on a user's name opens the reset-account modal (username and/or password). */
+  openAccountReset(userId: string | null | undefined, name: string, event?: Event) {
+    event?.stopPropagation();
+    this.cancelPendingOpen();
+    if (!userId) {
+      this.showToast('error', `${name} does not have a portal account yet`);
+      return;
+    }
+    this.closeProfile();
+    this.resetAccountUser.set({ userId, name });
+  }
+
+  closeAccountReset() {
+    this.resetAccountUser.set(null);
+  }
+
+  onAccountResetSaved(result: { message: string; username: string | null }) {
+    this.showToast('success', result.message);
+  }
+
   openProfile(s: StaffMember) {
     this.profileStaff.set(s);
+  }
+
+  private openClickTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /**
+   * Single-click opens the profile popup after a short delay so that a double-click on the
+   * name (reset account) can cancel it; otherwise the popup's backdrop swallows the second click.
+   */
+  scheduleOpenProfile(s: StaffMember) {
+    this.cancelPendingOpen();
+    this.openClickTimer = setTimeout(() => {
+      this.openClickTimer = null;
+      this.openProfile(s);
+    }, 300);
+  }
+
+  private cancelPendingOpen() {
+    if (this.openClickTimer) {
+      clearTimeout(this.openClickTimer);
+      this.openClickTimer = null;
+    }
   }
 
   closeProfile() {

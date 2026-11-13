@@ -1312,3 +1312,8 @@
 
 // Classical navy & brass layer (shared with Login + Dashboard)
 @include classic.page;
+
+.dbl-name {
+  cursor: pointer;
+  user-select: none;
+}

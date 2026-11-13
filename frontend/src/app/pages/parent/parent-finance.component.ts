@@ -1,6 +1,5 @@
-import { Component, computed, inject, OnInit, signal } from '@angular/core';
-import { FormsModule } from '@angular/forms';
-import { DatePipe, DecimalPipe } from '@angular/common';
+import { Component, computed, HostListener, inject, OnInit, signal } from '@angular/core';
+import { DatePipe } from '@angular/common';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
@@ -57,6 +56,8 @@ interface StatementData {
   summary: { totalInvoiced: number; totalPaid: number; balance: number };
 }
 
+type FinanceTab = 'statement' | 'invoices' | 'receipts';
+
 interface ReceiptRow {
   id: string;
   receiptNumber: string;
@@ -72,7 +73,7 @@ interface ReceiptRow {
 @Component({
   selector: 'app-parent-finance',
   standalone: true,
-  imports: [PortalLayoutComponent, FormsModule, DecimalPipe, DatePipe, RouterLink],
+  imports: [PortalLayoutComponent, DatePipe, RouterLink],
   templateUrl: './parent-finance.component.html',
   styleUrl: './parent-finance.component.scss',
 })
@@ -94,6 +95,9 @@ export class ParentFinanceComponent implements OnInit {
 
   selectedStudentId = '';
 
+  currencySymbol = signal('$');
+  activeTab = signal<FinanceTab>('statement');
+
   loading = signal(true);
   loadingStatement = signal(false);
   loadingReceipts = signal(false);
@@ -105,6 +109,15 @@ export class ParentFinanceComponent implements OnInit {
   private statementPdfObjectUrl: string | null = null;
 
   ngOnInit() {
+    this.api.get<{ currency?: string }>('/dashboard/school-links').subscribe({
+      next: (data) => {
+        if (data.currency) {
+          const c = data.currency;
+          this.currencySymbol.set(c === 'INR' ? '₹' : c === 'GBP' ? '£' : c === 'EUR' ? '€' : '$');
+        }
+      },
+    });
+
     this.route.queryParamMap.subscribe((q) => {
       const fromQuery = q.get('studentId');
       if (fromQuery) {
@@ -167,6 +180,63 @@ export class ParentFinanceComponent implements OnInit {
     if (s.admissionNumber) parts.push(s.admissionNumber);
     if (cls) parts.push(cls);
     return parts.join(' — ');
+  }
+
+  selectChild(id: string) {
+    if (!id || id === this.selectedStudentId) return;
+    this.selectedStudentId = id;
+    this.onStudentChange();
+  }
+
+  setTab(tab: FinanceTab) {
+    this.activeTab.set(tab);
+  }
+
+  selectedChild(): LinkedChild | undefined {
+    return this.children().find((c) => c.student.id === this.selectedStudentId);
+  }
+
+  classOf(c: LinkedChild): string {
+    return c.student.schoolClass?.name || c.student.schoolClass?.form?.name || '';
+  }
+
+  initials(c: LinkedChild): string {
+    return `${c.student.firstName?.charAt(0) || ''}${c.student.lastName?.charAt(0) || ''}`.toUpperCase();
+  }
+
+  /** Currency text with a proper minus sign: −$12.00 rather than $-12.00. */
+  money(value: number | string | null | undefined): string {
+    const n = Number(value) || 0;
+    const body = Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return `${n < 0 ? '−' : ''}${this.currencySymbol()}${body}`;
+  }
+
+  /** Share of invoiced fees already paid, 0–100. */
+  paidPercent(summary: StatementData['summary']): number {
+    const invoiced = Number(summary.totalInvoiced) || 0;
+    if (invoiced <= 0) return 0;
+    return Math.max(0, Math.min(100, ((Number(summary.totalPaid) || 0) / invoiced) * 100));
+  }
+
+  balanceLabel(balance: number): string {
+    if (balance > 0) return 'Balance due';
+    if (balance < 0) return 'Credit balance';
+    return 'Fully paid';
+  }
+
+  invoiceBalance(inv: InvoiceRow): number {
+    return Math.max(0, (Number(inv.totalAmount) || 0) - (Number(inv.amountPaid) || 0));
+  }
+
+  isOverdue(inv: InvoiceRow): boolean {
+    if (!inv.dueDate || this.invoiceBalance(inv) <= 0) return false;
+    const due = new Date(inv.dueDate);
+    return !isNaN(due.getTime()) && due.getTime() < Date.now();
+  }
+
+  @HostListener('document:keydown.escape')
+  onEscape() {
+    if (this.statementPdfPreviewOpen()) this.closeStatementPdfPreview();
   }
 
   onStudentChange() {

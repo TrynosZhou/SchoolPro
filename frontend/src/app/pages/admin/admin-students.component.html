@@ -217,7 +217,7 @@
               <div class="card-head">
                 <span class="avatar">{{ initials(s) }}</span>
                 <div class="card-title">
-                  <strong>{{ s.firstName }} {{ s.lastName }}</strong>
+                  <strong class="dbl-name" (dblclick)="openAccountReset(s.userId, s.firstName + ' ' + s.lastName, $event)" title="Double-click to reset account">{{ s.firstName }} {{ s.lastName }}</strong>
                   <code class="sid">{{ s.admissionNumber }}</code>
                 </div>
                 @if (enrollmentStatus(s) === 'enrolled') {
@@ -284,8 +284,8 @@
               @for (s of visibleStudents(); track s.id) {
                 <tr class="clickable-row" (dblclick)="openStudentDetail(s)" title="Double-click to view details">
                   <td><code class="sid">{{ s.admissionNumber }}</code></td>
-                  <td>{{ s.lastName }}</td>
-                  <td>{{ s.firstName }}</td>
+                  <td class="dbl-name" (dblclick)="openAccountReset(s.userId, s.firstName + ' ' + s.lastName, $event)" title="Double-click to reset account">{{ s.lastName }}</td>
+                  <td class="dbl-name" (dblclick)="openAccountReset(s.userId, s.firstName + ' ' + s.lastName, $event)" title="Double-click to reset account">{{ s.firstName }}</td>
                   <td>
                     @if (s.gender) {
                       <span class="gender-tag">{{ genderLabel(s) }}</span>
@@ -343,6 +343,14 @@
       }
     </section>
   </div>
+  @if (resetAccountUser(); as ra) {
+    <app-account-reset-modal
+      [userId]="ra.userId"
+      [displayName]="ra.name"
+      (closed)="closeAccountReset()"
+      (saved)="onAccountResetSaved($event)"
+    />
+  }
 </app-portal-layout>
 
 @if (registerDrawerOpen()) {
