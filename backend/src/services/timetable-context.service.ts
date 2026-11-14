@@ -49,6 +49,20 @@ export async function loadTimetableContext() {
   };
 }
 
+/** Next version label: increments the trailing number ("2" → "3", "2.1" → "2.2"); appends one if there is none. */
+export function nextTimetableVersion(current: unknown): string {
+  const value = normalizeTimetableVersion(current);
+  const match = value.match(/^(.*?)(\d+)$/);
+  if (match) return `${match[1]}${Number(match[2]) + 1}`.slice(0, 32);
+  return `${value} 2`.slice(0, 32);
+}
+
+/** Called after a new timetable is generated: moves the stored version up by one. */
+export async function bumpTimetableVersion(): Promise<string> {
+  const settings = await ensureSettings();
+  return saveTimetableVersion(nextTimetableVersion(settings.timetableVersion));
+}
+
 export async function saveTimetableVersion(raw: unknown): Promise<string> {
   const version = normalizeTimetableVersion(raw);
   const repo = AppDataSource.getRepository(SchoolSettings);

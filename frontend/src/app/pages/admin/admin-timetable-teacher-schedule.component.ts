@@ -14,6 +14,7 @@ import {
   TIMETABLE_DAYS,
 } from '../../core/services/teacher-allocation.service';
 import {
+  breakColumnVerticalLabel,
   breakPeriodLabel,
   dayGridLabel,
   formatPeriodRange,
@@ -49,6 +50,7 @@ export class AdminTimetableTeacherScheduleComponent implements OnInit {
   readonly timetableSubjectShort = timetableSubjectShort;
   readonly isBreakPeriod = isBreakPeriod;
   readonly breakPeriodLabel = breakPeriodLabel;
+  readonly breakColumnVerticalLabel = breakColumnVerticalLabel;
   readonly lessonPeriodNumber = lessonPeriodNumber;
 
   periods = signal<TimetablePeriod[]>([]);

@@ -355,10 +355,28 @@
                   }
                 </select>
               </label>
+            } @else if (canEditRole()) {
+              <label class="span-2">
+                Portal role
+                <select [(ngModel)]="form.role" name="role" (ngModelChange)="onEditRoleChange()">
+                  @for (r of editRoleOptions(); track r.value) {
+                    <option [value]="r.value">{{ r.label }}</option>
+                  }
+                </select>
+              </label>
+              @if (roleChanged()) {
+                <p class="span-2 field-hint">
+                  Role will change from <strong>{{ editingUser()?.roleLabel }}</strong> to
+                  <strong>{{ roleLabelFor(form.role) }}</strong> when you save. The user will see the new portal the next time they sign in.
+                </p>
+              }
             } @else {
               <label class="span-2">
                 Portal role
                 <input [value]="editingUser()?.roleLabel" disabled />
+                <small class="field-hint">
+                  {{ editingUser()?.id === currentUserId() ? 'You cannot change your own role.' : 'The role of a student account cannot be changed here.' }}
+                </small>
               </label>
             }
 

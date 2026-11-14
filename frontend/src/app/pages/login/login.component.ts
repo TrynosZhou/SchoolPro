@@ -270,7 +270,7 @@ export class LoginComponent implements OnInit {
       localStorage.removeItem(this.rememberKey);
     }
 
-    this.auth.login(this.username.trim(), this.password).subscribe({
+    this.auth.login(this.username.trim(), this.password, this.isParentRole() ? 'parent' : 'staff').subscribe({
       next: () => this.router.navigate([this.auth.getPortalRoute()]),
       error: (e) => {
         this.error.set(e.error?.message || 'Invalid username or password. Please try again.');

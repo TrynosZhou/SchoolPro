@@ -14,6 +14,11 @@ export interface User {
   staffId?: string;
   parentId?: string;
   studentId?: string;
+  /**
+   * Set when a staff member (e.g. a teacher who also has children at the school) signs in
+   * through the Parent portal: the account's own role, while `role` is the portal in use.
+   */
+  accountRole?: UserRole;
 }
 
 export interface AuthResponse {

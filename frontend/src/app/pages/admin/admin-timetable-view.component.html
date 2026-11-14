@@ -1,5 +1,5 @@
 <app-portal-layout portalTitle="Admin Portal" pageTitle="Timetable" [navSections]="adminNav">
-  <div class="view-page">
+  <div class="view-page" [style.--tt-teacher-scale]="display.teacherFactor()" [style.--tt-class-scale]="display.classFactor()">
     <header class="hero">
       <div class="hero-copy">
         <p class="eyebrow">Academics</p>
@@ -118,6 +118,28 @@
       </div>
     </header>
 
+    <section class="font-controls" aria-label="Timetable name font size">
+      <div class="font-controls-copy">
+        <h3>Name font size</h3>
+        <p>Make teacher names and class names larger or smaller on the timetables and in the PDFs.</p>
+      </div>
+      <div class="font-controls-groups">
+        <div class="size-group" role="group" aria-label="Teacher names font size">
+          <span class="size-label">Teacher names</span>
+          <button type="button" class="size-btn" (click)="display.adjustTeacher(-scaleStep)" aria-label="Decrease teacher name font size">A−</button>
+          <output class="size-value">{{ display.teacherScale() }}%</output>
+          <button type="button" class="size-btn" (click)="display.adjustTeacher(scaleStep)" aria-label="Increase teacher name font size">A+</button>
+        </div>
+        <div class="size-group" role="group" aria-label="Class names font size">
+          <span class="size-label">Class names</span>
+          <button type="button" class="size-btn" (click)="display.adjustClass(-scaleStep)" aria-label="Decrease class name font size">A−</button>
+          <output class="size-value">{{ display.classScale() }}%</output>
+          <button type="button" class="size-btn" (click)="display.adjustClass(scaleStep)" aria-label="Increase class name font size">A+</button>
+        </div>
+        <button type="button" class="size-reset" (click)="display.reset()">Reset</button>
+      </div>
+    </section>
+
     <section class="bulk-download" aria-label="Bulk timetable downloads">
       <div class="bulk-copy">
         <h3>Bulk download</h3>
@@ -233,7 +255,7 @@
                   <div class="timetable-sheet classic">
                     <header class="sheet-header">
                       <div class="sheet-header-left">
-                        <img *ngIf="schoolLogoUrl()" [src]="schoolLogoUrl()" class="sheet-logo" alt="Logo" />
+                        @if (schoolLogoUrl()) {<img [src]="schoolLogoUrl()" class="sheet-logo" alt="Logo" />}
                       </div>
                       <div class="sheet-header-titles">
                         <h1 class="sheet-main-title">{{ schoolName() }}</h1>
@@ -403,7 +425,7 @@
             <div class="timetable-sheet classic">
               <header class="sheet-header">
                 <div class="sheet-header-left">
-                  <img *ngIf="schoolLogoUrl()" [src]="schoolLogoUrl()" class="sheet-logo" alt="Logo" />
+                  @if (schoolLogoUrl()) {<img [src]="schoolLogoUrl()" class="sheet-logo" alt="Logo" />}
                 </div>
                 <div class="sheet-header-titles">
                   <h1 class="sheet-main-title">{{ schoolName() }}</h1>
@@ -679,7 +701,7 @@
                 <div class="timetable-sheet classic">
                   <header class="sheet-header">
                     <div class="sheet-header-left">
-                      <img *ngIf="schoolLogoUrl()" [src]="schoolLogoUrl()" class="sheet-logo" alt="Logo" />
+                      @if (schoolLogoUrl()) {<img [src]="schoolLogoUrl()" class="sheet-logo" alt="Logo" />}
                     </div>
                     <div class="sheet-header-titles">
                       <h1 class="sheet-main-title">{{ schoolName() }}</h1>
@@ -787,7 +809,7 @@
                     <div class="timetable-sheet classic">
                       <header class="sheet-header">
                         <div class="sheet-header-left">
-                          <img *ngIf="schoolLogoUrl()" [src]="schoolLogoUrl()" class="sheet-logo" alt="Logo" />
+                          @if (schoolLogoUrl()) {<img [src]="schoolLogoUrl()" class="sheet-logo" alt="Logo" />}
                         </div>
                         <div class="sheet-header-titles">
                           <h1 class="sheet-main-title">{{ schoolName() }}</h1>

@@ -1,0 +1,454 @@
+:host {
+  display: block;
+}
+
+.tt-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  max-width: 1200px;
+}
+
+.card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+}
+
+.hero {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 1rem;
+  padding: 1.5rem 1.75rem;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+
+  h2 {
+    margin: 0 0 0.35rem;
+    font-size: 1.5rem;
+    color: #0f172a;
+  }
+
+  .eyebrow {
+    margin: 0 0 0.25rem;
+    font-size: 0.75rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #b08d4a;
+    font-weight: 600;
+  }
+
+  .hero-sub {
+    margin: 0;
+    max-width: 40rem;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    color: #64748b;
+  }
+}
+
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.btn-outline,
+.btn-primary {
+  padding: 0.5rem 0.95rem;
+  border-radius: 4px;
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+.btn-outline {
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #0f172a;
+}
+
+.btn-primary {
+  border: 1px solid #0f1b3d;
+  background: #0f1b3d;
+  color: #fff;
+
+  &:hover:not(:disabled) {
+    background: #1b2a57;
+  }
+}
+
+.notice {
+  padding: 0.8rem 1rem;
+  border-radius: 8px;
+
+  &.error {
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    color: #b91c1c;
+  }
+
+  &.success {
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+    color: #166534;
+  }
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1rem;
+
+  @media (max-width: 800px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 1rem 1.25rem;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-top: 3px solid #b08d4a;
+  border-radius: 12px;
+
+  span {
+    font-size: 0.8rem;
+    color: #64748b;
+  }
+
+  strong {
+    font-size: 1.8rem;
+    color: #0f172a;
+  }
+}
+
+.grid-card {
+  padding: 1rem;
+}
+
+.empty {
+  margin: 0;
+  padding: 1.5rem;
+  text-align: center;
+  color: #64748b;
+}
+
+.grid-scroll {
+  overflow-x: auto;
+}
+
+.tt-grid {
+  width: 100%;
+  min-width: 720px;
+  border-collapse: collapse;
+  table-layout: fixed;
+
+  th,
+  td {
+    border: 1px solid #1e293b;
+    text-align: center;
+    vertical-align: middle;
+    padding: 0.35rem;
+  }
+
+  thead th {
+    background: #0f1b3d;
+    color: #fff;
+    border-color: #0f1b3d;
+
+    .th-main {
+      display: block;
+      font-weight: 700;
+      font-size: 0.85rem;
+    }
+
+    .th-time {
+      display: block;
+      font-size: 0.68rem;
+      font-weight: 400;
+      opacity: 0.85;
+      white-space: normal;
+      word-break: break-word;
+    }
+
+    &.brk {
+      width: 3.8rem;
+      background: #475569;
+
+      .th-main {
+        font-size: 0.7rem;
+      }
+
+      .th-time {
+        font-size: 0.6rem;
+      }
+    }
+  }
+
+  .day-col {
+    width: 3.2rem;
+    background: #f1f5f9;
+    color: #0f172a;
+    font-weight: 700;
+  }
+
+  thead .day-col {
+    background: #0f1b3d;
+  }
+
+  td {
+    height: 4.5rem;
+  }
+
+  // One tall shaded cell per break column, with the label written vertically.
+  td.brk {
+    background: #f1f5f9;
+    padding: 0.5rem 0;
+
+    .brk-text {
+      display: inline-block;
+      writing-mode: vertical-rl;
+      transform: rotate(180deg);
+      font-size: 1rem;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      white-space: nowrap;
+      color: #0f172a;
+    }
+  }
+
+  td.slot {
+    background: #fffdf7;
+
+    .slot-subject {
+      display: block;
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: #b08d4a;
+      text-align: left;
+    }
+
+    // The box is a size container so the name's font scales with the cell width and always
+    // fits inside it. Names wrap only at spaces (never mid-word). The administrator's
+    // font-size setting (--tt-teacher-scale) multiplies the fitted size.
+    .slot-box {
+      container-type: inline-size;
+      width: 100%;
+    }
+
+    .slot-class {
+      display: block;
+      font-size: calc(max(0.5rem, min(15cqw, 0.9rem)) * var(--tt-teacher-scale, 1));
+      line-height: 1.2;
+      overflow-wrap: break-word;
+      word-break: normal;
+      font-weight: 700;
+      color: #0f172a;
+    }
+
+    .slot-room {
+      display: block;
+      font-size: 0.68rem;
+      color: #64748b;
+    }
+  }
+}
+
+// ── PDF preview overlay ─────────────────────────────────────
+.pdf-overlay {
+  --pdf-toolbar-h: 4rem;
+
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  display: flex;
+  flex-direction: column;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  max-height: 100dvh;
+  background: #0f172a;
+  overflow: hidden;
+}
+
+.pdf-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex: 0 0 auto;
+  min-height: var(--pdf-toolbar-h);
+  padding: 0.65rem 0.9rem;
+  box-sizing: border-box;
+  background: #1e293b;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  color: #f8fafc;
+}
+
+.pdf-toolbar-title {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+
+  strong {
+    font-size: 0.95rem;
+  }
+
+  span {
+    font-size: 0.8rem;
+    color: #94a3b8;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 60ch;
+  }
+}
+
+.pdf-toolbar-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.pdf-btn {
+  padding: 0.5rem 0.95rem;
+  border: 1px solid #b08d4a;
+  background: #b08d4a;
+  color: #fff;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
+
+  &.pdf-btn-close {
+    background: transparent;
+    color: #e2e8f0;
+    border-color: #475569;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.08);
+    }
+  }
+}
+
+// The viewport owns the scrolling; the frame has an explicit height so the
+// browser's PDF viewer can scroll through every page.
+.pdf-stage {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  background: #525659;
+}
+
+.pdf-frame {
+  display: block;
+  width: 100%;
+  height: calc(100dvh - var(--pdf-toolbar-h));
+  min-height: calc(100dvh - var(--pdf-toolbar-h));
+  border: 0;
+  background: #525659;
+}
+
+.pdf-mobile-fallback {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.9rem;
+  min-height: calc(100dvh - var(--pdf-toolbar-h));
+  padding: 1.5rem;
+  box-sizing: border-box;
+  color: #f1f5f9;
+  text-align: center;
+  background: linear-gradient(180deg, #0b1220 0%, #0f172a 100%);
+
+  .mobile-fallback-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #f8fafc;
+    margin: 0;
+  }
+
+  .mobile-fallback-hint {
+    font-size: 0.88rem;
+    color: #cbd5e1;
+    max-width: 36ch;
+    line-height: 1.5;
+    margin: 0;
+  }
+
+  .mobile-fallback-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.6rem;
+    margin-top: 0.5rem;
+  }
+}
+
+@media (max-width: 900px) {
+  .pdf-frame {
+    display: none;
+  }
+
+  .pdf-mobile-fallback {
+    display: flex;
+  }
+}
+
+// ── Per-child cards ─────────────────────────────────────────
+.child-card {
+  padding: 1rem 1.1rem 1.2rem;
+}
+
+.child-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.9rem;
+
+  h3 {
+    margin: 0;
+    font-size: 1.1rem;
+    color: #0f172a;
+  }
+
+  .child-meta {
+    margin: 0.15rem 0 0;
+    font-size: 0.82rem;
+    color: #64748b;
+  }
+}
+
+.child-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}

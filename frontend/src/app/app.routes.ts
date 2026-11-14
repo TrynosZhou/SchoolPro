@@ -33,6 +33,7 @@ import { NotificationsComponent } from './shared/notifications/notifications.com
 import { AdminBulkMessageComponent } from './pages/admin/admin-bulk-message.component';
 import { AdminNotificationSettingsComponent } from './pages/admin/admin-notification-settings.component';
 import { ParentAttendanceComponent } from './pages/parent/parent-attendance.component';
+import { ParentTimetableComponent } from './pages/parent/parent-timetable.component';
 import { StudentDashboardComponent } from './pages/student/student-dashboard.component';
 import { StudentHomeworkComponent } from './pages/student/student-homework.component';
 import { ChangePasswordPageComponent } from './pages/account/change-password-page.component';
@@ -43,6 +44,7 @@ import { AdminResultsAnalysisComponent } from './pages/admin/admin-results-analy
 import { AdminRankingComponent } from './pages/admin/admin-ranking.component';
 import { AdminMarkEntryProgressComponent } from './pages/admin/admin-mark-entry-progress.component';
 import { RecordBookComponent } from './pages/exams/record-book.component';
+import { TeacherTimetableComponent } from './pages/teacher/teacher-timetable.component';
 import { TeacherAssignmentsComponent } from './pages/teacher/teacher-assignments.component';
 import { AdminManageFeesComponent } from './pages/admin/admin-manage-fees.component';
 import { AdminStudentBalanceComponent } from './pages/admin/admin-student-balance.component';
@@ -242,7 +244,7 @@ export const routes: Routes = [
       { path: 'class-list', component: ClassListComponent },
       { path: 'assessments', component: TeacherDashboardComponent },
       { path: 'schedules', component: TeacherDashboardComponent },
-      { path: 'timetable', component: TeacherDashboardComponent },
+      { path: 'timetable', component: TeacherTimetableComponent },
       { path: 'messages', component: MessagingCenterComponent },
       { path: 'notifications', component: NotificationsComponent },
       { path: 'change-password', component: ChangePasswordPageComponent },
@@ -256,6 +258,7 @@ export const routes: Routes = [
       { path: 'finance', component: ParentFinanceComponent },
       { path: 'finance/:studentId', component: ParentFinanceComponent },
       { path: 'attendance', component: ParentAttendanceComponent },
+      { path: 'timetable', component: ParentTimetableComponent },
       { path: 'report-card/:studentId', component: ParentReportCardComponent },
       { path: 'report-cards', component: ParentReportCardsComponent },
       { path: 'messages', component: MessagingCenterComponent },

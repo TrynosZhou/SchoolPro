@@ -34,6 +34,8 @@ export interface TimetablePdfOptions {
   columns: TimetablePdfColumn[];
   rows: TimetablePdfRow[];
   fileName: string;
+  /** Per-position font multipliers (1 = default), e.g. { bottomRight: 1.2 } for teacher names. */
+  fontScale?: Partial<Record<'topLeft' | 'topRight' | 'main' | 'bottomRight' | 'bottomCenter', number>>;
 }
 
 const MARGIN = 10;
@@ -50,11 +52,19 @@ export async function downloadTimetablePdf(options: TimetablePdfOptions): Promis
   doc.save(options.fileName);
 }
 
+/** Render a weekly timetable grid to a PDF Blob (used for in-app previews). */
+export async function buildTimetablePdfBlob(options: TimetablePdfOptions): Promise<Blob> {
+  const doc = await buildTimetableDoc(options);
+  return doc.output('blob');
+}
+
 /** Render a weekly timetable grid to PDF bytes (used for bulk ZIP downloads). */
 export async function buildTimetablePdfBytes(options: TimetablePdfOptions): Promise<Uint8Array> {
   const doc = await buildTimetableDoc(options);
   return new Uint8Array(doc.output('arraybuffer'));
 }
+
+type CellPos = 'topLeft' | 'topRight' | 'main' | 'bottomRight' | 'bottomCenter';
 
 async function buildTimetableDoc(options: TimetablePdfOptions) {
   const { jsPDF } = await import('jspdf');
@@ -67,6 +77,19 @@ async function buildTimetableDoc(options: TimetablePdfOptions) {
   const colW = (contentWidth - DAY_COL_W) / colCount;
 
   let y = MARGIN;
+
+  /** Sets the font for a cell text, scaled by the options and shrunk so it fits inside the cell. */
+  const fitCellText = (text: string, pos: CellPos, baseSize: number) => {
+    const scale = options.fontScale?.[pos] ?? 1;
+    let size = baseSize * scale;
+    const maxW = colW - 2;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(size);
+    while (size > 4 && doc.getTextWidth(text) > maxW) {
+      size -= 0.5;
+      doc.setFontSize(size);
+    }
+  };
 
   // Render Header
   doc.setFont('helvetica', 'bold');
@@ -194,28 +217,23 @@ async function buildTimetableDoc(options: TimetablePdfOptions) {
       doc.rect(cx, y, colW, ROW_H, 'D');
 
       if (cell.topLeft) {
-        doc.setFontSize(7);
-        doc.setFont('helvetica', 'normal');
+        fitCellText(cell.topLeft, 'topLeft', 7);
         doc.text(cell.topLeft, cx + 1, y + 3, { baseline: 'top' });
       }
       if (cell.topRight) {
-        doc.setFontSize(7);
-        doc.setFont('helvetica', 'normal');
+        fitCellText(cell.topRight, 'topRight', 7);
         doc.text(cell.topRight, cx + colW - 1, y + 3, { align: 'right', baseline: 'top' });
       }
       if (cell.main) {
-        doc.setFontSize(14);
-        doc.setFont('helvetica', 'normal');
+        fitCellText(cell.main, 'main', 14);
         doc.text(cell.main, cx + 1, y + ROW_H / 2, { baseline: 'middle' });
       }
       if (cell.bottomRight) {
-        doc.setFontSize(7);
-        doc.setFont('helvetica', 'normal');
+        fitCellText(cell.bottomRight, 'bottomRight', 7);
         doc.text(cell.bottomRight, cx + colW - 1, y + ROW_H - 1, { align: 'right', baseline: 'bottom' });
       }
       if (cell.bottomCenter) {
-        doc.setFontSize(7);
-        doc.setFont('helvetica', 'normal');
+        fitCellText(cell.bottomCenter, 'bottomCenter', 7);
         doc.text(cell.bottomCenter, cx + colW / 2, y + ROW_H - 1, { align: 'center', baseline: 'bottom' });
       }
     });

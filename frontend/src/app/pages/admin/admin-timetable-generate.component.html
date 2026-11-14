@@ -30,7 +30,8 @@
       >
         <div class="context-menu-heading">{{ menu.teacherName }}</div>
         <button type="button" (click)="previewTeacherFromMenu()">Preview timetable</button>
-        <button type="button" (click)="editLessonsFromMenu()">Edit lessons</button>
+        <button type="button" (click)="editAssignmentsFromMenu()">Edit assignments</button>
+        <button type="button" (click)="editLessonsFromMenu()">Edit timetable slots</button>
       </div>
     }
 
@@ -151,7 +152,7 @@
           [disabled]="generating() || versionSaving()"
         />
       </h2>
-      <p class="version-hint">Edit the version label before generating. It appears on PDFs and the view timetable page.</p>
+      <p class="version-hint">The version goes up by one automatically each time a new timetable is generated. You can also type a different version here. It appears on PDFs and the view timetable page.</p>
     </section>
 
     <section class="list-shell generate-panel">
@@ -394,7 +395,16 @@
                 <tbody>
                   @for (teacher of summaryGridTeachers(); track teacher.teacherId) {
                     <tr>
-                      <td class="teacher-col" [title]="teacher.name + (teacher.employeeNumber ? ' · ' + teacher.employeeNumber : '')">
+                      <td
+                        class="teacher-col teacher-col-action"
+                        tabindex="0"
+                        role="button"
+                        [title]="teacher.name + (teacher.employeeNumber ? ' · ' + teacher.employeeNumber : '') + ' — click to edit lessons'"
+                        [attr.aria-label]="'Edit lessons for ' + teacher.name"
+                        (click)="openTeacherAssignments(teacher.teacherId, teacher.name)"
+                        (keydown.enter)="openTeacherAssignments(teacher.teacherId, teacher.name)"
+                        (keydown.space)="$event.preventDefault(); openTeacherAssignments(teacher.teacherId, teacher.name)"
+                      >
                         <strong>{{ teacher.label }}</strong>
                       </td>
                       @for (d of days; track d.value) {
@@ -552,7 +562,13 @@
                 <tr>
                   <td
                     class="row-label row-label-teacher"
-                    [title]="teacher.name + (teacher.employeeNumber ? ' · ' + teacher.employeeNumber : '') + ' — right-click for options'"
+                    tabindex="0"
+                    role="button"
+                    [title]="teacher.name + (teacher.employeeNumber ? ' · ' + teacher.employeeNumber : '') + ' — click to edit lessons, right-click for more'"
+                    [attr.aria-label]="'Edit lessons for ' + teacher.name"
+                    (click)="openTeacherAssignments(teacher.teacherId, teacher.name)"
+                    (keydown.enter)="openTeacherAssignments(teacher.teacherId, teacher.name)"
+                    (keydown.space)="$event.preventDefault(); openTeacherAssignments(teacher.teacherId, teacher.name)"
                     (contextmenu)="onTeacherContextMenu(teacher.teacherId, teacher.name, $event)"
                   >
                     <strong>{{ teacher.label }}</strong>
@@ -698,6 +714,182 @@
 
           <ng-container *ngTemplateOutlet="timetableGrid; context: { mode, fullPage: true }" />
         </div>
+      </div>
+    </div>
+  }
+
+  @if (assignmentsModal(); as am) {
+    <app-teacher-assignments-modal
+      style="--tam-z: 6000"
+      [teacherId]="am.teacherId"
+      [teacherName]="am.teacherName"
+      [employeeNumber]="am.employeeNumber"
+      (changed)="onTeacherAssignmentsChanged()"
+      (closed)="closeTeacherAssignments()"
+    />
+  }
+
+  @if (lessonsModal(); as lm) {
+    <div class="lessons-backdrop" (click)="closeTeacherLessons()">
+      <div
+        class="lessons-modal"
+        role="dialog"
+        aria-modal="true"
+        [attr.aria-label]="'Edit lessons for ' + lm.teacherName"
+        (click)="$event.stopPropagation()"
+      >
+        <header class="lessons-head">
+          <div class="lessons-head-main">
+            <span class="lessons-avatar" aria-hidden="true">{{ teacherInitials(lm.teacherName) }}</span>
+            <div>
+              <h3>Edit lessons</h3>
+              <p>{{ lm.teacherName }}@if (lm.employeeNumber) { · {{ lm.employeeNumber }} } · {{ lessonDrafts().length }} lessons per week</p>
+            </div>
+          </div>
+          <button type="button" class="lessons-close" (click)="closeTeacherLessons()" aria-label="Close" [disabled]="lessonsSaving()">✕</button>
+        </header>
+
+        <div class="lessons-body">
+          @if (!lessonDrafts().length) {
+            <p class="lessons-empty">This teacher has no lessons on the timetable yet.</p>
+          } @else {
+            <div class="lessons-table-wrap">
+              <table class="lessons-table">
+                <thead>
+                  <tr>
+                    <th>Class</th>
+                    <th>Subject</th>
+                    <th>Day</th>
+                    <th>Period</th>
+                    <th>Room</th>
+                    <th class="center">Locked</th>
+                    <th class="center">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (d of lessonDrafts(); track d.id) {
+                    <tr
+                      [class.removed]="d.remove"
+                      [class.changed]="!d.remove && changedLessonDrafts().includes(d)"
+                      [class.has-issue]="lessonIssues().has(d.id)"
+                    >
+                      <td><strong>{{ classDisplayName(d.className) }}</strong></td>
+                      <td>{{ d.subjectName }}</td>
+                      <td>
+                        <select
+                          [ngModel]="d.dayOfWeek"
+                          (ngModelChange)="updateLessonDraft(d.id, { dayOfWeek: +$event })"
+                          [name]="'day-' + d.id"
+                          [disabled]="d.remove || (d.isLocked && d.original.isLocked)"
+                          [attr.aria-label]="'Day for ' + d.className + ' ' + d.subjectName"
+                        >
+                          @for (day of days; track day.value) {
+                            <option [ngValue]="day.value">{{ day.label }}</option>
+                          }
+                        </select>
+                      </td>
+                      <td>
+                        <select
+                          [ngModel]="d.periodKey"
+                          (ngModelChange)="updateLessonDraft(d.id, { periodKey: $event })"
+                          [name]="'period-' + d.id"
+                          [disabled]="d.remove || (d.isLocked && d.original.isLocked)"
+                          [attr.aria-label]="'Period for ' + d.className + ' ' + d.subjectName"
+                        >
+                          @for (o of periodOptionsFor(d); track o.key) {
+                            <option [value]="o.key">{{ o.label }}</option>
+                          }
+                        </select>
+                      </td>
+                      <td>
+                        <input
+                          type="text"
+                          class="room-input"
+                          maxlength="30"
+                          placeholder="Room"
+                          [ngModel]="d.room"
+                          (ngModelChange)="updateLessonDraft(d.id, { room: $event })"
+                          [name]="'room-' + d.id"
+                          [disabled]="d.remove || (d.isLocked && d.original.isLocked)"
+                          [attr.aria-label]="'Room for ' + d.className + ' ' + d.subjectName"
+                        />
+                      </td>
+                      <td class="center">
+                        <input
+                          type="checkbox"
+                          [ngModel]="d.isLocked"
+                          (ngModelChange)="updateLessonDraft(d.id, { isLocked: !!$event })"
+                          [name]="'lock-' + d.id"
+                          [disabled]="d.remove"
+                          [attr.aria-label]="'Lock ' + d.className + ' ' + d.subjectName"
+                        />
+                      </td>
+                      <td class="center">
+                        <div class="row-actions">
+                          @if (d.remove) {
+                            <button type="button" class="link-action" (click)="updateLessonDraft(d.id, { remove: false })">Undo remove</button>
+                          } @else {
+                            @if (changedLessonDrafts().includes(d)) {
+                              <button type="button" class="link-action" (click)="resetLessonDraft(d.id)">Reset</button>
+                            }
+                            <button
+                              type="button"
+                              class="link-action danger"
+                              (click)="updateLessonDraft(d.id, { remove: true })"
+                              [disabled]="d.isLocked && d.original.isLocked"
+                              [title]="d.isLocked && d.original.isLocked ? 'Unlock this lesson to remove it' : 'Remove this lesson from the timetable'"
+                            >
+                              Remove
+                            </button>
+                          }
+                        </div>
+                      </td>
+                    </tr>
+                    @if (lessonIssues().get(d.id); as issue) {
+                      <tr class="issue-row" [class.hard]="issue.kind === 'class'">
+                        <td colspan="7">
+                          {{ issue.kind === 'class' ? '⛔' : '⚠️' }} {{ issue.msg }}
+                        </td>
+                      </tr>
+                    }
+                  }
+                </tbody>
+              </table>
+            </div>
+
+            @if (hasTeacherOverlap()) {
+              <label class="lessons-double-book">
+                <input
+                  type="checkbox"
+                  [ngModel]="lessonsAllowDoubleBooking()"
+                  (ngModelChange)="lessonsAllowDoubleBooking.set(!!$event)"
+                  name="allowDoubleBooking"
+                />
+                <span>Allow this teacher to teach two classes in the same period (ignore conflicts)</span>
+              </label>
+            }
+          }
+
+          @if (lessonsError(); as err) {
+            <p class="lessons-error" role="alert">{{ err }}</p>
+          }
+        </div>
+
+        <footer class="lessons-foot">
+          <span class="lessons-count">
+            @if (changedLessonDrafts().length) {
+              {{ changedLessonDrafts().length }} unsaved {{ changedLessonDrafts().length === 1 ? 'change' : 'changes' }}
+            } @else {
+              No changes yet
+            }
+          </span>
+          <div class="lessons-foot-actions">
+            <button type="button" class="btn-ghost" (click)="closeTeacherLessons()" [disabled]="lessonsSaving()">Cancel</button>
+            <button type="button" class="btn-primary" (click)="saveTeacherLessons()" [disabled]="!canSaveLessons()">
+              {{ lessonsSaving() ? 'Saving…' : 'Save changes' }}
+            </button>
+          </div>
+        </footer>
       </div>
     </div>
   }

@@ -1,9 +1,11 @@
+import { blobErrorMessage } from '../../core/utils/blob-error.util';
 import { Component, computed, HostListener, inject, OnDestroy, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { NgStyle, NgTemplateOutlet } from '@angular/common';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
-import { Router, RouterLink } from '@angular/router';
+import { RouterLink } from '@angular/router';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
+import { TeacherAssignmentsModalComponent } from '../../shared/teacher-assignments-modal/teacher-assignments-modal.component';
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
 import { ApiService } from '../../core/services/api.service';
 import { TimetablePeriod, TimetablePeriodsService } from '../../core/services/timetable-periods.service';
@@ -47,6 +49,7 @@ interface TimetableSlotView {
   teacherId: string;
   teacherName: string;
   employeeNumber?: string;
+  room?: string | null;
   isLocked?: boolean;
 }
 
@@ -88,6 +91,7 @@ interface TeacherSummaryRow {
 }
 
 interface GenerateTimetableResult {
+  timetableVersion?: string;
   success: boolean;
   summary: {
     totalSlots: number;
@@ -112,6 +116,29 @@ interface GenerateTimetableResult {
   teacherSummary: TeacherSummaryRow[];
 }
 
+interface LessonDraft {
+  id: string;
+  classId: string;
+  className: string;
+  subjectName: string;
+  subjectShort: string;
+  /** Editable fields. */
+  dayOfWeek: number;
+  periodKey: string;
+  room: string;
+  isLocked: boolean;
+  remove: boolean;
+  /** Values when the modal opened, used to detect changes. */
+  original: { dayOfWeek: number; periodKey: string; room: string; isLocked: boolean };
+}
+
+interface LessonPeriodOption {
+  key: string;
+  label: string;
+  startTime: string;
+  endTime: string;
+}
+
 const DAYS = [
   { value: 1, label: 'Monday', short: 'Mon' },
   { value: 2, label: 'Tuesday', short: 'Tue' },
@@ -123,7 +150,7 @@ const DAYS = [
 @Component({
   selector: 'app-admin-timetable-generate',
   standalone: true,
-  imports: [PortalLayoutComponent, FormsModule, RouterLink, NgStyle, NgTemplateOutlet],
+  imports: [PortalLayoutComponent, FormsModule, RouterLink, NgStyle, NgTemplateOutlet, TeacherAssignmentsModalComponent],
   templateUrl: './admin-timetable-generate.component.html',
   styleUrl: './admin-timetable-generate.component.scss',
 })
@@ -131,7 +158,6 @@ export class AdminTimetableGenerateComponent implements OnInit, OnDestroy {
   private api = inject(ApiService);
   private periodsSvc = inject(TimetablePeriodsService);
   private sanitizer = inject(DomSanitizer);
-  private router = inject(Router);
   private slotMoveHintTimer: ReturnType<typeof setTimeout> | null = null;
   private pdfObjectUrl: string | null = null;
 
@@ -172,6 +198,15 @@ export class AdminTimetableGenerateComponent implements OnInit, OnDestroy {
   teacherContextMenu = signal<{ x: number; y: number; teacherId: string; teacherName: string } | null>(
     null,
   );
+  /** "Current assignments" modal: opened by clicking a teacher's initials. */
+  assignmentsModal = signal<{ teacherId: string; teacherName: string; employeeNumber: string } | null>(null);
+  private assignmentsChanged = false;
+  /** Timetable-slot editor (move lessons / rooms / locks): opened from the teacher's right-click menu. */
+  lessonsModal = signal<{ teacherId: string; teacherName: string; employeeNumber: string } | null>(null);
+  lessonDrafts = signal<LessonDraft[]>([]);
+  lessonsSaving = signal(false);
+  lessonsError = signal<string | null>(null);
+  lessonsAllowDoubleBooking = signal(false);
   slotMoveHint = signal<{
     x: number;
     y: number;
@@ -190,6 +225,9 @@ export class AdminTimetableGenerateComponent implements OnInit, OnDestroy {
   yearName = signal<string | null>(null);
   timetableVersion = signal('1');
   versionSaving = signal(false);
+  /** True once the admin has typed a different version; it is then used for the next generation instead of auto-incrementing. */
+  private versionEdited = false;
+  private serverVersion = '1';
 
   termPrefix = computed(() => timetableTermPrefix(this.termName(), this.yearName()));
   termVersionLabel = computed(() =>
@@ -241,6 +279,247 @@ export class AdminTimetableGenerateComponent implements OnInit, OnDestroy {
     return '';
   });
 
+  /** Lesson periods (breaks excluded) offered in the modal's period dropdown. */
+  lessonPeriodOptions = computed<LessonPeriodOption[]>(() => {
+    const all = this.periods();
+    const out: LessonPeriodOption[] = [];
+    all.forEach((p, i) => {
+      if (isBreakPeriod(p)) return;
+      out.push({
+        key: this.periodKey(p.startTime, p.endTime),
+        label: `Period ${lessonPeriodNumber(all, i)} · ${formatPeriodRange(p)}`,
+        startTime: p.startTime,
+        endTime: p.endTime,
+      });
+    });
+    return out;
+  });
+
+  /** Dropdown options for one lesson; keeps a legacy/custom time selectable so it is never lost. */
+  periodOptionsFor(draft: LessonDraft): LessonPeriodOption[] {
+    const base = this.lessonPeriodOptions();
+    if (base.some((o) => o.key === draft.periodKey)) return base;
+    const [startTime, endTime] = draft.periodKey.split('|');
+    return [
+      ...base,
+      { key: draft.periodKey, label: `${formatPeriodRange({ startTime, endTime })} (custom)`, startTime, endTime },
+    ];
+  }
+
+  private periodKey(startTime: string, endTime: string): string {
+    return `${startTime}|${endTime}`;
+  }
+
+  private timeMinutes(time: string): number {
+    const [h, m] = String(time || '0:00').split(':').map(Number);
+    return (h || 0) * 60 + (m || 0);
+  }
+
+  private timesOverlap(aKey: string, bKey: string): boolean {
+    const [a0, a1] = aKey.split('|');
+    const [b0, b1] = bKey.split('|');
+    return this.timeMinutes(a0) < this.timeMinutes(b1) && this.timeMinutes(b0) < this.timeMinutes(a1);
+  }
+
+  /** Lessons that were changed (moved, re-roomed, lock toggled or removed). */
+  changedLessonDrafts = computed(() =>
+    this.lessonDrafts().filter(
+      (d) =>
+        d.remove ||
+        d.dayOfWeek !== d.original.dayOfWeek ||
+        d.periodKey !== d.original.periodKey ||
+        d.room.trim() !== d.original.room.trim() ||
+        d.isLocked !== d.original.isLocked,
+    ),
+  );
+
+  /**
+   * Live checks while editing.
+   *  - "class": the class already has another lesson in that period (cannot be saved).
+   *  - "teacher": the teacher would teach two classes at once (needs the double-booking tick-box).
+   */
+  lessonIssues = computed(() => {
+    const issues = new Map<string, { kind: 'class' | 'teacher'; msg: string }>();
+    const drafts = this.lessonDrafts().filter((d) => !d.remove);
+    const ownIds = new Set(this.lessonDrafts().map((d) => d.id));
+
+    for (const d of drafts) {
+      const classSlots = this.classes().find((c) => c.classId === d.classId)?.slots ?? [];
+      const classClash = classSlots.find(
+        (s) =>
+          !ownIds.has(s.id) &&
+          s.dayOfWeek === d.dayOfWeek &&
+          this.periodKey(s.startTime, s.endTime) === d.periodKey,
+      );
+      if (classClash) {
+        issues.set(d.id, {
+          kind: 'class',
+          msg: `${classClash.subjectName} (${classClash.teacherName}) is already scheduled for ${this.classDisplayName(d.className)} in this period.`,
+        });
+        continue;
+      }
+      const twin = drafts.find(
+        (o) => o.id !== d.id && o.dayOfWeek === d.dayOfWeek && this.timesOverlap(o.periodKey, d.periodKey),
+      );
+      if (twin) {
+        issues.set(d.id, {
+          kind: 'teacher',
+          msg: `Overlaps with ${this.classDisplayName(twin.className)} (${twin.subjectName}).`,
+        });
+      }
+    }
+    return issues;
+  });
+
+  hasBlockingLessonIssue = computed(() => [...this.lessonIssues().values()].some((i) => i.kind === 'class'));
+  hasTeacherOverlap = computed(() => [...this.lessonIssues().values()].some((i) => i.kind === 'teacher'));
+
+  canSaveLessons = computed(
+    () =>
+      !this.lessonsSaving() &&
+      this.changedLessonDrafts().length > 0 &&
+      !this.hasBlockingLessonIssue() &&
+      (!this.hasTeacherOverlap() || this.lessonsAllowDoubleBooking()),
+  );
+
+  /** Click a teacher's initials to view / edit that teacher's class assignments (lessons). */
+  openTeacherAssignments(teacherId: string, teacherName: string) {
+    if (!teacherId) return;
+    const teacher = this.teachers().find((t) => t.teacherId === teacherId);
+    this.closeTeacherContextMenu();
+    this.closeSlotContextMenu();
+    this.closeSlotMoveHint();
+    this.assignmentsChanged = false;
+    this.assignmentsModal.set({
+      teacherId,
+      teacherName: teacherName || teacher?.teacherName || '',
+      employeeNumber: teacher?.employeeNumber || '',
+    });
+    document.body.style.overflow = 'hidden';
+  }
+
+  onTeacherAssignmentsChanged() {
+    this.assignmentsChanged = true;
+  }
+
+  closeTeacherAssignments() {
+    this.assignmentsModal.set(null);
+    if (!this.editorWindow()) document.body.style.overflow = '';
+    if (this.assignmentsChanged) {
+      this.assignmentsChanged = false;
+      // Assignment changes add/remove timetable slots, so refresh the grids.
+      this.loadSnapshot(true);
+    }
+  }
+
+  /** Edit timetable slots (day / period / room / lock) for a teacher. */
+  openTeacherLessons(teacherId: string, teacherName: string) {
+    const teacher = this.teachers().find((t) => t.teacherId === teacherId);
+    if (!teacher) return;
+    this.closeTeacherContextMenu();
+    this.closeSlotContextMenu();
+    this.closeSlotMoveHint();
+
+    const drafts: LessonDraft[] = [...teacher.slots]
+      .sort((a, b) => a.dayOfWeek - b.dayOfWeek || a.startTime.localeCompare(b.startTime))
+      .map((slot) => {
+        const periodKey = this.periodKey(slot.startTime, slot.endTime);
+        const room = slot.room ?? '';
+        const locked = !!slot.isLocked;
+        return {
+          id: slot.id,
+          classId: slot.classId,
+          className: slot.className,
+          subjectName: slot.subjectName,
+          subjectShort: timetableSubjectShort(slot.subjectCode, slot.subjectName, slot.subjectShort),
+          dayOfWeek: slot.dayOfWeek,
+          periodKey,
+          room,
+          isLocked: locked,
+          remove: false,
+          original: { dayOfWeek: slot.dayOfWeek, periodKey, room, isLocked: locked },
+        };
+      });
+
+    this.lessonDrafts.set(drafts);
+    this.lessonsError.set(null);
+    this.lessonsAllowDoubleBooking.set(false);
+    this.lessonsModal.set({
+      teacherId,
+      teacherName: teacherName || teacher.teacherName,
+      employeeNumber: teacher.employeeNumber || '',
+    });
+    document.body.style.overflow = 'hidden';
+  }
+
+  updateLessonDraft(id: string, patch: Partial<Pick<LessonDraft, 'dayOfWeek' | 'periodKey' | 'room' | 'isLocked' | 'remove'>>) {
+    this.lessonsError.set(null);
+    this.lessonDrafts.update((list) => list.map((d) => (d.id === id ? { ...d, ...patch } : d)));
+  }
+
+  resetLessonDraft(id: string) {
+    this.lessonsError.set(null);
+    this.lessonDrafts.update((list) =>
+      list.map((d) => (d.id === id ? { ...d, ...d.original, remove: false } : d)),
+    );
+  }
+
+  closeTeacherLessons(force = false) {
+    if (this.lessonsSaving()) return;
+    if (!force && this.changedLessonDrafts().length) {
+      const ok = window.confirm('You have unsaved lesson changes. Discard them?');
+      if (!ok) return;
+    }
+    this.lessonsModal.set(null);
+    this.lessonDrafts.set([]);
+    this.lessonsError.set(null);
+    if (!this.editorWindow()) document.body.style.overflow = '';
+  }
+
+  saveTeacherLessons() {
+    const modal = this.lessonsModal();
+    if (!modal || !this.canSaveLessons()) return;
+
+    const options = new Map(this.lessonPeriodOptions().map((o) => [o.key, o]));
+    const lessons = this.changedLessonDrafts().map((d) => {
+      const [fallbackStart, fallbackEnd] = d.periodKey.split('|');
+      const startTime = options.get(d.periodKey)?.startTime ?? fallbackStart;
+      const endTime = options.get(d.periodKey)?.endTime ?? fallbackEnd;
+      return {
+        id: d.id,
+        dayOfWeek: d.dayOfWeek,
+        startTime,
+        endTime,
+        room: d.room.trim() || null,
+        isLocked: d.isLocked,
+        remove: d.remove,
+      };
+    });
+
+    this.lessonsSaving.set(true);
+    this.lessonsError.set(null);
+    this.api
+      .put<{ updated: number; removed: number }>(`/timetable/teachers/${modal.teacherId}/lessons`, {
+        lessons,
+        ignoreConflicts: this.lessonsAllowDoubleBooking(),
+      })
+      .subscribe({
+        next: (res) => {
+          this.lessonsSaving.set(false);
+          const parts: string[] = [];
+          if (res.updated) parts.push(`${res.updated} updated`);
+          if (res.removed) parts.push(`${res.removed} removed`);
+          this.closeTeacherLessons(true);
+          this.showToast('success', `Lessons saved for ${modal.teacherName}${parts.length ? ' (' + parts.join(', ') + ')' : ''}.`);
+          this.loadSnapshot();
+        },
+        error: (e) => {
+          this.lessonsSaving.set(false);
+          this.lessonsError.set(e.error?.message || 'Could not save lessons. Nothing was changed.');
+        },
+      });
+  }
+
   ngOnInit() {
     this.periods.set(this.periodsSvc.load());
     this.loadTimetableContext();
@@ -261,6 +540,7 @@ export class AdminTimetableGenerateComponent implements OnInit, OnDestroy {
           this.yearName.set(ctx.yearName ?? null);
           if (ctx.timetableVersion) {
             this.timetableVersion.set(normalizeTimetableVersion(ctx.timetableVersion));
+            this.serverVersion = normalizeTimetableVersion(ctx.timetableVersion);
           }
         },
         error: () => {
@@ -285,7 +565,10 @@ export class AdminTimetableGenerateComponent implements OnInit, OnDestroy {
       next: (res) => {
         this.versionSaving.set(false);
         if (res.timetableVersion) {
-          this.timetableVersion.set(normalizeTimetableVersion(res.timetableVersion));
+          const saved = normalizeTimetableVersion(res.timetableVersion);
+          if (saved !== this.serverVersion) this.versionEdited = true;
+          this.serverVersion = saved;
+          this.timetableVersion.set(saved);
         }
       },
       error: () => {
@@ -300,7 +583,7 @@ export class AdminTimetableGenerateComponent implements OnInit, OnDestroy {
     this.closePdfPreview();
   }
 
-  loadSnapshot() {
+  loadSnapshot(keepTab = false) {
     this.loading.set(true);
     const openEditorMode = this.editorWindow();
     this.api.get<GenerateTimetableResult>('/timetable/generate/snapshot').subscribe({
@@ -308,7 +591,7 @@ export class AdminTimetableGenerateComponent implements OnInit, OnDestroy {
         this.applyResult(data);
         this.loading.set(false);
         if (this.hasResult()) {
-          if (!openEditorMode) {
+          if (!openEditorMode && !keepTab) {
             this.resultTab.set('teachers');
           }
         } else {
@@ -337,10 +620,17 @@ export class AdminTimetableGenerateComponent implements OnInit, OnDestroy {
           endTime: p.endTime,
         })),
         replaceExisting: this.replaceExisting,
-        timetableVersion: normalizeTimetableVersion(this.timetableVersion()),
+        // Only sent when the admin edited it by hand; otherwise the server bumps the version itself.
+        ...(this.versionEdited ? { timetableVersion: normalizeTimetableVersion(this.timetableVersion()) } : {}),
       })
       .subscribe({
         next: (data) => {
+          if (data.timetableVersion) {
+            const v = normalizeTimetableVersion(data.timetableVersion);
+            this.timetableVersion.set(v);
+            this.serverVersion = v;
+          }
+          this.versionEdited = false;
           this.applyResult(data);
           this.generating.set(false);
           if (data.summary?.totalSlots) {
@@ -567,8 +857,14 @@ export class AdminTimetableGenerateComponent implements OnInit, OnDestroy {
 
   @HostListener('document:keydown.escape')
   onEscapeKey() {
+    // The assignments modal handles its own Escape key.
+    if (this.assignmentsModal()) return;
     if (this.slotMoveHint()) {
       this.closeSlotMoveHint();
+      return;
+    }
+    if (this.lessonsModal()) {
+      this.closeTeacherLessons();
       return;
     }
     if (this.teacherContextMenu()) {
@@ -792,13 +1088,18 @@ export class AdminTimetableGenerateComponent implements OnInit, OnDestroy {
     this.previewTeacherPdf();
   }
 
-  /** Menu action: open the teacher's class-assignment editor (Class Assignments page). */
+  /** Menu action: open the Current assignments modal for the right-clicked teacher. */
+  editAssignmentsFromMenu() {
+    const menu = this.teacherContextMenu();
+    if (!menu) return;
+    this.openTeacherAssignments(menu.teacherId, menu.teacherName);
+  }
+
+  /** Menu action: open the timetable-slot editor for the right-clicked teacher. */
   editLessonsFromMenu() {
     const menu = this.teacherContextMenu();
     if (!menu) return;
-    const teacherId = menu.teacherId;
-    this.closeTeacherContextMenu();
-    void this.router.navigate(['/admin/class-assignments'], { queryParams: { teacherId } });
+    this.openTeacherLessons(menu.teacherId, menu.teacherName);
   }
 
   downloadTeacherPdf() {
@@ -925,9 +1226,9 @@ export class AdminTimetableGenerateComponent implements OnInit, OnDestroy {
         a.click();
         URL.revokeObjectURL(url);
       },
-      error: (e) => {
+      error: async (e) => {
         onDone();
-        this.showToast('error', e.error?.message || 'Failed to generate PDF.');
+        this.showToast('error', await blobErrorMessage(e, 'Failed to generate PDF.'));
       },
     });
   }

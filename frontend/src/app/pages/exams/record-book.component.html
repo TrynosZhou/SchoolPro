@@ -14,7 +14,7 @@
       <p class="eyebrow">Academics · Mark entry</p>
       <h1>Record Book</h1>
       <p class="hero-sub">
-        Select term, class, and subject to load enrolled students. Add test columns and enter marks — they auto-save when you move to the next student.
+        Select term, class, and subject to load enrolled students. Add mark columns, give each set of marks a topic, and type in the marks yourself. Everything you enter is saved automatically as you type.
       </p>
     </div>
   </header>
@@ -42,7 +42,7 @@
       <label class="field">
         <span>Class <span class="req">*</span></span>
         <select [(ngModel)]="filters.classId" name="class" (ngModelChange)="onClassChange()">
-          <option value="">— Select —</option>
+          <option value="">{{ assignmentsLoading() ? 'Loading your classes…' : '— Select —' }}</option>
           @for (c of classes(); track c.id) {
             <option [value]="c.id">{{ c.name }}</option>
           }
@@ -51,9 +51,7 @@
       @if (filters.classId) {
         <label class="field">
           <span>Subject <span class="req">*</span></span>
-          @if (loadingSubjects()) {
-            <select disabled><option>Loading subjects…</option></select>
-          } @else if (!subjects().length) {
+          @if (!subjects().length) {
             <select disabled><option>— No subjects —</option></select>
           } @else if (showSubjectPicker()) {
             <select [(ngModel)]="filters.subjectId" name="subject" (ngModelChange)="onSubjectChange()">
@@ -69,15 +67,22 @@
           }
         </label>
       }
-      <button type="button" class="btn-load" (click)="loadClass()" [disabled]="loading() || loadingSubjects() || !filtersReady()">
+      <button type="button" class="btn-load" (click)="loadClass()" [disabled]="loading() || assignmentsLoading() || !filtersReady()">
         {{ loading() ? 'Loading…' : 'Load Class' }}
       </button>
     </div>
+    @if (assignmentsFailed()) {
+      <p class="filter-hint">Could not verify the classes and subjects you teach, so marks cannot be entered right now. Refresh the page to try again.</p>
+    } @else if (!assignmentsLoading() && !classes().length) {
+      <p class="filter-hint">You have not been assigned to teach any subject in any class yet, so there is nothing to record marks for. Please contact the administrator.</p>
+    } @else if (!hasLoaded() && !filters.classId) {
+      <p class="filter-hint">You can only record marks for the classes you teach and the subjects you teach in them.</p>
+    }
     @if (teacherName() && filters.classId && !hasLoaded()) {
       <p class="filter-hint">
         <strong>{{ teacherName() }}</strong>
         @if (subjects().length) {
-          · Subjects: {{ assignedSubjectsLabel() }}
+          · Your subjects in this class: {{ assignedSubjectsLabel() }}
         }
       </p>
     }
@@ -96,7 +101,7 @@
         </div>
         @if (subjects().length > 1) {
           <div class="meta-wide">
-            <span class="meta-label">All subjects assigned in this class</span>
+            <span class="meta-label">Your subjects in this class</span>
             <span>{{ assignedSubjectsLabel() }}</span>
           </div>
         }
@@ -106,7 +111,7 @@
     <section class="toolbar card">
       <div>
         <strong>{{ sessionLabel() }}</strong>
-        <span class="toolbar-meta">Drag column edges to resize · Click + to add test columns · Auto-save on row change</span>
+        <span class="toolbar-meta">Drag column edges to resize · Click + or − to add or remove mark columns · Marks and topics auto-save</span>
       </div>
     </section>
 
@@ -115,22 +120,37 @@
     } @else {
       <div class="grid-wrap">
         <div class="grid-toolbar">
-          <span class="grid-toolbar-hint">Max {{ maxMarks() }} marks per test</span>
+          <span class="grid-toolbar-hint">Max {{ maxMarks() }} marks per column</span>
+          <span class="save-status" [class.saving]="saveState() === 'saving'" [class.error]="saveState() === 'error'" role="status" aria-live="polite">
+            @switch (saveState()) {
+              @case ('saving') { Saving… }
+              @case ('saved') { All changes saved{{ lastSavedAt() ? ' · ' + (lastSavedAt() | date: 'HH:mm:ss') : '' }} }
+              @case ('error') { Not saved }
+              @default { Auto-save on }
+            }
+          </span>
+          <button
+            type="button"
+            class="btn-add-column btn-remove-column"
+            (click)="removeMarkColumn()"
+            [disabled]="!canRemoveColumn()"
+            title="Remove last mark column"
+            aria-label="Remove last mark column"
+          >
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+              <path fill="currentColor" d="M5 11h14v2H5z"/>
+            </svg>
+          </button>
           <button
             type="button"
             class="btn-add-column"
             (click)="addMarkColumn()"
-            [disabled]="addingColumn()"
-            title="Add test column"
-            aria-label="Add test column"
+            title="Add mark column"
+            aria-label="Add mark column"
           >
-            @if (addingColumn()) {
-              <span class="spinner" aria-hidden="true"></span>
-            } @else {
-              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-                <path fill="currentColor" d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
-              </svg>
-            }
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+              <path fill="currentColor" d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+            </svg>
           </button>
         </div>
 
@@ -166,22 +186,13 @@
                     <span class="th-label">FirstName</span>
                     <span class="col-resizer" (mousedown)="startColumnResize($event, 'firstName')" title="Resize column"></span>
                   </th>
-                  <th
-                    class="sticky col-fixed"
-                    [style.width.px]="colWidth('gender')"
-                    [style.minWidth.px]="colWidth('gender')"
-                    [style.left.px]="stickyLeft('gender')"
-                  >
-                    <span class="th-label">Gender</span>
-                    <span class="col-resizer" (mousedown)="startColumnResize($event, 'gender')" title="Resize column"></span>
-                  </th>
                   @for (col of markColumns(); track col.columnKey) {
                     <th
                       class="mark-col"
                       [style.width.px]="colWidth(col.columnKey)"
                       [style.minWidth.px]="colWidth(col.columnKey)"
                     >
-                      <span class="th-label">{{ col.label }}</span>
+                      <span class="th-label">Mark</span>
                       <span
                         class="col-resizer"
                         (mousedown)="startColumnResize($event, col.columnKey)"
@@ -193,11 +204,7 @@
               </thead>
               <tbody>
                 @for (row of students(); track row.studentId) {
-                  <tr
-                    [attr.data-student-id]="row.studentId"
-                    [class.row-saving]="row.saveStatus === 'saving'"
-                    [class.row-error]="row.saveStatus === 'error'"
-                  >
+                  <tr [attr.data-student-id]="row.studentId">
                     <td
                       class="sticky col-fixed student-cell"
                       [style.width.px]="colWidth('studentId')"
@@ -219,12 +226,6 @@
                       [style.left.px]="stickyLeft('firstName')"
                       [title]="row.firstName"
                     >{{ row.firstName }}</td>
-                    <td
-                      class="sticky col-fixed student-cell"
-                      [style.width.px]="colWidth('gender')"
-                      [style.minWidth.px]="colWidth('gender')"
-                      [style.left.px]="stickyLeft('gender')"
-                    >{{ row.gender }}</td>
                     @for (col of markColumns(); track col.columnKey) {
                       <td
                         class="mark-cell"
@@ -236,21 +237,61 @@
                           class="mark-input"
                           [min]="0"
                           [max]="maxMarks()"
-                          [ngModel]="row.marksByColumn[col.columnKey].marks"
+                          [class.invalid]="isInvalid(row.studentId, col.columnKey)"
+                          [ngModel]="markValue(row.studentId, col.columnKey)"
                           (ngModelChange)="onMarkInput(row.studentId, col.columnKey, $event)"
-                          (focus)="onCellFocus(row.studentId)"
-                          (blur)="onCellBlur(row.studentId)"
+                          (blur)="onCellBlur()"
                           [name]="row.studentId + '-' + col.columnKey"
                         />
                       </td>
                     }
                   </tr>
                 }
+                <tr class="topic-row">
+                  <td
+                    class="sticky col-fixed topic-label"
+                    [style.width.px]="colWidth('studentId')"
+                    [style.minWidth.px]="colWidth('studentId')"
+                    [style.left.px]="stickyLeft('studentId')"
+                  >Topic</td>
+                  <td
+                    class="sticky col-fixed topic-blank"
+                    [style.width.px]="colWidth('lastName')"
+                    [style.minWidth.px]="colWidth('lastName')"
+                    [style.left.px]="stickyLeft('lastName')"
+                  ></td>
+                  <td
+                    class="sticky col-fixed topic-blank"
+                    [style.width.px]="colWidth('firstName')"
+                    [style.minWidth.px]="colWidth('firstName')"
+                    [style.left.px]="stickyLeft('firstName')"
+                  ></td>
+                  @for (col of markColumns(); track col.columnKey) {
+                    <td
+                      class="topic-cell"
+                      [style.width.px]="colWidth(col.columnKey)"
+                      [style.minWidth.px]="colWidth(col.columnKey)"
+                    >
+                      <textarea
+                        class="topic-input"
+                        rows="1"
+                        placeholder="Topic"
+                        aria-label="Topic for this set of marks"
+                        [attr.maxlength]="maxTopicLength"
+                        [ngModel]="topicFor(col.columnKey)"
+                        (ngModelChange)="onTopicInput(col.columnKey, $event)"
+                        (blur)="onCellBlur()"
+                        [name]="'topic-' + col.columnKey"
+                        (keydown.enter)="$event.preventDefault()"
+                      ></textarea>
+                    </td>
+                  }
+                </tr>
               </tbody>
             </table>
           </div>
           @if (!markColumns().length) {
-            <p class="grid-hint">No test columns yet. Click the <strong>+</strong> button above the table to add Test 1, Test 2, and more.</p>
+            <p class="grid-hint">No mark columns yet. Click the <strong>+</strong> button above the table to add one, then enter its topic (e.g. Algebra) in the Topic row.</p>
           }
         </section>
       </div>

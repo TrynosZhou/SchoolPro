@@ -1,0 +1,1239 @@
+// =============================================================
+// FINANCE CLASSIC — shared layer for the Finance Reports pages
+//   Outstanding invoices · Debtor aging · Fee collection & revenue
+//   Student reconciliation
+//
+// Builds on admin-classic (navy #0f1d36 · brass #b8924a ·
+// Cormorant Garamond headings · hairline borders · 2–3px corners).
+// Adds the finance-specific pieces: report filters, ledger tables,
+// status marks, aging bars, summary panels and record cards.
+//
+// Usage (last lines of each page stylesheet):
+//   @use '../../../styles/admin-classic' as classic;
+//   @use '../../../styles/finance-classic' as finance;
+//   @include classic.page;
+//   @include finance.page;
+// =============================================================
+
+@mixin page {
+  :host {
+    // Finance-specific tones. Muted, ledger-like — no neon greens or reds.
+    --fin-paper: #fbfaf7;          // parchment band behind toolbars
+    --fin-rule: #e3ddd0;           // warm hairline
+    --fin-ok: #1f6b46;
+    --fin-ok-bg: #edf6f0;
+    --fin-warn: #7a5a1f;
+    --fin-warn-bg: rgba(184, 146, 74, 0.14);
+    --fin-bad: #8a1c2b;            // burgundy
+    --fin-bad-bg: #f8ecee;
+    --fin-info: #16294a;
+    --fin-info-bg: #eef1f6;
+
+    display: block;
+  }
+
+  // ── Page rhythm ─────────────────────────────────────────────
+  :host .outstanding-page,
+  :host .aging-page,
+  :host .revenue-page,
+  :host .recon-page {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-5);
+    font-feature-settings: 'tnum' 1, 'lnum' 1;
+  }
+
+  // ── Hero ────────────────────────────────────────────────────
+  :host .hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) minmax(320px, 1fr);
+    gap: var(--space-8);
+    align-items: start;
+    color: var(--color-text-primary) !important;
+
+    @media (max-width: 960px) {
+      grid-template-columns: 1fr;
+      gap: var(--space-5);
+    }
+  }
+
+  :host .hero .hero-copy h2 {
+    font-size: 2.6rem;
+    padding-bottom: var(--space-3);
+    margin-bottom: var(--space-3);
+    border-bottom: 1px solid var(--fin-rule);
+  }
+
+  :host .hero .hero-copy .hero-sub {
+    max-width: 36rem;
+    margin: 0 0 var(--space-4);
+  }
+
+  :host .hero-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+
+  :host .access-badge {
+    display: inline-block;
+    margin: 0 var(--space-1);
+    padding: 0.1rem 0.5rem;
+    border-radius: 2px;
+    border: 1px solid rgba(184, 146, 74, 0.5);
+    background: var(--fin-warn-bg) !important;
+    color: var(--fin-warn) !important;
+    font-size: var(--font-size-xs);
+    font-weight: 700;
+    letter-spacing: 0.04em;
+  }
+
+  // ── KPI tiles (right-hand side of hero) ─────────────────────
+  :host .hero .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-3);
+
+    @media (max-width: 520px) {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  :host .hero .kpi {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    min-width: 0;
+
+    strong {
+      display: block;
+      font-size: 1.85rem;
+      line-height: 1.05;
+      white-space: nowrap;
+    }
+
+    span:not(.kpi-icon) {
+      display: block;
+      margin-top: 0.2rem;
+      font-size: var(--font-size-xs);
+      font-weight: 600;
+      letter-spacing: 0.03em;
+      color: var(--color-text-muted) !important;
+    }
+
+    &.highlight {
+      grid-column: 1 / -1;
+      background: var(--navy) !important;
+      border-color: var(--navy) !important;
+      border-top-color: var(--brass) !important;
+
+      strong {
+        font-size: 2.3rem;
+        color: #fff !important;
+      }
+
+      span:not(.kpi-icon) {
+        color: rgba(255, 255, 255, 0.72) !important;
+      }
+
+      .kpi-icon {
+        border-color: rgba(255, 255, 255, 0.35);
+        color: #fff !important;
+      }
+    }
+
+    &.warn strong {
+      color: var(--fin-warn) !important;
+    }
+
+    &.bad strong {
+      color: var(--fin-bad) !important;
+    }
+
+    &.ok strong {
+      color: var(--fin-ok) !important;
+    }
+  }
+
+  // Emoji glyphs read as stamped marks rather than colourful stickers.
+  :host .kpi .kpi-icon {
+    font-size: 1rem;
+    filter: grayscale(1) contrast(1.15);
+    opacity: 0.85;
+  }
+
+  // ── Alert strip (debtor aging) ──────────────────────────────
+  :host .alert-banner {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2) var(--space-5);
+    padding: var(--space-3) var(--space-4);
+    font-size: var(--font-size-base);
+
+    .alert-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-4);
+    }
+
+    .link-btn {
+      padding: 0;
+      border: 0;
+      background: none !important;
+      font-size: var(--font-size-sm);
+      cursor: pointer;
+    }
+  }
+
+  // ── Shells: filter panel, results, summaries ────────────────
+  :host .list-shell,
+  :host .summary-shell,
+  :host .panel-shell,
+  :host .results-shell,
+  :host .notes-shell,
+  :host .match-panel {
+    background: var(--color-bg) !important;
+    border: 1px solid var(--color-border) !important;
+    border-radius: 3px !important;
+    box-shadow: none !important;
+  }
+
+  :host .summary-shell,
+  :host .panel-shell,
+  :host .notes-shell {
+    padding: var(--space-5) var(--space-6);
+  }
+
+  :host .list-toolbar {
+    padding: var(--space-5) var(--space-6);
+    background: var(--fin-paper) !important;
+    border-bottom: 1px solid var(--color-border) !important;
+
+    h3 {
+      margin: 0 0 var(--space-1);
+      font-family: var(--serif);
+      font-size: 1.6rem;
+      font-weight: 600;
+      line-height: 1.1;
+      color: var(--navy) !important;
+    }
+
+    > p,
+    .toolbar-head p {
+      margin: 0;
+      color: var(--color-text-secondary) !important;
+      font-size: var(--font-size-base);
+    }
+  }
+
+  :host .summary-head h3,
+  :host .panel-shell h3,
+  :host .notes-head h3,
+  :host .detail-card h4 {
+    font-family: var(--serif);
+    font-weight: 600;
+    color: var(--navy) !important;
+  }
+
+  :host .summary-head h3,
+  :host .panel-shell h3 {
+    font-size: 1.5rem;
+  }
+
+  :host .period,
+  :host .panel-shell .sub {
+    color: var(--color-text-muted) !important;
+    font-size: var(--font-size-sm);
+  }
+
+  :host .toolbar-head {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: var(--space-3) var(--space-5);
+    margin-bottom: var(--space-4);
+  }
+
+  :host .toolbar-head-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-3);
+  }
+
+  // ── Term selector (Term 1 / Term 3 / Term 2 Current) ────────
+  :host .term-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    margin: var(--space-3) 0 var(--space-4);
+  }
+
+  :host .term-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: 0.4rem 0.95rem;
+    border: 1px solid var(--color-border-strong) !important;
+    border-radius: 2px !important;
+    background: var(--color-bg) !important;
+    color: var(--navy) !important;
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    cursor: pointer;
+    transition: border-color var(--transition-base), background var(--transition-base);
+
+    &:hover {
+      border-color: var(--navy) !important;
+    }
+
+    &.active {
+      background: var(--navy) !important;
+      border-color: var(--navy) !important;
+      color: #fff !important;
+      box-shadow: inset 0 -3px 0 var(--brass);
+    }
+  }
+
+  :host .current-dot {
+    padding: 0.05rem 0.4rem;
+    border-radius: 2px !important;
+    background: var(--brass-soft) !important;
+    color: var(--brass-ink) !important;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  :host .term-chip.active .current-dot {
+    background: rgba(255, 255, 255, 0.16) !important;
+    color: #f1dfb8 !important;
+  }
+
+  // ── Filter form ─────────────────────────────────────────────
+  :host .filter-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+    gap: var(--space-4) var(--space-5);
+  }
+
+  :host .filter-grid .span-2 {
+    grid-column: span 2;
+
+    @media (max-width: 640px) {
+      grid-column: auto;
+    }
+  }
+
+  :host .field,
+  :host .field-row {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    min-width: 0;
+
+    label,
+    > span:first-child {
+      font-size: var(--font-size-xs) !important;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--color-text-muted) !important;
+    }
+  }
+
+  :host .field-row {
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+  }
+
+  :host select,
+  :host input[type='date'],
+  :host input[type='text'],
+  :host input[type='search'],
+  :host .search-input,
+  :host .sort-select {
+    border: 1px solid var(--color-border-strong) !important;
+    border-radius: 2px !important;
+    background-color: var(--color-bg) !important;
+    color: var(--navy) !important;
+    box-shadow: none !important;
+    transition: border-color var(--transition-base), box-shadow var(--transition-base);
+
+    &:hover:not(:disabled) {
+      border-color: var(--navy) !important;
+    }
+
+    &:focus {
+      outline: none;
+      border-color: var(--navy) !important;
+      box-shadow: 0 0 0 3px var(--brass-soft) !important;
+    }
+
+    &:disabled {
+      background-color: var(--color-bg-muted) !important;
+      color: var(--color-text-muted) !important;
+    }
+  }
+
+  :host .search-wrap {
+    position: relative;
+    min-width: 0;
+
+    .search-icon {
+      color: var(--color-text-muted);
+    }
+
+    .clear-search {
+      color: var(--color-text-muted);
+      background: none !important;
+      border: 0;
+      cursor: pointer;
+
+      &:hover {
+        color: var(--navy);
+      }
+    }
+  }
+
+  :host .action-row,
+  :host .search-row,
+  :host .toolbar-row,
+  :host .pdf-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-3);
+  }
+
+  :host .action-row {
+    margin-top: var(--space-5);
+    padding-top: var(--space-4);
+    border-top: 1px solid var(--fin-rule);
+  }
+
+  :host .toolbar-row {
+    justify-content: space-between;
+    margin-top: var(--space-4);
+  }
+
+  // ── Buttons specific to these pages ─────────────────────────
+  :host .btn-preview-pdf,
+  :host .btn-download-pdf,
+  :host .btn-get-balance,
+  :host .btn-collect,
+  :host .pay-btn,
+  :host .btn-pdf {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    padding: 0.5rem 1.1rem;
+    border-radius: 2px !important;
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background var(--transition-base), border-color var(--transition-base);
+
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+  }
+
+  :host .btn-download-pdf,
+  :host .btn-get-balance,
+  :host .btn-collect,
+  :host .pay-btn {
+    background: var(--navy) !important;
+    border: 1px solid var(--navy) !important;
+    color: #fff !important;
+    box-shadow: inset 0 -3px 0 var(--brass);
+
+    &:hover:not(:disabled) {
+      background: var(--navy-2) !important;
+    }
+  }
+
+  :host .btn-preview-pdf {
+    background: var(--color-bg) !important;
+    border: 1px solid var(--navy) !important;
+    color: var(--navy) !important;
+
+    &:hover:not(:disabled) {
+      background: var(--fin-info-bg) !important;
+    }
+  }
+
+  :host .pay-btn,
+  :host .micro-btn {
+    padding: 0.25rem 0.7rem;
+    font-size: var(--font-size-xs);
+  }
+
+  :host .micro-btn {
+    border: 1px solid var(--color-border-strong);
+    border-radius: 2px;
+    background: var(--color-bg);
+    color: var(--navy);
+    font-weight: 600;
+    cursor: pointer;
+
+    &:hover:not(:disabled) {
+      border-color: var(--navy);
+      background: var(--fin-info-bg);
+    }
+  }
+
+  // ── Segmented view switch ───────────────────────────────────
+  :host .view-tabs {
+    display: inline-flex;
+    flex-wrap: nowrap;
+    gap: 0;
+    border: 1px solid var(--color-border-strong);
+    border-radius: 2px;
+    overflow: hidden;
+    background: var(--color-bg);
+
+    button {
+      padding: 0.45rem 0.95rem;
+      border: 0 !important;
+      border-right: 1px solid var(--color-border-strong) !important;
+      border-radius: 0 !important;
+      background: transparent !important;
+      color: var(--navy) !important;
+      font-size: var(--font-size-sm);
+      font-weight: 600;
+      cursor: pointer;
+
+      &:last-child {
+        border-right: 0 !important;
+      }
+
+      &:hover:not(.active) {
+        background: var(--color-bg-subtle) !important;
+      }
+
+      &.active {
+        background: var(--navy) !important;
+        color: #fff !important;
+        box-shadow: inset 0 -3px 0 var(--brass);
+      }
+    }
+  }
+
+  // ── Filter chips (all / overdue / due soon …) ───────────────
+  :host .filter-chips,
+  :host .class-chips,
+  :host .bucket-chips,
+  :host .student-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+
+  :host .chip-filter,
+  :host .class-chip,
+  :host .bucket-chip,
+  :host .chip-stat {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: 0.32rem 0.8rem;
+    border: 1px solid var(--color-border-strong) !important;
+    border-radius: 2px !important;
+    background: var(--color-bg) !important;
+    color: var(--navy) !important;
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    cursor: pointer;
+    transition: border-color var(--transition-base), background var(--transition-base);
+
+    &:hover {
+      border-color: var(--navy) !important;
+    }
+
+    &.active {
+      background: var(--navy) !important;
+      border-color: var(--navy) !important;
+      color: #fff !important;
+      box-shadow: inset 0 -2px 0 var(--brass);
+    }
+
+    // Semantic chips keep an accent edge instead of changing the whole fill
+    &.ok { border-left: 3px solid var(--fin-ok) !important; }
+    &.warn { border-left: 3px solid var(--brass) !important; }
+    &.bad,
+    &.overdue { border-left: 3px solid var(--fin-bad) !important; }
+    &.issues { border-left: 3px solid var(--fin-bad) !important; }
+  }
+
+  :host .chip-amt {
+    font-weight: 500;
+    color: var(--color-text-muted) !important;
+    font-variant-numeric: tabular-nums;
+  }
+
+  :host .chip-filter.active .chip-amt,
+  :host .class-chip.active .chip-amt {
+    color: rgba(255, 255, 255, 0.75) !important;
+  }
+
+  :host .chip-stat {
+    cursor: default;
+    background: var(--fin-paper) !important;
+  }
+
+  :host .results-meta {
+    margin: var(--space-3) 0 0;
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary) !important;
+
+    strong {
+      color: var(--navy);
+    }
+
+    .warn-text,
+    .bad-text {
+      color: var(--fin-bad) !important;
+      font-weight: 600;
+    }
+  }
+
+  // ── Summary cards ───────────────────────────────────────────
+  :host .summary-grid,
+  :host .metric-grid,
+  :host .proj-grid,
+  :host .method-grid,
+  :host .match-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(11.5rem, 1fr));
+    gap: var(--space-3);
+  }
+
+  :host .summary-card,
+  :host .method-card,
+  :host .match-card,
+  :host .schedule-card,
+  :host .detail-card,
+  :host .bucket-card {
+    padding: var(--space-3) var(--space-4);
+    border: 1px solid var(--color-border) !important;
+    border-left: 3px solid var(--navy) !important;
+    border-radius: 2px !important;
+    background: var(--fin-paper) !important;
+    box-shadow: none !important;
+
+    &.credit,
+    &.ok { border-left-color: var(--fin-ok) !important; }
+    &.warn { border-left-color: var(--brass) !important; }
+    &.bad { border-left-color: var(--fin-bad) !important; }
+  }
+
+  :host .summary-card {
+    span,
+    small {
+      font-size: var(--font-size-xs);
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      color: var(--color-text-muted) !important;
+    }
+
+    strong {
+      display: block;
+      margin-top: 0.15rem;
+      font-family: var(--serif);
+      font-size: 1.7rem;
+      font-weight: 600;
+      line-height: 1.1;
+      color: var(--navy) !important;
+      font-variant-numeric: tabular-nums;
+    }
+
+    &.credit strong { color: var(--fin-ok) !important; }
+    &.bad strong { color: var(--fin-bad) !important; }
+  }
+
+  // ── Aging buckets & bar charts ──────────────────────────────
+  :host .bucket-chart,
+  :host .chart-bars {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  :host .bucket-row,
+  :host .bar-row {
+    border-radius: 2px !important;
+    transition: background var(--transition-base);
+
+    &.clickable:hover {
+      background: var(--fin-paper) !important;
+    }
+
+    .bucket-label,
+    .bar-label {
+      font-size: var(--font-size-sm);
+      font-weight: 600;
+      color: var(--navy);
+    }
+
+    .bar-val {
+      font-variant-numeric: tabular-nums;
+      font-weight: 600;
+      color: var(--navy);
+    }
+  }
+
+  :host .bucket-track,
+  :host .bar-track,
+  :host .rate-track,
+  :host .method-bar,
+  :host .capacity-track {
+    height: 0.7rem;
+    border-radius: 1px !important;
+    background: #ece8dd !important;
+    overflow: hidden;
+  }
+
+  :host .bucket-fill,
+  :host .bar-fill,
+  :host .rate-fill,
+  :host .method-fill,
+  :host .aging-seg {
+    border-radius: 0 !important;
+    background-image: none !important;
+  }
+
+  // Graded from sober navy (current) to burgundy (critical)
+  :host .bucket-row[data-tone='current'] .bucket-fill { background: #2d6a4f !important; }
+  :host .bucket-row[data-tone='mid'] .bucket-fill { background: #16294a !important; }
+  :host .bucket-row[data-tone='warn'] .bucket-fill { background: #b8924a !important; }
+  :host .bucket-row[data-tone='bad'] .bucket-fill { background: #a4533a !important; }
+  :host .bucket-row[data-tone='critical'] .bucket-fill { background: #8a1c2b !important; }
+
+  :host .bar-fill {
+    &.blue { background: #16294a !important; }
+    &.green { background: #2d6a4f !important; }
+    &.muted { background: #9aa3b2 !important; }
+    &.purple { background: #5b4a7a !important; }
+    &.orange { background: #b8924a !important; }
+  }
+
+  :host .rate-fill {
+    background: #2d6a4f !important;
+  }
+
+  :host .rate-label,
+  :host .legend {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+  }
+
+  :host .legend .dot {
+    border-radius: 1px !important;
+  }
+
+  // ── Revenue-page tabs ───────────────────────────────────────
+  :host .tab-nav {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: var(--space-1);
+    padding: 0 var(--space-6);
+    background: var(--fin-paper) !important;
+    border-bottom: 1px solid var(--color-border) !important;
+
+    button {
+      padding: 0.75rem 1.1rem;
+      font-size: var(--font-size-base);
+    }
+  }
+
+  :host .tab-search {
+    margin-left: auto;
+    padding-bottom: var(--space-2);
+  }
+
+  // ── Ledger tables ───────────────────────────────────────────
+  :host .table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    border-radius: 0;
+  }
+
+  :host .invoice-table,
+  :host .aging-table,
+  :host .recon-table,
+  :host .data-table,
+  :host .txn-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--font-size-base);
+
+    th,
+    td {
+      padding: 0.7rem 0.9rem;
+      border: 0 !important;
+      border-bottom: 1px solid var(--fin-rule) !important;
+      vertical-align: middle;
+    }
+
+    th {
+      font-size: var(--font-size-xs);
+      letter-spacing: 0.07em;
+    }
+
+    th.num,
+    td.num {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+
+    tbody tr:nth-child(even) td {
+      background: var(--fin-paper);
+    }
+
+    tbody tr:hover td {
+      background: var(--fin-info-bg);
+    }
+
+    tfoot td {
+      border-top: 2px solid var(--navy) !important;
+      background: var(--fin-paper) !important;
+      font-weight: 700;
+      color: var(--navy);
+    }
+  }
+
+  :host .num {
+    &.paid { color: var(--fin-ok) !important; }
+    &.balance strong,
+    &.balance { color: var(--navy); }
+    &.balance strong { font-weight: 700; }
+  }
+
+  :host .has-variance {
+    color: var(--fin-bad) !important;
+    font-weight: 700;
+  }
+
+  :host .name-cell {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    min-width: 0;
+
+    strong {
+      color: var(--navy);
+      font-weight: 600;
+    }
+  }
+
+  :host .sid,
+  :host .ref,
+  :host .sub-id {
+    padding: 0.1rem 0.4rem;
+    border: 1px solid var(--fin-rule);
+    border-radius: 2px !important;
+    background: var(--color-bg) !important;
+    color: var(--color-text-secondary) !important;
+    font-family: var(--font-family-mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.02em;
+  }
+
+  :host .class-meta,
+  :host .sub-meta,
+  :host .muted {
+    color: var(--color-text-muted) !important;
+    font-size: var(--font-size-sm);
+  }
+
+  :host .due {
+    font-variant-numeric: tabular-nums;
+
+    &.overdue { color: var(--fin-bad) !important; font-weight: 700; }
+    &.soon { color: var(--fin-warn) !important; font-weight: 700; }
+  }
+
+  :host .expand-cell,
+  :host .sel-col {
+    width: 2.5rem;
+    text-align: center;
+  }
+
+  :host .expand-cell button,
+  :host .toggle {
+    border: 0;
+    background: none;
+    color: var(--navy);
+    cursor: pointer;
+  }
+
+  // ── Status marks ────────────────────────────────────────────
+  :host .status-pill,
+  :host .flag,
+  :host .balance-pill,
+  :host .yn {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.12rem 0.55rem;
+    border: 1px solid transparent;
+    border-radius: 2px !important;
+    font-size: var(--font-size-xs);
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+  }
+
+  :host .status-pill,
+  :host .flag {
+    &.ok,
+    &.paid,
+    &.status-reconciled {
+      background: var(--fin-ok-bg) !important;
+      border-color: rgba(31, 107, 70, 0.3);
+      color: var(--fin-ok) !important;
+    }
+
+    &.warn,
+    &.status-pending,
+    &.soon {
+      background: var(--fin-warn-bg) !important;
+      border-color: rgba(184, 146, 74, 0.45);
+      color: var(--fin-warn) !important;
+    }
+
+    &.bad,
+    &.overdue,
+    &.status-unreconciled {
+      background: var(--fin-bad-bg) !important;
+      border-color: rgba(138, 28, 43, 0.3);
+      color: var(--fin-bad) !important;
+    }
+  }
+
+  :host .status-reconciled {
+    background: var(--fin-ok-bg) !important;
+    color: var(--fin-ok) !important;
+  }
+
+  :host .status-pending {
+    background: var(--fin-warn-bg) !important;
+    color: var(--fin-warn) !important;
+  }
+
+  :host .status-unreconciled {
+    background: var(--fin-bad-bg) !important;
+    color: var(--fin-bad) !important;
+  }
+
+  :host .balance-pill {
+    background: var(--fin-bad-bg) !important;
+    border-color: rgba(138, 28, 43, 0.25);
+    color: var(--fin-bad) !important;
+    font-variant-numeric: tabular-nums;
+  }
+
+  // ── Avatars ─────────────────────────────────────────────────
+  :host .avatar {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    border-radius: 50% !important;
+    background: var(--navy) !important;
+    color: #f1dfb8 !important;
+    border: 1px solid var(--brass);
+    font-family: var(--serif);
+    font-weight: 700;
+  }
+
+  // ── Class groups (outstanding invoices) ─────────────────────
+  :host .group-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    padding: var(--space-5) var(--space-6);
+  }
+
+  :host .group-panel {
+    border: 1px solid var(--color-border) !important;
+    border-radius: 3px !important;
+    background: var(--color-bg) !important;
+    overflow: hidden;
+    box-shadow: none !important;
+  }
+
+  :host .group-toggle {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    width: 100%;
+    padding: var(--space-3) var(--space-5);
+    border: 0 !important;
+    border-bottom: 1px solid var(--color-border) !important;
+    border-left: 3px solid var(--brass) !important;
+    background: var(--fin-paper) !important;
+    color: var(--navy) !important;
+    text-align: left;
+    cursor: pointer;
+
+    &:hover {
+      background: var(--fin-info-bg) !important;
+    }
+  }
+
+  :host .group-title {
+    font-family: var(--serif);
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--navy);
+  }
+
+  :host .group-total,
+  :host .student-total {
+    margin-left: auto;
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    color: var(--navy) !important;
+  }
+
+  // ── Student balance lookup ──────────────────────────────────
+  :host .balance-lookup-result,
+  :host .balance-pick-card {
+    border: 1px solid var(--color-border) !important;
+    border-left: 3px solid var(--brass) !important;
+    border-radius: 2px !important;
+    background: var(--color-bg) !important;
+    box-shadow: none !important;
+  }
+
+  :host .balance-lookup-empty {
+    border-radius: 2px !important;
+    background: var(--fin-warn-bg) !important;
+    border: 1px solid rgba(184, 146, 74, 0.45) !important;
+    border-left: 3px solid var(--brass) !important;
+    color: var(--fin-warn) !important;
+  }
+
+  :host .balance-pick-card:hover {
+    border-color: var(--navy) !important;
+    background: var(--fin-paper) !important;
+  }
+
+  // ── Record cards (cards view) ───────────────────────────────
+  :host .card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(19rem, 1fr));
+    gap: var(--space-4);
+    padding: var(--space-5) var(--space-6);
+  }
+
+  :host .student-card,
+  :host .debtor-card {
+    padding: var(--space-4) var(--space-5);
+    border: 1px solid var(--color-border) !important;
+    border-top: 3px solid var(--brass) !important;
+    border-radius: 3px !important;
+    background: var(--color-bg) !important;
+    box-shadow: none !important;
+
+    &.escalate { border-top-color: var(--fin-warn) !important; }
+    &.bad-debt { border-top-color: var(--fin-bad) !important; }
+  }
+
+  :host .card-head {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    margin-bottom: var(--space-3);
+    padding-bottom: var(--space-3);
+    border-bottom: 1px solid var(--fin-rule);
+  }
+
+  :host .invoice-list {
+    border: 0;
+    border-top: 1px solid var(--fin-rule);
+
+    li,
+    > div {
+      border-bottom: 1px dashed var(--fin-rule);
+    }
+  }
+
+  // ── Expanded detail rows ────────────────────────────────────
+  :host .detail-row td {
+    padding: 0 !important;
+    background: var(--fin-paper) !important;
+  }
+
+  :host .detail-panel,
+  :host .inline-detail,
+  :host .inline-notes,
+  :host .guardian-strip,
+  :host .discrepancy-box {
+    border-radius: 2px !important;
+    box-shadow: none !important;
+  }
+
+  :host .detail-panel {
+    padding: var(--space-5) var(--space-6);
+    background: var(--fin-paper) !important;
+    border-left: 3px solid var(--brass) !important;
+  }
+
+  :host .guardian-strip,
+  :host .inline-notes {
+    border: 1px solid var(--color-border) !important;
+    background: var(--color-bg) !important;
+  }
+
+  :host .discrepancy-box {
+    background: var(--fin-bad-bg) !important;
+    border: 1px solid rgba(138, 28, 43, 0.3) !important;
+    border-left: 3px solid var(--fin-bad) !important;
+    color: var(--fin-bad) !important;
+  }
+
+  :host .detail-cols {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+    gap: var(--space-4);
+  }
+
+  :host .note-item {
+    border: 1px solid var(--color-border) !important;
+    border-left: 3px solid var(--brass) !important;
+    border-radius: 2px !important;
+    background: var(--color-bg) !important;
+  }
+
+  // ── Loading & empty ─────────────────────────────────────────
+  :host .loading-panel {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-3);
+    padding: var(--space-10);
+    color: var(--color-text-secondary);
+    font-weight: 600;
+  }
+
+  :host .spinner {
+    border-color: var(--fin-rule) !important;
+    border-top-color: var(--brass) !important;
+  }
+
+  :host .empty-state,
+  :host .empty-state.standalone {
+    padding: var(--space-10) var(--space-6);
+    border-radius: 3px !important;
+    text-align: center;
+    color: var(--color-text-secondary);
+
+    h3 {
+      font-family: var(--serif);
+      font-size: 1.5rem;
+      color: var(--navy) !important;
+    }
+
+    &.standalone {
+      border: 1px dashed var(--color-border-strong) !important;
+      background: var(--fin-paper) !important;
+    }
+  }
+
+  :host .empty-icon {
+    filter: grayscale(1);
+    opacity: 0.6;
+  }
+
+  // ── Focus (keyboard) ────────────────────────────────────────
+  :host button:focus-visible,
+  :host a:focus-visible,
+  :host [tabindex]:focus-visible {
+    outline: 2px solid var(--brass);
+    outline-offset: 2px;
+  }
+
+  // ── Dark theme ──────────────────────────────────────────────
+  :host-context([data-theme='dark']) {
+    --fin-paper: #16181d;
+    --fin-rule: #2a2d35;
+    --fin-ok: #7bd1a0;
+    --fin-ok-bg: rgba(123, 209, 160, 0.12);
+    --fin-warn: #e2c27d;
+    --fin-bad: #f1a0aa;
+    --fin-bad-bg: rgba(241, 160, 170, 0.12);
+    --fin-info: #cdd7ea;
+    --fin-info-bg: rgba(205, 215, 234, 0.08);
+  }
+
+  :host-context([data-theme='dark']) .bucket-track,
+  :host-context([data-theme='dark']) .bar-track,
+  :host-context([data-theme='dark']) .rate-track,
+  :host-context([data-theme='dark']) .method-bar {
+    background: #262a33 !important;
+  }
+
+  // ── Responsive ──────────────────────────────────────────────
+  @media (max-width: 720px) {
+    :host .hero .hero-copy h2 {
+      font-size: 2rem;
+    }
+
+    :host .list-toolbar,
+    :host .summary-shell,
+    :host .panel-shell,
+    :host .notes-shell,
+    :host .group-list,
+    :host .card-grid {
+      padding-left: var(--space-4);
+      padding-right: var(--space-4);
+    }
+
+    :host .toolbar-head-actions,
+    :host .pdf-actions {
+      width: 100%;
+    }
+
+    :host .tab-nav {
+      padding: 0 var(--space-2);
+      overflow-x: auto;
+      flex-wrap: nowrap;
+    }
+  }
+
+  // ── Print: keep the report ink-friendly ─────────────────────
+  @media print {
+    :host .hero,
+    :host .kpi,
+    :host .summary-card,
+    :host .list-shell {
+      box-shadow: none !important;
+      break-inside: avoid;
+    }
+
+    :host .kpi.highlight {
+      background: #fff !important;
+      border-color: var(--color-border) !important;
+
+      strong {
+        color: var(--navy) !important;
+      }
+    }
+  }
+}

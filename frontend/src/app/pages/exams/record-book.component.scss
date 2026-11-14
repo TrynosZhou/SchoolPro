@@ -118,6 +118,16 @@
   color: var(--color-text-secondary);
 }
 
+.save-status {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: #166534;
+
+  &.saving { color: var(--color-text-secondary); }
+  &.error { color: #b42318; }
+}
+
 .btn-add-column {
   display: inline-flex;
   align-items: center;
@@ -144,7 +154,7 @@
     box-shadow: inset 0 -3px 0 var(--brass), var(--ac-ring);
   }
 
-  &:disabled { opacity: 0.6; cursor: wait; }
+  &:disabled { opacity: 0.4; cursor: not-allowed; }
 
   .spinner {
     width: 14px;
@@ -293,8 +303,65 @@
   tbody tr:nth-child(even) td { background: var(--ivory); }
   tbody tr:hover td { background: var(--brass-soft); }
 
-  tr.row-saving .mark-cell { background: #f0f5fc; }
-  tr.row-error .mark-cell { background: #fdf1f0; box-shadow: inset 0 -2px 0 #b42318; }
+  // Topic row: pinned to the bottom of the table, topic written vertically (e.g. "Algebra").
+  .topic-row {
+    td {
+      position: sticky;
+      bottom: 0;
+      z-index: 2;
+      height: 9rem;
+      background: #fff;
+      border-top: 2px solid var(--brass);
+    }
+
+    td.sticky { z-index: 3; }
+
+    .topic-label {
+      padding: 0.5rem 0.85rem;
+      vertical-align: bottom;
+      font-weight: 700;
+      color: var(--navy);
+    }
+
+    .topic-cell { padding: 0; }
+  }
+
+  .topic-input {
+    display: block;
+    width: 100%;
+    height: 9rem;
+    margin: 0;
+    padding: 0.5rem 0.2rem;
+    border: none;
+    background: transparent;
+    resize: none;
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+    text-align: left;
+    font-family: inherit;
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--navy);
+    outline: none;
+    box-sizing: border-box;
+    overflow: hidden;
+
+    &::placeholder { color: #a8b0bd; font-weight: 500; }
+    &:hover { background: var(--ivory); }
+    &:focus {
+      background: #fff;
+      box-shadow: inset 0 0 0 2px var(--brass);
+    }
+  }
+
+  tbody tr.topic-row:hover td { background: #fff; }
+  tbody tr.topic-row:nth-child(even) td { background: #fff; }
+
+  .mark-input.invalid {
+    background: #fdf1f0;
+    color: #b42318;
+    box-shadow: inset 0 -2px 0 #b42318;
+  }
 }
 
 // ── Empty state ──

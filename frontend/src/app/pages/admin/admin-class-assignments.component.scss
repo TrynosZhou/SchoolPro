@@ -1054,3 +1054,18 @@
 .modal {
   border-top: 3px solid #b08d3c;
 }
+
+.pending-lessons {
+  ul {
+    margin: 0.5rem 0 0.9rem 1.1rem;
+    padding: 0;
+  }
+  li {
+    margin: 0.2rem 0;
+  }
+  .muted {
+    margin-top: 0.6rem;
+    opacity: 0.75;
+    font-size: 0.85em;
+  }
+}

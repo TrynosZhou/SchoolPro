@@ -136,22 +136,26 @@
                   </tr>
                 </thead>
                 <tbody>
-                  @for (d of days; track d.value) {
+                  @for (d of days; track d.value; let di = $index) {
                     <tr>
                       <td class="day-col-classic">{{ dayGridLabel(d.value) }}</td>
                       @for (p of periods(); track p.id) {
-                        <td class="slot-cell" [class.break-slot]="isBreakPeriod(p)">
-                          @if (isBreakPeriod(p)) {
-                            <div class="break-cell">{{ p.name }}</div>
-                          } @else {
+                        @if (isBreakPeriod(p)) {
+                          @if (di === 0) {
+                            <td class="slot-cell break-slot" [attr.rowspan]="days.length">
+                              <div class="break-cell-vertical">{{ breakColumnVerticalLabel(p) }}</div>
+                            </td>
+                          }
+                        } @else {
+                          <td class="slot-cell">
                             @if (allocationAt(d.value, p); as a) {
                               <div class="lesson-cell teacher-lesson">
                                 <span class="lesson-corner tl">{{ subjectShortLabel(a) }}</span>
                                 <span class="lesson-main">{{ classShort(a) }}</span>
                               </div>
                             }
-                          }
-                        </td>
+                          </td>
+                        }
                       }
                     </tr>
                   }

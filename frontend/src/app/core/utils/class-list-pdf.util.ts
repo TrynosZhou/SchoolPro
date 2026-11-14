@@ -98,7 +98,7 @@ function typeInfo(t?: string | null): { text: string; color: Rgb | null } {
   return { text: '-', color: null };
 }
 
-async function loadImage(url?: string | null): Promise<string | null> {
+export async function loadImage(url?: string | null): Promise<string | null> {
   if (!url) return null;
   if (url.startsWith('data:image/')) return url;
   try {
@@ -155,7 +155,7 @@ function drawCrest(doc: Doc, dataUrl: string | null, schoolName: string, x: numb
   });
 }
 
-function drawLetterhead(doc: Doc, b: ClassListPdfBranding, logo: string | null): number {
+export function drawLetterhead(doc: Doc, b: ClassListPdfBranding, logo: string | null): number {
   const top = 14;
   const crest = 20;
   const schoolName = b.schoolName?.trim() || 'School Pro Academy';

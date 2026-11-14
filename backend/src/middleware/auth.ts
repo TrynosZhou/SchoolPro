@@ -3,6 +3,7 @@ import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { env } from '../config/env';
 import { UserRole } from '../entities/enums';
+import { DEFAULT_ROLE_PERMISSIONS } from '../config/permissions';
 
 export interface AuthPayload {
   userId: string;
@@ -73,6 +74,11 @@ export function authorizePermission(...required: string[]) {
       return next();
     }
     const granted = new Set(req.user.permissions ?? []);
+    // Teachers always hold the standard teacher permissions (covers sessions issued before
+    // the baseline was enforced, so no re-login is needed).
+    if (req.user.role === UserRole.TEACHER) {
+      DEFAULT_ROLE_PERMISSIONS[UserRole.TEACHER].forEach((k) => granted.add(k));
+    }
     if (required.some((key) => granted.has(key))) {
       return next();
     }

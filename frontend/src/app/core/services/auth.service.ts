@@ -1,6 +1,6 @@
 import { Injectable, inject, signal, computed } from '@angular/core';
 import { Router } from '@angular/router';
-import { tap } from 'rxjs/operators';
+import { map, tap } from 'rxjs/operators';
 import { ApiService } from './api.service';
 import { AuthResponse, User, UserRole } from '../models';
 import { changePasswordPathForRole } from '../utils/change-password-route.util';
@@ -25,10 +25,39 @@ export class AuthService {
     return !!this.userSignal() && !!token && !this.isTokenExpired(token);
   });
 
-  login(username: string, password: string) {
-    return this.api.post<AuthResponse>('/auth/login', { username, password }).pipe(
+  /**
+   * Staff / parent sign-in. `portal` is the "Sign in as" choice. A teacher who is also a
+   * parent signs in as 'staff' to reach the teacher dashboard, or as 'parent' to reach the
+   * parent dashboard, using the same account.
+   */
+  login(username: string, password: string, portal: 'staff' | 'parent' = 'staff') {
+    return this.api.post<AuthResponse>('/auth/login', { username, password, portal }).pipe(
+      map((res) => {
+        // A parent account may only sign in through the Parent portal, never as staff.
+        if (portal === 'staff' && res.user?.role === 'parent') {
+          throw {
+            error: {
+              message:
+                'This is a parent account. Choose "Parent" in "Sign in as" to access the parent portal.',
+            },
+          };
+        }
+        return this.applyPortal(res, portal);
+      }),
       tap((res) => this.persistSession(res))
     );
+  }
+
+  /**
+   * Staff accounts that are also parents may enter the Parent portal: the session's active
+   * role becomes 'parent' (the original role is kept in `accountRole`). Any other account
+   * keeps the role the server returned.
+   */
+  private applyPortal(res: AuthResponse, portal: 'staff' | 'parent'): AuthResponse {
+    const u = res.user;
+    if (portal !== 'parent' || !u || u.role === 'parent' || u.role === 'student') return res;
+    if (u.role !== 'teacher' && !u.parentId) return res;
+    return { ...res, user: { ...u, accountRole: u.role, role: 'parent' } };
   }
 
   /** One-click demo sign-in for a fixed role (POST /auth/demo-login). */
@@ -94,6 +123,37 @@ export class AuthService {
     const next = { ...current, ...partial };
     localStorage.setItem(USER_KEY, JSON.stringify(next));
     this.userSignal.set(next);
+  }
+
+  /**
+   * Reloads the signed-in user's account record (users table) from the server so the name,
+   * e-mail and username shown across the app always match the database, even if they were
+   * changed after login. The session stored in the browser is only a cache.
+   */
+  refreshProfile(): void {
+    if (!this.isLoggedIn()) return;
+    this.api
+      .get<Partial<User>>('/auth/me')
+      .subscribe({
+        next: (me) => {
+          if (!me) return;
+          const fresh: Partial<User> = {};
+          if (typeof me.firstName === 'string') fresh.firstName = me.firstName;
+          if (typeof me.lastName === 'string') fresh.lastName = me.lastName;
+          if (typeof me.email === 'string') fresh.email = me.email;
+          if (me.username !== undefined) fresh.username = me.username;
+          if (me.gender != null) fresh.gender = me.gender;
+          if (Array.isArray(me.permissions)) fresh.permissions = me.permissions;
+          const cur = this.userSignal();
+          const changed = !!cur && (Object.keys(fresh) as (keyof User)[]).some(
+            (k) => JSON.stringify(cur[k]) !== JSON.stringify(fresh[k]),
+          );
+          if (changed) this.patchUser(fresh);
+        },
+        error: () => {
+          /* keep the cached profile when offline or the request fails */
+        },
+      });
   }
 
   logout() {

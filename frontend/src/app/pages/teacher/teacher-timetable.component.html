@@ -1,0 +1,127 @@
+<app-portal-layout
+  [portalTitle]="portalLayout.portalTitle"
+  pageTitle="My Timetable"
+  homePath="/teacher"
+  [navSections]="portalLayout.navSections || []"
+  [navItems]="portalLayout.navItems || []"
+>
+  <div class="tt-page">
+    <header class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">Schedules · Timetable</p>
+        <h2>My Timetable</h2>
+        <p class="hero-sub">
+          {{ teacherName() }}{{ termVersionLabel() ? ' · ' + termVersionLabel() : '' }}. Your weekly teaching schedule,
+          generated from the school timetable.
+        </p>
+      </div>
+      <div class="hero-actions">
+        <button type="button" class="btn-outline" (click)="load()" [disabled]="loading()">
+          {{ loading() ? 'Refreshing…' : 'Refresh' }}
+        </button>
+        <button type="button" class="btn-outline" (click)="downloadPdf()" [disabled]="loading() || pdfLoading() || !hasLessons()">
+          Download PDF
+        </button>
+        <button type="button" class="btn-primary" (click)="previewPdf()" [disabled]="loading() || pdfLoading() || !hasLessons()">
+          {{ pdfLoading() ? 'Generating…' : 'Preview PDF' }}
+        </button>
+      </div>
+    </header>
+
+    @if (error(); as err) {
+      <div class="notice error">{{ err }}</div>
+    }
+    @if (toast(); as tst) {
+      <div class="notice" [class.error]="tst.type === 'error'" [class.success]="tst.type === 'success'">{{ tst.msg }}</div>
+    }
+
+    @if (loading()) {
+      <section class="card"><p class="empty">Generating your timetable…</p></section>
+    } @else if (!error()) {
+      <section class="stats">
+        <article class="stat"><span>Lessons per week</span><strong>{{ stats().lessons }}</strong></article>
+        <article class="stat"><span>Classes</span><strong>{{ stats().classes }}</strong></article>
+        <article class="stat"><span>Subjects</span><strong>{{ stats().subjects }}</strong></article>
+        <article class="stat"><span>Teaching days</span><strong>{{ stats().days }}</strong></article>
+      </section>
+
+      <section class="card grid-card">
+        @if (!hasLessons()) {
+          <p class="empty">No lessons have been allocated to you yet. Once the timetable is generated, it will appear here.</p>
+        } @else {
+          <div class="grid-scroll">
+            <table class="tt-grid">
+              <thead>
+                <tr>
+                  <th class="day-col"></th>
+                  @for (p of periods(); track p.id; let i = $index) {
+                    <th [class.brk]="isBreakPeriod(p)">
+                      <span class="th-main">{{ isBreakPeriod(p) ? breakPeriodLabel(p) : lessonPeriodNumber(periods(), i) }}</span>
+                      <span class="th-time">{{ formatPeriodRange(p) }}</span>
+                    </th>
+                  }
+                </tr>
+              </thead>
+              <tbody>
+                @for (d of days; track d.value; let first = $first) {
+                  <tr>
+                    <th class="day-col" scope="row" [attr.title]="d.label">{{ dayGridLabel(d.value) }}</th>
+                    @for (p of periods(); track p.id) {
+                      @if (isBreakPeriod(p)) {
+                        @if (first) {
+                          <td class="brk" [attr.rowspan]="days.length">
+                            <span class="brk-text">{{ breakColumnVerticalLabel(p) }}</span>
+                          </td>
+                        }
+                      } @else {
+                        @if (allocationAt(d.value, p); as a) {
+                          <td class="slot">
+                            <span class="slot-subject">{{ subjectShort(a) }}</span>
+                            <span class="slot-class">{{ classShort(a) }}</span>
+                            @if (a.timetableEntry?.room) {
+                              <span class="slot-room">{{ a.timetableEntry?.room }}</span>
+                            }
+                          </td>
+                        } @else {
+                          <td class="free"></td>
+                        }
+                      }
+                    }
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </section>
+    }
+  </div>
+</app-portal-layout>
+
+@if (pdfPreviewOpen() && pdfPreviewUrl()) {
+  <div class="pdf-overlay" role="dialog" aria-modal="true" aria-label="Timetable PDF preview">
+    <header class="pdf-toolbar">
+      <div class="pdf-toolbar-title">
+        <strong>Timetable preview</strong>
+        <span>{{ teacherName() }}{{ termVersionLabel() ? ' · ' + termVersionLabel() : '' }}</span>
+      </div>
+      <div class="pdf-toolbar-actions">
+        <button type="button" class="pdf-btn" (click)="openPreviewInNewTab()">Open</button>
+        <button type="button" class="pdf-btn" (click)="downloadPdf()" [disabled]="pdfLoading()">Download PDF</button>
+        <button type="button" class="pdf-btn pdf-btn-close" (click)="closePdfPreview()">Close</button>
+      </div>
+    </header>
+    <div class="pdf-stage">
+      <iframe class="pdf-frame" [src]="pdfPreviewUrl()!" title="Timetable PDF preview" referrerpolicy="no-referrer"></iframe>
+      <div class="pdf-mobile-fallback">
+        <p class="mobile-fallback-title">PDF is ready</p>
+        <p class="mobile-fallback-hint">Tap "Open PDF" to view your timetable with your device's PDF viewer, or download it directly.</p>
+        <div class="mobile-fallback-actions">
+          <button type="button" class="pdf-btn" (click)="openPreviewInNewTab()">Open PDF</button>
+          <button type="button" class="pdf-btn" (click)="downloadPdf()">Download PDF</button>
+          <button type="button" class="pdf-btn pdf-btn-close" (click)="closePdfPreview()">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+}

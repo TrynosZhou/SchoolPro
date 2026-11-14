@@ -56,9 +56,20 @@ export interface TimetableSlot {
   assignment?: TeacherAssignment;
 }
 
+/** Per-assignment progress: lessons required per week vs lessons already on the timetable. */
+export interface TeacherLoadProgress {
+  classId: string;
+  className: string;
+  subjectId: string;
+  subjectName: string;
+  requiredPeriods: number;
+  scheduledPeriods: number;
+}
+
 export interface TeacherWeeklySchedule {
   assignments: TeacherAssignment[];
   slots: TimetableSlot[];
+  load?: TeacherLoadProgress[];
   timetableRows: {
     id: string;
     classId: string;

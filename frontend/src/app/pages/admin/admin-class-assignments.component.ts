@@ -3,6 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
+import { TeacherAssignmentsModalComponent } from '../../shared/teacher-assignments-modal/teacher-assignments-modal.component';
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
 import { ApiService } from '../../core/services/api.service';
 import { TeacherAssignmentService } from '../../core/services/teacher-assignment.service';
@@ -10,7 +11,6 @@ import { TimetablePeriodsService } from '../../core/services/timetable-periods.s
 import {
   AssignmentFormRow,
   ClassOption,
-  LessonLength,
   StaffOption,
   SubjectOption,
   TeacherAssignment,
@@ -18,16 +18,9 @@ import {
   WorkloadSummaryRow,
 } from '../../core/models/teacher-assignment';
 import { classHeaderLabel } from '../../core/utils/class-display';
+import { blobErrorMessage } from '../../core/utils/blob-error.util';
 
 type Tab = 'assignments' | 'timetable' | 'workload';
-
-interface AssignmentEditDraft {
-  assignmentId: string;
-  subjectId: string;
-  weeklyPeriods: number;
-  lessonLength: LessonLength;
-  isSharedSplit: boolean;
-}
 
 const DAYS: { key: string; label: string }[] = [
   { key: 'MONDAY', label: 'Mon' },
@@ -42,7 +35,7 @@ const DAYS: { key: string; label: string }[] = [
 @Component({
   selector: 'app-admin-class-assignments',
   standalone: true,
-  imports: [PortalLayoutComponent, FormsModule],
+  imports: [PortalLayoutComponent, FormsModule, TeacherAssignmentsModalComponent],
   templateUrl: './admin-class-assignments.component.html',
   styleUrl: './admin-class-assignments.component.scss',
 })
@@ -79,25 +72,23 @@ export class AdminClassAssignmentsComponent implements OnInit, OnDestroy {
   schedule = signal<TeacherWeeklySchedule | null>(null);
   scheduleLoading = signal(false);
   schedulePdfLoading = signal(false);
+  scheduleGenerating = signal(false);
+
+  /** Assigned lessons for the selected teacher that are not (fully) on the timetable yet. */
+  readonly pendingLoad = computed(() =>
+    (this.schedule()?.load ?? []).filter((l) => l.scheduledPeriods < l.requiredPeriods),
+  );
+  readonly hasSubjectAssignments = computed(() => (this.schedule()?.load?.length ?? 0) > 0);
   pdfPreviewOpen = signal(false);
   pdfPreviewUrl = signal<SafeResourceUrl | null>(null);
   pdfPreviewTitle = signal('');
   pdfDownloadName = signal('timetable-teacher.pdf');
 
   assignmentsModalTeacher = signal<WorkloadSummaryRow | null>(null);
-  modalAssignments = signal<TeacherAssignment[]>([]);
-  modalAssignmentsLoading = signal(false);
-  editingAssignmentId = signal<string | null>(null);
-  editDraft = signal<AssignmentEditDraft | null>(null);
-  assignmentSaving = signal(false);
-  modalAddOpen = signal(false);
-  modalAddDraft = signal<AssignmentFormRow | null>(null);
-  modalAddSaving = signal(false);
+  modalEditAssignmentId = signal<string | null>(null);
   teacherResetting = signal(false);
   resetConfirmOpen = signal(false);
   resetConfirmText = signal('');
-  resetScope = signal<'all' | 'teacher' | null>(null);
-  resetTargetTeacher = signal<WorkloadSummaryRow | null>(null);
 
   readonly resetConfirmReady = computed(() => this.resetConfirmText().trim() === 'RESET');
 
@@ -142,15 +133,12 @@ export class AdminClassAssignmentsComponent implements OnInit, OnDestroy {
 
   @HostListener('document:keydown.escape')
   onEscapeKey(): void {
+    // The assignments modal handles its own Escape key.
     if (this.resetConfirmOpen()) {
       this.cancelResetConfirm();
       return;
     }
-    if (this.assignmentsModalTeacher()) {
-      this.closeTeacherAssignmentsModal();
-      return;
-    }
-    if (this.pdfPreviewOpen()) {
+    if (!this.assignmentsModalTeacher() && this.pdfPreviewOpen()) {
       this.closePdfPreview();
     }
   }
@@ -214,24 +202,9 @@ export class AdminClassAssignmentsComponent implements OnInit, OnDestroy {
   }
 
   openTeacherAssignmentsModal(row: WorkloadSummaryRow, editAssignmentId?: string): void {
+    this.modalEditAssignmentId.set(editAssignmentId ?? null);
     this.assignmentsModalTeacher.set(row);
-    this.modalAssignmentsLoading.set(true);
-    this.cancelModalAddAssignment();
     document.body.style.overflow = 'hidden';
-    this.assignmentsApi.list({ teacherId: row.teacherId }).subscribe({
-      next: (rows) => {
-        this.modalAssignments.set(rows);
-        this.modalAssignmentsLoading.set(false);
-        if (editAssignmentId) {
-          const target = rows.find((assignment) => assignment.id === editAssignmentId);
-          if (target) this.startEditAssignment(target);
-        }
-      },
-      error: () => {
-        this.modalAssignmentsLoading.set(false);
-        this.showToast('error', 'Failed to load teacher assignments');
-      },
-    });
   }
 
   editAssignmentFromList(assignment: TeacherAssignment): void {
@@ -249,25 +222,20 @@ export class AdminClassAssignmentsComponent implements OnInit, OnDestroy {
     this.openTeacherAssignmentsModal(teacherRow || fallback, assignment.id);
   }
 
-  openResetAllConfirm(): void {
-    this.resetScope.set('all');
-    this.resetTargetTeacher.set(null);
-    this.resetConfirmText.set('');
-    this.resetConfirmOpen.set(true);
+  closeTeacherAssignmentsModal(): void {
+    this.assignmentsModalTeacher.set(null);
+    this.modalEditAssignmentId.set(null);
+    if (!this.pdfPreviewOpen()) {
+      document.body.style.overflow = '';
+    }
   }
 
-  openResetConfirm(explicitTeacherId: string): void {
-    const teacherId = explicitTeacherId || this.assignmentsModalTeacher()?.teacherId || '';
-    if (!teacherId) return;
+  /** The shared modal changed something (add / edit / delete / reset): refresh this page's data. */
+  onAssignmentsModalChanged(): void {
+    this.refreshAfterAssignmentChange();
+  }
 
-    const assignmentCount = this.assignments().filter((a) => a.teacherId === teacherId).length;
-    if (!assignmentCount) {
-      this.showToast('error', 'This teacher has no active assignments to reset');
-      return;
-    }
-
-    this.resetScope.set('teacher');
-    this.resetTargetTeacher.set(this.workloadRowForTeacher(teacherId, assignmentCount));
+  openResetAllConfirm(): void {
     this.resetConfirmText.set('');
     this.resetConfirmOpen.set(true);
   }
@@ -276,53 +244,26 @@ export class AdminClassAssignmentsComponent implements OnInit, OnDestroy {
     if (this.teacherResetting()) return;
     this.resetConfirmOpen.set(false);
     this.resetConfirmText.set('');
-    this.resetScope.set(null);
-    this.resetTargetTeacher.set(null);
   }
 
   confirmResetAssignments(): void {
     if (!this.resetConfirmReady() || this.teacherResetting()) return;
-
-    const scope = this.resetScope();
-    if (scope === 'all') {
-      this.teacherResetting.set(true);
-      this.assignmentsApi.resetAll('RESET').subscribe({
-        next: (result) => this.finishResetSuccess(result.ended, 'all'),
-        error: (e) => this.finishResetError(e),
-      });
-      return;
-    }
-
-    const teacher = this.resetTargetTeacher();
-    if (!teacher) return;
-
     this.teacherResetting.set(true);
-    this.assignmentsApi.resetTeacher(teacher.teacherId, 'RESET').subscribe({
-      next: (result) => this.finishResetSuccess(result.ended, 'teacher', teacher.teacherId),
+    this.assignmentsApi.resetAll('RESET').subscribe({
+      next: (result) => this.finishResetSuccess(result.ended),
       error: (e) => this.finishResetError(e),
     });
   }
 
-  private finishResetSuccess(ended: number, scope: 'all' | 'teacher', teacherId?: string): void {
+  private finishResetSuccess(ended: number): void {
     this.teacherResetting.set(false);
     this.resetConfirmOpen.set(false);
     this.resetConfirmText.set('');
-    this.resetScope.set(null);
-    this.resetTargetTeacher.set(null);
-    this.cancelEditAssignment();
-    this.cancelModalAddAssignment();
     this.formRows.set([this.emptyRow()]);
     this.filterTeacherId.set('');
     this.filterClassId.set('');
-    if (scope === 'all') {
-      this.loadAssignments();
-      this.loadWorkload();
-      if (this.assignmentsModalTeacher()) {
-        this.reloadModalAssignments();
-      }
-    } else if (teacherId) {
-      this.refreshAfterAssignmentChange(teacherId);
-    }
+    this.loadAssignments();
+    this.loadWorkload();
     this.showToast('success', `Reset complete (${ended} assignment${ended === 1 ? '' : 's'} removed)`);
   }
 
@@ -353,260 +294,19 @@ export class AdminClassAssignmentsComponent implements OnInit, OnDestroy {
       next: () => {
         this.loadAssignments();
         this.loadWorkload();
-        const teacherId = this.assignmentsModalTeacher()?.teacherId;
-        if (teacherId) this.reloadModalAssignments();
         this.showToast('success', 'Assignments updated from Staff → Teacher Load');
       },
       error: () => this.showToast('error', 'Failed to sync from teacher load'),
     });
   }
 
-  closeTeacherAssignmentsModal(): void {
-    this.cancelResetConfirm();
-    this.cancelEditAssignment();
-    this.cancelModalAddAssignment();
-    this.assignmentsModalTeacher.set(null);
-    this.modalAssignments.set([]);
-    if (!this.pdfPreviewOpen()) {
-      document.body.style.overflow = '';
-    }
-  }
-
-  openModalAddAssignment(): void {
-    const teacher = this.assignmentsModalTeacher();
-    if (!teacher) return;
-    this.cancelEditAssignment();
-    this.modalAddDraft.set({
-      teacherId: teacher.teacherId,
-      classId: '',
-      sectionId: '',
-      subjectId: '',
-      role: 'subject_teacher',
-      weeklyPeriods: 1,
-      lessonLength: 'single',
-      isSharedSplit: false,
-    });
-    this.modalAddOpen.set(true);
-  }
-
-  cancelModalAddAssignment(): void {
-    this.modalAddOpen.set(false);
-    this.modalAddDraft.set(null);
-    this.modalAddSaving.set(false);
-  }
-
-  classesForModalAdd(): ClassOption[] {
-    const teacherId = this.assignmentsModalTeacher()?.teacherId;
-    const draftClassId = this.modalAddDraft()?.classId;
-    if (!teacherId) return this.classes();
-
-    const taken = new Set<string>();
-    for (const assignment of this.modalAssignments()) {
-      taken.add(assignment.classId);
-    }
-    for (const assignment of this.assignments()) {
-      if (assignment.teacherId === teacherId && assignment.isActive && !assignment.endDate) {
-        taken.add(assignment.classId);
-      }
-    }
-
-    return this.classes().filter((c) => !taken.has(c.id) || c.id === draftClassId);
-  }
-
-  modalAddConflict(): string | null {
-    const draft = this.modalAddDraft();
-    const teacherId = this.assignmentsModalTeacher()?.teacherId;
-    if (!draft?.classId || !teacherId) return null;
-    return this.existingAssignmentConflictMessage(teacherId, draft.classId);
-  }
-
-  saveModalAddAssignment(forceReassign = false): void {
-    const draft = this.modalAddDraft();
-    const teacherId = this.assignmentsModalTeacher()?.teacherId;
-    if (!draft || !teacherId) return;
-
-    if (!draft.classId) {
-      this.showToast('error', 'Select a class');
-      return;
-    }
-    if (draft.role === 'subject_teacher' && !draft.subjectId) {
-      this.showToast('error', 'Select a subject');
-      return;
-    }
-
-    const conflict = this.existingAssignmentConflictMessage(teacherId, draft.classId);
-    if (conflict) {
-      this.showToast('error', conflict);
-      return;
-    }
-
-    this.modalAddSaving.set(true);
-    this.assignmentsApi
-      .bulkCreate({
-        forceReassign,
-        assignments: [
-          {
-            teacherId,
-            classId: draft.classId,
-            sectionId: draft.sectionId || undefined,
-            subjectId: draft.role === 'subject_teacher' ? draft.subjectId : undefined,
-            role: draft.role,
-            weeklyPeriods: draft.role === 'subject_teacher' ? draft.weeklyPeriods : 0,
-            lessonLength: draft.lessonLength,
-            isSharedSplit: draft.isSharedSplit,
-          },
-        ],
-      })
-      .subscribe({
-        next: () => {
-          this.modalAddSaving.set(false);
-          this.cancelModalAddAssignment();
-          this.refreshAfterAssignmentChange(teacherId);
-          this.showToast('success', 'Assignment added');
-        },
-        error: (e) => {
-          this.modalAddSaving.set(false);
-          const msg = e.error?.message || 'Failed to add assignment';
-          const isDuplicateClass =
-            typeof msg === 'string' && msg.toLowerCase().includes('only be linked to a class once');
-          if (e.status === 409 && !forceReassign && !isDuplicateClass && confirm(`${msg}\n\nForce reassign and continue?`)) {
-            this.saveModalAddAssignment(true);
-            return;
-          }
-          this.showToast('error', msg);
-        },
-      });
-  }
-
-  modalIntegrityWarning(): string | null {
-    const rows = this.modalAssignments();
-    const seen = new Set<string>();
-    for (const row of rows) {
-      if (seen.has(row.classId)) {
-        return 'Data inconsistency detected: this teacher has more than one active assignment for the same class. End the duplicate rows to restore integrity.';
-      }
-      seen.add(row.classId);
-    }
-    return null;
-  }
-
-  modalHasLoadOutOfSync(): boolean {
-    return this.modalAssignments().some((row) => row.loadOutOfSync);
-  }
-
-  isDuplicateClassAssignment(assignment: TeacherAssignment): boolean {
-    return this.modalAssignments().some(
-      (row) => row.id !== assignment.id && row.classId === assignment.classId,
-    );
-  }
-
-  startEditAssignment(assignment: TeacherAssignment): void {
-    this.editingAssignmentId.set(assignment.id);
-    this.editDraft.set({
-      assignmentId: assignment.id,
-      subjectId: assignment.subjectId || '',
-      weeklyPeriods: assignment.weeklyPeriods,
-      lessonLength: assignment.lessonLength,
-      isSharedSplit: assignment.isSharedSplit,
-    });
-  }
-
-  cancelEditAssignment(): void {
-    this.editingAssignmentId.set(null);
-    this.editDraft.set(null);
-    this.assignmentSaving.set(false);
-  }
-
-  saveEditAssignment(forceReassign = false): void {
-    const draft = this.editDraft();
-    if (!draft) return;
-
-    const assignment = this.modalAssignments().find((row) => row.id === draft.assignmentId);
-    if (!assignment) return;
-
-    if (assignment.role === 'subject_teacher' && !draft.subjectId) {
-      this.showToast('error', 'Select a subject');
-      return;
-    }
-
-    if (assignment.role === 'subject_teacher' && draft.weeklyPeriods < 1) {
-      this.showToast('error', 'Periods per week must be at least 1');
-      return;
-    }
-
-    this.assignmentSaving.set(true);
-    const body: Record<string, unknown> = {
-      weeklyPeriods: assignment.role === 'subject_teacher' ? draft.weeklyPeriods : 0,
-      lessonLength: draft.lessonLength,
-      isSharedSplit: draft.isSharedSplit,
-      forceReassign,
-    };
-    if (assignment.role === 'subject_teacher') {
-      body['subjectId'] = draft.subjectId;
-    }
-
-    this.assignmentsApi.update(draft.assignmentId, body).subscribe({
-      next: () => {
-        this.assignmentSaving.set(false);
-        this.cancelEditAssignment();
-        this.refreshAfterAssignmentChange(this.assignmentsModalTeacher()?.teacherId);
-        this.showToast('success', 'Assignment updated');
-      },
-      error: (e) => {
-        this.assignmentSaving.set(false);
-        const msg = e.error?.message || 'Failed to update assignment';
-        if (e.status === 409 && !forceReassign && confirm(`${msg}\n\nForce reassign and continue?`)) {
-          this.saveEditAssignment(true);
-          return;
-        }
-        this.showToast('error', msg);
-      },
-    });
-  }
-
-  deleteAssignmentFromModal(assignment: TeacherAssignment): void {
-    if (!confirm('Delete this assignment? The historical record will be kept.')) return;
-    const teacherId = this.assignmentsModalTeacher()?.teacherId;
-    this.assignmentsApi.end(assignment.id).subscribe({
-      next: () => {
-        if (this.editingAssignmentId() === assignment.id) {
-          this.cancelEditAssignment();
-        }
-        this.refreshAfterAssignmentChange(teacherId);
-        this.showToast('success', 'Assignment deleted');
-      },
-      error: (e) => this.showToast('error', e.error?.message || 'Failed to delete assignment'),
-    });
-  }
-
-  private refreshAfterAssignmentChange(teacherId?: string): void {
+  private refreshAfterAssignmentChange(): void {
     this.assignmentsApi.workloadSummary().subscribe({
       next: (rows) => {
         this.workload.set(rows);
-        if (teacherId) {
-          const updated = rows.find((row) => row.teacherId === teacherId);
-          if (updated) this.assignmentsModalTeacher.set(updated);
-          this.reloadModalAssignments();
-        }
         this.loadAssignments();
       },
       error: () => this.showToast('error', 'Failed to refresh assignments'),
-    });
-  }
-
-  private reloadModalAssignments(): void {
-    const teacherRow = this.assignmentsModalTeacher();
-    if (!teacherRow) return;
-    this.modalAssignmentsLoading.set(true);
-    this.assignmentsApi.list({ teacherId: teacherRow.teacherId }).subscribe({
-      next: (rows) => {
-        this.modalAssignments.set(rows);
-        this.modalAssignmentsLoading.set(false);
-      },
-      error: () => {
-        this.modalAssignmentsLoading.set(false);
-        this.showToast('error', 'Failed to refresh assignments');
-      },
     });
   }
 
@@ -627,6 +327,48 @@ export class AdminClassAssignmentsComponent implements OnInit, OnDestroy {
         this.showToast('error', 'Failed to load teacher schedule');
       },
     });
+  }
+
+  /**
+   * Adds the selected teacher's missing lessons to the school timetable without touching
+   * lessons that are already scheduled (append mode, restricted to this teacher).
+   */
+  generateLessonsForTeacher(): void {
+    const teacherId = this.scheduleTeacherId();
+    if (!teacherId) return;
+    const lessonPeriods = this.periodsSvc.load().filter((p) => p.slotType !== 'break');
+    if (!lessonPeriods.length) {
+      this.showToast('error', 'Configure lesson periods first (Timetable → Configure Periods).');
+      return;
+    }
+    this.scheduleGenerating.set(true);
+    this.api
+      .post<{ success: boolean; failures: { reason: string }[]; summary: { totalSlots: number } }>(
+        '/timetable/generate',
+        {
+          periods: lessonPeriods.map((p) => ({ name: p.name, startTime: p.startTime, endTime: p.endTime })),
+          replaceExisting: false,
+          teacherId,
+        },
+      )
+      .subscribe({
+        next: (res) => {
+          this.scheduleGenerating.set(false);
+          if (res.success) {
+            this.showToast('success', 'Lessons added to the timetable for this teacher.');
+          } else {
+            this.showToast(
+              'error',
+              res.failures?.[0]?.reason || 'Some lessons could not be placed. See Timetable → Generate.',
+            );
+          }
+          this.loadTeacherSchedule();
+        },
+        error: async (e) => {
+          this.scheduleGenerating.set(false);
+          this.showToast('error', await blobErrorMessage(e, 'Could not generate lessons for this teacher.'));
+        },
+      });
   }
 
   previewTeacherTimetablePdf(): void {
@@ -651,9 +393,9 @@ export class AdminClassAssignmentsComponent implements OnInit, OnDestroy {
         const safeName = this.staffName(teacherId).replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '-') || 'teacher';
         this.openPdfPreview(blob, `timetable-teacher-${safeName}.pdf`, `Teacher: ${this.staffName(teacherId)}`);
       },
-      error: (e) => {
+      error: async (e) => {
         this.schedulePdfLoading.set(false);
-        this.showToast('error', e.error?.message || 'Failed to generate timetable PDF.');
+        this.showToast('error', await blobErrorMessage(e, 'Failed to generate timetable PDF.'));
       },
     });
   }

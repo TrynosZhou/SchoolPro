@@ -167,6 +167,7 @@ export class AdminDashboardComponent implements OnInit {
   });
 
   ngOnInit(): void {
+    this.auth.refreshProfile();
     this.api.get<{ schoolName: string | null; currency?: string }>('/dashboard/school-links').subscribe({
       next: (data) => {
         if (data.schoolName) this.schoolName.set(data.schoolName);

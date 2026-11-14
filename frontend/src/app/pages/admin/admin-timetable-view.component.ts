@@ -23,6 +23,10 @@ import {
   timetableSubjectShort,
 } from '../../core/utils/timetable-grid-display';
 import { buildZip, downloadBlob } from '../../core/utils/zip.util';
+import {
+  TimetableDisplaySettingsService,
+  TT_SCALE_STEP,
+} from '../../core/services/timetable-display-settings.service';
 import { buildTimetablePdfBytes, TimetablePdfOptions, downloadTimetablePdf, TimetablePdfCell, TimetablePdfColumn, TimetablePdfRow } from '../../core/utils/timetable-pdf.util';
 
 interface ClassTeacherUser { title?: string | null; firstName?: string | null; lastName?: string | null; }
@@ -111,6 +115,8 @@ export class AdminTimetableViewComponent implements OnInit {
   private api = inject(ApiService);
   private periodsSvc = inject(TimetablePeriodsService);
   private route = inject(ActivatedRoute);
+  readonly display = inject(TimetableDisplaySettingsService);
+  readonly scaleStep = TT_SCALE_STEP;
   readonly adminNav = ADMIN_NAV_SECTIONS;
   readonly days = DAYS;
   readonly dayGridLabel = dayGridLabel;
@@ -553,6 +559,7 @@ export class AdminTimetableViewComponent implements OnInit {
         };
       }),
       fileName: this.pdfFileName(short, 'class-timetable'),
+      fontScale: { bottomRight: this.display.teacherFactor() },
     });
   }
 
@@ -573,6 +580,7 @@ export class AdminTimetableViewComponent implements OnInit {
         };
       }),
       fileName: this.pdfFileName(klass.className, 'class-timetable'),
+      fontScale: { bottomRight: this.display.teacherFactor() },
     };
   }
 
@@ -592,6 +600,7 @@ export class AdminTimetableViewComponent implements OnInit {
         };
       }),
       fileName: this.pdfFileName(teacher.teacherName, 'teacher-timetable'),
+      fontScale: { main: this.display.classFactor() },
     };
   }
 

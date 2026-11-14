@@ -1577,6 +1577,59 @@ router.patch('/users/:id', authorize(UserRole.ADMIN), async (req: AuthRequest, r
     }
   }
 
+  // ── Portal role change (administrator only: this route is ADMIN-restricted) ──────────────
+  // The account, its login credentials and its existing profiles are kept; only the portal
+  // role changes. A staff profile / parent profile is created when the new role needs one.
+  if (role !== undefined) {
+    const nextRole = Object.values(UserRole).includes(role) ? (role as UserRole) : null;
+    if (!nextRole) return res.status(400).json({ message: 'Invalid role' });
+
+    if (user.role !== nextRole) {
+      if (req.params.id === req.user!.userId) {
+        return res.status(400).json({ message: 'You cannot change your own role.' });
+      }
+      if (user.role === UserRole.STUDENT || nextRole === UserRole.STUDENT) {
+        return res.status(400).json({
+          message: 'Student accounts are tied to a student record, so their role cannot be changed here.',
+        });
+      }
+
+      const wasStaff = STAFF_PORTAL_ROLES.includes(user.role);
+      const willBeStaff = STAFF_PORTAL_ROLES.includes(nextRole);
+
+      user.role = nextRole;
+      // A permission role belongs to one portal role: clear it unless a matching one is supplied below.
+      (user as any).schoolRoleId = null;
+      (user as any).schoolRole = null;
+
+      // Staff profile: required for every staff role except Director.
+      if (willBeStaff && nextRole !== UserRole.DIRECTOR) {
+        const staffRepo = AppDataSource.getRepository(Staff);
+        if (user.staffProfile) {
+          user.staffProfile.isActive = user.isActive;
+        } else {
+          user.staffProfile = await staffRepo.save(staffRepo.create({
+            userId: user.id,
+            employeeNumber: await generateEmployeeNumber(),
+            department: department?.trim() || undefined,
+            qualification: qualification?.trim() || undefined,
+            hireDate: hireDate || today(),
+            isActive: user.isActive,
+          }));
+        }
+      } else if (wasStaff && !willBeStaff && user.staffProfile) {
+        // No longer staff: keep the record (history, timetable) but remove from active staff lists.
+        user.staffProfile.isActive = false;
+      }
+
+      // Parent profile: created when moving to Parent; an existing one (and its children) is kept.
+      if (nextRole === UserRole.PARENT && !user.parentProfile) {
+        const parentRepo = AppDataSource.getRepository(Parent);
+        user.parentProfile = await parentRepo.save(parentRepo.create({ userId: user.id }));
+      }
+    }
+  }
+
   if (schoolRoleId !== undefined) {
     if (schoolRoleId === null || schoolRoleId === '') {
       user.schoolRoleId = undefined;
@@ -1584,23 +1637,18 @@ router.patch('/users/:id', authorize(UserRole.ADMIN), async (req: AuthRequest, r
     } else if (STAFF_PORTAL_ROLES.includes(user.role)) {
       const schoolRole = await AppDataSource.getRepository(SchoolRole).findOne({ where: { id: schoolRoleId } });
       if (!schoolRole) return res.status(404).json({ message: 'Assigned role not found' });
+      if (schoolRole.baseRole !== user.role && role !== undefined) {
+        return res.status(400).json({ message: 'The selected permission role does not belong to the new portal role' });
+      }
       user.schoolRoleId = schoolRole.id;
       user.schoolRole = schoolRole;
       user.role = schoolRole.baseRole;
     }
   }
 
-  if (role !== undefined && req.params.id !== req.user!.userId) {
-    const nextRole = Object.values(UserRole).includes(role) ? role : null;
-    if (!nextRole) return res.status(400).json({ message: 'Invalid role' });
-    if (user.role !== nextRole) {
-      return res.status(400).json({ message: 'Role changes are not supported here. Create a new account with the correct role instead.' });
-    }
-  }
-
   if (isActive !== undefined) {
     user.isActive = Boolean(isActive);
-    if (user.staffProfile) user.staffProfile.isActive = user.isActive;
+    if (user.staffProfile && STAFF_PORTAL_ROLES.includes(user.role)) user.staffProfile.isActive = user.isActive;
   }
 
   await userRepo.save(user);

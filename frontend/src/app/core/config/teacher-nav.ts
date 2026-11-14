@@ -1,6 +1,26 @@
 import { NavItem, NavSection } from '../../shared/portal-layout/portal-layout.component';
 import { CHANGE_PASSWORD_ICON, CHANGE_PASSWORD_LABEL, CHANGE_PASSWORD_PATHS } from '../utils/change-password-route.util';
 
+/**
+ * Permissions every teacher account always has (mirrors DEFAULT_ROLE_PERMISSIONS.teacher on the
+ * server). Guarantees all teachers see the same menus even when their stored role / cached
+ * session carries an older or trimmed permission list.
+ */
+export const TEACHER_BASELINE_PERMISSIONS: readonly string[] = [
+  'students.view',
+  'enrollment.manage',
+  'attendance.mark',
+  'attendance.report',
+  'academics.exams',
+  'academics.report_cards',
+  'academics.mark_sheet',
+  'academics.results',
+  'academics.ranking',
+  'communication.send',
+  'communication.inbox',
+  'timetable.view',
+];
+
 /** Full teacher sidebar catalog — filtered at runtime by user permissions. */
 export const TEACHER_NAV_SECTIONS: NavSection[] = [
   {
@@ -43,6 +63,10 @@ export const TEACHER_NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
+    heading: 'Timetable',
+    items: [{ label: 'My Timetable', path: '/teacher/timetable', icon: '🗓️', permission: 'timetable.view' }],
+  },
+  {
     heading: 'Communication',
     items: [
       { label: 'Messages', path: '/teacher/messages', icon: '💬', permission: ['communication.inbox', 'communication.send'] },
@@ -62,17 +86,18 @@ function itemAllowed(granted: Set<string>, item: NavItem): boolean {
   return granted.has(key);
 }
 
-/** Build teacher sidebar sections visible for the signed-in user's permissions. */
+/**
+ * Build the teacher sidebar. Every teacher gets the full menu set: the user's permissions are
+ * merged with the teacher baseline, so nothing standard is ever hidden.
+ * (`options.classTeacher` is accepted for backward compatibility but no longer hides menus.)
+ */
 export function buildTeacherNavSections(
   userPermissions: string[] | undefined,
-  options?: { classTeacher?: boolean },
+  _options?: { classTeacher?: boolean },
 ): NavSection[] {
-  const granted = new Set(userPermissions ?? []);
+  const granted = new Set([...(userPermissions ?? []), ...TEACHER_BASELINE_PERMISSIONS]);
   return TEACHER_NAV_SECTIONS.map((section) => ({
     ...section,
-    items: section.items.filter((item) => {
-      if (item.path === '/teacher/enrollment' && options?.classTeacher === false) return false;
-      return itemAllowed(granted, item);
-    }),
+    items: section.items.filter((item) => itemAllowed(granted, item)),
   })).filter((section) => section.path || section.items.length > 0);
 }

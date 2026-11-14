@@ -186,9 +186,37 @@ export class AdminUserManagementComponent implements OnInit {
       this.lockedOnly(),
   );
 
-  isStaffRole = computed(() => ['director', 'principal', 'admin', 'accountant', 'teacher'].includes(this.form.role));
-  isParentRole = computed(() => this.form.role === 'parent');
-  isStudentRole = computed(() => this.form.role === 'student');
+  readonly currentUserId = computed(() => this.auth.user()?.id);
+
+  /** Student accounts and the administrator's own account keep their role. */
+  canEditRole(): boolean {
+    const u = this.editingUser();
+    if (!u) return false;
+    return u.id !== this.currentUserId() && u.role !== 'student';
+  }
+
+  /** Roles an existing (non-student) account can be moved between. */
+  editRoleOptions(): { value: PortalRole; label: string }[] {
+    return this.roleOptions.filter((r) => r.value !== 'student');
+  }
+
+  roleChanged(): boolean {
+    const u = this.editingUser();
+    return !!u && this.canEditRole() && this.form.role !== u.role;
+  }
+
+  roleLabelFor(role: PortalRole): string {
+    return this.roleOptions.find((r) => r.value === role)?.label ?? role;
+  }
+
+  /** A permission role belongs to one portal role, so clear it when the portal role changes. */
+  onEditRoleChange() {
+    this.form.schoolRoleId = '';
+  }
+
+  isStaffRole = () => ['director', 'principal', 'admin', 'accountant', 'teacher'].includes(this.form.role);
+  isParentRole = () => this.form.role === 'parent';
+  isStudentRole = () => this.form.role === 'student';
   resetCandidates = computed(() =>
     [...this.users()].sort((a, b) =>
       `${a.lastName} ${a.firstName}`.toLowerCase().localeCompare(`${b.lastName} ${b.firstName}`.toLowerCase()),
@@ -338,6 +366,9 @@ export class AdminUserManagementComponent implements OnInit {
         email: this.form.email.trim(),
         phone: this.form.phone.trim() || undefined,
       };
+      if (this.canEditRole() && this.form.role !== user.role) {
+        body['role'] = this.form.role;
+      }
       if (user.id !== currentUserId) {
         body['isActive'] = this.form.isActive;
       } else if (!this.form.isActive) {

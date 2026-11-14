@@ -97,7 +97,13 @@
   }
 
   .row-label-teacher {
-    cursor: context-menu;
+    cursor: pointer;
+
+    &:hover,
+    &:focus-visible {
+      background: #e0e7ff;
+      outline: none;
+    }
   }
 
   .drop-cell {

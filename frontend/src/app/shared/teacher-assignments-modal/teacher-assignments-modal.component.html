@@ -1,0 +1,243 @@
+@if (toast(); as t) {
+  <div class="tam-toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'" role="status">{{ t.msg }}</div>
+}
+
+<div class="modal-backdrop" (click)="close()" role="presentation">
+  <div
+    class="modal assignments-modal"
+    role="dialog"
+    aria-modal="true"
+    [attr.aria-label]="'Current assignments for ' + displayName()"
+    (click)="$event.stopPropagation()"
+  >
+    <header class="modal-head">
+      <div class="modal-head-main">
+        <p class="modal-eyebrow">Current assignments</p>
+        <h3>{{ displayName() }}</h3>
+        <div class="modal-sub-row">
+          <p class="modal-sub">
+            @if (displayEmployeeNumber()) {
+              <code>{{ displayEmployeeNumber() }}</code> ·
+            }
+            {{ totalPeriods() }} periods / week
+          </p>
+          <div class="modal-sub-actions">
+            <button
+              type="button"
+              class="btn-outline btn-sm danger-outline"
+              (click)="openReset()"
+              [disabled]="resetting() || loading() || !assignments().length"
+            >
+              Reset
+            </button>
+            <button
+              type="button"
+              class="icon-btn add"
+              (click)="openAdd()"
+              title="Add class assignment"
+              [attr.aria-label]="'Add assignment for ' + displayName()"
+            >
+              +
+            </button>
+          </div>
+        </div>
+      </div>
+      <button type="button" class="modal-close" (click)="close()" aria-label="Close">×</button>
+    </header>
+
+    <div class="modal-body">
+      @if (addOpen() && addDraft(); as addRow) {
+        <section class="modal-add-form">
+          <h4>Add class assignment</h4>
+          <div class="modal-add-fields">
+            <label>
+              <span>Class</span>
+              <select [(ngModel)]="addRow.classId" name="modalAddClass">
+                <option value="">— Select —</option>
+                @for (c of classesForAdd(); track c.id) {
+                  <option [value]="c.id">{{ classLabel(c) }}</option>
+                }
+              </select>
+            </label>
+            <label>
+              <span>Role</span>
+              <select [(ngModel)]="addRow.role" name="modalAddRole">
+                <option value="subject_teacher">Subject Teacher</option>
+                <option value="class_teacher">Class Teacher</option>
+              </select>
+            </label>
+            @if (addRow.role === 'subject_teacher') {
+              <label>
+                <span>Subject</span>
+                <select [(ngModel)]="addRow.subjectId" name="modalAddSubject">
+                  <option value="">— Select —</option>
+                  @for (sub of subjects(); track sub.id) {
+                    <option [value]="sub.id">{{ sub.name }}{{ sub.code ? ' (' + sub.code + ')' : '' }}</option>
+                  }
+                </select>
+              </label>
+              <label>
+                <span>Periods / week</span>
+                <input type="number" min="1" [(ngModel)]="addRow.weeklyPeriods" name="modalAddPeriods" />
+              </label>
+              <label>
+                <span>Lesson length</span>
+                <select [(ngModel)]="addRow.lessonLength" name="modalAddLength">
+                  @for (opt of lessonLengths; track opt.value) {
+                    <option [value]="opt.value">{{ opt.label }}</option>
+                  }
+                </select>
+              </label>
+            }
+          </div>
+          @if (addConflict(); as conflict) {
+            <p class="row-warning" role="alert">{{ conflict }}</p>
+          }
+          <div class="modal-add-actions">
+            <button type="button" class="btn-outline" [disabled]="addSaving()" (click)="cancelAdd()">Cancel</button>
+            <button type="button" class="btn-primary" [disabled]="addSaving() || !!addConflict()" (click)="saveAdd()">
+              {{ addSaving() ? 'Saving…' : 'Add assignment' }}
+            </button>
+          </div>
+        </section>
+      }
+
+      @if (integrityWarning(); as warning) {
+        <p class="integrity-warning" role="alert">{{ warning }}</p>
+      }
+      @if (hasLoadOutOfSync()) {
+        <p class="load-sync-hint">
+          Some loads changed on Staff → Teacher Load. Use <strong>Edit</strong> on those rows, or
+          <button type="button" class="link-btn" (click)="syncFromTeacherLoad()">sync from teacher load</button>.
+        </p>
+      }
+
+      @if (loading()) {
+        <p class="loading-note">Loading assignments…</p>
+      } @else {
+        <div class="table-wrap">
+          <table class="data-table modal-table">
+            <thead>
+              <tr>
+                <th>Class</th>
+                <th>Role</th>
+                <th>Subject</th>
+                <th>Load</th>
+                <th>Since</th>
+                <th class="col-action">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (a of assignments(); track a.id) {
+                @if (editingAssignmentId() === a.id && editDraft(); as draft) {
+                  <tr class="edit-row">
+                    <td>{{ classLabel(a.schoolClass || { name: '—' }) }}</td>
+                    <td><span class="role-pill" [class.homeroom]="a.role === 'class_teacher'">{{ roleLabel(a.role) }}</span></td>
+                    <td>
+                      @if (a.role === 'subject_teacher') {
+                        <select [(ngModel)]="draft.subjectId" [name]="'editSubject' + a.id" class="inline-select">
+                          <option value="">— Select —</option>
+                          @for (sub of subjects(); track sub.id) {
+                            <option [value]="sub.id">{{ sub.name }}{{ sub.code ? ' (' + sub.code + ')' : '' }}</option>
+                          }
+                        </select>
+                      } @else {
+                        —
+                      }
+                    </td>
+                    <td>
+                      @if (a.role === 'subject_teacher') {
+                        <div class="inline-load">
+                          <input type="number" min="1" [(ngModel)]="draft.weeklyPeriods" [name]="'editPeriods' + a.id" class="inline-input" />
+                          <select [(ngModel)]="draft.lessonLength" [name]="'editLength' + a.id" class="inline-select">
+                            @for (opt of lessonLengths; track opt.value) {
+                              <option [value]="opt.value">{{ opt.label }}</option>
+                            }
+                          </select>
+                        </div>
+                      } @else {
+                        —
+                      }
+                    </td>
+                    <td>{{ a.startDate }}</td>
+                    <td class="row-actions">
+                      <button type="button" class="btn-ghost btn-sm" [disabled]="saving()" (click)="saveEdit()">
+                        {{ saving() ? 'Saving…' : 'Save' }}
+                      </button>
+                      <button type="button" class="btn-ghost btn-sm" [disabled]="saving()" (click)="cancelEdit()">Cancel</button>
+                    </td>
+                  </tr>
+                } @else {
+                  <tr [class.duplicate-row]="isDuplicateClassAssignment(a)" [class.load-changed-row]="a.loadOutOfSync">
+                    <td>{{ classLabel(a.schoolClass || { name: '—' }) }}</td>
+                    <td><span class="role-pill" [class.homeroom]="a.role === 'class_teacher'">{{ roleLabel(a.role) }}</span></td>
+                    <td>{{ a.subject?.name || '—' }}</td>
+                    <td>
+                      {{ a.role === 'subject_teacher' ? a.weeklyPeriods + ' × ' + a.lessonLength : '—' }}
+                      @if (a.loadOutOfSync) {
+                        <span class="load-changed-badge">Updated load</span>
+                      }
+                    </td>
+                    <td>{{ a.startDate }}</td>
+                    <td class="row-actions">
+                      <button type="button" class="btn-ghost btn-sm" (click)="startEdit(a)">Edit</button>
+                      <button type="button" class="btn-ghost btn-sm danger" (click)="deleteAssignment(a)">Delete</button>
+                    </td>
+                  </tr>
+                }
+              } @empty {
+                <tr><td colspan="6" class="empty">No active assignments for this teacher</td></tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </div>
+
+    <footer class="modal-foot">
+      <button type="button" class="btn-outline" (click)="close()">Close</button>
+    </footer>
+  </div>
+</div>
+
+@if (resetConfirmOpen()) {
+  <div class="modal-backdrop reset-confirm-layer" (click)="cancelReset()" role="presentation">
+    <div class="modal reset-confirm-modal" role="alertdialog" aria-modal="true" (click)="$event.stopPropagation()">
+      <header class="reset-confirm-head">
+        <h3>Reset class assignments?</h3>
+      </header>
+      <div class="reset-confirm-body">
+        <p>
+          This will end <strong>all</strong> active class assignments for
+          <strong>{{ displayName() }}</strong>@if (displayEmployeeNumber()) { ({{ displayEmployeeNumber() }}) }.
+        </p>
+        <ul class="reset-confirm-list">
+          <li>Linked timetable slots and teacher allocations for this teacher are removed</li>
+          <li>Class timetable grids for this teacher are cleared</li>
+          <li>Staff → Teacher Load entries for this teacher are cleared</li>
+          <li>Homeroom links on affected classes are cleared</li>
+        </ul>
+        <p class="reset-confirm-type">Type <code>RESET</code> below to confirm.</p>
+        <label class="reset-confirm-field">
+          <span class="sr-only">Confirmation text</span>
+          <input
+            type="text"
+            [ngModel]="resetConfirmText()"
+            (ngModelChange)="resetConfirmText.set($event)"
+            name="resetConfirmText"
+            placeholder="Type RESET"
+            autocomplete="off"
+            spellcheck="false"
+            [disabled]="resetting()"
+          />
+        </label>
+      </div>
+      <footer class="reset-confirm-foot">
+        <button type="button" class="btn-outline" (click)="cancelReset()" [disabled]="resetting()">Cancel</button>
+        <button type="button" class="btn-danger" (click)="confirmReset()" [disabled]="!resetConfirmReady() || resetting()">
+          {{ resetting() ? 'Resetting…' : 'Reset assignments' }}
+        </button>
+      </footer>
+    </div>
+  </div>
+}

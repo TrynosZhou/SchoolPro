@@ -11,6 +11,15 @@
       </div>
       <div class="hero-actions">
         <a routerLink="/admin" class="hero-link">← Dashboard</a>
+        <button
+          type="button"
+          class="preview-btn"
+          (click)="previewPdf()"
+          [disabled]="loading() || pdfLoading() || !canPreviewPdf()"
+          title="Preview a PDF of parents who have not yet viewed their child's report card"
+        >
+          {{ pdfLoading() ? 'Generating…' : 'Preview PDF' }}
+        </button>
         <button type="button" class="refresh-btn" (click)="load()" [disabled]="loading()">
           {{ loading() ? 'Refreshing…' : 'Refresh' }}
         </button>
@@ -42,6 +51,10 @@
 
     @if (error(); as err) {
       <div class="notice error">{{ err }}</div>
+    }
+
+    @if (toast(); as tst) {
+      <div class="notice" [class.error]="tst.type === 'error'" [class.success]="tst.type === 'success'">{{ tst.msg }}</div>
     }
 
     @if (data(); as d) {
@@ -125,3 +138,34 @@
     }
   </div>
 </app-portal-layout>
+
+@if (pdfPreviewOpen() && pdfPreviewUrl()) {
+  <div class="pdf-overlay" role="dialog" aria-modal="true" aria-label="Report access PDF preview">
+    <header class="pdf-toolbar">
+      <div class="pdf-toolbar-title">
+        <strong>Report access preview</strong>
+        <span>
+          {{ data()?.term?.name }}{{ data()?.examType ? ' · ' + data()?.examType?.name : '' }} ·
+          {{ pendingParents().length }} parent{{ pendingParents().length === 1 ? '' : 's' }} yet to view
+        </span>
+      </div>
+      <div class="pdf-toolbar-actions">
+        <button type="button" class="pdf-btn" (click)="openPreviewInNewTab()">Open</button>
+        <button type="button" class="pdf-btn" (click)="downloadPdf()" [disabled]="pdfLoading()">Download PDF</button>
+        <button type="button" class="pdf-btn pdf-btn-close" (click)="closePdfPreview()">Close</button>
+      </div>
+    </header>
+    <div class="pdf-stage">
+      <iframe class="pdf-frame" [src]="pdfPreviewUrl()!" title="Report access PDF preview" referrerpolicy="no-referrer"></iframe>
+      <div class="pdf-mobile-fallback">
+        <p class="mobile-fallback-title">PDF is ready</p>
+        <p class="mobile-fallback-hint">Tap "Open PDF" to view it with your device's PDF viewer, or download it directly.</p>
+        <div class="mobile-fallback-actions">
+          <button type="button" class="pdf-btn" (click)="openPreviewInNewTab()">Open PDF</button>
+          <button type="button" class="pdf-btn" (click)="downloadPdf()">Download PDF</button>
+          <button type="button" class="pdf-btn pdf-btn-close" (click)="closePdfPreview()">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+}

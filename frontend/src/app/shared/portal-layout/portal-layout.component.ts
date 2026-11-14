@@ -356,8 +356,8 @@ export class PortalLayoutComponent implements OnInit, OnChanges, OnDestroy {
     if (role === 'admin') return '/admin/timetable/view';
     if (role === 'teacher') return '/teacher/timetable';
     if (role === 'student') return '/student/lms';
-    // Parents have no timetable: this icon opens their notifications page.
-    if (role === 'parent') return '/parent/notifications';
+    // Parents: opens the class timetable(s) of their linked children.
+    if (role === 'parent') return '/parent/timetable';
     return '/';
   }
 

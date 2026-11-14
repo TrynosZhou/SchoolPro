@@ -49,6 +49,15 @@ export async function ensureDefaultRoles(): Promise<void> {
       role.permissions = defaults;
       dirty = true;
     }
+    // Teacher portal menus are driven by permissions. Older databases hold a Teacher role that
+    // pre-dates newer permissions, so top it up with any missing defaults (never removes any).
+    if (baseRole === UserRole.TEACHER) {
+      const merged = mergePermissions(role.permissions, defaults);
+      if (merged.length !== (role.permissions?.length ?? 0)) {
+        role.permissions = merged;
+        dirty = true;
+      }
+    }
     if (dirty) await roleRepo.save(role);
   }
 
@@ -64,11 +73,25 @@ export async function ensureDefaultRoles(): Promise<void> {
   }
 }
 
+function mergePermissions(current: string[] | undefined | null, extra: string[]): string[] {
+  return [...new Set([...(current ?? []).filter((p) => p?.trim()), ...extra])];
+}
+
+/**
+ * Every teacher account gets the complete teacher menu set (dashboard, students, attendance,
+ * examinations, academics, communication, timetable). A custom role assigned to a teacher can
+ * ADD permissions on top of that baseline but can no longer hide standard teacher menus.
+ */
+export function withTeacherBaseline(role: UserRole | string | undefined, permissions: string[]): string[] {
+  if (role !== UserRole.TEACHER) return permissions;
+  return mergePermissions(permissions, DEFAULT_ROLE_PERMISSIONS[UserRole.TEACHER]);
+}
+
 export function resolvePermissionsForUser(user: User): string[] {
-  if (user.schoolRole?.permissions?.length) {
-    return sanitizePermissions(user.schoolRole.permissions);
-  }
-  return [...DEFAULT_ROLE_PERMISSIONS[user.role]];
+  const base = user.schoolRole?.permissions?.length
+    ? sanitizePermissions(user.schoolRole.permissions)
+    : [...DEFAULT_ROLE_PERMISSIONS[user.role]];
+  return withTeacherBaseline(user.role, base);
 }
 
 export async function loadUserWithRole(userId: string): Promise<User | null> {

@@ -1,6 +1,7 @@
 import { IsNull, Not } from 'typeorm';
 import { AppDataSource } from '../config/data-source';
-import { ClassSubject, Staff, Timetable, TeacherAllocation } from '../entities';
+import { ClassSubject, Staff, Timetable, TeacherAllocation, TeacherAssignment } from '../entities';
+import { TeacherAssignmentRole } from '../entities/enums';
 import { dayIntToEnum } from '../utils/timetable-day';
 import { relations } from '../utils/typeorm-helpers';
 import {
@@ -14,6 +15,7 @@ export interface TimetablePeriodInput {
   startTime: string;
   endTime: string;
   name?: string;
+  slotType?: 'lesson' | 'break';
 }
 
 export interface GenerateTimetableInput {
@@ -104,6 +106,8 @@ export interface GenerateTimetableResult {
 interface LessonPeriod {
   startTime: string;
   endTime: string;
+  /** True when a break / lunch (or any gap) separates this period from the previous lesson period. */
+  breakBefore?: boolean;
 }
 
 interface AssignmentTask {
@@ -146,14 +150,58 @@ function slotKey(prefix: string, id: string, day: number, startTime: string): st
   return `${prefix}:${id}:${day}:${startTime}`;
 }
 
+function timeToMinutes(time: string): number {
+  const [h, m] = String(time || '0:0').split(':').map(Number);
+  return (h || 0) * 60 + (m || 0);
+}
+
 function normalizePeriods(periods: TimetablePeriodInput[]): LessonPeriod[] {
-  return periods
+  const sorted = periods
     .map((p) => ({
       startTime: String(p.startTime || '').trim(),
       endTime: String(p.endTime || '').trim(),
+      isBreak: p.slotType === 'break',
     }))
     .filter((p) => p.startTime && p.endTime)
     .sort((a, b) => a.startTime.localeCompare(b.startTime));
+
+  // Lesson periods only, but each remembers whether a break / lunch (or a time gap) sits before it,
+  // so a double / triple lesson is never placed across a break.
+  const lessons: LessonPeriod[] = [];
+  let breakSeen = false;
+  for (const p of sorted) {
+    if (p.isBreak) {
+      breakSeen = true;
+      continue;
+    }
+    const prev = lessons[lessons.length - 1];
+    const gap = !!prev && timeToMinutes(p.startTime) > timeToMinutes(prev.endTime);
+    lessons.push({
+      startTime: p.startTime,
+      endTime: p.endTime,
+      breakBefore: !!prev && (breakSeen || gap),
+    });
+    breakSeen = false;
+  }
+  return lessons;
+}
+
+/** A multi-period lesson can only start at `periodIndex` if no break / lunch falls inside the block. */
+function blockFitsWithoutBreak(periods: LessonPeriod[], periodIndex: number, blockSize: number): boolean {
+  for (let i = 1; i < blockSize; i += 1) {
+    if (periods[periodIndex + i]?.breakBefore) return false;
+  }
+  return true;
+}
+
+function longestUnbrokenRun(periods: LessonPeriod[]): number {
+  let best = 0;
+  let run = 0;
+  for (const p of periods) {
+    run = p.breakBefore ? 1 : run + 1;
+    if (run > best) best = run;
+  }
+  return best;
 }
 
 function canPlaceBlock(
@@ -164,6 +212,7 @@ function canPlaceBlock(
   occupied: Set<string>,
 ): boolean {
   if (periodIndex < 0 || periodIndex + task.blockSize > periods.length) return false;
+  if (!blockFitsWithoutBreak(periods, periodIndex, task.blockSize)) return false;
   for (let i = 0; i < task.blockSize; i += 1) {
     const p = periods[periodIndex + i];
     const ck = slotKey('c', task.classId, day, p.startTime);
@@ -274,34 +323,53 @@ function listCandidates(
   return candidates.sort((a, b) => a.score - b.score);
 }
 
-function scheduleAssignments(
+type Failure = GenerateTimetableResult['failures'][number];
+
+interface ScheduleOutcome {
+  placed: PlacedSlot[];
+  failures: Failure[];
+  /** Periods that could not be placed (lower is better). */
+  unscheduled: number;
+}
+
+/** One scheduling attempt. `attempt` 0 is deterministic most-constrained-first; later attempts add jitter. */
+function scheduleOnce(
   tasks: AssignmentTask[],
   periods: LessonPeriod[],
-  preOccupied?: Set<string>,
-): { placed: PlacedSlot[]; failures: GenerateTimetableResult['failures'] } {
+  preOccupied: Set<string> | undefined,
+  attempt: number,
+  teacherLoad: Map<string, number>,
+  classLoad: Map<string, number>,
+): ScheduleOutcome {
   // Seed with slots that are already taken (e.g. existing lessons when appending) so
   // auto-generation never double-books a class or a teacher.
   const occupied = new Set<string>(preOccupied ?? []);
   const placed: PlacedSlot[] = [];
-  const failures: GenerateTimetableResult['failures'] = [];
   const scheduledCount = new Map<string, number>();
 
   const seed =
-    tasks.reduce((s, t) => s + hashSeed(t.classSubjectId), 0) ^ (Date.now() & 0xffff);
+    (tasks.reduce((sum, t) => sum + hashSeed(t.classSubjectId), 0) ^ Math.imul(attempt + 1, 0x9e3779b1)) >>> 0;
   const rand = mulberry32(seed);
 
   for (const task of tasks) {
     scheduledCount.set(task.classSubjectId, 0);
   }
 
-  const blocks = shuffleWithRng(
-    buildBlocksToPlace(
-      [...tasks].sort(
-        (a, b) => b.blockSize - a.blockSize || b.requiredPeriods - a.requiredPeriods,
-      ),
-    ),
-    rand,
-  );
+  // Most constrained first: long blocks, then teachers/classes with the heaviest load, so a
+  // busy teacher (e.g. a Mathematics teacher across many classes) is placed while the grid is
+  // still empty. Later attempts add random jitter so retries explore different orders.
+  const jitter = attempt === 0 ? 0 : 5 + attempt * 2;
+  const priority = (t: AssignmentTask) =>
+    t.blockSize * 1000 +
+    (teacherLoad.get(t.teacherId) || 0) * 10 +
+    (classLoad.get(t.classId) || 0) +
+    t.requiredPeriods +
+    rand() * jitter * 10;
+
+  const blocks = buildBlocksToPlace(tasks)
+    .map((blk) => ({ blk, p: priority(blk.task) }))
+    .sort((x, y) => y.p - x.p)
+    .map((x) => x.blk);
 
   for (const { task } of blocks) {
     const candidates = listCandidates(task, periods, occupied, placed, rand);
@@ -324,24 +392,83 @@ function scheduleAssignments(
     );
   }
 
+  const failures: Failure[] = [];
+  let unscheduled = 0;
   for (const task of tasks) {
     const scheduled = scheduledCount.get(task.classSubjectId) || 0;
     if (scheduled < task.requiredPeriods) {
+      unscheduled += task.requiredPeriods - scheduled;
       failures.push({
         className: task.className,
         subjectName: task.subjectName,
         teacherName: task.teacherName,
         requiredPeriods: task.requiredPeriods,
         scheduledPeriods: scheduled,
-        reason:
-          scheduled === 0
-            ? 'No free slots matched teacher load (increase periods or reduce assignments).'
-            : `Only ${scheduled} of ${task.requiredPeriods} periods could be scheduled.`,
+        reason: explainFailure(task, scheduled, periods, teacherLoad, classLoad),
       });
     }
   }
 
-  return { placed, failures };
+  return { placed, failures, unscheduled };
+}
+
+function explainFailure(
+  task: AssignmentTask,
+  scheduled: number,
+  periods: LessonPeriod[],
+  teacherLoad: Map<string, number>,
+  classLoad: Map<string, number>,
+): string {
+  const weekCapacity = periods.length * 5;
+  const tLoad = teacherLoad.get(task.teacherId) || 0;
+  const cLoad = classLoad.get(task.classId) || 0;
+  if (tLoad > weekCapacity) {
+    return `${task.teacherName} is assigned ${tLoad} periods/week but the timetable only has ${weekCapacity} lesson slots (5 days × ${periods.length} periods). Reduce this teacher's load or add periods.`;
+  }
+  if (cLoad > weekCapacity) {
+    return `${task.className} has ${cLoad} periods/week assigned but only ${weekCapacity} lesson slots exist. Reduce the class's weekly periods or add periods.`;
+  }
+  if (task.blockSize > 1 && task.blockSize <= periods.length && task.blockSize > longestUnbrokenRun(periods)) {
+    return `${task.subjectName} uses ${task.blockSize}-period lessons but no ${task.blockSize} lesson periods in a row exist without a break or lunch in between. Use shorter lessons or change the periods.`;
+  }
+  if (task.blockSize > periods.length) {
+    return `${task.subjectName} uses ${task.blockSize}-period lessons but only ${periods.length} lesson periods exist per day.`;
+  }
+  return scheduled === 0
+    ? `No free slot could be found for ${task.teacherName} in ${task.className} (the teacher's or the class's free periods never lined up). Reduce the load or add periods.`
+    : `Only ${scheduled} of ${task.requiredPeriods} periods could be scheduled.`;
+}
+
+/**
+ * Places every assignment, retrying with different orderings and keeping the best result.
+ * A single random greedy pass can strand the last lessons of a heavily loaded teacher, so we
+ * run several attempts (bounded in time) and stop as soon as everything is placed.
+ */
+function scheduleAssignments(
+  tasks: AssignmentTask[],
+  periods: LessonPeriod[],
+  preOccupied?: Set<string>,
+): { placed: PlacedSlot[]; failures: GenerateTimetableResult['failures'] } {
+  const teacherLoad = new Map<string, number>();
+  const classLoad = new Map<string, number>();
+  for (const t of tasks) {
+    teacherLoad.set(t.teacherId, (teacherLoad.get(t.teacherId) || 0) + t.requiredPeriods);
+    classLoad.set(t.classId, (classLoad.get(t.classId) || 0) + t.requiredPeriods);
+  }
+
+  const MAX_ATTEMPTS = 60;
+  const TIME_BUDGET_MS = 4000;
+  const started = Date.now();
+  let best: ScheduleOutcome | null = null;
+
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
+    const outcome = scheduleOnce(tasks, periods, preOccupied, attempt, teacherLoad, classLoad);
+    if (!best || outcome.unscheduled < best.unscheduled) best = outcome;
+    if (best.unscheduled === 0) break;
+    if (Date.now() - started > TIME_BUDGET_MS) break;
+  }
+
+  return { placed: best!.placed, failures: best!.failures };
 }
 
 function buildViewsFromSlots(slots: TimetableSlotView[]): Pick<
@@ -434,16 +561,19 @@ function buildViewsFromSlots(slots: TimetableSlotView[]): Pick<
   };
 }
 
-async function loadAssignmentTasks(classIds?: string[]): Promise<AssignmentTask[]> {
+async function loadAssignmentTasksDetailed(
+  classIds?: string[],
+): Promise<{ tasks: AssignmentTask[]; skipped: GenerateTimetableResult['failures'] }> {
   const repo = AppDataSource.getRepository(ClassSubject);
+  // leftJoin on the teacher's user so a staff record without a linked user account is not
+  // silently dropped from the timetable.
   const qb = repo
     .createQueryBuilder('cs')
     .innerJoinAndSelect('cs.teacher', 'teacher')
-    .innerJoinAndSelect('teacher.user', 'teacherUser')
+    .leftJoinAndSelect('teacher.user', 'teacherUser')
     .innerJoinAndSelect('cs.schoolClass', 'schoolClass')
     .innerJoinAndSelect('cs.subject', 'subject')
-    .where('cs.teacherId IS NOT NULL')
-    .andWhere('cs.weeklyPeriods > 0');
+    .where('cs.teacherId IS NOT NULL');
 
   if (classIds?.length) {
     qb.andWhere('cs.classId IN (:...classIds)', { classIds });
@@ -451,12 +581,48 @@ async function loadAssignmentTasks(classIds?: string[]): Promise<AssignmentTask[
 
   const rows = await qb.getMany();
   const tasks: AssignmentTask[] = [];
+  const skipped: GenerateTimetableResult['failures'] = [];
+
+  // Fallback sources for "weekly periods" when Class Subject.weeklyPeriods was never set
+  // (e.g. the teacher was assigned a subject from Class Assignments without a period count).
+  const assignmentRepo = AppDataSource.getRepository(TeacherAssignment);
+  const activeAssignments = await assignmentRepo.find({
+    where: { role: TeacherAssignmentRole.SUBJECT_TEACHER, isActive: true, endDate: IsNull() },
+  });
+  const assignmentPeriods = new Map<string, number>();
+  for (const a of activeAssignments) {
+    if (!a.teacherId || !a.classId || !a.subjectId) continue;
+    const n = Math.round(Number(a.weeklyPeriods) || 0);
+    if (n > 0) assignmentPeriods.set(`${a.teacherId}:${a.classId}:${a.subjectId}`, n);
+  }
 
   for (const cs of rows) {
-    const weeklyPeriods = Math.max(0, Math.round(Number(cs.weeklyPeriods) || 0));
-    if (weeklyPeriods < 1) continue;
     const lessonLength = normalizeLessonLength(cs.lessonLength);
     const blockSize = lessonLengthMultiplier(lessonLength);
+
+    let weeklyPeriods = Math.max(0, Math.round(Number(cs.weeklyPeriods) || 0));
+    if (weeklyPeriods < 1) {
+      weeklyPeriods = assignmentPeriods.get(`${cs.teacherId}:${cs.classId}:${cs.subjectId}`) || 0;
+    }
+    if (weeklyPeriods < 1) {
+      const existing = await AppDataSource.getRepository(Timetable).count({
+        where: { teacherId: cs.teacherId!, classId: cs.classId, subjectId: cs.subjectId },
+      });
+      weeklyPeriods = Math.ceil(existing / blockSize);
+    }
+
+    if (weeklyPeriods < 1) {
+      skipped.push({
+        className: cs.schoolClass?.name || 'Class',
+        subjectName: cs.subject?.name || 'Subject',
+        teacherName: staffName(cs.teacher),
+        requiredPeriods: 0,
+        scheduledPeriods: 0,
+        reason: `${staffName(cs.teacher)} is assigned ${cs.subject?.name || 'this subject'} in ${cs.schoolClass?.name || 'this class'} but no weekly periods are set. Set the number of periods on Staff → Teacher Load, then generate again.`,
+      });
+      continue;
+    }
+
     const requiredPeriods = effectiveWeeklyPeriods(weeklyPeriods, lessonLength);
 
     tasks.push({
@@ -475,7 +641,11 @@ async function loadAssignmentTasks(classIds?: string[]): Promise<AssignmentTask[
     });
   }
 
-  return tasks;
+  return { tasks, skipped };
+}
+
+async function loadAssignmentTasks(classIds?: string[]): Promise<AssignmentTask[]> {
+  return (await loadAssignmentTasksDetailed(classIds)).tasks;
 }
 
 async function enrichSummaryWithLoads(
@@ -622,10 +792,12 @@ export async function generateTimetableFromTeacherLoad(
   }
 
   const classIds = input.classIds?.filter(Boolean);
-  const tasks = await loadAssignmentTasks(classIds);
+  const { tasks, skipped } = await loadAssignmentTasksDetailed(classIds);
   if (!tasks.length) {
     throw new Error(
-      'No teacher load assignments found. Assign classes and subjects on Staff → Teacher Load first.',
+      skipped.length
+        ? `${skipped.length} teacher assignment(s) have no weekly periods set (e.g. ${skipped[0].teacherName} – ${skipped[0].subjectName}, ${skipped[0].className}). Set periods on Staff → Teacher Load first.`
+        : 'No teacher load assignments found. Assign classes and subjects on Staff → Teacher Load first.',
     );
   }
 
@@ -650,7 +822,9 @@ export async function generateTimetableFromTeacherLoad(
     }
   }
 
-  const { placed, failures } = scheduleAssignments(tasks, periods, preOccupied);
+  const { placed, failures: placementFailures } = scheduleAssignments(tasks, periods, preOccupied);
+  // Assignments that were skipped (no weekly periods) are reported, never silently dropped.
+  const failures = [...skipped, ...placementFailures];
 
   await AppDataSource.transaction(async (manager) => {
     const timetableRepo = manager.getRepository(Timetable);

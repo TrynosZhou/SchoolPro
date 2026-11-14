@@ -1,0 +1,132 @@
+<app-portal-layout portalTitle="Parent Portal" pageTitle="Class Timetable" homePath="/parent" [navItems]="nav">
+  @if (toast(); as t) {
+    <div class="toast" role="status" aria-live="polite" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>
+  }
+
+  <div class="tt-page" [style.--tt-teacher-scale]="display.teacherFactor()">
+    <header class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">Schedules · Timetable</p>
+        <h2>Class Timetable</h2>
+        <p class="hero-sub">
+          The weekly class timetable of each of your linked children{{ termVersionLabel() ? ' · ' + termVersionLabel() : '' }}.
+          Preview it or download it as a PDF.
+        </p>
+      </div>
+      <div class="hero-actions">
+        <button type="button" class="btn-outline" (click)="load()" [disabled]="loading()">
+          {{ loading() ? 'Refreshing…' : 'Refresh' }}
+        </button>
+      </div>
+    </header>
+
+    @if (error(); as err) {
+      <div class="notice error">{{ err }}</div>
+    }
+
+    @if (loading()) {
+      <section class="card"><p class="empty">Fetching your children's timetables…</p></section>
+    } @else {
+      @for (c of timetables(); track c.studentId) {
+        <section class="card child-card">
+          <div class="child-head">
+            <div>
+              <h3>{{ c.studentName }}</h3>
+              <p class="child-meta">
+                {{ c.classLabel || 'No class assigned' }}{{ c.admissionNumber ? ' · ' + c.admissionNumber : '' }}
+              </p>
+            </div>
+            <div class="child-actions">
+              <button type="button" class="btn-outline" (click)="downloadPdf(c)" [disabled]="pdfLoading() !== null || !hasLessons(c)">
+                Download PDF
+              </button>
+              <button type="button" class="btn-primary" (click)="previewPdf(c)" [disabled]="pdfLoading() !== null || !hasLessons(c)">
+                {{ pdfLoading() === c.studentId ? 'Generating…' : 'Preview PDF' }}
+              </button>
+            </div>
+          </div>
+
+          @if (c.error) {
+            <p class="empty">{{ c.error }}</p>
+          } @else if (!hasLessons(c)) {
+            <p class="empty">No timetable has been published for this class yet.</p>
+          } @else {
+            <div class="grid-scroll">
+              <table class="tt-grid">
+                <thead>
+                  <tr>
+                    <th class="day-col"></th>
+                    @for (p of periodsFor(c); track p.id; let i = $index) {
+                      <th [class.brk]="isBreakPeriod(p)">
+                        <span class="th-main">{{ isBreakPeriod(p) ? breakPeriodLabel(p) : lessonPeriodNumber(periodsFor(c), i) }}</span>
+                        <span class="th-time">{{ formatPeriodRange(p) }}</span>
+                      </th>
+                    }
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (d of days; track d.value; let first = $first) {
+                    <tr>
+                      <th class="day-col" scope="row" [attr.title]="d.label">{{ dayGridLabel(d.value) }}</th>
+                      @for (p of periodsFor(c); track p.id) {
+                        @if (isBreakPeriod(p)) {
+                          @if (first) {
+                            <td class="brk" [attr.rowspan]="days.length">
+                              <span class="brk-text">{{ breakColumnVerticalLabel(p) }}</span>
+                            </td>
+                          }
+                        } @else {
+                          @if (entryAt(c, d.value, p); as e) {
+                            <td class="slot">
+                              <div class="slot-box">
+                                <span class="slot-subject">{{ subjectShort(e) }}</span>
+                                <span class="slot-class">{{ teacherName(e) }}</span>
+                                @if (e.room) {
+                                  <span class="slot-room">{{ e.room }}</span>
+                                }
+                              </div>
+                            </td>
+                          } @else {
+                            <td class="free"></td>
+                          }
+                        }
+                      }
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
+        </section>
+      }
+    }
+  </div>
+</app-portal-layout>
+
+@if (pdfPreviewOpen() && pdfPreviewUrl()) {
+  <div class="pdf-overlay" role="dialog" aria-modal="true" aria-label="Timetable PDF preview">
+    <header class="pdf-toolbar">
+      <div class="pdf-toolbar-title">
+        <strong>Timetable preview</strong>
+        <span>{{ previewChild()?.studentName }}{{ previewChild()?.classLabel ? ' · ' + previewChild()?.classLabel : '' }}</span>
+      </div>
+      <div class="pdf-toolbar-actions">
+        <button type="button" class="pdf-btn" (click)="openPreviewInNewTab()">Open</button>
+        <button type="button" class="pdf-btn" (click)="downloadPdf(previewChild())" [disabled]="pdfLoading() !== null">Download PDF</button>
+        <button type="button" class="pdf-btn pdf-btn-close" (click)="closePdfPreview()">Close</button>
+      </div>
+    </header>
+    <div class="pdf-stage">
+      <iframe class="pdf-frame" [src]="pdfPreviewUrl()!" title="Timetable PDF preview" referrerpolicy="no-referrer"></iframe>
+      <div class="pdf-mobile-fallback">
+        <p class="mobile-fallback-title">PDF is ready</p>
+        <p class="mobile-fallback-hint">Tap "Open PDF" to view the timetable with your device's PDF viewer, or download it directly.</p>
+        <div class="mobile-fallback-actions">
+          <button type="button" class="pdf-btn" (click)="openPreviewInNewTab()">Open PDF</button>
+          <button type="button" class="pdf-btn" (click)="downloadPdf(previewChild())">Download PDF</button>
+          <button type="button" class="pdf-btn pdf-btn-close" (click)="closePdfPreview()">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+}

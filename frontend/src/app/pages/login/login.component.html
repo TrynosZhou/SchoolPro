@@ -104,6 +104,11 @@
                   <option value="student">Student</option>
                 </select>
               </div>
+              @if (isParentRole()) {
+                <small class="field-hint">Teachers with children at the school can sign in here with the same username and password. Sign out and sign in again to switch between Staff and Parent.</small>
+              } @else if (isStaffRole()) {
+                <small class="field-hint">Parent accounts must choose &quot;Parent&quot;.</small>
+              }
             </div>
           }
 

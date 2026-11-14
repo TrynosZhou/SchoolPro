@@ -532,6 +532,36 @@ body .toast.error {
   border-color: color-mix(in srgb, var(--color-negative, #f87171) 45%, transparent) !important;
 }
 
+/* ------------------------------------------------------------
+   MESSAGE LABEL COLOUR — all system messages (success + error
+   toasts, flash notices, alert messages) use BLUE text so they
+   are easy to spot. !important is needed because many components
+   define their own .toast colours in encapsulated styles.
+   ------------------------------------------------------------ */
+:root {
+  --message-label-color: #1d4ed8;
+}
+
+[data-theme='dark'] {
+  --message-label-color: #93c5fd;
+}
+
+body .toast,
+body .toast.success,
+body .toast.error,
+body .developer-photo-toast,
+body .developer-photo-toast.success,
+body .developer-photo-toast.error,
+body .alert .alert-message,
+body .notice,
+body .notice.success,
+body .notice.error,
+[data-theme='dark'] body .toast,
+[data-theme='dark'] body .toast.success,
+[data-theme='dark'] body .toast.error {
+  color: var(--message-label-color) !important;
+}
+
 @keyframes toast-in {
   from {
     opacity: 0;
