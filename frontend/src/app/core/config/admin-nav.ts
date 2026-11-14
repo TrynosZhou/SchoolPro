@@ -58,6 +58,7 @@ export const ADMIN_NAV_SECTIONS: NavSection[] = [
     items: [
       { label: 'View Timetable', path: '/admin/timetable/view' },
       { label: 'Class Assignments', path: '/admin/class-assignments' },
+      { label: 'Manual Generate', path: '/admin/timetable/manual-entry' },
     ],
   },
   {

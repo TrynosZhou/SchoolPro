@@ -425,6 +425,21 @@ export const ADMIN_HELP_TOPICS: HelpTopic[] = [
     keywords: ['generate timetable', 'build timetable', 'schedule'],
   },
   {
+    id: 'timetable-manual-entry',
+    section: 'Timetable',
+    title: 'Manual Generate',
+    path: '/admin/timetable/manual-entry',
+    summary: 'Move lesson cards by hand, with automatic teacher and class clash detection.',
+    steps: [
+      'Open Timetable → Manual Generate.',
+      'Choose By class or By teacher, then pick the class or teacher.',
+      'Drag a lesson card to another period (or click the card, then click the period).',
+      'Green periods are free, amber means the teacher is already teaching, red means the class already has a lesson.',
+      'Use Undo move to reverse a change, and the lock icon to pin a lesson in place.',
+    ],
+    keywords: ['manual', 'manual generate', 'move lesson', 'drag', 'clash', 'collision', 'timetable'],
+  },
+  {
     id: 'timetable-view',
     section: 'Timetable',
     title: 'View Timetable',

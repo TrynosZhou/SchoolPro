@@ -1,0 +1,204 @@
+<app-portal-layout portalTitle="Admin Portal" pageTitle="Manual Entry" [navSections]="adminNav">
+  <div class="manual-page">
+    @if (toast(); as t) {
+      <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'" role="status">{{ t.msg }}</div>
+    }
+
+    <header class="hero">
+      <div>
+        <h2>Manual Timetable Entry</h2>
+        <p>
+          Adjust lessons by hand. Drag a lesson card to another period — the system checks every period for
+          teacher and class clashes before the card is placed.
+        </p>
+      </div>
+      <div class="hero-actions">
+        <button type="button" class="btn-outline" (click)="undo()" [disabled]="!undoStack().length || moving()">
+          Undo move@if (undoStack().length) { ({{ undoStack().length }}) }
+        </button>
+        <button type="button" class="btn-outline" (click)="load(true)" [disabled]="refreshing() || loading()">
+          {{ refreshing() ? 'Refreshing…' : 'Refresh' }}
+        </button>
+      </div>
+    </header>
+
+    @if (loading()) {
+      <div class="state-box"><p>Loading timetable…</p></div>
+    } @else if (loadError()) {
+      <div class="state-box error">
+        <h3>Could not load the timetable</h3>
+        <button type="button" class="btn-primary" (click)="load()">Try again</button>
+      </div>
+    } @else if (!hasTimetable()) {
+      <div class="state-box">
+        <h3>No lessons to adjust yet</h3>
+        <p>Generate a timetable first, then come back here to fine-tune it by hand.</p>
+        <a class="btn-primary" routerLink="/admin/timetable/generate">Go to Generate Timetable</a>
+      </div>
+    } @else if (!periods().length) {
+      <div class="state-box">
+        <h3>No periods configured</h3>
+        <p>Set up lesson periods under Timetable → Configure Periods.</p>
+      </div>
+    } @else {
+      <section class="toolbar">
+        <div class="seg" role="group" aria-label="View timetable by">
+          <button type="button" [class.active]="mode() === 'class'" [attr.aria-pressed]="mode() === 'class'" (click)="setMode('class')">By class</button>
+          <button type="button" [class.active]="mode() === 'teacher'" [attr.aria-pressed]="mode() === 'teacher'" (click)="setMode('teacher')">By teacher</button>
+        </div>
+
+        <label class="picker">
+          <span>{{ mode() === 'class' ? 'Class' : 'Teacher' }}</span>
+          <select [ngModel]="selectedId()" (ngModelChange)="onSelect($event)" name="entityPick">
+            @if (mode() === 'class') {
+              @for (c of classes(); track c.classId) {
+                <option [value]="c.classId">{{ c.className }}</option>
+              }
+            } @else {
+              @for (t of teachers(); track t.teacherId) {
+                <option [value]="t.teacherId">{{ t.teacherName }}@if (t.employeeNumber) { ({{ t.employeeNumber }}) }</option>
+              }
+            }
+          </select>
+        </label>
+
+        <div class="stats">
+          <span><strong>{{ stats().shown }}</strong> lessons shown</span>
+          <span><strong>{{ stats().lessons }}</strong> in school</span>
+          <span><strong>{{ stats().locked }}</strong> locked</span>
+          <span class="clash-count" [class.bad]="clashes().length"><strong>{{ clashes().length }}</strong> clash{{ clashes().length === 1 ? '' : 'es' }}</span>
+        </div>
+      </section>
+
+      <div class="status-bar" [class.holding]="!!heldSlot()" role="status" aria-live="polite">
+        <span class="status-text">{{ statusMessage() }}</span>
+        @if (heldSlot()) {
+          <button type="button" class="link-btn" (click)="clearHold()">Cancel (Esc)</button>
+        }
+      </div>
+
+      <div class="legend" aria-label="Legend">
+        <span><i class="dot ok"></i> Free</span>
+        <span><i class="dot teacher"></i> Teacher clash (can be overridden)</span>
+        <span><i class="dot class"></i> Class clash (blocked)</span>
+        <span><i class="dot clash-outline"></i> Existing clash</span>
+        <span>🔒 Locked</span>
+      </div>
+
+      <section class="grid-panel">
+        <h3 class="grid-title">{{ selectedLabel() }}</h3>
+        <div class="grid-wrap">
+          <table class="mt-grid" [class.busy]="moving()">
+            <thead>
+              <tr>
+                <th class="corner" scope="col"><span class="sr-only">Day</span></th>
+                @for (p of periods(); track p.id; let i = $index) {
+                  <th scope="col" [class.break-head]="isBreakPeriod(p)">
+                    @if (isBreakPeriod(p)) {
+                      <span class="sr-only">{{ breakTimeLabel(p) }}</span>
+                    } @else {
+                      <strong>{{ lessonPeriodNumber(periods(), i) }}</strong>
+                      <small>{{ formatPeriodRange(p) }}</small>
+                    }
+                  </th>
+                }
+              </tr>
+            </thead>
+            <tbody>
+              @for (d of days; track d.value; let rowIdx = $index) {
+                <tr>
+                  <th scope="row" class="day-head">{{ d.short }}</th>
+                  @for (p of periods(); track p.id) {
+                    @if (isBreakPeriod(p)) {
+                      @if (rowIdx === 0) {
+                        <td class="break-cell" [attr.rowspan]="days.length">
+                          <span class="break-vertical">{{ breakTimeLabel(p) }}</span>
+                        </td>
+                      }
+                    } @else {
+                      <td
+                        class="cell"
+                        [attr.data-state]="cellState(d.value, p)"
+                        [class.hover]="hoverKey() === cellKey(d.value, p)"
+                        [attr.title]="cellTitle(d.value, p)"
+                        (click)="onCellClick(d.value, p)"
+                        (mouseenter)="onCellHover(d.value, p)"
+                        (dragover)="onCellDragOver(d.value, p, $event)"
+                        (drop)="onCellDrop(d.value, p, $event)"
+                      >
+                        @for (s of slotsAt(d.value, p); track s.id) {
+                          <div
+                            class="mt-card"
+                            tabindex="0"
+                            [class.held]="heldId() === s.id"
+                            [class.locked]="s.isLocked"
+                            [class.clash]="clashIds().has(s.id)"
+                            [ngStyle]="cardStyle(s.teacherId)"
+                            [attr.draggable]="s.isLocked || moving() ? null : true"
+                            [attr.aria-label]="cardTitle(s)"
+                            [title]="cardTitle(s)"
+                            (dragstart)="onDragStart(s, $event)"
+                            (dragend)="onDragEnd()"
+                            (click)="onCardActivate(s, d.value, p, $event)"
+                            (keydown.enter)="onCardKey(s, d.value, p, $event)"
+                            (keydown.space)="onCardKey(s, d.value, p, $event)"
+                          >
+                            <span class="card-main">{{ subjectShort(s) }}</span>
+                            <span class="card-sub">{{ cardSub(s) }}</span>
+                            <button
+                              type="button"
+                              class="lock-btn"
+                              [attr.aria-label]="s.isLocked ? 'Unlock lesson' : 'Lock lesson'"
+                              [title]="s.isLocked ? 'Locked — click to unlock' : 'Click to lock this lesson in place'"
+                              (click)="toggleLock(s, $event)"
+                            >{{ s.isLocked ? '🔒' : '🔓' }}</button>
+                          </div>
+                        }
+                      </td>
+                    }
+                  }
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="clash-panel" [class.has-clashes]="clashes().length">
+        <button type="button" class="clash-head" (click)="clashPanelOpen.set(!clashPanelOpen())" [attr.aria-expanded]="clashPanelOpen()">
+          <span>Clash report</span>
+          <span class="badge" [class.bad]="clashes().length">{{ clashes().length }}</span>
+        </button>
+        @if (clashPanelOpen()) {
+          @if (!clashes().length) {
+            <p class="ok-note">No teacher or class clashes in the timetable.</p>
+          } @else {
+            <ul class="clash-list">
+              @for (c of clashes(); track c.key) {
+                <li>
+                  <button type="button" (click)="focusClash(c)">{{ clashText(c) }}</button>
+                </li>
+              }
+            </ul>
+          }
+        }
+      </section>
+    }
+  </div>
+</app-portal-layout>
+
+@if (pending(); as p) {
+  <div class="confirm-backdrop" (click)="cancelPending()" role="presentation">
+    <div class="confirm-box" role="alertdialog" aria-modal="true" aria-labelledby="clashTitle" (click)="$event.stopPropagation()">
+      <h3 id="clashTitle">Clash detected</h3>
+      <p>{{ p.msg }}</p>
+      @if (pendingSlot(); as ps) {
+        <p class="confirm-sub">Placing {{ ps.subjectName }} ({{ ps.className }}) here would double-book the teacher.</p>
+      }
+      <div class="confirm-actions">
+        <button type="button" class="btn-outline" (click)="cancelPending()">Cancel</button>
+        <button type="button" class="btn-danger" (click)="confirmPending()">Place anyway</button>
+      </div>
+    </div>
+  </div>
+}

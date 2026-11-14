@@ -62,6 +62,7 @@ import { AdminDebtorAgingComponent } from './pages/admin/admin-debtor-aging.comp
 import { AdminFeeCollectionRevenueComponent } from './pages/admin/admin-fee-collection-revenue.component';
 import { AdminTimetableConfigurePeriodsComponent } from './pages/admin/admin-timetable-configure-periods.component';
 import { AdminTimetableGenerateComponent } from './pages/admin/admin-timetable-generate.component';
+import { AdminTimetableManualEntryComponent } from './pages/admin/admin-timetable-manual-entry.component';
 import { AdminTimetableViewComponent } from './pages/admin/admin-timetable-view.component';
 import { AdminTimetableTeacherScheduleComponent } from './pages/admin/admin-timetable-teacher-schedule.component';
 import { AdminSendMessageComponent } from './pages/admin/admin-send-message.component';
@@ -169,6 +170,7 @@ export const routes: Routes = [
       { path: 'timetable/configure-periods', component: AdminTimetableConfigurePeriodsComponent },
       { path: 'timetable/generate', component: AdminTimetableGenerateComponent },
       { path: 'timetable/view', component: AdminTimetableViewComponent },
+      { path: 'timetable/manual-entry', component: AdminTimetableManualEntryComponent },
       { path: 'timetable/teacher-schedule', component: AdminTimetableTeacherScheduleComponent },
       { path: 'staff', component: AdminStaffComponent },
       { path: 'payroll', component: AdminPayrollComponent },
