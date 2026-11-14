@@ -9,6 +9,7 @@ exports.authorizePermission = authorizePermission;
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const env_1 = require("../config/env");
 const enums_1 = require("../entities/enums");
+const permissions_1 = require("../config/permissions");
 function authenticate(req, res, next) {
     const header = req.headers.authorization;
     if (!header?.startsWith('Bearer ')) {
@@ -44,6 +45,11 @@ function authorizePermission(...required) {
             return next();
         }
         const granted = new Set(req.user.permissions ?? []);
+        // Teachers always hold the standard teacher permissions (covers sessions issued before
+        // the baseline was enforced, so no re-login is needed).
+        if (req.user.role === enums_1.UserRole.TEACHER) {
+            permissions_1.DEFAULT_ROLE_PERMISSIONS[enums_1.UserRole.TEACHER].forEach((k) => granted.add(k));
+        }
         if (required.some((key) => granted.has(key))) {
             return next();
         }

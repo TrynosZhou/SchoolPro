@@ -38,6 +38,7 @@ export interface TimetableSlotView {
   teacherId: string;
   teacherName: string;
   employeeNumber?: string;
+  room?: string | null;
   isLocked?: boolean;
 }
 
@@ -747,6 +748,7 @@ export async function getTimetableSnapshot(): Promise<GenerateTimetableResult> {
       teacherId: r.teacherId!,
       teacherName: staffName(r.teacher),
       employeeNumber: r.teacher?.employeeNumber || '',
+      room: r.room || null,
       isLocked: !!r.isLocked,
     }));
 

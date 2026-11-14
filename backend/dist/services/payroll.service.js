@@ -13,6 +13,7 @@ exports.processRun = processRun;
 exports.markRunPaid = markRunPaid;
 exports.cancelRun = cancelRun;
 exports.updatePayslip = updatePayslip;
+const leave_request_service_1 = require("./leave-request.service");
 const data_source_1 = require("../config/data-source");
 const gl_posting_service_1 = require("./gl-posting.service");
 const entities_1 = require("../entities");
@@ -310,7 +311,9 @@ async function createRun(year, month, opts) {
             continue;
         const calc = calcFromProfile(profile);
         const staffName = `${staff.user.firstName} ${staff.user.lastName}`.trim();
-        const leave = await (0, leave_accrual_service_1.applyMonthlyLeaveAccrual)(staff.id, profile, 0);
+        // Approved annual leave inside this month becomes "leave taken" on the payslip.
+        const leaveTaken = await (0, leave_request_service_1.approvedAnnualLeaveDaysInMonth)(staff.id, year, month);
+        const leave = await (0, leave_accrual_service_1.applyMonthlyLeaveAccrual)(staff.id, profile, leaveTaken);
         await payslipRepo.save(payslipRepo.create({
             payrollRunId: run.id,
             staffId: staff.id,

@@ -422,17 +422,27 @@ async function generateReportCardPortalPdf(data) {
         };
         const rowLayouts = layoutRows();
         const drawTableHeader = (atY) => {
-            doc.rect(tableX, atY, tableW, tableHeaderH).fill('#f1f5f9');
+            // Dark navy header with white bold uppercase labels.
+            doc.rect(tableX, atY, tableW, tableHeaderH).fill('#14213d');
             let hx = tableX;
-            doc.fillColor('#000000').font('Helvetica-Bold').fontSize(rcPt(7));
+            const headerFontSize = rcPt(7);
+            doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(headerFontSize);
+            const headerTextY = atY + (tableHeaderH - doc.currentLineHeight(false)) / 2 + 0.5;
             headers.forEach((h, i) => {
                 const align = i === 0 || i === remarksColIndex ? 'left' : 'center';
-                const px = i === 0 || i === remarksColIndex ? 5 : 4;
-                doc.text(h, hx + px, atY + rcSp(6), { width: cols[i] - px * 2, align, lineBreak: false });
+                const px = i === 0 || i === remarksColIndex ? 8 : 4;
+                doc.text(h, hx + px, headerTextY, {
+                    width: cols[i] - px * 2,
+                    align,
+                    lineBreak: false,
+                    characterSpacing: 0.4,
+                });
                 hx += cols[i];
             });
-            doc.lineWidth(0.75).strokeColor(grid).rect(tableX, atY, tableW, tableHeaderH).stroke();
+            // Subtle lighter column dividers inside the navy header.
+            doc.lineWidth(0.75).strokeColor('#3b4a6b');
             strokeColumnDividers(doc, tableX, atY, tableHeaderH, cols);
+            doc.lineWidth(0.75).strokeColor('#14213d').rect(tableX, atY, tableW, tableHeaderH).stroke();
         };
         y = tableStartY;
         drawTableHeader(y);

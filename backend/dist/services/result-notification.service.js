@@ -1,6 +1,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.processResultNotificationJob = processResultNotificationJob;
+exports.resolveGuardianNotifyPhone = resolveGuardianNotifyPhone;
+exports.guardianAllowsWhatsApp = guardianAllowsWhatsApp;
 exports.queueWhatsAppResultNotifications = queueWhatsAppResultNotifications;
 const data_source_1 = require("../config/data-source");
 const env_1 = require("../config/env");

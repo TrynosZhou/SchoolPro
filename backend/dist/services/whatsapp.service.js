@@ -4,6 +4,7 @@ exports.sendWhatsAppReminder = sendWhatsAppReminder;
 exports.sendSmsMessage = sendSmsMessage;
 exports.sendResultWhatsApp = sendResultWhatsApp;
 exports.sendResultSms = sendResultSms;
+exports.sendReportCardWhatsApp = sendReportCardWhatsApp;
 const env_1 = require("../config/env");
 const integrations_service_1 = require("./integrations.service");
 const tenant_context_1 = require("../config/tenant-context");
@@ -34,6 +35,8 @@ async function sendTwilioMessage(params) {
         else if (params.body) {
             form.set('Body', params.body);
         }
+        if (params.mediaUrl)
+            form.set('MediaUrl', params.mediaUrl);
         const statusCallback = getStatusCallbackUrl();
         if (statusCallback)
             form.set('StatusCallback', statusCallback);
@@ -187,5 +190,31 @@ async function sendResultSms(params) {
         from: smsFrom,
         to,
         body,
+    });
+}
+/**
+ * Report-card delivery over WhatsApp: a text summary (readable without internet/PDF viewer)
+ * plus an optional PDF attached via a publicly reachable URL.
+ */
+async function sendReportCardWhatsApp(params) {
+    if (tenant_context_1.tenantContext.isDemo()) {
+        console.log(`[WhatsApp DEMO MOCK] report card → ${params.parentPhone}`);
+        return { success: true, sid: `DEMO-WA-${Date.now()}`, mocked: true };
+    }
+    const whatsapp = await (0, integrations_service_1.getEffectiveWhatsApp)();
+    const to = params.parentPhone.startsWith('whatsapp:')
+        ? params.parentPhone
+        : `whatsapp:${params.parentPhone}`;
+    if (whatsapp.useMock || !whatsapp.accountSid || !whatsapp.authToken || !whatsapp.from) {
+        console.log(`[WhatsApp mock] report card → ${to} | ${params.body}`);
+        return { success: true, sid: `MOCK-WA-${Date.now()}`, mocked: true };
+    }
+    return sendTwilioMessage({
+        accountSid: whatsapp.accountSid,
+        authToken: whatsapp.authToken,
+        from: normalizeWhatsAppFrom(whatsapp.from),
+        to,
+        body: params.body,
+        mediaUrl: params.pdfUrl,
     });
 }

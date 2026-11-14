@@ -24,6 +24,8 @@ const report_card_remarks_service_1 = require("../services/report-card-remarks.s
 const helpers_1 = require("../utils/helpers");
 const typeorm_helpers_1 = require("../utils/typeorm-helpers");
 const publish_results_service_1 = require("../services/publish-results.service");
+const report_access_service_1 = require("../services/report-access.service");
+const report_card_whatsapp_service_1 = require("../services/report-card-whatsapp.service");
 const notification_log_service_1 = require("../services/notification-log.service");
 const ResultsPublication_1 = require("../entities/ResultsPublication");
 const access_control_1 = require("../middleware/access-control");
@@ -141,6 +143,20 @@ router.post('/results/publish', (0, auth_1.authorize)(...PUBLISH_ROLES), async (
     }
     catch (err) {
         return res.status(400).json({ message: err instanceof Error ? err.message : 'Publish failed' });
+    }
+});
+router.post('/report-cards/send-whatsapp', (0, auth_1.authorize)(...PUBLISH_ROLES), async (req, res) => {
+    const { termId, examTypeId } = req.body;
+    if (!termId || !examTypeId) {
+        return res.status(400).json({ message: 'termId and examTypeId are required' });
+    }
+    try {
+        res.json(await (0, report_card_whatsapp_service_1.sendReportCardsViaWhatsApp)({ termId, examTypeId }));
+    }
+    catch (err) {
+        return res.status(400).json({
+            message: err instanceof Error ? err.message : 'Failed to send report cards via WhatsApp',
+        });
     }
 });
 router.post('/results/unpublish', (0, auth_1.authorize)(...PUBLISH_ROLES), async (req, res) => {
@@ -859,6 +875,18 @@ router.get('/report-cards/by-class', (0, auth_1.authorize)(enums_1.UserRole.ADMI
         reports: (0, report_card_service_1.attachAttendanceToReports)(reports, attendanceMap),
     });
 });
+router.get('/report-access', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.DIRECTOR), async (req, res) => {
+    try {
+        res.json(await (0, report_access_service_1.buildReportAccessReport)({
+            termId: req.query.termId || undefined,
+            examTypeId: req.query.examTypeId || undefined,
+        }));
+    }
+    catch (err) {
+        console.error('Report access report failed:', err);
+        res.status(500).json({ message: err instanceof Error ? err.message : 'Failed to load report access' });
+    }
+});
 router.get('/report-cards/:studentId/:termId', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.DIRECTOR, enums_1.UserRole.TEACHER, enums_1.UserRole.PARENT, enums_1.UserRole.STUDENT), acadView, async (req, res) => {
     const repo = data_source_1.AppDataSource.getRepository(entities_1.ReportCard);
     const where = {
@@ -891,6 +919,14 @@ router.get('/report-cards/:studentId/:termId', (0, auth_1.authorize)(enums_1.Use
     const portalBlock = await assertPortalReportCardAccess(req, report, req.query.examTypeId);
     if (portalBlock)
         return res.status(403).json({ message: portalBlock });
+    if (req.user.role === enums_1.UserRole.PARENT && req.user.parentId) {
+        await (0, report_access_service_1.recordParentReportView)({
+            parentId: req.user.parentId,
+            studentId: report.studentId,
+            termId: report.termId,
+            examTypeId: report.examTypeId,
+        });
+    }
     // Recompute class & form position (and totals) so the rank always shows on the
     // portal view, even for reports created via paths that didn't persist positions.
     const maxMarks = Number(report.examType?.maxMarks) || 100;
@@ -930,6 +966,14 @@ router.get('/report-cards/:studentId/:termId/pdf', (0, auth_1.authorize)(enums_1
         const portalBlock = await assertPortalReportCardAccess(req, report, req.query.examTypeId);
         if (portalBlock)
             return res.status(403).json({ message: portalBlock });
+        if (req.user.role === enums_1.UserRole.PARENT && req.user.parentId) {
+            await (0, report_access_service_1.recordParentReportView)({
+                parentId: req.user.parentId,
+                studentId: report.studentId,
+                termId: report.termId,
+                examTypeId: report.examTypeId,
+            });
+        }
         const settings = await data_source_1.AppDataSource.getRepository(entities_1.SchoolSettings).findOne({ where: { id: 'default' } });
         const inline = req.query.preview === 'true';
         const maxMarks = Number(report.examType?.maxMarks) || 100;

@@ -21,6 +21,7 @@ const timetable_routes_1 = __importDefault(require("./routes/timetable.routes"))
 const admin_routes_1 = __importDefault(require("./routes/admin.routes"));
 const dashboard_routes_1 = __importDefault(require("./routes/dashboard.routes"));
 const payroll_routes_1 = __importDefault(require("./routes/payroll.routes"));
+const leave_requests_routes_1 = __importDefault(require("./routes/leave-requests.routes"));
 const general_ledger_routes_1 = __importDefault(require("./routes/general-ledger.routes"));
 const chart_of_accounts_routes_1 = __importDefault(require("./routes/chart-of-accounts.routes"));
 const teacher_assignment_routes_1 = __importDefault(require("./routes/teacher-assignment.routes"));
@@ -172,6 +173,7 @@ app.use('/api/timetable', timetable_routes_1.default);
 app.use('/api/admin', admin_routes_1.default);
 app.use('/api/dashboard', dashboard_routes_1.default);
 app.use('/api/payroll', payroll_routes_1.default);
+app.use('/api/leave-requests', leave_requests_routes_1.default);
 app.use('/api/general-ledger', general_ledger_routes_1.default);
 app.use('/api/chart-of-accounts', chart_of_accounts_routes_1.default);
 app.use('/api/admin/assignments', teacher_assignment_routes_1.default);

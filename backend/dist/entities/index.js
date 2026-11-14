@@ -14,8 +14,8 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
     for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.InvoiceAdjustment = exports.TuitionExemption = exports.StaffLeaveBalance = exports.Payslip = exports.PayrollRun = exports.StaffPayrollProfile = exports.StudentTermBalance = exports.ResultsPublication = exports.ClassPromotionRule = exports.SchoolFee = exports.SchoolSettings = exports.UniformSale = exports.TuckshopSale = exports.TuckshopItem = exports.Notification = exports.MessageAttachment = exports.Message = exports.WeeklyAssessment = exports.LearningSchedule = exports.TeacherAllocation = exports.Timetable = exports.CashbookEntry = exports.LedgerEntry = exports.Receipt = exports.Payment = exports.InvoiceLine = exports.Invoice = exports.HonourRoll = exports.ReportCard = exports.ExamMark = exports.ExamType = exports.StudentAttendance = exports.StaffAttendance = exports.Staff = exports.Guardian = exports.Student = exports.Parent = exports.TimetableSlot = exports.TeacherAssignment = exports.Section = exports.ClassSubject = exports.Department = exports.Subject = exports.SchoolClass = exports.Form = exports.Term = exports.SchoolYear = exports.SchoolRole = exports.User = exports.entities = void 0;
-exports.LibraryBookmark = exports.LibraryResource = exports.ClassRecording = exports.VirtualClass = exports.LessonContent = exports.LmsSubmission = exports.LmsAssignment = exports.NotificationLog = exports.HomeworkAssignment = exports.RecordBookMark = exports.RecordBookColumn = exports.AuditLog = exports.ReportTemplate = exports.StudentEnrollment = exports.BulkMessageRecipient = exports.BulkMessage = exports.ApplicationDocument = exports.Application = exports.GeneralLedgerEntry = exports.ChartOfAccount = void 0;
+exports.LeaveRequest = exports.StaffLeaveBalance = exports.Payslip = exports.PayrollRun = exports.StaffPayrollProfile = exports.StudentTermBalance = exports.ReportCardView = exports.ResultsPublication = exports.ClassPromotionRule = exports.SchoolFee = exports.SchoolSettings = exports.UniformSale = exports.TuckshopSale = exports.TuckshopItem = exports.Notification = exports.MessageAttachment = exports.Message = exports.WeeklyAssessment = exports.LearningSchedule = exports.TeacherAllocation = exports.Timetable = exports.CashbookEntry = exports.LedgerEntry = exports.Receipt = exports.Payment = exports.InvoiceLine = exports.Invoice = exports.HonourRoll = exports.ReportCard = exports.ExamMark = exports.ExamType = exports.StudentAttendance = exports.StaffAttendance = exports.Staff = exports.Guardian = exports.Student = exports.Parent = exports.TimetableSlot = exports.TeacherAssignment = exports.Section = exports.ClassSubject = exports.Department = exports.Subject = exports.SchoolClass = exports.Form = exports.Term = exports.SchoolYear = exports.SchoolRole = exports.User = exports.entities = void 0;
+exports.LibraryBookmark = exports.LibraryResource = exports.ClassRecording = exports.VirtualClass = exports.LessonContent = exports.LmsSubmission = exports.LmsAssignment = exports.NotificationLog = exports.HomeworkAssignment = exports.RecordBookMark = exports.RecordBookColumn = exports.AuditLog = exports.ReportTemplate = exports.StudentEnrollment = exports.BulkMessageRecipient = exports.BulkMessage = exports.ApplicationDocument = exports.Application = exports.GeneralLedgerEntry = exports.ChartOfAccount = exports.InvoiceAdjustment = exports.TuitionExemption = void 0;
 const User_1 = require("./User");
 Object.defineProperty(exports, "User", { enumerable: true, get: function () { return User_1.User; } });
 const SchoolRole_1 = require("./SchoolRole");
@@ -100,6 +100,8 @@ const ClassPromotionRule_1 = require("./ClassPromotionRule");
 Object.defineProperty(exports, "ClassPromotionRule", { enumerable: true, get: function () { return ClassPromotionRule_1.ClassPromotionRule; } });
 const ResultsPublication_1 = require("./ResultsPublication");
 Object.defineProperty(exports, "ResultsPublication", { enumerable: true, get: function () { return ResultsPublication_1.ResultsPublication; } });
+const ReportCardView_1 = require("./ReportCardView");
+Object.defineProperty(exports, "ReportCardView", { enumerable: true, get: function () { return ReportCardView_1.ReportCardView; } });
 const StudentTermBalance_1 = require("./StudentTermBalance");
 Object.defineProperty(exports, "StudentTermBalance", { enumerable: true, get: function () { return StudentTermBalance_1.StudentTermBalance; } });
 const StaffPayrollProfile_1 = require("./StaffPayrollProfile");
@@ -110,6 +112,8 @@ const Payslip_1 = require("./Payslip");
 Object.defineProperty(exports, "Payslip", { enumerable: true, get: function () { return Payslip_1.Payslip; } });
 const StaffLeaveBalance_1 = require("./StaffLeaveBalance");
 Object.defineProperty(exports, "StaffLeaveBalance", { enumerable: true, get: function () { return StaffLeaveBalance_1.StaffLeaveBalance; } });
+const LeaveRequest_1 = require("./LeaveRequest");
+Object.defineProperty(exports, "LeaveRequest", { enumerable: true, get: function () { return LeaveRequest_1.LeaveRequest; } });
 const TuitionExemption_1 = require("./TuitionExemption");
 Object.defineProperty(exports, "TuitionExemption", { enumerable: true, get: function () { return TuitionExemption_1.TuitionExemption; } });
 const InvoiceAdjustment_1 = require("./InvoiceAdjustment");
@@ -161,6 +165,7 @@ exports.entities = [
     SchoolFee_1.SchoolFee,
     ClassPromotionRule_1.ClassPromotionRule,
     ResultsPublication_1.ResultsPublication,
+    ReportCardView_1.ReportCardView,
     StudentTermBalance_1.StudentTermBalance,
     SchoolYear_1.SchoolYear,
     Term_1.Term,
@@ -202,6 +207,7 @@ exports.entities = [
     PayrollRun_1.PayrollRun,
     Payslip_1.Payslip,
     StaffLeaveBalance_1.StaffLeaveBalance,
+    LeaveRequest_1.LeaveRequest,
     TuitionExemption_1.TuitionExemption,
     InvoiceAdjustment_1.InvoiceAdjustment,
     ChartOfAccount_1.ChartOfAccount,

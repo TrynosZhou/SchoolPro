@@ -96,15 +96,28 @@ router.post('/generate', (0, auth_1.authorize)(...manageRoles), async (req, res)
         if (!Array.isArray(periods) || !periods.length) {
             return res.status(400).json({ message: 'periods array is required (lesson times from Configure Periods).' });
         }
-        if (timetableVersion !== undefined && timetableVersion !== null && String(timetableVersion).trim()) {
-            await (0, timetable_context_service_1.saveTimetableVersion)(timetableVersion);
+        // A version sent by the admin (edited by hand) is used as-is; otherwise a full re-generation
+        // moves the version up by one automatically.
+        const manualVersion = timetableVersion !== undefined && timetableVersion !== null && String(timetableVersion).trim()
+            ? String(timetableVersion)
+            : null;
+        if (manualVersion) {
+            await (0, timetable_context_service_1.saveTimetableVersion)(manualVersion);
         }
         const result = await (0, timetable_generate_service_1.generateTimetableFromTeacherLoad)({
             periods,
             replaceExisting: replaceExisting !== false,
             classIds: Array.isArray(classIds) ? classIds : undefined,
         });
-        res.status(result.success ? 201 : 207).json(result);
+        if (!manualVersion && replaceExisting !== false && result.summary.totalSlots > 0) {
+            await (0, timetable_context_service_1.bumpTimetableVersion)();
+        }
+        const ctx = await (0, timetable_context_service_1.loadTimetableContext)();
+        res.status(result.success ? 201 : 207).json({
+            ...result,
+            timetableVersion: ctx.timetableVersion,
+            termVersionLabel: ctx.termVersionLabel,
+        });
     }
     catch (err) {
         const e = err;

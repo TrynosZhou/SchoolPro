@@ -427,8 +427,9 @@ async function resolveClassTeacherAssignment(repo, classId, classTeacherId) {
     if (classTeacherId === undefined)
         return {};
     const teacherId = classTeacherId ? String(classTeacherId).trim() : '';
+    // Empty value means "unassign": return null so the column is actually cleared.
     if (!teacherId)
-        return { classTeacherId: undefined };
+        return { classTeacherId: null };
     const staff = await data_source_1.AppDataSource.getRepository(entities_1.Staff).findOne({ where: { id: teacherId } });
     if (!staff)
         return { error: 'Class teacher not found' };
@@ -448,7 +449,7 @@ router.post('/classes', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (re
         return res.status(409).json({ message: assignment.error });
     const cls = repo.create({
         ...rest,
-        ...(assignment.classTeacherId !== undefined ? { classTeacherId: assignment.classTeacherId } : {}),
+        ...(assignment.classTeacherId ? { classTeacherId: assignment.classTeacherId } : {}),
     });
     const saved = await repo.save(cls);
     res.status(201).json(saved);
@@ -666,6 +667,7 @@ router.patch('/classes/:id', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), asyn
         const assignment = await resolveClassTeacherAssignment(repo, cls.id, classTeacherId);
         if (assignment.error)
             return res.status(409).json({ message: assignment.error });
+        // null clears the teacher (column is nullable); entity type is `string | undefined`.
         cls.classTeacherId = assignment.classTeacherId;
     }
     const saved = await repo.save(cls);
@@ -1167,6 +1169,7 @@ const STAFF_PORTAL_ROLES = [enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPA
 function serializeManagedUser(user) {
     return {
         id: user.id,
+        username: user.username ?? null,
         email: user.email,
         firstName: user.firstName,
         lastName: user.lastName,
@@ -1394,6 +1397,56 @@ router.patch('/users/:id', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async 
             user.portalPasswordCustomized = true;
         }
     }
+    // ── Portal role change (administrator only: this route is ADMIN-restricted) ──────────────
+    // The account, its login credentials and its existing profiles are kept; only the portal
+    // role changes. A staff profile / parent profile is created when the new role needs one.
+    if (role !== undefined) {
+        const nextRole = Object.values(enums_1.UserRole).includes(role) ? role : null;
+        if (!nextRole)
+            return res.status(400).json({ message: 'Invalid role' });
+        if (user.role !== nextRole) {
+            if (req.params.id === req.user.userId) {
+                return res.status(400).json({ message: 'You cannot change your own role.' });
+            }
+            if (user.role === enums_1.UserRole.STUDENT || nextRole === enums_1.UserRole.STUDENT) {
+                return res.status(400).json({
+                    message: 'Student accounts are tied to a student record, so their role cannot be changed here.',
+                });
+            }
+            const wasStaff = STAFF_PORTAL_ROLES.includes(user.role);
+            const willBeStaff = STAFF_PORTAL_ROLES.includes(nextRole);
+            user.role = nextRole;
+            // A permission role belongs to one portal role: clear it unless a matching one is supplied below.
+            user.schoolRoleId = null;
+            user.schoolRole = null;
+            // Staff profile: required for every staff role except Director.
+            if (willBeStaff && nextRole !== enums_1.UserRole.DIRECTOR) {
+                const staffRepo = data_source_1.AppDataSource.getRepository(entities_1.Staff);
+                if (user.staffProfile) {
+                    user.staffProfile.isActive = user.isActive;
+                }
+                else {
+                    user.staffProfile = await staffRepo.save(staffRepo.create({
+                        userId: user.id,
+                        employeeNumber: await (0, helpers_1.generateEmployeeNumber)(),
+                        department: department?.trim() || undefined,
+                        qualification: qualification?.trim() || undefined,
+                        hireDate: hireDate || (0, helpers_1.today)(),
+                        isActive: user.isActive,
+                    }));
+                }
+            }
+            else if (wasStaff && !willBeStaff && user.staffProfile) {
+                // No longer staff: keep the record (history, timetable) but remove from active staff lists.
+                user.staffProfile.isActive = false;
+            }
+            // Parent profile: created when moving to Parent; an existing one (and its children) is kept.
+            if (nextRole === enums_1.UserRole.PARENT && !user.parentProfile) {
+                const parentRepo = data_source_1.AppDataSource.getRepository(entities_1.Parent);
+                user.parentProfile = await parentRepo.save(parentRepo.create({ userId: user.id }));
+            }
+        }
+    }
     if (schoolRoleId !== undefined) {
         if (schoolRoleId === null || schoolRoleId === '') {
             user.schoolRoleId = undefined;
@@ -1403,22 +1456,17 @@ router.patch('/users/:id', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async 
             const schoolRole = await data_source_1.AppDataSource.getRepository(entities_1.SchoolRole).findOne({ where: { id: schoolRoleId } });
             if (!schoolRole)
                 return res.status(404).json({ message: 'Assigned role not found' });
+            if (schoolRole.baseRole !== user.role && role !== undefined) {
+                return res.status(400).json({ message: 'The selected permission role does not belong to the new portal role' });
+            }
             user.schoolRoleId = schoolRole.id;
             user.schoolRole = schoolRole;
             user.role = schoolRole.baseRole;
         }
     }
-    if (role !== undefined && req.params.id !== req.user.userId) {
-        const nextRole = Object.values(enums_1.UserRole).includes(role) ? role : null;
-        if (!nextRole)
-            return res.status(400).json({ message: 'Invalid role' });
-        if (user.role !== nextRole) {
-            return res.status(400).json({ message: 'Role changes are not supported here. Create a new account with the correct role instead.' });
-        }
-    }
     if (isActive !== undefined) {
         user.isActive = Boolean(isActive);
-        if (user.staffProfile)
+        if (user.staffProfile && STAFF_PORTAL_ROLES.includes(user.role))
             user.staffProfile.isActive = user.isActive;
     }
     await userRepo.save(user);
@@ -1450,6 +1498,70 @@ router.post('/users/:id/unlock', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), 
     const full = await loadManagedUser(user.id);
     res.json(serializeManagedUser(full));
 });
+/**
+ * Admin-initiated account reset for a selected user.
+ * Body: { username?: string; password?: string } — send the username only, the password only, or both.
+ * Passwords must satisfy the school security policy; usernames must be unique (case-insensitive).
+ */
+const USERNAME_PATTERN = /^[A-Za-z0-9._-]{3,50}$/;
+async function resetUserAccountHandler(req, res) {
+    const userRepo = data_source_1.AppDataSource.getRepository(entities_1.User);
+    const user = await userRepo.findOne({ where: { id: req.params.id } });
+    if (!user)
+        return res.status(404).json({ message: 'User not found' });
+    const rawUsername = typeof req.body?.username === 'string' ? req.body.username.trim() : '';
+    const password = typeof req.body?.password === 'string' ? req.body.password : '';
+    const wantsUsername = rawUsername.length > 0 && rawUsername !== (user.username ?? '');
+    const wantsPassword = password.trim().length > 0;
+    if (!wantsUsername && !wantsPassword) {
+        return res.status(400).json({ message: 'Enter a new username, a new password, or both' });
+    }
+    const changes = [];
+    if (wantsUsername) {
+        if (user.role === enums_1.UserRole.STUDENT) {
+            return res.status(400).json({
+                message: 'Student accounts sign in with their Student ID, so the username cannot be changed. You can still reset the password.',
+            });
+        }
+        if (!USERNAME_PATTERN.test(rawUsername)) {
+            return res.status(400).json({
+                message: 'Username must be 3–50 characters and may only contain letters, numbers, dots, underscores and hyphens',
+            });
+        }
+        const lowered = rawUsername.toLowerCase();
+        const clash = await userRepo
+            .createQueryBuilder('u')
+            .where('u.id != :id', { id: user.id })
+            .andWhere('(LOWER(u.username) = :v OR LOWER(u.email) = :v)', { v: lowered })
+            .getOne();
+        if (clash)
+            return res.status(409).json({ message: 'That username is already in use' });
+        user.username = rawUsername;
+        changes.push('username');
+    }
+    if (wantsPassword) {
+        const policy = await (0, security_policy_service_1.getSecurityPolicy)();
+        const pwdErr = (0, security_policy_1.validatePasswordAgainstPolicy)(password, policy);
+        if (pwdErr)
+            return res.status(400).json({ message: pwdErr });
+        user.passwordHash = await bcryptjs_1.default.hash(password, 10);
+        if (user.role === enums_1.UserRole.STUDENT) {
+            user.portalPasswordCustomized = true;
+        }
+        changes.push('password');
+    }
+    user.failedLoginAttempts = 0;
+    user.lockedUntil = null;
+    await userRepo.save(user);
+    res.json({
+        message: `${changes.join(' and ').replace(/^./, (c) => c.toUpperCase())} updated for ${user.firstName} ${user.lastName}`,
+        username: user.username ?? null,
+        changed: changes,
+    });
+}
+router.post('/users/:id/reset-account', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), resetUserAccountHandler);
+// Kept for backwards compatibility with the password-only modal.
+router.post('/users/:id/reset-password', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), resetUserAccountHandler);
 async function loadParentRecord(parentId) {
     return data_source_1.AppDataSource.getRepository(entities_1.Parent).findOne({
         where: { id: parentId },
@@ -1756,14 +1868,29 @@ router.patch('/parents/:id', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), asyn
     res.json(serializeParent(full));
 });
 router.delete('/parents/:id', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (req, res) => {
-    const parent = await loadParentRecord(req.params.id);
-    if (!parent)
-        return res.status(404).json({ message: 'Parent not found' });
-    if (parent.userId === req.user.userId) {
-        return res.status(400).json({ message: 'You cannot delete your own account' });
+    try {
+        // Light lookup only (no guardianship/student joins) so deletion never depends on the heavy detail loader.
+        const parent = await data_source_1.AppDataSource.getRepository(entities_1.Parent).findOne({ where: { id: req.params.id } });
+        if (!parent)
+            return res.status(404).json({ message: 'Parent not found' });
+        if (parent.userId === req.user.userId) {
+            return res.status(400).json({ message: 'You cannot delete your own account' });
+        }
+        // Deleting the user cascades to the parent profile; guardian links to children are unlinked
+        // (parentId set to null) and the parent's report-card view records are removed.
+        await data_source_1.AppDataSource.getRepository(entities_1.User).delete({ id: parent.userId });
+        return res.json({ message: 'Parent deleted' });
     }
-    await data_source_1.AppDataSource.getRepository(entities_1.User).delete({ id: parent.userId });
-    res.json({ message: 'Parent deleted' });
+    catch (err) {
+        console.error('Delete parent failed:', err);
+        const code = err?.code;
+        if (code === '23503') {
+            return res.status(409).json({
+                message: 'This parent cannot be deleted because other records (e.g. messages, payments or audit entries) still reference their account. Deactivate the account instead.',
+            });
+        }
+        return res.status(500).json({ message: err instanceof Error ? err.message : 'Failed to delete parent' });
+    }
 });
 router.use('/permissions', permissions_routes_1.default);
 exports.default = router;

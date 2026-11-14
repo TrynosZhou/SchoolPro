@@ -156,7 +156,7 @@ router.get('/fees', (0, auth_1.authorize)(...portal_roles_1.FINANCE_ROLES, enums
 router.post('/fees', (0, auth_1.authorize)(...portal_roles_1.FINANCE_WRITE_ROLES), async (req, res) => {
     await (0, registration_invoice_service_1.ensureRegistrationSchoolFees)();
     const repo = data_source_1.AppDataSource.getRepository(entities_1.SchoolFee);
-    const { name, code, description, defaultAmount, icon, isActive, sortOrder } = req.body;
+    const { name, code, description, defaultAmount, dayScholarAmount, boarderAmount, icon, isActive, sortOrder } = req.body;
     if (!name?.trim()) {
         return res.status(400).json({ message: 'Fee name is required' });
     }
@@ -173,6 +173,8 @@ router.post('/fees', (0, auth_1.authorize)(...portal_roles_1.FINANCE_WRITE_ROLES
         name: String(name).trim(),
         description: description?.trim() || undefined,
         defaultAmount: Number(defaultAmount) || 0,
+        dayScholarAmount: dayScholarAmount !== undefined && dayScholarAmount !== null ? Number(dayScholarAmount) : 0,
+        boarderAmount: boarderAmount !== undefined && boarderAmount !== null ? Number(boarderAmount) : 0,
         icon: icon?.trim() || undefined,
         isActive: isActive !== false,
         sortOrder: Number(sortOrder) || 0,
@@ -184,13 +186,17 @@ router.patch('/fees/:id', (0, auth_1.authorize)(...portal_roles_1.FINANCE_WRITE_
     const fee = await repo.findOne({ where: { id: req.params.id } });
     if (!fee)
         return res.status(404).json({ message: 'Fee not found' });
-    const { name, code, description, defaultAmount, icon, isActive, sortOrder } = req.body;
+    const { name, code, description, defaultAmount, dayScholarAmount, boarderAmount, icon, isActive, sortOrder } = req.body;
     if (name !== undefined)
         fee.name = String(name).trim();
     if (description !== undefined)
         fee.description = description?.trim() || undefined;
     if (defaultAmount !== undefined)
         fee.defaultAmount = Number(defaultAmount) || 0;
+    if (dayScholarAmount !== undefined)
+        fee.dayScholarAmount = dayScholarAmount !== null ? Number(dayScholarAmount) : 0;
+    if (boarderAmount !== undefined)
+        fee.boarderAmount = boarderAmount !== null ? Number(boarderAmount) : 0;
     if (icon !== undefined)
         fee.icon = icon?.trim() || undefined;
     if (isActive !== undefined)
@@ -344,8 +350,8 @@ router.post('/tuition-exemptions', (0, auth_1.authorize)(...financeStaff), async
 });
 router.delete('/tuition-exemptions/:id', (0, auth_1.authorize)(...financeStaff), async (req, res) => {
     try {
-        await (0, tuition_exemption_service_1.removeTuitionExemption)(req.params.id);
-        res.json({ ok: true });
+        const applied = await (0, tuition_exemption_service_1.removeTuitionExemption)(req.params.id);
+        res.json({ ok: true, applied });
     }
     catch (err) {
         return res.status(400).json({ message: err instanceof Error ? err.message : 'Failed to remove exemption' });
@@ -368,12 +374,12 @@ router.get('/tuition-exemptions/export.pdf', (0, auth_1.authorize)(...financeSta
     const pageBottom = () => doc.page.height - margin - 20;
     const exemptionLabel = (row) => {
         if (row.exemptionType === 'staff_child') {
-            return 'Staff child — all fees waived';
+            return 'Staff child — balance & fees waived';
         }
         if (row.exemptionType === 'percentage') {
-            return `${row.value}% off tuition`;
+            return row.value >= 100 ? '100% — balance written off' : `${row.value}% off tuition`;
         }
-        return `$${Number(row.value).toFixed(2)} off tuition`;
+        return `$${Number(row.value).toFixed(2)} off balance & tuition`;
     };
     let y = margin;
     await renderPdfHeaderWithLogo(doc, 'Tuition Exemptions Report', {
@@ -491,17 +497,49 @@ router.post('/invoice-adjustments/debit-note', (0, auth_1.authorize)(...financeS
         return res.status(400).json({ message: err instanceof Error ? err.message : 'Failed to apply debit note' });
     }
 });
+router.get('/invoices/tuition-quote', (0, auth_1.authorize)(...portal_roles_1.FINANCE_ROLES), finView, async (req, res) => {
+    const studentId = String(req.query.studentId || '').trim();
+    if (!studentId)
+        return res.status(400).json({ message: 'studentId is required' });
+    const student = await data_source_1.AppDataSource.getRepository(entities_1.Student).findOne({
+        where: { id: studentId },
+        relations: (0, typeorm_helpers_1.relations)('schoolClass', 'schoolClass.form', 'form'),
+    });
+    if (!student)
+        return res.status(404).json({ message: 'Student not found' });
+    const quote = await (0, registration_invoice_service_1.quoteTuitionForStudent)(student);
+    res.json(quote);
+});
 router.post('/invoices', (0, auth_1.authorize)(...portal_roles_1.FINANCE_WRITE_ROLES), finCreate, async (req, res) => {
     const repo = data_source_1.AppDataSource.getRepository(entities_1.Invoice);
     const ledgerRepo = data_source_1.AppDataSource.getRepository(entities_1.LedgerEntry);
     const studentRepo = data_source_1.AppDataSource.getRepository(entities_1.Student);
-    const { lines, ...data } = req.body;
+    let { lines, ...data } = req.body;
     const student = await studentRepo.findOne({
         where: { id: data.studentId },
-        relations: (0, typeorm_helpers_1.relations)('schoolClass'),
+        relations: (0, typeorm_helpers_1.relations)('schoolClass', 'schoolClass.form', 'form'),
     });
     if (!student)
         return res.status(404).json({ message: 'Student not found' });
+    const feeType = String(data.feeType || '');
+    const isTuitionFee = !feeType || feeType === 'tuition' || feeType.includes('tuition');
+    if (isTuitionFee) {
+        const quote = await (0, registration_invoice_service_1.quoteTuitionForStudent)(student);
+        if (quote.error || quote.amount <= 0) {
+            return res.status(400).json({
+                message: quote.error || 'No tuition amount is configured for this student on Manage Fees.',
+            });
+        }
+        data.feeType = quote.feeCode || data.feeType;
+        data.description = quote.description;
+        data.totalAmount = quote.amount;
+        lines = [{
+                description: quote.description,
+                quantity: 1,
+                unitPrice: quote.amount,
+                amount: quote.amount,
+            }];
+    }
     let termName;
     if (data.termId) {
         const term = await data_source_1.AppDataSource.getRepository(entities_1.Term).findOne({ where: { id: data.termId } });

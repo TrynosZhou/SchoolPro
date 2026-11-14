@@ -115,6 +115,8 @@ exports.DEFAULT_ROLE_PERMISSIONS = {
         'finance.books',
         'finance.reports',
         'finance.student_balance',
+        'communication.send',
+        'communication.inbox',
     ],
     [enums_1.UserRole.TEACHER]: [
         'students.view',

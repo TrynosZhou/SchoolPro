@@ -7,6 +7,7 @@ exports.listParentMessagingRecipients = listParentMessagingRecipients;
 exports.listStudentMessagingRecipients = listStudentMessagingRecipients;
 exports.listTeacherMessagingRecipients = listTeacherMessagingRecipients;
 exports.canMessageRecipient = canMessageRecipient;
+exports.listAccountantMessagingRecipients = listAccountantMessagingRecipients;
 const data_source_1 = require("../config/data-source");
 const enums_1 = require("../entities/enums");
 /** Stable conversation key for a two-user pair (sorted so it is symmetric). */
@@ -18,12 +19,22 @@ const OFFICE_ROLES = new Set([
     enums_1.UserRole.DIRECTOR,
     enums_1.UserRole.PRINCIPAL,
 ]);
+/** Roles that parents / students / teachers may message as "the office" (includes accountants). */
+const OFFICE_RECIPIENT_ROLES = new Set([
+    enums_1.UserRole.ADMIN,
+    enums_1.UserRole.DIRECTOR,
+    enums_1.UserRole.PRINCIPAL,
+    enums_1.UserRole.ACCOUNTANT,
+]);
 async function officeRecipients() {
     const rows = await data_source_1.AppDataSource.query(`SELECT id, "firstName", "lastName", email, role
        FROM users
-      WHERE "isActive" = true AND role IN ('admin','director','principal')
+      WHERE "isActive" = true AND role IN ('admin','director','principal','accountant')
       ORDER BY "firstName", "lastName"`);
-    return rows.map((u) => ({ ...u, context: 'School office' }));
+    return rows.map((u) => ({
+        ...u,
+        context: u.role === 'accountant' ? 'Accounts office' : 'School office',
+    }));
 }
 /** Student ids linked to a parent account (via guardians). */
 async function getParentStudentIds(parentId) {
@@ -210,7 +221,7 @@ async function listTeacherMessagingRecipients(staffId) {
     return [...recipients.values()];
 }
 async function canParentMessageUser(parentId, recipientUserId, recipientRole) {
-    if (OFFICE_ROLES.has(recipientRole))
+    if (OFFICE_RECIPIENT_ROLES.has(recipientRole))
         return true;
     if (recipientRole === enums_1.UserRole.TEACHER) {
         const studentIds = await getParentStudentIds(parentId);
@@ -222,7 +233,7 @@ async function canParentMessageUser(parentId, recipientUserId, recipientRole) {
     return false;
 }
 async function canStudentMessageUser(studentId, recipientUserId, recipientRole) {
-    if (OFFICE_ROLES.has(recipientRole))
+    if (OFFICE_RECIPIENT_ROLES.has(recipientRole))
         return true;
     if (recipientRole === enums_1.UserRole.TEACHER) {
         const teacherUserIds = await getTeacherUserIdsForStudents([studentId]);
@@ -232,7 +243,7 @@ async function canStudentMessageUser(studentId, recipientUserId, recipientRole) 
 }
 async function canTeacherMessageUser(staffId, recipientUserId, recipientRole) {
     // Staff can always reach the office and colleagues.
-    if (OFFICE_ROLES.has(recipientRole) || recipientRole === enums_1.UserRole.TEACHER)
+    if (OFFICE_RECIPIENT_ROLES.has(recipientRole) || recipientRole === enums_1.UserRole.TEACHER)
         return true;
     if (recipientRole === enums_1.UserRole.PARENT || recipientRole === enums_1.UserRole.STUDENT) {
         const reachable = await listTeacherMessagingRecipients(staffId);
@@ -251,6 +262,12 @@ async function canMessageRecipient(sender, recipient) {
     const role = sender.role;
     if (OFFICE_ROLES.has(role))
         return true;
+    if (role === enums_1.UserRole.ACCOUNTANT) {
+        // Accountants may reach the office, other accountants, teachers and parents.
+        return (OFFICE_RECIPIENT_ROLES.has(recipient.role) ||
+            recipient.role === enums_1.UserRole.TEACHER ||
+            recipient.role === enums_1.UserRole.PARENT);
+    }
     if (role === enums_1.UserRole.TEACHER) {
         if (!sender.staffId)
             return false;
@@ -267,4 +284,26 @@ async function canMessageRecipient(sender, recipient) {
         return canStudentMessageUser(sender.studentId, recipient.id, recipient.role);
     }
     return false;
+}
+/**
+ * Recipients an ACCOUNTANT may message: the school office, other accountants,
+ * and every active parent account.
+ */
+async function listAccountantMessagingRecipients(selfUserId) {
+    const recipients = new Map();
+    for (const r of await officeRecipients()) {
+        if (r.id !== selfUserId)
+            recipients.set(r.id, r);
+    }
+    const parents = await data_source_1.AppDataSource.query(`SELECT u.id, u."firstName", u."lastName", u.email, u.role
+       FROM users u
+       JOIN parents p ON p."userId" = u.id
+      WHERE u."isActive" = true
+      ORDER BY u."firstName", u."lastName"`);
+    for (const p of parents) {
+        if (p.id !== selfUserId && !recipients.has(p.id)) {
+            recipients.set(p.id, { ...p, context: 'Parent' });
+        }
+    }
+    return [...recipients.values()];
 }

@@ -121,7 +121,7 @@ exports.DEFAULT_ACCESS_MATRIX = {
         label: 'Accountant',
         description: 'Finance operations and student registration; no class enrolment.',
         modules: {
-            communication: grants('none', 'none', 'none', 'none'),
+            communication: grants('all', 'all', 'none', 'none'),
             students: grants('all', 'all', 'all', 'none'),
             enrollment: grants('none', 'none', 'none', 'none'),
             admissions: grants('none', 'none', 'none', 'none'),

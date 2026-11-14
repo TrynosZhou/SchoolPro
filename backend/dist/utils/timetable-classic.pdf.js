@@ -103,48 +103,6 @@ function formatGeneratedDate(date) {
 function slotsAt(slots, day, period) {
     return slots.filter((s) => s.dayOfWeek === day && s.startTime === period.startTime && s.endTime === period.endTime);
 }
-function sameLesson(a, b, mode) {
-    if (a.subjectName !== b.subjectName)
-        return false;
-    if (mode === 'teacher') {
-        return a.className === b.className;
-    }
-    return (a.teacherName === b.teacherName);
-}
-function computeColSpans(day, periods, slots, mode) {
-    const spans = periods.map(() => 1);
-    let i = 0;
-    while (i < periods.length) {
-        if (isBreakPeriod(periods[i])) {
-            i += 1;
-            continue;
-        }
-        const cellSlots = slotsAt(slots, day, periods[i]);
-        if (cellSlots.length === 0) {
-            i += 1;
-            continue;
-        }
-        let span = 1;
-        // Clashed cells (2+ lessons) are never merged across periods.
-        if (cellSlots.length === 1) {
-            const slot = cellSlots[0];
-            while (i + span < periods.length) {
-                const next = periods[i + span];
-                if (isBreakPeriod(next))
-                    break;
-                const nextSlots = slotsAt(slots, day, next);
-                if (nextSlots.length !== 1 || !sameLesson(slot, nextSlots[0], mode))
-                    break;
-                span += 1;
-            }
-        }
-        spans[i] = span;
-        for (let k = 1; k < span; k += 1)
-            spans[i + k] = 0;
-        i += span;
-    }
-    return spans;
-}
 function drawVerticalLabel(doc, text, x, y, w, h) {
     doc.save();
     doc.font('Helvetica-Bold').fontSize(7).fillColor(COLORS.ink);
@@ -179,12 +137,6 @@ function distributeColumnWidths(totalWidth, count) {
         }
         return base;
     });
-}
-function spanColumnWidth(widths, start, span) {
-    let total = 0;
-    for (let i = 0; i < span; i += 1)
-        total += widths[start + i] || 0;
-    return total;
 }
 function drawTeacherCell(doc, slot, x, y, w, h) {
     doc.save();
@@ -326,28 +278,33 @@ function renderClassicTimetablePage(doc, data, mode) {
         doc.rect(gridX, rowY, dayColW, rowH).stroke();
         doc.font('Helvetica-Bold').fontSize(9).fillColor(COLORS.ink);
         doc.text(DAY_LABELS[di], gridX + 1, rowY + rowH / 2 - 5, { width: dayColW - 2, align: 'center' });
-        const spans = computeColSpans(day, periods, slots, mode);
         let cx = gridX + dayColW;
         for (let pi = 0; pi < periods.length; pi += 1) {
             const period = periods[pi];
             const colW = colWidths[pi];
-            const span = spans[pi];
+            // Break / lunch columns: never hold lessons.
             if (isBreakPeriod(period)) {
-                doc.fillColor(COLORS.breakFill).strokeColor(COLORS.border);
-                doc.rect(cx, rowY, colW, rowH).fillAndStroke();
-                if (di === 2) {
-                    drawVerticalLabel(doc, breakColumnTitle(period), cx, rowY, colW, rowH);
+                if (mode === 'teacher') {
+                    // Teacher timetables: one merged break/lunch cell spanning every day row, label written once.
+                    if (di === 0) {
+                        doc.fillColor(COLORS.breakFill).strokeColor(COLORS.border);
+                        doc.rect(cx, bodyY, colW, bodyH).fillAndStroke();
+                        drawVerticalLabel(doc, breakColumnTitle(period), cx, bodyY, colW, bodyH);
+                    }
+                }
+                else {
+                    doc.fillColor(COLORS.breakFill).strokeColor(COLORS.border);
+                    doc.rect(cx, rowY, colW, rowH).fillAndStroke();
+                    if (di === 2) {
+                        drawVerticalLabel(doc, breakColumnTitle(period), cx, rowY, colW, rowH);
+                    }
                 }
                 cx += colW;
                 continue;
             }
-            if (span === 0) {
-                cx += colW;
-                continue;
-            }
-            const cellW = spanColumnWidth(colWidths, pi, span);
+            // Lesson columns: exactly one cell per period, never merged with a neighbour.
             doc.fillColor('#ffffff').strokeColor(COLORS.border);
-            doc.rect(cx, rowY, cellW, rowH).stroke();
+            doc.rect(cx, rowY, colW, rowH).stroke();
             const cellSlots = slotsAt(slots, day, period);
             if (cellSlots.length) {
                 // Clashing lessons are stacked vertically, splitting the cell height so both show.
@@ -356,24 +313,27 @@ function renderClassicTimetablePage(doc, data, mode) {
                     const sy = rowY + si * subH;
                     if (si > 0) {
                         doc.strokeColor(COLORS.border).lineWidth(0.4);
-                        doc.moveTo(cx, sy).lineTo(cx + cellW, sy).stroke();
+                        doc.moveTo(cx, sy).lineTo(cx + colW, sy).stroke();
                         doc.lineWidth(1);
                     }
                     if (mode === 'teacher') {
-                        drawTeacherCell(doc, cellSlots[si], cx, sy, cellW, subH);
+                        drawTeacherCell(doc, cellSlots[si], cx, sy, colW, subH);
                     }
                     else {
-                        drawClassCell(doc, cellSlots[si], cx, sy, cellW, subH);
+                        drawClassCell(doc, cellSlots[si], cx, sy, colW, subH);
                     }
                 }
             }
-            cx += cellW;
+            cx += colW;
         }
     }
     doc.lineWidth(1.4);
     doc.rect(gridX, gridY, dayColW + gridW, gridH).stroke();
     doc.restore();
     const footerY = pageH - margin - 10;
+    // The footer sits inside the document's bottom margin; without this PDFKit starts a new page
+    // for each footer line, leaving blank extra pages after every timetable.
+    doc.page.margins.bottom = 0;
     doc.font('Helvetica').fontSize(7).fillColor(COLORS.muted);
     doc.text(`Timetable generated: ${formatGeneratedDate(data.generatedAt)}`, margin, footerY, {
         width: contentW / 2,

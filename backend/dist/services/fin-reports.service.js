@@ -71,6 +71,9 @@ function isTuitionExemptionLedgerEntry(entry) {
 }
 function buildTuitionExemptionNarrative(entry, inv, amount, isCredit) {
     const desc = String(entry.description || '').trim();
+    if (desc.toLowerCase().includes('outstanding balance')) {
+        return desc;
+    }
     if (desc.includes('%') && desc.includes('$') && desc.length > 24) {
         return desc;
     }

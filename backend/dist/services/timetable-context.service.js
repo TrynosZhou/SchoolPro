@@ -1,6 +1,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.loadTimetableContext = loadTimetableContext;
+exports.nextTimetableVersion = nextTimetableVersion;
+exports.bumpTimetableVersion = bumpTimetableVersion;
 exports.saveTimetableVersion = saveTimetableVersion;
 const data_source_1 = require("../config/data-source");
 const entities_1 = require("../entities");
@@ -49,6 +51,19 @@ async function loadTimetableContext() {
         titleLine,
         generatedAt: new Date(),
     };
+}
+/** Next version label: increments the trailing number ("2" → "3", "2.1" → "2.2"); appends one if there is none. */
+function nextTimetableVersion(current) {
+    const value = normalizeTimetableVersion(current);
+    const match = value.match(/^(.*?)(\d+)$/);
+    if (match)
+        return `${match[1]}${Number(match[2]) + 1}`.slice(0, 32);
+    return `${value} 2`.slice(0, 32);
+}
+/** Called after a new timetable is generated: moves the stored version up by one. */
+async function bumpTimetableVersion() {
+    const settings = await ensureSettings();
+    return saveTimetableVersion(nextTimetableVersion(settings.timetableVersion));
 }
 async function saveTimetableVersion(raw) {
     const version = normalizeTimetableVersion(raw);

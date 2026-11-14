@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ensureDefaultRoles = ensureDefaultRoles;
+exports.withTeacherBaseline = withTeacherBaseline;
 exports.resolvePermissionsForUser = resolvePermissionsForUser;
 exports.loadUserWithRole = loadUserWithRole;
 exports.validatePermissionKeys = validatePermissionKeys;
@@ -46,6 +47,15 @@ async function ensureDefaultRoles() {
             role.permissions = defaults;
             dirty = true;
         }
+        // Teacher portal menus are driven by permissions. Older databases hold a Teacher role that
+        // pre-dates newer permissions, so top it up with any missing defaults (never removes any).
+        if (baseRole === enums_1.UserRole.TEACHER) {
+            const merged = mergePermissions(role.permissions, defaults);
+            if (merged.length !== (role.permissions?.length ?? 0)) {
+                role.permissions = merged;
+                dirty = true;
+            }
+        }
         if (dirty)
             await roleRepo.save(role);
     }
@@ -59,11 +69,24 @@ async function ensureDefaultRoles() {
         }
     }
 }
+function mergePermissions(current, extra) {
+    return [...new Set([...(current ?? []).filter((p) => p?.trim()), ...extra])];
+}
+/**
+ * Every teacher account gets the complete teacher menu set (dashboard, students, attendance,
+ * examinations, academics, communication, timetable). A custom role assigned to a teacher can
+ * ADD permissions on top of that baseline but can no longer hide standard teacher menus.
+ */
+function withTeacherBaseline(role, permissions) {
+    if (role !== enums_1.UserRole.TEACHER)
+        return permissions;
+    return mergePermissions(permissions, permissions_1.DEFAULT_ROLE_PERMISSIONS[enums_1.UserRole.TEACHER]);
+}
 function resolvePermissionsForUser(user) {
-    if (user.schoolRole?.permissions?.length) {
-        return (0, permissions_1.sanitizePermissions)(user.schoolRole.permissions);
-    }
-    return [...permissions_1.DEFAULT_ROLE_PERMISSIONS[user.role]];
+    const base = user.schoolRole?.permissions?.length
+        ? (0, permissions_1.sanitizePermissions)(user.schoolRole.permissions)
+        : [...permissions_1.DEFAULT_ROLE_PERMISSIONS[user.role]];
+    return withTeacherBaseline(user.role, base);
 }
 async function loadUserWithRole(userId) {
     return data_source_1.AppDataSource.getRepository(entities_1.User).findOne({

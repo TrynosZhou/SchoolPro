@@ -35,6 +35,14 @@ __decorate([
     __metadata("design:type", Number)
 ], SchoolFee.prototype, "defaultAmount", void 0);
 __decorate([
+    (0, typeorm_1.Column)({ type: 'decimal', precision: 12, scale: 2, default: 0, nullable: true }),
+    __metadata("design:type", Number)
+], SchoolFee.prototype, "dayScholarAmount", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'decimal', precision: 12, scale: 2, default: 0, nullable: true }),
+    __metadata("design:type", Number)
+], SchoolFee.prototype, "boarderAmount", void 0);
+__decorate([
     (0, typeorm_1.Column)({ nullable: true, length: 16 }),
     __metadata("design:type", String)
 ], SchoolFee.prototype, "icon", void 0);

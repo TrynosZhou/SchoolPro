@@ -483,6 +483,21 @@ router.patch('/slots/:id/move', authorize(...manageRoles), async (req: AuthReque
   }
 });
 
+/** Save the lessons edited in the "Edit lessons" modal for one teacher (atomic). */
+router.put('/teachers/:teacherId/lessons', authorize(...manageRoles), async (req: AuthRequest, res: Response) => {
+  try {
+    const { lessons, ignoreConflicts } = req.body || {};
+    const result = await saveTeacherLessons(String(req.params.teacherId), {
+      lessons,
+      ignoreConflicts: ignoreConflicts === true || ignoreConflicts === 'true',
+    });
+    res.json(result);
+  } catch (err) {
+    const e = err as Error & { conflict?: unknown };
+    res.status(e.conflict ? 409 : 400).json({ message: e.message || 'Failed to save lessons.' });
+  }
+});
+
 router.patch('/slots/lock-bulk', authorize(...manageRoles), async (req: AuthRequest, res: Response) => {
   try {
     const locked = req.body?.locked;

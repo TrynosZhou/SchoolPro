@@ -225,11 +225,11 @@ router.get('/messages/recipients', (0, auth_1.authorize)(enums_1.UserRole.TEACHE
         registeredParentCount,
     });
 });
-router.get('/messages/unread-count', (0, auth_1.authorize)(enums_1.UserRole.TEACHER, enums_1.UserRole.PARENT, enums_1.UserRole.STUDENT, enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), msgView, async (req, res) => {
+router.get('/messages/unread-count', (0, auth_1.authorize)(enums_1.UserRole.TEACHER, enums_1.UserRole.PARENT, enums_1.UserRole.STUDENT, enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.ACCOUNTANT), msgView, async (req, res) => {
     const rows = await data_source_1.AppDataSource.query(`SELECT COUNT(*)::int AS count FROM messages WHERE "recipientId" = $1 AND "isRead" = false`, [req.user.userId]);
     res.json({ count: Number(rows[0]?.count || 0) });
 });
-router.get('/messages/inbox', (0, auth_1.authorize)(enums_1.UserRole.TEACHER, enums_1.UserRole.PARENT, enums_1.UserRole.STUDENT, enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), msgView, async (req, res) => {
+router.get('/messages/inbox', (0, auth_1.authorize)(enums_1.UserRole.TEACHER, enums_1.UserRole.PARENT, enums_1.UserRole.STUDENT, enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.ACCOUNTANT), msgView, async (req, res) => {
     const repo = data_source_1.AppDataSource.getRepository(entities_1.Message);
     const messages = await repo.find({
         where: { recipientId: req.user.userId },
@@ -238,7 +238,7 @@ router.get('/messages/inbox', (0, auth_1.authorize)(enums_1.UserRole.TEACHER, en
     });
     res.json(messages);
 });
-router.get('/messages/sent', (0, auth_1.authorize)(enums_1.UserRole.TEACHER, enums_1.UserRole.PARENT, enums_1.UserRole.STUDENT, enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), msgView, async (req, res) => {
+router.get('/messages/sent', (0, auth_1.authorize)(enums_1.UserRole.TEACHER, enums_1.UserRole.PARENT, enums_1.UserRole.STUDENT, enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.ACCOUNTANT), msgView, async (req, res) => {
     const repo = data_source_1.AppDataSource.getRepository(entities_1.Message);
     const messages = await repo.find({
         where: { senderId: req.user.userId },
@@ -247,7 +247,7 @@ router.get('/messages/sent', (0, auth_1.authorize)(enums_1.UserRole.TEACHER, enu
     });
     res.json(messages);
 });
-router.get('/messages', (0, auth_1.authorize)(enums_1.UserRole.TEACHER, enums_1.UserRole.PARENT, enums_1.UserRole.STUDENT, enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), msgView, async (req, res) => {
+router.get('/messages', (0, auth_1.authorize)(enums_1.UserRole.TEACHER, enums_1.UserRole.PARENT, enums_1.UserRole.STUDENT, enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.ACCOUNTANT), msgView, async (req, res) => {
     const repo = data_source_1.AppDataSource.getRepository(entities_1.Message);
     const messages = await repo.find({
         where: [{ recipientId: req.user.userId }, { senderId: req.user.userId }],
@@ -268,6 +268,10 @@ router.get('/messages/staff-recipients', (0, auth_1.authorize)(enums_1.UserRole.
     }
     res.json(list);
 });
+// Recipients an accountant may contact: office, other accountants and parents.
+router.get('/messages/accountant-recipients', (0, auth_1.authorize)(enums_1.UserRole.ACCOUNTANT), msgView, async (req, res) => {
+    res.json(await (0, messaging_service_1.listAccountantMessagingRecipients)(req.user.userId));
+});
 // Recipients a teacher may contact: parents/students of the students they teach, plus office.
 router.get('/messages/teacher-recipients', (0, auth_1.authorize)(enums_1.UserRole.TEACHER), msgView, async (req, res) => {
     if (!req.user.staffId)
@@ -276,7 +280,7 @@ router.get('/messages/teacher-recipients', (0, auth_1.authorize)(enums_1.UserRol
     res.json(list);
 });
 // Threaded conversation list for the current user: one entry per counterpart.
-router.get('/messages/threads', (0, auth_1.authorize)(enums_1.UserRole.TEACHER, enums_1.UserRole.PARENT, enums_1.UserRole.STUDENT, enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), msgView, async (req, res) => {
+router.get('/messages/threads', (0, auth_1.authorize)(enums_1.UserRole.TEACHER, enums_1.UserRole.PARENT, enums_1.UserRole.STUDENT, enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.ACCOUNTANT), msgView, async (req, res) => {
     const repo = data_source_1.AppDataSource.getRepository(entities_1.Message);
     const me = req.user.userId;
     const messages = await repo.find({
@@ -307,7 +311,7 @@ router.get('/messages/threads', (0, auth_1.authorize)(enums_1.UserRole.TEACHER, 
     res.json([...threads.values()]);
 });
 // All messages in a single conversation (and mark inbound ones read).
-router.get('/messages/threads/:threadId', (0, auth_1.authorize)(enums_1.UserRole.TEACHER, enums_1.UserRole.PARENT, enums_1.UserRole.STUDENT, enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), msgView, async (req, res) => {
+router.get('/messages/threads/:threadId', (0, auth_1.authorize)(enums_1.UserRole.TEACHER, enums_1.UserRole.PARENT, enums_1.UserRole.STUDENT, enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.ACCOUNTANT), msgView, async (req, res) => {
     const repo = data_source_1.AppDataSource.getRepository(entities_1.Message);
     const me = req.user.userId;
     const threadId = String(req.params.threadId);
@@ -408,7 +412,7 @@ router.post('/messages/to-admin', (0, auth_1.authorize)(enums_1.UserRole.PARENT,
     });
     res.status(201).json(full);
 });
-router.get('/messages/attachments/:attachmentId', (0, auth_1.authorize)(enums_1.UserRole.TEACHER, enums_1.UserRole.PARENT, enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.STUDENT), msgView, async (req, res) => {
+router.get('/messages/attachments/:attachmentId', (0, auth_1.authorize)(enums_1.UserRole.TEACHER, enums_1.UserRole.PARENT, enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.STUDENT, enums_1.UserRole.ACCOUNTANT), msgView, async (req, res) => {
     const attachmentRepo = data_source_1.AppDataSource.getRepository(entities_1.MessageAttachment);
     const attachment = await attachmentRepo.findOne({
         where: { id: req.params.attachmentId },
@@ -430,7 +434,7 @@ router.get('/messages/attachments/:attachmentId', (0, auth_1.authorize)(enums_1.
     res.setHeader('Content-Disposition', `attachment; filename="${attachment.originalName.replace(/"/g, '')}"`);
     res.sendFile(fullPath);
 });
-router.post('/messages', (0, auth_1.authorize)(enums_1.UserRole.TEACHER, enums_1.UserRole.PARENT, enums_1.UserRole.STUDENT, enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), msgCreate, async (req, res) => {
+router.post('/messages', (0, auth_1.authorize)(enums_1.UserRole.TEACHER, enums_1.UserRole.PARENT, enums_1.UserRole.STUDENT, enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.ACCOUNTANT), msgCreate, async (req, res) => {
     const { recipientId, subject, body, studentId, broadcastToAllParents } = req.body || {};
     const trimmedSubject = String(subject || '').trim();
     const trimmedBody = String(body || '').trim();
@@ -524,7 +528,7 @@ router.post('/messages', (0, auth_1.authorize)(enums_1.UserRole.TEACHER, enums_1
     });
     res.status(201).json(full);
 });
-router.patch('/messages/:id/read', (0, auth_1.authorize)(enums_1.UserRole.TEACHER, enums_1.UserRole.PARENT, enums_1.UserRole.STUDENT, enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), msgView, async (req, res) => {
+router.patch('/messages/:id/read', (0, auth_1.authorize)(enums_1.UserRole.TEACHER, enums_1.UserRole.PARENT, enums_1.UserRole.STUDENT, enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.ACCOUNTANT), msgView, async (req, res) => {
     const repo = data_source_1.AppDataSource.getRepository(entities_1.Message);
     const msg = await repo.findOne({
         where: { id: req.params.id, recipientId: req.user.userId },

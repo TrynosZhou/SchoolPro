@@ -53,8 +53,8 @@ async function previewBulkTuitionInvoices() {
             continue;
         const form = resolveStudentForm(student);
         const level = form ? (0, registration_invoice_service_1.resolveFormLevel)(form) : 1;
-        const tuitionFee = await (0, registration_invoice_service_1.resolveTuitionFeeForFormLevel)(level);
-        const amount = Number(tuitionFee?.defaultAmount || 0);
+        const tuitionFee = await (0, registration_invoice_service_1.resolveTuitionFeeForFormLevel)(level, student.studentType);
+        const amount = tuitionFee ? (0, registration_invoice_service_1.resolveTuitionAmountForStudent)(tuitionFee, student.studentType) : 0;
         if (amount <= 0)
             continue;
         const { netAmount } = (0, tuition_exemption_service_1.computeTuitionExemptionDiscount)(amount, exemptionMap.get(student.id));
@@ -113,24 +113,29 @@ async function createBulkTuitionInvoices() {
             continue;
         }
         const level = (0, registration_invoice_service_1.resolveFormLevel)(form);
-        const tuitionFee = await (0, registration_invoice_service_1.resolveTuitionFeeForFormLevel)(level);
+        const tuitionFee = await (0, registration_invoice_service_1.resolveTuitionFeeForFormLevel)(level, student.studentType);
         if (!tuitionFee) {
             skipped += 1;
             skippedStudents.push({ id: student.id, name: studentName, reason: 'Tuition fee not configured' });
             continue;
         }
-        const amount = Math.round(Number(tuitionFee.defaultAmount) * 100) / 100;
+        const amount = Math.round((0, registration_invoice_service_1.resolveTuitionAmountForStudent)(tuitionFee, student.studentType) * 100) / 100;
         if (amount <= 0) {
             skipped += 1;
+            const typeLabel = (0, registration_invoice_service_1.isBoarderStudent)(student.studentType) ? 'boarder' : 'day scholar';
             skippedStudents.push({
                 id: student.id,
                 name: studentName,
-                reason: 'Tuition fee amount is zero — set it in Manage Fees',
+                reason: `Tuition fee amount is zero for ${typeLabel} — set it in Manage Fees`,
             });
             continue;
         }
         const exemption = exemptionMap.get(student.id);
-        const invoiceLines = (0, tuition_exemption_service_1.buildTuitionInvoiceLines)(tuitionFee.name, currentTerm.name, amount, exemption);
+        const isBoarder = (0, registration_invoice_service_1.isBoarderStudent)(student.studentType);
+        const lineFeeName = tuitionFee.name.toLowerCase().includes('boarder') || tuitionFee.name.toLowerCase().includes('day')
+            ? tuitionFee.name
+            : `${tuitionFee.name} (${isBoarder ? 'Boarder' : 'Day scholar'})`;
+        const invoiceLines = (0, tuition_exemption_service_1.buildTuitionInvoiceLines)(lineFeeName, currentTerm.name, amount, exemption);
         const invoiceTotal = (0, term_balance_service_1.roundMoney)(invoiceLines.reduce((sum, line) => sum + Number(line.amount), 0));
         let invoice = await invoiceRepo.save(invoiceRepo.create({
             invoiceNumber: (0, helpers_1.generateNumber)('INV'),

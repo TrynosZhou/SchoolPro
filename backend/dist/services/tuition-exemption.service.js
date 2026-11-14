@@ -11,6 +11,7 @@ exports.upsertTuitionExemption = upsertTuitionExemption;
 exports.removeTuitionExemption = removeTuitionExemption;
 exports.buildFeeInvoiceLines = buildFeeInvoiceLines;
 exports.buildTuitionInvoiceLines = buildTuitionInvoiceLines;
+exports.computeOutstandingBalanceExemption = computeOutstandingBalanceExemption;
 exports.syncTuitionExemptionToInvoices = syncTuitionExemptionToInvoices;
 const data_source_1 = require("../config/data-source");
 const typeorm_1 = require("typeorm");
@@ -190,7 +191,7 @@ async function upsertTuitionExemption(input) {
         });
     }
     const saved = await repo.save(row);
-    await syncTuitionExemptionToInvoices(saved.studentId);
+    const applied = await syncTuitionExemptionToInvoices(saved.studentId);
     return {
         id: saved.id,
         studentId: saved.studentId,
@@ -206,6 +207,7 @@ async function upsertTuitionExemption(input) {
         isActive: saved.isActive,
         createdAt: saved.createdAt.toISOString(),
         updatedAt: saved.updatedAt.toISOString(),
+        applied,
     };
 }
 async function removeTuitionExemption(id) {
@@ -216,7 +218,7 @@ async function removeTuitionExemption(id) {
     }
     const studentId = row.studentId;
     await repo.remove(row);
-    await syncTuitionExemptionToInvoices(studentId);
+    return syncTuitionExemptionToInvoices(studentId);
 }
 function buildFeeInvoiceLines(feeDescription, baseAmount, exemption) {
     const base = (0, term_balance_service_1.roundMoney)(Math.max(0, Number(baseAmount || 0)));
@@ -302,13 +304,6 @@ function isTuitionBaseLine(line) {
 function isChargeLine(line) {
     return Number(line.amount) > 0 && !isExemptionLine(line);
 }
-function parseTuitionLineMeta(description) {
-    const match = String(description || '').match(/^(.+?)\s*\(([^)]+)\)\s*$/);
-    if (match) {
-        return { feeName: match[1].trim(), termName: match[2].trim() };
-    }
-    return { feeName: String(description || 'Tuition').trim(), termName: 'Current term' };
-}
 function toLineInput(line) {
     return {
         description: line.description,
@@ -316,27 +311,6 @@ function toLineInput(line) {
         unitPrice: (0, term_balance_service_1.roundMoney)(Number(line.unitPrice)),
         amount: (0, term_balance_service_1.roundMoney)(Number(line.amount)),
     };
-}
-function rebuildInvoiceLinesWithExemption(lines, exemption) {
-    if (!lines.some(isChargeLine))
-        return null;
-    if (isStaffChildExemption(exemption)) {
-        const rebuilt = [];
-        for (const charge of lines.filter(isChargeLine).map(toLineInput)) {
-            rebuilt.push(...buildFeeInvoiceLines(charge.description, charge.amount, exemption));
-        }
-        return rebuilt;
-    }
-    const tuitionBaseLine = lines.find(isTuitionBaseLine);
-    if (!tuitionBaseLine)
-        return null;
-    const nonTuitionLines = lines
-        .filter((line) => !isTuitionBaseLine(line) && !isExemptionLine(line))
-        .map(toLineInput);
-    const { feeName, termName } = parseTuitionLineMeta(tuitionBaseLine.description);
-    const baseAmount = (0, term_balance_service_1.roundMoney)(Number(tuitionBaseLine.amount));
-    const tuitionLines = buildTuitionInvoiceLines(feeName, termName, baseAmount, exemption);
-    return [...nonTuitionLines, ...tuitionLines];
 }
 function linesEqual(a, b) {
     if (a.length !== b.length)
@@ -350,9 +324,47 @@ function linesEqual(a, b) {
     }
     return true;
 }
+const EPS = 0.005;
+/**
+ * Work out how much of an outstanding balance an exemption covers.
+ *  - Staff child or 100% exemption: the whole outstanding balance is written off.
+ *  - Fixed percentage (below 100%): applied to the tuition invoice amount per invoice in
+ *    syncTuitionExemptionToInvoices; here it only caps the total at the outstanding balance.
+ *  - Fixed amount: the amount is deducted, never more than the outstanding balance.
+ */
+function computeOutstandingBalanceExemption(outstandingBalance, exemption) {
+    const outstanding = (0, term_balance_service_1.roundMoney)(Math.max(0, Number(outstandingBalance || 0)));
+    if (!exemption || outstanding <= EPS) {
+        return { outstanding, exemptedAmount: 0, balanceAfter: outstanding, fullWriteOff: false };
+    }
+    const value = Number(exemption.value || 0);
+    let exempted;
+    if (isStaffChildExemption(exemption)) {
+        exempted = outstanding;
+    }
+    else if (exemption.exemptionType === enums_2.TuitionExemptionType.PERCENTAGE) {
+        const pct = Math.min(100, Math.max(0, value));
+        exempted = pct >= 100 ? outstanding : (0, term_balance_service_1.roundMoney)((outstanding * pct) / 100);
+    }
+    else {
+        exempted = (0, term_balance_service_1.roundMoney)(Math.min(outstanding, Math.max(0, value)));
+    }
+    exempted = (0, term_balance_service_1.roundMoney)(Math.min(outstanding, exempted));
+    const balanceAfter = (0, term_balance_service_1.roundMoney)(Math.max(0, outstanding - exempted));
+    return { outstanding, exemptedAmount: exempted, balanceAfter, fullWriteOff: balanceAfter <= EPS };
+}
+function outstandingExemptionLineLabel(exemption, fullWriteOff) {
+    if (isStaffChildExemption(exemption)) {
+        return 'Staff child exemption — outstanding balance written off';
+    }
+    const base = formatExemptionLabel(exemption.exemptionType, Number(exemption.value));
+    return fullWriteOff
+        ? `${base} — outstanding balance written off`
+        : `${base} — deducted from invoice balance`;
+}
 async function appendLedgerAdjustment(input) {
     const delta = (0, term_balance_service_1.roundMoney)(input.delta);
-    if (Math.abs(delta) < 0.005)
+    if (Math.abs(delta) < EPS)
         return;
     const ledgerRepo = data_source_1.AppDataSource.getRepository(entities_1.LedgerEntry);
     const lastLedger = await ledgerRepo.findOne({
@@ -367,12 +379,10 @@ async function appendLedgerAdjustment(input) {
         const label = input.exemption
             ? formatExemptionLabel(input.exemption.exemptionType, Number(input.exemption.value))
             : 'Tuition exemption';
-        if (input.exemption && isStaffChildExemption(input.exemption)) {
-            description = `${label} — $${amount.toFixed(2)} waived on ${input.invoiceNumber}. All fees cancelled for staff child.`;
-        }
-        else {
-            description = `${label} — $${amount.toFixed(2)} tuition discount applied on ${input.invoiceNumber}. Gross tuition was invoiced at full amount before this exemption.`;
-        }
+        const fullWriteOff = amount >= (0, term_balance_service_1.roundMoney)(input.outstandingBefore) - EPS;
+        description = fullWriteOff
+            ? `${label} — $${amount.toFixed(2)} outstanding balance written off on ${input.invoiceNumber}.`
+            : `${label} — $${amount.toFixed(2)} deducted from invoice ${input.invoiceNumber} (balance before exemption $${(0, term_balance_service_1.roundMoney)(input.outstandingBefore).toFixed(2)}).`;
     }
     else {
         description = input.exemption && isStaffChildExemption(input.exemption)
@@ -391,7 +401,12 @@ async function appendLedgerAdjustment(input) {
         referenceId: input.invoiceId,
     }));
 }
-/** Re-apply the active tuition exemption (or remove it) on all open invoices for a student. */
+/**
+ * Apply the active exemption (or remove it) on the student's existing invoices, including any
+ * balance brought forward from earlier terms. The calculation always starts from the ORIGINAL
+ * invoice balance (gross charges less payments), so saving or editing an exemption repeatedly
+ * never double-counts.
+ */
 async function syncTuitionExemptionToInvoices(studentId) {
     const exemption = await getActiveExemptionForStudent(studentId);
     const invoiceRepo = data_source_1.AppDataSource.getRepository(entities_1.Invoice);
@@ -401,20 +416,80 @@ async function syncTuitionExemptionToInvoices(studentId) {
         relations: (0, typeorm_helpers_1.relations)('lines'),
         order: { createdAt: 'ASC' },
     });
-    const affectedTermIds = new Set();
+    const candidates = [];
     for (const invoice of invoices) {
-        if (invoice.feeType === term_balance_service_1.BALANCE_FORWARD_FEE_TYPE)
-            continue;
-        if (!['sent', 'partial', 'overdue'].includes(invoice.status))
+        if (invoice.status === enums_1.InvoiceStatus.CANCELLED || invoice.status === enums_1.InvoiceStatus.DRAFT)
             continue;
         const lines = invoice.lines || [];
-        const rebuilt = rebuildInvoiceLinesWithExemption(lines, exemption);
-        if (!rebuilt)
+        const hasExemptionLine = lines.some(isExemptionLine);
+        const isOpen = ['sent', 'partial', 'overdue'].includes(invoice.status);
+        // Paid invoices are only revisited to restore a balance that an earlier exemption wrote off.
+        if (!isOpen && !hasExemptionLine)
             continue;
+        const charges = lines.filter(isChargeLine).map(toLineInput);
+        if (!charges.length)
+            continue;
+        const gross = (0, term_balance_service_1.roundMoney)(charges.reduce((sum, line) => sum + Number(line.amount), 0));
+        const paid = (0, term_balance_service_1.roundMoney)(Number(invoice.amountPaid));
+        const tuitionBase = invoice.feeType === term_balance_service_1.BALANCE_FORWARD_FEE_TYPE
+            ? 0
+            : (0, term_balance_service_1.roundMoney)(lines.filter(isTuitionBaseLine).reduce((sum, line) => sum + Number(line.amount), 0));
+        candidates.push({
+            invoice,
+            charges,
+            tuitionBase,
+            originalOutstanding: (0, term_balance_service_1.roundMoney)(Math.max(0, gross - paid)),
+        });
+    }
+    const totalOutstanding = (0, term_balance_service_1.roundMoney)(candidates.reduce((sum, c) => sum + c.originalOutstanding, 0));
+    const plan = computeOutstandingBalanceExemption(totalOutstanding, exemption);
+    const isPercentage = exemption?.exemptionType === enums_2.TuitionExemptionType.PERCENTAGE;
+    const withBalance = candidates.filter((c) => c.originalOutstanding > EPS);
+    // How much of the outstanding balance is exempted on each invoice.
+    //  - Full write-off (staff child / 100%): the whole balance on every invoice.
+    //  - Fixed percentage: the percentage of the ORIGINAL tuition invoice amount, deducted from that
+    //    invoice's balance, so the student pays the reduced tuition for the term.
+    //  - Fixed amount: deducted from the outstanding balance, oldest invoice first.
+    const allocation = new Map();
+    let exemptedTotal = 0;
+    let remaining = plan.exemptedAmount;
+    for (const c of withBalance) {
+        let share;
+        if (plan.fullWriteOff) {
+            share = c.originalOutstanding;
+        }
+        else if (isPercentage) {
+            const pct = Math.min(100, Math.max(0, Number(exemption?.value || 0)));
+            share = (0, term_balance_service_1.roundMoney)((c.tuitionBase * pct) / 100);
+        }
+        else {
+            share = remaining;
+        }
+        share = (0, term_balance_service_1.roundMoney)(Math.min(c.originalOutstanding, Math.max(0, share)));
+        if (!isPercentage && !plan.fullWriteOff)
+            remaining = (0, term_balance_service_1.roundMoney)(remaining - share);
+        exemptedTotal = (0, term_balance_service_1.roundMoney)(exemptedTotal + share);
+        allocation.set(c.invoice.id, share);
+    }
+    const summaryExempted = plan.fullWriteOff || !isPercentage ? plan.exemptedAmount : exemptedTotal;
+    const affectedTermIds = new Set();
+    let invoicesAdjusted = 0;
+    for (const candidate of candidates) {
+        const { invoice, charges } = candidate;
+        const share = allocation.get(invoice.id) ?? 0;
+        const rebuilt = [...charges];
+        if (share > EPS && exemption) {
+            rebuilt.push({
+                description: outstandingExemptionLineLabel(exemption, share >= candidate.originalOutstanding - EPS),
+                quantity: 1,
+                unitPrice: -share,
+                amount: -share,
+            });
+        }
+        const lines = invoice.lines || [];
         const oldTotal = (0, term_balance_service_1.roundMoney)(Number(invoice.totalAmount));
         const newTotal = (0, term_balance_service_1.roundMoney)(rebuilt.reduce((sum, line) => sum + Number(line.amount), 0));
-        const currentInputs = lines.map(toLineInput);
-        if (linesEqual(currentInputs, rebuilt) && oldTotal === newTotal)
+        if (linesEqual(lines.map(toLineInput), rebuilt) && oldTotal === newTotal)
             continue;
         await lineRepo.delete({ invoiceId: invoice.id });
         for (const line of rebuilt) {
@@ -430,12 +505,14 @@ async function syncTuitionExemptionToInvoices(studentId) {
         invoice.totalAmount = newTotal;
         refreshInvoiceStatus(invoice);
         await invoiceRepo.save(invoice);
+        invoicesAdjusted += 1;
         await appendLedgerAdjustment({
             studentId,
             termId: invoice.termId || undefined,
             invoiceNumber: invoice.invoiceNumber,
             invoiceId: invoice.id,
             delta,
+            outstandingBefore: candidate.originalOutstanding,
             exemption,
         });
         if (invoice.termId) {
@@ -446,4 +523,11 @@ async function syncTuitionExemptionToInvoices(studentId) {
     for (const termId of affectedTermIds) {
         await (0, term_balance_service_1.refreshTermClosingBalance)(studentId, termId);
     }
+    return {
+        outstandingBefore: plan.outstanding,
+        exemptedAmount: summaryExempted,
+        outstandingAfter: (0, term_balance_service_1.roundMoney)(Math.max(0, plan.outstanding - summaryExempted)),
+        fullWriteOff: plan.fullWriteOff || (summaryExempted > 0 && (0, term_balance_service_1.roundMoney)(plan.outstanding - summaryExempted) <= EPS),
+        invoicesAdjusted,
+    };
 }
