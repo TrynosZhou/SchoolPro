@@ -6,6 +6,9 @@ import { Student, Guardian, User, SchoolSettings, Form, Invoice } from '../entit
 import { UserRole, StudentType, StudentStatus } from '../entities/enums';
 import { authenticate, authorize, AuthRequest } from '../middleware/auth';
 import bcrypt from 'bcryptjs';
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
 import { relations, param } from '../utils/typeorm-helpers';
 import { generateStudentId, previewStudentId, today } from '../utils/helpers';
 import { generateClassListPdf, generateStudentIdCardPdf } from '../utils/pdf';
@@ -325,6 +328,87 @@ router.delete('/parent/unlink-child/:studentId', authorize(UserRole.PARENT), asy
   await guardianRepo.save(guardian);
 
   res.json({ message: `${name} has been unlinked from your account.` });
+});
+
+
+// ── Student passport photo ───────────────────────────────────────────────
+const studentPhotosDir = path.join(process.cwd(), 'uploads', 'student-photos');
+const PHOTO_EXTS = ['.png', '.jpg', '.jpeg', '.webp', '.gif'];
+
+const studentPhotoUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => {
+      fs.mkdirSync(studentPhotosDir, { recursive: true });
+      cb(null, studentPhotosDir);
+    },
+    filename: (req, file, cb) => {
+      const ext = path.extname(file.originalname).toLowerCase();
+      const safeExt = PHOTO_EXTS.includes(ext) ? ext : '.jpg';
+      cb(null, `${String(req.params.id).replace(/[^a-zA-Z0-9-]/g, '')}-${Date.now()}${safeExt}`);
+    },
+  }),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const ok = /^image\/(png|jpe?g|webp|gif)$/i.test(file.mimetype);
+    cb(ok ? null : new Error('Only image files (JPG, PNG, WEBP, GIF) are allowed'), ok);
+  },
+});
+
+function removeStoredPhoto(url?: string | null) {
+  if (!url) return;
+  const file = path.join(process.cwd(), url.replace(/^\/+/, ''));
+  if (path.dirname(file) === studentPhotosDir && fs.existsSync(file)) {
+    try { fs.unlinkSync(file); } catch { /* ignore stale file cleanup errors */ }
+  }
+}
+
+router.post(
+  '/:id/photo',
+  authorize(UserRole.ADMIN, UserRole.TEACHER),
+  stuEdit,
+  (req, res, next) => {
+    studentPhotoUpload.single('photo')(req, res, (err: any) => {
+      if (err) {
+        const msg = err.code === 'LIMIT_FILE_SIZE' ? 'Photo must be 5MB or smaller' : err.message || 'Upload failed';
+        return res.status(400).json({ message: msg });
+      }
+      next();
+    });
+  },
+  async (req: AuthRequest, res: Response) => {
+    if (!req.file) return res.status(400).json({ message: 'Photo image is required' });
+    const repo = AppDataSource.getRepository(Student);
+    const student = await repo.findOne({ where: { id: param(req.params.id) } });
+    if (!student) {
+      removeStoredPhoto(`/uploads/student-photos/${req.file.filename}`);
+      return res.status(404).json({ message: 'Student not found' });
+    }
+    if (!(await AccessControlService.userCanAccessStudent(req.user!, student.id))) {
+      removeStoredPhoto(`/uploads/student-photos/${req.file.filename}`);
+      return res.status(403).json({ message: 'You do not have access to this student record' });
+    }
+    if (student.classId && !(await assertTeacherClassAccess(req, student.classId))) {
+      removeStoredPhoto(`/uploads/student-photos/${req.file.filename}`);
+      return res.status(403).json({ message: 'You are not assigned to this class' });
+    }
+    removeStoredPhoto(student.photoUrl);
+    student.photoUrl = `/uploads/student-photos/${req.file.filename}`;
+    await repo.save(student);
+    res.json({ id: student.id, photoUrl: student.photoUrl });
+  },
+);
+
+router.delete('/:id/photo', authorize(UserRole.ADMIN, UserRole.TEACHER), stuEdit, async (req: AuthRequest, res: Response) => {
+  const repo = AppDataSource.getRepository(Student);
+  const student = await repo.findOne({ where: { id: param(req.params.id) } });
+  if (!student) return res.status(404).json({ message: 'Student not found' });
+  if (!(await AccessControlService.userCanAccessStudent(req.user!, student.id))) {
+    return res.status(403).json({ message: 'You do not have access to this student record' });
+  }
+  removeStoredPhoto(student.photoUrl);
+  student.photoUrl = null;
+  await repo.save(student);
+  res.json({ id: student.id, photoUrl: null });
 });
 
 router.get(

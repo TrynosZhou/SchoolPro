@@ -29,6 +29,7 @@ import reportsRoutes from './routes/reports.routes';
 import accessControlRoutes from './routes/access-control.routes';
 import webhooksRoutes from './routes/webhooks.routes';
 import lmsRoutes from './routes/lms.routes';
+import idCardsRoutes from './routes/id-cards.routes';
 import { tenantContextMiddleware } from './middleware/tenant-context.middleware';
 import { demoGlobalWriteGuard, demoWriteRateLimiter } from './middleware/demo-guard.middleware';
 
@@ -190,6 +191,7 @@ app.use('/api/analytics', analyticsRoutes);
 app.use('/api/reports', reportsRoutes);
 app.use('/api/access-control', accessControlRoutes);
 app.use('/api/lms', lmsRoutes);
+app.use('/api/id-cards', idCardsRoutes);
 app.use('/webhooks', webhooksRoutes);
 
 if (frontendDir) {

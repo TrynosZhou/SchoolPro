@@ -14,6 +14,7 @@ import { UnlessDemoDirective } from '../../core/directives/unless-demo.directive
 import { TranslatePipe } from '../../core/pipes/translate.pipe';
 import { Student } from '../../core/models';
 import { environment } from '../../../environments/environment';
+import { buildIdCardPrintDocument } from '../../core/utils/id-card-print.util';
 
 interface FormOption {
   id: string;
@@ -277,8 +278,16 @@ export class AdminStudentsComponent implements OnInit {
   onPhotoFile(ev: Event) {
     const input = ev.target as HTMLInputElement;
     const file = input.files?.[0] || null;
+    if (file && file.size > 5 * 1024 * 1024) {
+      this.showToast('error', 'Photo must be 5MB or smaller.');
+      input.value = '';
+      return;
+    }
     this.photoFile = file;
     this.photoPreview.set(file ? URL.createObjectURL(file) : '');
+    // Existing student: save the photo straight away so it is not lost if the form is closed.
+    const editing = this.editingStudent();
+    if (file && editing?.id) this.uploadPhotoIfNeeded(editing.id, true);
   }
 
   photoUrl(student: Student | null): string {
@@ -289,13 +298,24 @@ export class AdminStudentsComponent implements OnInit {
     return `${origin}${url}`;
   }
 
-  private uploadPhotoIfNeeded(studentId: string) {
-    if (!this.photoFile) return;
+  private uploadPhotoIfNeeded(studentId: string, announce = false) {
+    const file = this.photoFile;
+    if (!file) return;
     const fd = new FormData();
-    fd.append('photo', this.photoFile);
-    this.api.postFormData(`/students/${studentId}/photo`, fd).subscribe({ error: () => {} });
-    this.photoFile = null;
-    this.photoPreview.set('');
+    fd.append('photo', file);
+    this.photoFile = null; // prevent a duplicate upload while this one is in flight
+    this.api.postFormData<{ id: string; photoUrl: string }>(`/students/${studentId}/photo`, fd).subscribe({
+      next: (r) => {
+        this.photoPreview.set('');
+        const cur = this.editingStudent();
+        if (cur?.id === studentId) this.editingStudent.set({ ...cur, photoUrl: r.photoUrl });
+        if (announce) this.showToast('success', 'Photo saved.');
+        this.load(true);
+      },
+      error: (err) => {
+        this.showToast('error', err.error?.message || 'Student saved, but the photo could not be uploaded.');
+      },
+    });
   }
 
   openEdit(student: Student) {
@@ -362,25 +382,49 @@ export class AdminStudentsComponent implements OnInit {
     this.detailStudent.set(null);
   }
 
+  /** Opens the current student ID card design (same as ID Cards & QR) as a print preview. */
   previewStudentIdPdf(student: Student, event?: Event) {
     event?.stopPropagation();
+    // Open the tab synchronously (inside the click) so the pop-up blocker allows it.
+    const win = window.open('', '_blank');
+    if (!win) {
+      this.showToast('error', 'Pop-up blocked — allow pop-ups for this site and try again.');
+      return;
+    }
+    win.document.write('<p style="font-family:Arial;padding:16px">Loading ID card…</p>');
     this.idCardPdfLoading.set(student.id);
-    this.api.getBlob(`/students/${student.id}/id-card/pdf`, { preview: 'true' }).subscribe({
-      next: (blob) => {
-        this.idCardPdfLoading.set(null);
-        if (blob.type && !blob.type.includes('pdf')) {
-          this.showToast('error', 'Server did not return a PDF file');
-          return;
-        }
-        const url = URL.createObjectURL(blob);
-        window.open(url, '_blank', 'noopener,noreferrer');
-        setTimeout(() => URL.revokeObjectURL(url), 90_000);
-      },
-      error: (err) => {
-        this.idCardPdfLoading.set(null);
-        this.showToast('error', err.error?.message || 'Failed to generate student ID PDF');
-      },
-    });
+    this.api
+      .get<{
+        card: { code: string; qrDataUrl: string };
+        student: Student & { className?: string; formName?: string };
+      }>(`/id-cards/${student.id}/card`)
+      .subscribe({
+        next: (r) => {
+          this.idCardPdfLoading.set(null);
+          const s = r.student;
+          const cls = s.className || '—';
+          const html = buildIdCardPrintDocument({
+            firstName: s.firstName,
+            lastName: s.lastName,
+            admissionNumber: s.admissionNumber,
+            classLabel: s.formName ? `${cls} ${s.formName}` : cls,
+            dateOfBirth: s.dateOfBirth,
+            gender: s.gender,
+            photoUrl: this.photoUrl(s as Student),
+            qrDataUrl: r.card.qrDataUrl,
+            code: r.card.code,
+          });
+          win.document.open();
+          win.document.write(html);
+          win.document.close();
+          win.focus();
+        },
+        error: (err) => {
+          this.idCardPdfLoading.set(null);
+          win.close();
+          this.showToast('error', err.error?.message || 'Failed to load the student ID card');
+        },
+      });
   }
 
   cancelDelete() {
