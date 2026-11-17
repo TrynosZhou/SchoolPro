@@ -1,113 +1,12 @@
 import { Routes } from '@angular/router';
 import { authGuard, roleGuard } from './core/guards/auth.guard';
-import { LoginComponent } from './pages/login/login.component';
-import { ApplyComponent } from './pages/public/apply.component';
-import { ApplicationStatusComponent } from './pages/public/application-status.component';
-import { DirectorDashboardComponent } from './pages/director/director-dashboard.component';
-import { DirectorFinanceComponent } from './pages/director/director-finance.component';
-import { DirectorAcademicsComponent } from './pages/director/director-academics.component';
-import { DirectorStoreComponent } from './pages/director/director-store.component';
-import { AdminFinanceComponent } from './pages/admin/admin-finance.component';
-import { AdminDashboardComponent } from './pages/admin/admin-dashboard.component';
-import { AdminStudentsComponent } from './pages/admin/admin-students.component';
-import { AdminBillingComponent } from './pages/admin/admin-billing.component';
-import { AdminSettingsComponent } from './pages/admin/admin-settings.component';
-import { AdminEnrollmentComponent } from './pages/admin/admin-enrollment.component';
-import { ClassListComponent } from './pages/students/class-list.component';
-import { AdminReportCardsComponent } from './pages/admin/admin-report-cards.component';
-import { AdminReportViewComponent } from './pages/admin/admin-report-view.component';
-import { AdminStaffComponent } from './pages/admin/admin-staff.component';
-import { AdminStaffAttendanceComponent } from './pages/admin/admin-staff-attendance.component';
-import { AdminLeaveRequestsComponent } from './pages/admin/admin-leave-requests.component';
-import { AdminClassAssignmentsComponent } from './pages/admin/admin-class-assignments.component';
-import { TeacherDashboardComponent } from './pages/teacher/teacher-dashboard.component';
-import { TeacherExamsComponent } from './pages/teacher/teacher-exams.component';
-import { ExamMarksEntryComponent } from './pages/exams/exam-marks-entry.component';
-import { ParentDashboardComponent } from './pages/parent/parent-dashboard.component';
-import { ParentFinanceComponent } from './pages/parent/parent-finance.component';
-import { ParentReportCardComponent } from './pages/parent/parent-report-card.component';
-import { ParentReportCardsComponent } from './pages/parent/parent-report-cards.component';
-import { ParentSendEmailComponent } from './pages/parent/parent-send-email.component';
-import { MessagingCenterComponent } from './shared/messaging/messaging-center.component';
-import { NotificationsComponent } from './shared/notifications/notifications.component';
-import { AdminBulkMessageComponent } from './pages/admin/admin-bulk-message.component';
-import { AdminNotificationSettingsComponent } from './pages/admin/admin-notification-settings.component';
-import { ParentAttendanceComponent } from './pages/parent/parent-attendance.component';
-import { ParentTimetableComponent } from './pages/parent/parent-timetable.component';
-import { StudentDashboardComponent } from './pages/student/student-dashboard.component';
-import { StudentHomeworkComponent } from './pages/student/student-homework.component';
-import { ChangePasswordPageComponent } from './pages/account/change-password-page.component';
-import { AttendanceMarkRegisterComponent } from './pages/attendance/attendance-mark-register.component';
-import { AttendanceReportComponent } from './pages/attendance/attendance-report.component';
-import { AdminMarkSheetComponent } from './pages/admin/admin-mark-sheet.component';
-import { AdminResultsAnalysisComponent } from './pages/admin/admin-results-analysis.component';
-import { AdminRankingComponent } from './pages/admin/admin-ranking.component';
-import { AdminMarkEntryProgressComponent } from './pages/admin/admin-mark-entry-progress.component';
-import { RecordBookComponent } from './pages/exams/record-book.component';
-import { TeacherTimetableComponent } from './pages/teacher/teacher-timetable.component';
-import { TeacherAssignmentsComponent } from './pages/teacher/teacher-assignments.component';
-import { AdminManageFeesComponent } from './pages/admin/admin-manage-fees.component';
-import { AdminStudentBalanceComponent } from './pages/admin/admin-student-balance.component';
-import { AdminExemptionsComponent } from './pages/admin/admin-exemptions.component';
-import { AdminAcademicSettingsComponent } from './pages/admin/admin-academic-settings.component';
-import { AdminIntegrationsComponent } from './pages/admin/admin-integrations.component';
-import { AdminUserPermissionsComponent } from './pages/admin/admin-user-permissions.component';
-import { AdminUserManagementComponent } from './pages/admin/admin-user-management.component';
-import { AdminClassPromotionComponent } from './pages/admin/admin-class-promotion.component';
-import { AdminStudentLedgerComponent } from './pages/admin/admin-student-ledger.component';
-import { AdminOutstandingInvoicesComponent } from './pages/admin/admin-outstanding-invoices.component';
-import { AdminRecordPaymentComponent } from './pages/admin/admin-record-payment.component';
-import { AdminStudentReconciliationComponent } from './pages/admin/admin-student-reconciliation.component';
-import { AdminDebtorAgingComponent } from './pages/admin/admin-debtor-aging.component';
-import { AdminFeeCollectionRevenueComponent } from './pages/admin/admin-fee-collection-revenue.component';
-import { AdminTimetableConfigurePeriodsComponent } from './pages/admin/admin-timetable-configure-periods.component';
-import { AdminTimetableGenerateComponent } from './pages/admin/admin-timetable-generate.component';
-import { AdminTimetableManualEntryComponent } from './pages/admin/admin-timetable-manual-entry.component';
-import { AdminRoomsComponent } from './pages/admin/admin-rooms.component';
-import { AdminTimetableViewComponent } from './pages/admin/admin-timetable-view.component';
-import { AdminTimetableTeacherScheduleComponent } from './pages/admin/admin-timetable-teacher-schedule.component';
-import { AdminSendMessageComponent } from './pages/admin/admin-send-message.component';
-import { AdminInboxComponent } from './pages/admin/admin-inbox.component';
-import { AdminParentsComponent } from './pages/admin/admin-parents.component';
-import { AdminParentDetailComponent } from './pages/admin/admin-parent-detail.component';
-import { AdminParentAccountsComponent } from './pages/admin/admin-parent-accounts.component';
-import { AdminFamilyLinksComponent } from './pages/admin/admin-family-links.component';
-import { AdminPayrollComponent } from './pages/admin/admin-payroll.component';
-import { AdminGeneralLedgerComponent } from './pages/admin/admin-general-ledger.component';
-import { AdminAdmissionsComponent } from './pages/admin/admin-admissions.component';
-import { AdminAnalyticsDemographicsComponent } from './pages/admin/admin-analytics-demographics.component';
-import { AdminAnalyticsRetentionComponent } from './pages/admin/admin-analytics-retention.component';
-import { AdminReportBuilderComponent } from './pages/admin/admin-report-builder.component';
-import { AdminAuditTrailComponent } from './pages/admin/admin-audit-trail.component';
-import { AccountantDashboardComponent } from './pages/accountant/accountant-dashboard.component';
-import { DemoLandingComponent } from './pages/public/demo-landing.component';
-import { LmsTeacherComponent } from './pages/lms/lms-teacher.component';
-import { LmsStudentComponent } from './pages/lms/lms-student.component';
-import { LmsLibraryComponent } from './pages/lms/lms-library.component';
-import { AdminWelfareComponent } from './pages/welfare/admin-welfare.component';
-import { MeetingsComponent } from './pages/welfare/meetings.component';
-import { SchoolCalendarComponent } from './pages/welfare/school-calendar.component';
-import { AdminTransportComponent } from './pages/welfare/admin-transport.component';
-import { AdminHostelComponent } from './pages/welfare/admin-hostel.component';
-import { AdminLibraryComponent } from './pages/welfare/admin-library.component';
-import { AdminGateComponent } from './pages/welfare/admin-gate.component';
-import { AdminActivitiesComponent } from './pages/welfare/admin-activities.component';
-import { AdminIdCardsComponent } from './pages/welfare/admin-id-cards.component';
-import { AdminDocumentsComponent } from './pages/welfare/admin-documents.component';
-import { AdminConsentsComponent } from './pages/welfare/admin-consents.component';
-import { AdminEarlyWarningComponent } from './pages/welfare/admin-early-warning.component';
-import { AdminInventoryComponent } from './pages/welfare/admin-inventory.component';
-import { AdminHrComponent } from './pages/welfare/admin-hr.component';
-import { AdminSurveysComponent } from './pages/welfare/admin-surveys.component';
-import { AdminAlumniComponent } from './pages/welfare/admin-alumni.component';
-import { ParentEarlyLeaveComponent } from './pages/welfare/parent-early-leave.component';
 
 export const routes: Routes = [
   { path: '', redirectTo: 'login', pathMatch: 'full' },
-  { path: 'login', component: LoginComponent },
-  { path: 'demo', component: DemoLandingComponent },
-  { path: 'apply', component: ApplyComponent },
-  { path: 'apply/status', component: ApplicationStatusComponent },
+  { path: 'login', loadComponent: () => import('./pages/login/login.component').then((m) => m.LoginComponent) },
+  { path: 'demo', loadComponent: () => import('./pages/public/demo-landing.component').then((m) => m.DemoLandingComponent) },
+  { path: 'apply', loadComponent: () => import('./pages/public/apply.component').then((m) => m.ApplyComponent) },
+  { path: 'apply/status', loadComponent: () => import('./pages/public/application-status.component').then((m) => m.ApplicationStatusComponent) },
   { path: 'admissions', redirectTo: 'apply', pathMatch: 'full' },
   { path: 'admissions/status', redirectTo: 'apply/status', pathMatch: 'full' },
 
@@ -115,225 +14,225 @@ export const routes: Routes = [
     path: 'director',
     canActivate: [authGuard, roleGuard('director')],
     children: [
-      { path: '', component: DirectorDashboardComponent },
-      { path: 'finance', component: DirectorFinanceComponent },
-      { path: 'attendance', component: AttendanceReportComponent },
-      { path: 'academics', component: DirectorAcademicsComponent },
-      { path: 'store', component: DirectorStoreComponent },
-      { path: 'payroll', component: AdminPayrollComponent },
-      { path: 'exams', component: ExamMarksEntryComponent },
-      { path: 'report-cards', component: AdminReportCardsComponent },
-      { path: 'mark-sheet', component: AdminMarkSheetComponent },
-      { path: 'results-analysis', component: AdminResultsAnalysisComponent },
-      { path: 'ranking', component: AdminRankingComponent },
-      { path: 'mark-entry-progress', component: AdminMarkEntryProgressComponent },
-      { path: 'analytics/demographics', component: AdminAnalyticsDemographicsComponent },
-      { path: 'analytics/retention', component: AdminAnalyticsRetentionComponent },
-      { path: 'analytics/report-builder', component: AdminReportBuilderComponent },
-      { path: 'change-password', component: ChangePasswordPageComponent },
+      { path: '', loadComponent: () => import('./pages/director/director-dashboard.component').then((m) => m.DirectorDashboardComponent) },
+      { path: 'finance', loadComponent: () => import('./pages/director/director-finance.component').then((m) => m.DirectorFinanceComponent) },
+      { path: 'attendance', loadComponent: () => import('./pages/attendance/attendance-report.component').then((m) => m.AttendanceReportComponent) },
+      { path: 'academics', loadComponent: () => import('./pages/director/director-academics.component').then((m) => m.DirectorAcademicsComponent) },
+      { path: 'store', loadComponent: () => import('./pages/director/director-store.component').then((m) => m.DirectorStoreComponent) },
+      { path: 'payroll', loadComponent: () => import('./pages/admin/admin-payroll.component').then((m) => m.AdminPayrollComponent) },
+      { path: 'exams', loadComponent: () => import('./pages/exams/exam-marks-entry.component').then((m) => m.ExamMarksEntryComponent) },
+      { path: 'report-cards', loadComponent: () => import('./pages/admin/admin-report-cards.component').then((m) => m.AdminReportCardsComponent) },
+      { path: 'mark-sheet', loadComponent: () => import('./pages/admin/admin-mark-sheet.component').then((m) => m.AdminMarkSheetComponent) },
+      { path: 'results-analysis', loadComponent: () => import('./pages/admin/admin-results-analysis.component').then((m) => m.AdminResultsAnalysisComponent) },
+      { path: 'ranking', loadComponent: () => import('./pages/admin/admin-ranking.component').then((m) => m.AdminRankingComponent) },
+      { path: 'mark-entry-progress', loadComponent: () => import('./pages/admin/admin-mark-entry-progress.component').then((m) => m.AdminMarkEntryProgressComponent) },
+      { path: 'analytics/demographics', loadComponent: () => import('./pages/admin/admin-analytics-demographics.component').then((m) => m.AdminAnalyticsDemographicsComponent) },
+      { path: 'analytics/retention', loadComponent: () => import('./pages/admin/admin-analytics-retention.component').then((m) => m.AdminAnalyticsRetentionComponent) },
+      { path: 'analytics/report-builder', loadComponent: () => import('./pages/admin/admin-report-builder.component').then((m) => m.AdminReportBuilderComponent) },
+      { path: 'change-password', loadComponent: () => import('./pages/account/change-password-page.component').then((m) => m.ChangePasswordPageComponent) },
     ],
   },
   {
     path: 'principal',
     canActivate: [authGuard, roleGuard('principal')],
     children: [
-      { path: '', component: DirectorDashboardComponent },
-      { path: 'finance', component: DirectorFinanceComponent },
-      { path: 'attendance', component: AttendanceReportComponent },
-      { path: 'academics', component: DirectorAcademicsComponent },
-      { path: 'store', component: DirectorStoreComponent },
-      { path: 'payroll', component: AdminPayrollComponent },
-      { path: 'exams', component: ExamMarksEntryComponent },
-      { path: 'report-cards', component: AdminReportCardsComponent },
-      { path: 'mark-sheet', component: AdminMarkSheetComponent },
-      { path: 'results-analysis', component: AdminResultsAnalysisComponent },
-      { path: 'ranking', component: AdminRankingComponent },
-      { path: 'mark-entry-progress', component: AdminMarkEntryProgressComponent },
-      { path: 'analytics/demographics', component: AdminAnalyticsDemographicsComponent },
-      { path: 'analytics/retention', component: AdminAnalyticsRetentionComponent },
-      { path: 'analytics/report-builder', component: AdminReportBuilderComponent },
-      { path: 'change-password', component: ChangePasswordPageComponent },
+      { path: '', loadComponent: () => import('./pages/director/director-dashboard.component').then((m) => m.DirectorDashboardComponent) },
+      { path: 'finance', loadComponent: () => import('./pages/director/director-finance.component').then((m) => m.DirectorFinanceComponent) },
+      { path: 'attendance', loadComponent: () => import('./pages/attendance/attendance-report.component').then((m) => m.AttendanceReportComponent) },
+      { path: 'academics', loadComponent: () => import('./pages/director/director-academics.component').then((m) => m.DirectorAcademicsComponent) },
+      { path: 'store', loadComponent: () => import('./pages/director/director-store.component').then((m) => m.DirectorStoreComponent) },
+      { path: 'payroll', loadComponent: () => import('./pages/admin/admin-payroll.component').then((m) => m.AdminPayrollComponent) },
+      { path: 'exams', loadComponent: () => import('./pages/exams/exam-marks-entry.component').then((m) => m.ExamMarksEntryComponent) },
+      { path: 'report-cards', loadComponent: () => import('./pages/admin/admin-report-cards.component').then((m) => m.AdminReportCardsComponent) },
+      { path: 'mark-sheet', loadComponent: () => import('./pages/admin/admin-mark-sheet.component').then((m) => m.AdminMarkSheetComponent) },
+      { path: 'results-analysis', loadComponent: () => import('./pages/admin/admin-results-analysis.component').then((m) => m.AdminResultsAnalysisComponent) },
+      { path: 'ranking', loadComponent: () => import('./pages/admin/admin-ranking.component').then((m) => m.AdminRankingComponent) },
+      { path: 'mark-entry-progress', loadComponent: () => import('./pages/admin/admin-mark-entry-progress.component').then((m) => m.AdminMarkEntryProgressComponent) },
+      { path: 'analytics/demographics', loadComponent: () => import('./pages/admin/admin-analytics-demographics.component').then((m) => m.AdminAnalyticsDemographicsComponent) },
+      { path: 'analytics/retention', loadComponent: () => import('./pages/admin/admin-analytics-retention.component').then((m) => m.AdminAnalyticsRetentionComponent) },
+      { path: 'analytics/report-builder', loadComponent: () => import('./pages/admin/admin-report-builder.component').then((m) => m.AdminReportBuilderComponent) },
+      { path: 'change-password', loadComponent: () => import('./pages/account/change-password-page.component').then((m) => m.ChangePasswordPageComponent) },
     ],
   },
   {
     path: 'admin',
     canActivate: [authGuard, roleGuard('admin')],
     children: [
-      { path: '', component: AdminDashboardComponent },
-      { path: 'students', component: AdminStudentsComponent },
-      { path: 'admissions', component: AdminAdmissionsComponent },
-      { path: 'report-view', component: AdminReportViewComponent },
-      { path: 'parents', component: AdminParentsComponent },
-      { path: 'parents/:id', component: AdminParentDetailComponent },
-      { path: 'parent-accounts', component: AdminParentAccountsComponent },
-      { path: 'family-links', component: AdminFamilyLinksComponent },
-      { path: 'enrollment', component: AdminEnrollmentComponent },
-      { path: 'class-list', component: ClassListComponent },
-      { path: 'class-promotion', component: AdminClassPromotionComponent },
-      { path: 'billing', component: AdminBillingComponent, data: { financeMode: 'billing' } },
-      { path: 'payment', component: AdminBillingComponent, data: { financeMode: 'payment' } },
-      { path: 'manage-fees', component: AdminManageFeesComponent },
-      { path: 'student-balance', component: AdminStudentBalanceComponent },
-      { path: 'exemptions', component: AdminExemptionsComponent },
-      { path: 'finance', component: AdminFinanceComponent },
-      { path: 'fin-reports/student-ledger', component: AdminStudentLedgerComponent },
-      { path: 'fin-reports/outstanding-invoices', component: AdminOutstandingInvoicesComponent },
-      { path: 'fin-reports/record-payment/:studentId', component: AdminRecordPaymentComponent },
-      { path: 'fin-reports/student-reconciliation', component: AdminStudentReconciliationComponent },
-      { path: 'fin-reports/debtor-aging', component: AdminDebtorAgingComponent },
-      { path: 'fin-reports/fee-collection-revenue', component: AdminFeeCollectionRevenueComponent },
-      { path: 'fin-reports/general-ledger', component: AdminGeneralLedgerComponent },
-      { path: 'communication/send', component: AdminSendMessageComponent },
-      { path: 'communication/inbox', component: AdminInboxComponent },
-      { path: 'communication/bulk', component: AdminBulkMessageComponent },
-      { path: 'communication/notifications', component: NotificationsComponent },
-      { path: 'communication/notification-settings', component: AdminNotificationSettingsComponent },
+      { path: '', loadComponent: () => import('./pages/admin/admin-dashboard.component').then((m) => m.AdminDashboardComponent) },
+      { path: 'students', loadComponent: () => import('./pages/admin/admin-students.component').then((m) => m.AdminStudentsComponent) },
+      { path: 'admissions', loadComponent: () => import('./pages/admin/admin-admissions.component').then((m) => m.AdminAdmissionsComponent) },
+      { path: 'report-view', loadComponent: () => import('./pages/admin/admin-report-view.component').then((m) => m.AdminReportViewComponent) },
+      { path: 'parents', loadComponent: () => import('./pages/admin/admin-parents.component').then((m) => m.AdminParentsComponent) },
+      { path: 'parents/:id', loadComponent: () => import('./pages/admin/admin-parent-detail.component').then((m) => m.AdminParentDetailComponent) },
+      { path: 'parent-accounts', loadComponent: () => import('./pages/admin/admin-parent-accounts.component').then((m) => m.AdminParentAccountsComponent) },
+      { path: 'family-links', loadComponent: () => import('./pages/admin/admin-family-links.component').then((m) => m.AdminFamilyLinksComponent) },
+      { path: 'enrollment', loadComponent: () => import('./pages/admin/admin-enrollment.component').then((m) => m.AdminEnrollmentComponent) },
+      { path: 'class-list', loadComponent: () => import('./pages/students/class-list.component').then((m) => m.ClassListComponent) },
+      { path: 'class-promotion', loadComponent: () => import('./pages/admin/admin-class-promotion.component').then((m) => m.AdminClassPromotionComponent) },
+      { path: 'billing', loadComponent: () => import('./pages/admin/admin-billing.component').then((m) => m.AdminBillingComponent), data: { financeMode: 'billing' } },
+      { path: 'payment', loadComponent: () => import('./pages/admin/admin-billing.component').then((m) => m.AdminBillingComponent), data: { financeMode: 'payment' } },
+      { path: 'manage-fees', loadComponent: () => import('./pages/admin/admin-manage-fees.component').then((m) => m.AdminManageFeesComponent) },
+      { path: 'student-balance', loadComponent: () => import('./pages/admin/admin-student-balance.component').then((m) => m.AdminStudentBalanceComponent) },
+      { path: 'exemptions', loadComponent: () => import('./pages/admin/admin-exemptions.component').then((m) => m.AdminExemptionsComponent) },
+      { path: 'finance', loadComponent: () => import('./pages/admin/admin-finance.component').then((m) => m.AdminFinanceComponent) },
+      { path: 'fin-reports/student-ledger', loadComponent: () => import('./pages/admin/admin-student-ledger.component').then((m) => m.AdminStudentLedgerComponent) },
+      { path: 'fin-reports/outstanding-invoices', loadComponent: () => import('./pages/admin/admin-outstanding-invoices.component').then((m) => m.AdminOutstandingInvoicesComponent) },
+      { path: 'fin-reports/record-payment/:studentId', loadComponent: () => import('./pages/admin/admin-record-payment.component').then((m) => m.AdminRecordPaymentComponent) },
+      { path: 'fin-reports/student-reconciliation', loadComponent: () => import('./pages/admin/admin-student-reconciliation.component').then((m) => m.AdminStudentReconciliationComponent) },
+      { path: 'fin-reports/debtor-aging', loadComponent: () => import('./pages/admin/admin-debtor-aging.component').then((m) => m.AdminDebtorAgingComponent) },
+      { path: 'fin-reports/fee-collection-revenue', loadComponent: () => import('./pages/admin/admin-fee-collection-revenue.component').then((m) => m.AdminFeeCollectionRevenueComponent) },
+      { path: 'fin-reports/general-ledger', loadComponent: () => import('./pages/admin/admin-general-ledger.component').then((m) => m.AdminGeneralLedgerComponent) },
+      { path: 'communication/send', loadComponent: () => import('./pages/admin/admin-send-message.component').then((m) => m.AdminSendMessageComponent) },
+      { path: 'communication/inbox', loadComponent: () => import('./pages/admin/admin-inbox.component').then((m) => m.AdminInboxComponent) },
+      { path: 'communication/bulk', loadComponent: () => import('./pages/admin/admin-bulk-message.component').then((m) => m.AdminBulkMessageComponent) },
+      { path: 'communication/notifications', loadComponent: () => import('./shared/notifications/notifications.component').then((m) => m.NotificationsComponent) },
+      { path: 'communication/notification-settings', loadComponent: () => import('./pages/admin/admin-notification-settings.component').then((m) => m.AdminNotificationSettingsComponent) },
       { path: 'timetable', redirectTo: 'timetable/configure-periods', pathMatch: 'full' },
-      { path: 'timetable/configure-periods', component: AdminTimetableConfigurePeriodsComponent },
-      { path: 'timetable/generate', component: AdminTimetableGenerateComponent },
-      { path: 'timetable/view', component: AdminTimetableViewComponent },
-      { path: 'timetable/manual-entry', component: AdminTimetableManualEntryComponent },
-      { path: 'timetable/rooms', component: AdminRoomsComponent },
-      { path: 'timetable/teacher-schedule', component: AdminTimetableTeacherScheduleComponent },
-      { path: 'staff', component: AdminStaffComponent },
-      { path: 'payroll', component: AdminPayrollComponent },
-      { path: 'exams', component: ExamMarksEntryComponent },
+      { path: 'timetable/configure-periods', loadComponent: () => import('./pages/admin/admin-timetable-configure-periods.component').then((m) => m.AdminTimetableConfigurePeriodsComponent) },
+      { path: 'timetable/generate', loadComponent: () => import('./pages/admin/admin-timetable-generate.component').then((m) => m.AdminTimetableGenerateComponent) },
+      { path: 'timetable/view', loadComponent: () => import('./pages/admin/admin-timetable-view.component').then((m) => m.AdminTimetableViewComponent) },
+      { path: 'timetable/manual-entry', loadComponent: () => import('./pages/admin/admin-timetable-manual-entry.component').then((m) => m.AdminTimetableManualEntryComponent) },
+      { path: 'timetable/rooms', loadComponent: () => import('./pages/admin/admin-rooms.component').then((m) => m.AdminRoomsComponent) },
+      { path: 'timetable/teacher-schedule', loadComponent: () => import('./pages/admin/admin-timetable-teacher-schedule.component').then((m) => m.AdminTimetableTeacherScheduleComponent) },
+      { path: 'staff', loadComponent: () => import('./pages/admin/admin-staff.component').then((m) => m.AdminStaffComponent) },
+      { path: 'payroll', loadComponent: () => import('./pages/admin/admin-payroll.component').then((m) => m.AdminPayrollComponent) },
+      { path: 'exams', loadComponent: () => import('./pages/exams/exam-marks-entry.component').then((m) => m.ExamMarksEntryComponent) },
       { path: 'attendance', redirectTo: 'attendance/mark-register', pathMatch: 'full' },
-      { path: 'attendance/mark-register', component: AttendanceMarkRegisterComponent },
-      { path: 'attendance/report', component: AttendanceReportComponent },
-      { path: 'report-cards', component: AdminReportCardsComponent },
-      { path: 'mark-sheet', component: AdminMarkSheetComponent },
-      { path: 'results-analysis', component: AdminResultsAnalysisComponent },
-      { path: 'ranking', component: AdminRankingComponent },
-      { path: 'mark-entry-progress', component: AdminMarkEntryProgressComponent },
-      { path: 'analytics/demographics', component: AdminAnalyticsDemographicsComponent },
-      { path: 'analytics/retention', component: AdminAnalyticsRetentionComponent },
-      { path: 'analytics/report-builder', component: AdminReportBuilderComponent },
-      { path: 'classes', component: AdminDashboardComponent },
-      { path: 'staff-attendance', component: AdminStaffAttendanceComponent },
-      { path: 'leave-requests', component: AdminLeaveRequestsComponent },
-      { path: 'class-assignments', component: AdminClassAssignmentsComponent },
-      { path: 'lms', component: LmsTeacherComponent },
-      { path: 'library', component: LmsLibraryComponent },
-      { path: 'settings', component: AdminSettingsComponent },
-      { path: 'academic-settings', component: AdminAcademicSettingsComponent },
-      { path: 'user-management', component: AdminUserManagementComponent },
-      { path: 'change-password', component: ChangePasswordPageComponent },
-      { path: 'user-permissions', component: AdminUserPermissionsComponent },
-      { path: 'audit-trail', component: AdminAuditTrailComponent },
-      { path: 'integrations', component: AdminIntegrationsComponent },
-      { path: 'welfare', component: AdminWelfareComponent },
-      { path: 'meetings', component: MeetingsComponent },
-      { path: 'calendar', component: SchoolCalendarComponent },
-      { path: 'transport', component: AdminTransportComponent },
-      { path: 'hostel', component: AdminHostelComponent },
-      { path: 'physical-library', component: AdminLibraryComponent },
-      { path: 'gate', component: AdminGateComponent },
-      { path: 'activities', component: AdminActivitiesComponent },
-      { path: 'id-cards', component: AdminIdCardsComponent },
-      { path: 'documents', component: AdminDocumentsComponent },
-      { path: 'consents', component: AdminConsentsComponent },
-      { path: 'early-warning', component: AdminEarlyWarningComponent },
-      { path: 'inventory', component: AdminInventoryComponent },
-      { path: 'hr', component: AdminHrComponent },
-      { path: 'surveys', component: AdminSurveysComponent },
-      { path: 'alumni', component: AdminAlumniComponent },
+      { path: 'attendance/mark-register', loadComponent: () => import('./pages/attendance/attendance-mark-register.component').then((m) => m.AttendanceMarkRegisterComponent) },
+      { path: 'attendance/report', loadComponent: () => import('./pages/attendance/attendance-report.component').then((m) => m.AttendanceReportComponent) },
+      { path: 'report-cards', loadComponent: () => import('./pages/admin/admin-report-cards.component').then((m) => m.AdminReportCardsComponent) },
+      { path: 'mark-sheet', loadComponent: () => import('./pages/admin/admin-mark-sheet.component').then((m) => m.AdminMarkSheetComponent) },
+      { path: 'results-analysis', loadComponent: () => import('./pages/admin/admin-results-analysis.component').then((m) => m.AdminResultsAnalysisComponent) },
+      { path: 'ranking', loadComponent: () => import('./pages/admin/admin-ranking.component').then((m) => m.AdminRankingComponent) },
+      { path: 'mark-entry-progress', loadComponent: () => import('./pages/admin/admin-mark-entry-progress.component').then((m) => m.AdminMarkEntryProgressComponent) },
+      { path: 'analytics/demographics', loadComponent: () => import('./pages/admin/admin-analytics-demographics.component').then((m) => m.AdminAnalyticsDemographicsComponent) },
+      { path: 'analytics/retention', loadComponent: () => import('./pages/admin/admin-analytics-retention.component').then((m) => m.AdminAnalyticsRetentionComponent) },
+      { path: 'analytics/report-builder', loadComponent: () => import('./pages/admin/admin-report-builder.component').then((m) => m.AdminReportBuilderComponent) },
+      { path: 'classes', loadComponent: () => import('./pages/admin/admin-dashboard.component').then((m) => m.AdminDashboardComponent) },
+      { path: 'staff-attendance', loadComponent: () => import('./pages/admin/admin-staff-attendance.component').then((m) => m.AdminStaffAttendanceComponent) },
+      { path: 'leave-requests', loadComponent: () => import('./pages/admin/admin-leave-requests.component').then((m) => m.AdminLeaveRequestsComponent) },
+      { path: 'class-assignments', loadComponent: () => import('./pages/admin/admin-class-assignments.component').then((m) => m.AdminClassAssignmentsComponent) },
+      { path: 'lms', loadComponent: () => import('./pages/lms/lms-teacher.component').then((m) => m.LmsTeacherComponent) },
+      { path: 'library', loadComponent: () => import('./pages/lms/lms-library.component').then((m) => m.LmsLibraryComponent) },
+      { path: 'settings', loadComponent: () => import('./pages/admin/admin-settings.component').then((m) => m.AdminSettingsComponent) },
+      { path: 'academic-settings', loadComponent: () => import('./pages/admin/admin-academic-settings.component').then((m) => m.AdminAcademicSettingsComponent) },
+      { path: 'user-management', loadComponent: () => import('./pages/admin/admin-user-management.component').then((m) => m.AdminUserManagementComponent) },
+      { path: 'change-password', loadComponent: () => import('./pages/account/change-password-page.component').then((m) => m.ChangePasswordPageComponent) },
+      { path: 'user-permissions', loadComponent: () => import('./pages/admin/admin-user-permissions.component').then((m) => m.AdminUserPermissionsComponent) },
+      { path: 'audit-trail', loadComponent: () => import('./pages/admin/admin-audit-trail.component').then((m) => m.AdminAuditTrailComponent) },
+      { path: 'integrations', loadComponent: () => import('./pages/admin/admin-integrations.component').then((m) => m.AdminIntegrationsComponent) },
+      { path: 'welfare', loadComponent: () => import('./pages/welfare/admin-welfare.component').then((m) => m.AdminWelfareComponent) },
+      { path: 'meetings', loadComponent: () => import('./pages/welfare/meetings.component').then((m) => m.MeetingsComponent) },
+      { path: 'calendar', loadComponent: () => import('./pages/welfare/school-calendar.component').then((m) => m.SchoolCalendarComponent) },
+      { path: 'transport', loadComponent: () => import('./pages/welfare/admin-transport.component').then((m) => m.AdminTransportComponent) },
+      { path: 'hostel', loadComponent: () => import('./pages/welfare/admin-hostel.component').then((m) => m.AdminHostelComponent) },
+      { path: 'physical-library', loadComponent: () => import('./pages/welfare/admin-library.component').then((m) => m.AdminLibraryComponent) },
+      { path: 'gate', loadComponent: () => import('./pages/welfare/admin-gate.component').then((m) => m.AdminGateComponent) },
+      { path: 'activities', loadComponent: () => import('./pages/welfare/admin-activities.component').then((m) => m.AdminActivitiesComponent) },
+      { path: 'id-cards', loadComponent: () => import('./pages/welfare/admin-id-cards.component').then((m) => m.AdminIdCardsComponent) },
+      { path: 'documents', loadComponent: () => import('./pages/welfare/admin-documents.component').then((m) => m.AdminDocumentsComponent) },
+      { path: 'consents', loadComponent: () => import('./pages/welfare/admin-consents.component').then((m) => m.AdminConsentsComponent) },
+      { path: 'early-warning', loadComponent: () => import('./pages/welfare/admin-early-warning.component').then((m) => m.AdminEarlyWarningComponent) },
+      { path: 'inventory', loadComponent: () => import('./pages/welfare/admin-inventory.component').then((m) => m.AdminInventoryComponent) },
+      { path: 'hr', loadComponent: () => import('./pages/welfare/admin-hr.component').then((m) => m.AdminHrComponent) },
+      { path: 'surveys', loadComponent: () => import('./pages/welfare/admin-surveys.component').then((m) => m.AdminSurveysComponent) },
+      { path: 'alumni', loadComponent: () => import('./pages/welfare/admin-alumni.component').then((m) => m.AdminAlumniComponent) },
     ],
   },
   {
     path: 'accountant',
     canActivate: [authGuard, roleGuard('accountant')],
     children: [
-      { path: '', component: AccountantDashboardComponent },
-      { path: 'students', component: AdminStudentsComponent },
-      { path: 'billing', component: AdminBillingComponent, data: { financeMode: 'billing' } },
-      { path: 'payment', component: AdminBillingComponent, data: { financeMode: 'payment' } },
-      { path: 'manage-fees', component: AdminManageFeesComponent },
-      { path: 'student-balance', component: AdminStudentBalanceComponent },
-      { path: 'exemptions', component: AdminExemptionsComponent },
-      { path: 'finance', component: AdminFinanceComponent },
-      { path: 'fin-reports/student-ledger', component: AdminStudentLedgerComponent },
-      { path: 'fin-reports/outstanding-invoices', component: AdminOutstandingInvoicesComponent },
-      { path: 'fin-reports/record-payment/:studentId', component: AdminRecordPaymentComponent },
-      { path: 'fin-reports/student-reconciliation', component: AdminStudentReconciliationComponent },
-      { path: 'fin-reports/debtor-aging', component: AdminDebtorAgingComponent },
-      { path: 'fin-reports/fee-collection-revenue', component: AdminFeeCollectionRevenueComponent },
-      { path: 'fin-reports/general-ledger', component: AdminGeneralLedgerComponent },
-      { path: 'messages', component: MessagingCenterComponent },
-      { path: 'change-password', component: ChangePasswordPageComponent },
+      { path: '', loadComponent: () => import('./pages/accountant/accountant-dashboard.component').then((m) => m.AccountantDashboardComponent) },
+      { path: 'students', loadComponent: () => import('./pages/admin/admin-students.component').then((m) => m.AdminStudentsComponent) },
+      { path: 'billing', loadComponent: () => import('./pages/admin/admin-billing.component').then((m) => m.AdminBillingComponent), data: { financeMode: 'billing' } },
+      { path: 'payment', loadComponent: () => import('./pages/admin/admin-billing.component').then((m) => m.AdminBillingComponent), data: { financeMode: 'payment' } },
+      { path: 'manage-fees', loadComponent: () => import('./pages/admin/admin-manage-fees.component').then((m) => m.AdminManageFeesComponent) },
+      { path: 'student-balance', loadComponent: () => import('./pages/admin/admin-student-balance.component').then((m) => m.AdminStudentBalanceComponent) },
+      { path: 'exemptions', loadComponent: () => import('./pages/admin/admin-exemptions.component').then((m) => m.AdminExemptionsComponent) },
+      { path: 'finance', loadComponent: () => import('./pages/admin/admin-finance.component').then((m) => m.AdminFinanceComponent) },
+      { path: 'fin-reports/student-ledger', loadComponent: () => import('./pages/admin/admin-student-ledger.component').then((m) => m.AdminStudentLedgerComponent) },
+      { path: 'fin-reports/outstanding-invoices', loadComponent: () => import('./pages/admin/admin-outstanding-invoices.component').then((m) => m.AdminOutstandingInvoicesComponent) },
+      { path: 'fin-reports/record-payment/:studentId', loadComponent: () => import('./pages/admin/admin-record-payment.component').then((m) => m.AdminRecordPaymentComponent) },
+      { path: 'fin-reports/student-reconciliation', loadComponent: () => import('./pages/admin/admin-student-reconciliation.component').then((m) => m.AdminStudentReconciliationComponent) },
+      { path: 'fin-reports/debtor-aging', loadComponent: () => import('./pages/admin/admin-debtor-aging.component').then((m) => m.AdminDebtorAgingComponent) },
+      { path: 'fin-reports/fee-collection-revenue', loadComponent: () => import('./pages/admin/admin-fee-collection-revenue.component').then((m) => m.AdminFeeCollectionRevenueComponent) },
+      { path: 'fin-reports/general-ledger', loadComponent: () => import('./pages/admin/admin-general-ledger.component').then((m) => m.AdminGeneralLedgerComponent) },
+      { path: 'messages', loadComponent: () => import('./shared/messaging/messaging-center.component').then((m) => m.MessagingCenterComponent) },
+      { path: 'change-password', loadComponent: () => import('./pages/account/change-password-page.component').then((m) => m.ChangePasswordPageComponent) },
     ],
   },
   {
     path: 'teacher',
     canActivate: [authGuard, roleGuard('teacher')],
     children: [
-      { path: '', component: TeacherDashboardComponent },
-      { path: 'exams', component: TeacherExamsComponent },
-      { path: 'report-cards', component: AdminReportCardsComponent },
-      { path: 'mark-sheet', component: AdminMarkSheetComponent },
-      { path: 'results-analysis', component: AdminResultsAnalysisComponent },
-      { path: 'ranking', component: AdminRankingComponent },
-      { path: 'mark-entry-progress', component: AdminMarkEntryProgressComponent },
-      { path: 'record-book', component: RecordBookComponent },
-      { path: 'assignments', component: TeacherAssignmentsComponent },
-      { path: 'lms', component: LmsTeacherComponent },
-      { path: 'library', component: LmsLibraryComponent },
-      { path: 'welfare', component: AdminWelfareComponent },
-      { path: 'meetings', component: MeetingsComponent },
-      { path: 'calendar', component: SchoolCalendarComponent },
-      { path: 'surveys', component: AdminSurveysComponent },
+      { path: '', loadComponent: () => import('./pages/teacher/teacher-dashboard.component').then((m) => m.TeacherDashboardComponent) },
+      { path: 'exams', loadComponent: () => import('./pages/teacher/teacher-exams.component').then((m) => m.TeacherExamsComponent) },
+      { path: 'report-cards', loadComponent: () => import('./pages/admin/admin-report-cards.component').then((m) => m.AdminReportCardsComponent) },
+      { path: 'mark-sheet', loadComponent: () => import('./pages/admin/admin-mark-sheet.component').then((m) => m.AdminMarkSheetComponent) },
+      { path: 'results-analysis', loadComponent: () => import('./pages/admin/admin-results-analysis.component').then((m) => m.AdminResultsAnalysisComponent) },
+      { path: 'ranking', loadComponent: () => import('./pages/admin/admin-ranking.component').then((m) => m.AdminRankingComponent) },
+      { path: 'mark-entry-progress', loadComponent: () => import('./pages/admin/admin-mark-entry-progress.component').then((m) => m.AdminMarkEntryProgressComponent) },
+      { path: 'record-book', loadComponent: () => import('./pages/exams/record-book.component').then((m) => m.RecordBookComponent) },
+      { path: 'assignments', loadComponent: () => import('./pages/teacher/teacher-assignments.component').then((m) => m.TeacherAssignmentsComponent) },
+      { path: 'lms', loadComponent: () => import('./pages/lms/lms-teacher.component').then((m) => m.LmsTeacherComponent) },
+      { path: 'library', loadComponent: () => import('./pages/lms/lms-library.component').then((m) => m.LmsLibraryComponent) },
+      { path: 'welfare', loadComponent: () => import('./pages/welfare/admin-welfare.component').then((m) => m.AdminWelfareComponent) },
+      { path: 'meetings', loadComponent: () => import('./pages/welfare/meetings.component').then((m) => m.MeetingsComponent) },
+      { path: 'calendar', loadComponent: () => import('./pages/welfare/school-calendar.component').then((m) => m.SchoolCalendarComponent) },
+      { path: 'surveys', loadComponent: () => import('./pages/welfare/admin-surveys.component').then((m) => m.AdminSurveysComponent) },
       { path: 'attendance', redirectTo: 'attendance/mark-register', pathMatch: 'full' },
-      { path: 'attendance/mark-register', component: AttendanceMarkRegisterComponent },
-      { path: 'attendance/report', component: AttendanceReportComponent },
-      { path: 'enrollment', component: AdminEnrollmentComponent },
-      { path: 'class-list', component: ClassListComponent },
-      { path: 'assessments', component: TeacherDashboardComponent },
-      { path: 'schedules', component: TeacherDashboardComponent },
-      { path: 'timetable', component: TeacherTimetableComponent },
-      { path: 'messages', component: MessagingCenterComponent },
-      { path: 'notifications', component: NotificationsComponent },
-      { path: 'change-password', component: ChangePasswordPageComponent },
+      { path: 'attendance/mark-register', loadComponent: () => import('./pages/attendance/attendance-mark-register.component').then((m) => m.AttendanceMarkRegisterComponent) },
+      { path: 'attendance/report', loadComponent: () => import('./pages/attendance/attendance-report.component').then((m) => m.AttendanceReportComponent) },
+      { path: 'enrollment', loadComponent: () => import('./pages/admin/admin-enrollment.component').then((m) => m.AdminEnrollmentComponent) },
+      { path: 'class-list', loadComponent: () => import('./pages/students/class-list.component').then((m) => m.ClassListComponent) },
+      { path: 'assessments', loadComponent: () => import('./pages/teacher/teacher-dashboard.component').then((m) => m.TeacherDashboardComponent) },
+      { path: 'schedules', loadComponent: () => import('./pages/teacher/teacher-dashboard.component').then((m) => m.TeacherDashboardComponent) },
+      { path: 'timetable', loadComponent: () => import('./pages/teacher/teacher-timetable.component').then((m) => m.TeacherTimetableComponent) },
+      { path: 'messages', loadComponent: () => import('./shared/messaging/messaging-center.component').then((m) => m.MessagingCenterComponent) },
+      { path: 'notifications', loadComponent: () => import('./shared/notifications/notifications.component').then((m) => m.NotificationsComponent) },
+      { path: 'change-password', loadComponent: () => import('./pages/account/change-password-page.component').then((m) => m.ChangePasswordPageComponent) },
     ],
   },
   {
     path: 'parent',
     canActivate: [authGuard, roleGuard('parent')],
     children: [
-      { path: '', component: ParentDashboardComponent },
-      { path: 'finance', component: ParentFinanceComponent },
-      { path: 'finance/:studentId', component: ParentFinanceComponent },
-      { path: 'attendance', component: ParentAttendanceComponent },
-      { path: 'timetable', component: ParentTimetableComponent },
-      { path: 'report-card/:studentId', component: ParentReportCardComponent },
-      { path: 'report-cards', component: ParentReportCardsComponent },
-      { path: 'messages', component: MessagingCenterComponent },
-      { path: 'notifications', component: NotificationsComponent },
-      { path: 'send-email', component: ParentSendEmailComponent },
-      { path: 'welfare', component: AdminWelfareComponent },
-      { path: 'meetings', component: MeetingsComponent },
-      { path: 'calendar', component: SchoolCalendarComponent },
-      { path: 'consents', component: AdminConsentsComponent },
-      { path: 'surveys', component: AdminSurveysComponent },
-      { path: 'early-leave', component: ParentEarlyLeaveComponent },
-      { path: 'change-password', component: ChangePasswordPageComponent },
+      { path: '', loadComponent: () => import('./pages/parent/parent-dashboard.component').then((m) => m.ParentDashboardComponent) },
+      { path: 'finance', loadComponent: () => import('./pages/parent/parent-finance.component').then((m) => m.ParentFinanceComponent) },
+      { path: 'finance/:studentId', loadComponent: () => import('./pages/parent/parent-finance.component').then((m) => m.ParentFinanceComponent) },
+      { path: 'attendance', loadComponent: () => import('./pages/parent/parent-attendance.component').then((m) => m.ParentAttendanceComponent) },
+      { path: 'timetable', loadComponent: () => import('./pages/parent/parent-timetable.component').then((m) => m.ParentTimetableComponent) },
+      { path: 'report-card/:studentId', loadComponent: () => import('./pages/parent/parent-report-card.component').then((m) => m.ParentReportCardComponent) },
+      { path: 'report-cards', loadComponent: () => import('./pages/parent/parent-report-cards.component').then((m) => m.ParentReportCardsComponent) },
+      { path: 'messages', loadComponent: () => import('./shared/messaging/messaging-center.component').then((m) => m.MessagingCenterComponent) },
+      { path: 'notifications', loadComponent: () => import('./shared/notifications/notifications.component').then((m) => m.NotificationsComponent) },
+      { path: 'send-email', loadComponent: () => import('./pages/parent/parent-send-email.component').then((m) => m.ParentSendEmailComponent) },
+      { path: 'welfare', loadComponent: () => import('./pages/welfare/admin-welfare.component').then((m) => m.AdminWelfareComponent) },
+      { path: 'meetings', loadComponent: () => import('./pages/welfare/meetings.component').then((m) => m.MeetingsComponent) },
+      { path: 'calendar', loadComponent: () => import('./pages/welfare/school-calendar.component').then((m) => m.SchoolCalendarComponent) },
+      { path: 'consents', loadComponent: () => import('./pages/welfare/admin-consents.component').then((m) => m.AdminConsentsComponent) },
+      { path: 'surveys', loadComponent: () => import('./pages/welfare/admin-surveys.component').then((m) => m.AdminSurveysComponent) },
+      { path: 'early-leave', loadComponent: () => import('./pages/welfare/parent-early-leave.component').then((m) => m.ParentEarlyLeaveComponent) },
+      { path: 'change-password', loadComponent: () => import('./pages/account/change-password-page.component').then((m) => m.ChangePasswordPageComponent) },
     ],
   },
   {
     path: 'student',
     canActivate: [authGuard, roleGuard('student')],
     children: [
-      { path: '', component: StudentDashboardComponent },
-      { path: 'finance', component: ParentFinanceComponent },
-      { path: 'attendance', component: ParentAttendanceComponent },
-      { path: 'report-cards', component: ParentReportCardsComponent },
-      { path: 'report-card/:studentId', component: ParentReportCardComponent },
-      { path: 'homework', component: StudentHomeworkComponent },
-      { path: 'lms', component: LmsStudentComponent },
-      { path: 'library', component: LmsLibraryComponent },
-      { path: 'calendar', component: SchoolCalendarComponent },
-      { path: 'messages', component: MessagingCenterComponent },
-      { path: 'notifications', component: NotificationsComponent },
-      { path: 'change-password', component: ChangePasswordPageComponent },
+      { path: '', loadComponent: () => import('./pages/student/student-dashboard.component').then((m) => m.StudentDashboardComponent) },
+      { path: 'finance', loadComponent: () => import('./pages/parent/parent-finance.component').then((m) => m.ParentFinanceComponent) },
+      { path: 'attendance', loadComponent: () => import('./pages/parent/parent-attendance.component').then((m) => m.ParentAttendanceComponent) },
+      { path: 'report-cards', loadComponent: () => import('./pages/parent/parent-report-cards.component').then((m) => m.ParentReportCardsComponent) },
+      { path: 'report-card/:studentId', loadComponent: () => import('./pages/parent/parent-report-card.component').then((m) => m.ParentReportCardComponent) },
+      { path: 'homework', loadComponent: () => import('./pages/student/student-homework.component').then((m) => m.StudentHomeworkComponent) },
+      { path: 'lms', loadComponent: () => import('./pages/lms/lms-student.component').then((m) => m.LmsStudentComponent) },
+      { path: 'library', loadComponent: () => import('./pages/lms/lms-library.component').then((m) => m.LmsLibraryComponent) },
+      { path: 'calendar', loadComponent: () => import('./pages/welfare/school-calendar.component').then((m) => m.SchoolCalendarComponent) },
+      { path: 'messages', loadComponent: () => import('./shared/messaging/messaging-center.component').then((m) => m.MessagingCenterComponent) },
+      { path: 'notifications', loadComponent: () => import('./shared/notifications/notifications.component').then((m) => m.NotificationsComponent) },
+      { path: 'change-password', loadComponent: () => import('./pages/account/change-password-page.component').then((m) => m.ChangePasswordPageComponent) },
     ],
   },
 
