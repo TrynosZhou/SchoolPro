@@ -11,6 +11,7 @@ const entities_1 = require("../entities");
 const typeorm_helpers_1 = require("../utils/typeorm-helpers");
 const whatsapp_service_1 = require("./whatsapp.service");
 const email_service_1 = require("./email.service");
+const push_service_1 = require("./push.service");
 const notification_settings_service_1 = require("./notification-settings.service");
 const result_notification_service_1 = require("./result-notification.service");
 function normalizePhone(phone) {
@@ -199,6 +200,15 @@ async function publishResults(params) {
             sentViaWhatsApp: notifyWhatsApp && whatsappSent > 0,
         }));
         notificationsCreated += 1;
+    }
+    if (examCfg.channels.push && notifyUserIds.size) {
+        await (0, push_service_1.sendPushToUsers)([...notifyUserIds], {
+            title,
+            body: `${term.name} — ${examType.name} results are now available in the parent portal.`,
+            type: 'results_published',
+            url: '/notifications',
+            metadata: { termId, examTypeId },
+        }).catch((err) => console.error('[publish-results] push failed:', err));
     }
     const pubRepo = data_source_1.AppDataSource.getRepository(entities_1.ResultsPublication);
     let publication = await pubRepo.findOne({ where: { termId, examTypeId } });

@@ -59,6 +59,9 @@ const envWhatsappUseTemplate = cleanStr(process.env.WHATSAPP_USE_TEMPLATE);
 const envTwilioContentSid = cleanStr(process.env.TWILIO_CONTENT_SID);
 const envTwilioStatusCallbackUrl = cleanStr(process.env.TWILIO_STATUS_CALLBACK_URL);
 const envTwilioSmsFrom = cleanStr(process.env.TWILIO_SMS_FROM);
+const envVapidPublicKey = cleanStr(process.env.VAPID_PUBLIC_KEY);
+const envVapidPrivateKey = cleanStr(process.env.VAPID_PRIVATE_KEY);
+const envVapidSubject = cleanStr(process.env.VAPID_SUBJECT);
 const envStorageDriver = cleanStr(process.env.STORAGE_DRIVER);
 const envS3Bucket = cleanStr(process.env.S3_BUCKET);
 const envS3Region = cleanStr(process.env.S3_REGION);
@@ -100,6 +103,11 @@ exports.env = {
     },
     sms: {
         from: envTwilioSmsFrom || '',
+    },
+    push: {
+        publicKey: envVapidPublicKey || '',
+        privateKey: envVapidPrivateKey || '',
+        subject: envVapidSubject || 'mailto:admin@schoolpro.local',
     },
     demo: {
         enabled: envDemoFeatureEnabled !== 'false',

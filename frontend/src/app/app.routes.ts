@@ -63,12 +63,15 @@ import { AdminFeeCollectionRevenueComponent } from './pages/admin/admin-fee-coll
 import { AdminTimetableConfigurePeriodsComponent } from './pages/admin/admin-timetable-configure-periods.component';
 import { AdminTimetableGenerateComponent } from './pages/admin/admin-timetable-generate.component';
 import { AdminTimetableManualEntryComponent } from './pages/admin/admin-timetable-manual-entry.component';
+import { AdminRoomsComponent } from './pages/admin/admin-rooms.component';
 import { AdminTimetableViewComponent } from './pages/admin/admin-timetable-view.component';
 import { AdminTimetableTeacherScheduleComponent } from './pages/admin/admin-timetable-teacher-schedule.component';
 import { AdminSendMessageComponent } from './pages/admin/admin-send-message.component';
 import { AdminInboxComponent } from './pages/admin/admin-inbox.component';
 import { AdminParentsComponent } from './pages/admin/admin-parents.component';
 import { AdminParentDetailComponent } from './pages/admin/admin-parent-detail.component';
+import { AdminParentAccountsComponent } from './pages/admin/admin-parent-accounts.component';
+import { AdminFamilyLinksComponent } from './pages/admin/admin-family-links.component';
 import { AdminPayrollComponent } from './pages/admin/admin-payroll.component';
 import { AdminGeneralLedgerComponent } from './pages/admin/admin-general-ledger.component';
 import { AdminAdmissionsComponent } from './pages/admin/admin-admissions.component';
@@ -81,6 +84,23 @@ import { DemoLandingComponent } from './pages/public/demo-landing.component';
 import { LmsTeacherComponent } from './pages/lms/lms-teacher.component';
 import { LmsStudentComponent } from './pages/lms/lms-student.component';
 import { LmsLibraryComponent } from './pages/lms/lms-library.component';
+import { AdminWelfareComponent } from './pages/welfare/admin-welfare.component';
+import { MeetingsComponent } from './pages/welfare/meetings.component';
+import { SchoolCalendarComponent } from './pages/welfare/school-calendar.component';
+import { AdminTransportComponent } from './pages/welfare/admin-transport.component';
+import { AdminHostelComponent } from './pages/welfare/admin-hostel.component';
+import { AdminLibraryComponent } from './pages/welfare/admin-library.component';
+import { AdminGateComponent } from './pages/welfare/admin-gate.component';
+import { AdminActivitiesComponent } from './pages/welfare/admin-activities.component';
+import { AdminIdCardsComponent } from './pages/welfare/admin-id-cards.component';
+import { AdminDocumentsComponent } from './pages/welfare/admin-documents.component';
+import { AdminConsentsComponent } from './pages/welfare/admin-consents.component';
+import { AdminEarlyWarningComponent } from './pages/welfare/admin-early-warning.component';
+import { AdminInventoryComponent } from './pages/welfare/admin-inventory.component';
+import { AdminHrComponent } from './pages/welfare/admin-hr.component';
+import { AdminSurveysComponent } from './pages/welfare/admin-surveys.component';
+import { AdminAlumniComponent } from './pages/welfare/admin-alumni.component';
+import { ParentEarlyLeaveComponent } from './pages/welfare/parent-early-leave.component';
 
 export const routes: Routes = [
   { path: '', redirectTo: 'login', pathMatch: 'full' },
@@ -145,6 +165,8 @@ export const routes: Routes = [
       { path: 'report-view', component: AdminReportViewComponent },
       { path: 'parents', component: AdminParentsComponent },
       { path: 'parents/:id', component: AdminParentDetailComponent },
+      { path: 'parent-accounts', component: AdminParentAccountsComponent },
+      { path: 'family-links', component: AdminFamilyLinksComponent },
       { path: 'enrollment', component: AdminEnrollmentComponent },
       { path: 'class-list', component: ClassListComponent },
       { path: 'class-promotion', component: AdminClassPromotionComponent },
@@ -171,6 +193,7 @@ export const routes: Routes = [
       { path: 'timetable/generate', component: AdminTimetableGenerateComponent },
       { path: 'timetable/view', component: AdminTimetableViewComponent },
       { path: 'timetable/manual-entry', component: AdminTimetableManualEntryComponent },
+      { path: 'timetable/rooms', component: AdminRoomsComponent },
       { path: 'timetable/teacher-schedule', component: AdminTimetableTeacherScheduleComponent },
       { path: 'staff', component: AdminStaffComponent },
       { path: 'payroll', component: AdminPayrollComponent },
@@ -199,6 +222,22 @@ export const routes: Routes = [
       { path: 'user-permissions', component: AdminUserPermissionsComponent },
       { path: 'audit-trail', component: AdminAuditTrailComponent },
       { path: 'integrations', component: AdminIntegrationsComponent },
+      { path: 'welfare', component: AdminWelfareComponent },
+      { path: 'meetings', component: MeetingsComponent },
+      { path: 'calendar', component: SchoolCalendarComponent },
+      { path: 'transport', component: AdminTransportComponent },
+      { path: 'hostel', component: AdminHostelComponent },
+      { path: 'physical-library', component: AdminLibraryComponent },
+      { path: 'gate', component: AdminGateComponent },
+      { path: 'activities', component: AdminActivitiesComponent },
+      { path: 'id-cards', component: AdminIdCardsComponent },
+      { path: 'documents', component: AdminDocumentsComponent },
+      { path: 'consents', component: AdminConsentsComponent },
+      { path: 'early-warning', component: AdminEarlyWarningComponent },
+      { path: 'inventory', component: AdminInventoryComponent },
+      { path: 'hr', component: AdminHrComponent },
+      { path: 'surveys', component: AdminSurveysComponent },
+      { path: 'alumni', component: AdminAlumniComponent },
     ],
   },
   {
@@ -239,6 +278,10 @@ export const routes: Routes = [
       { path: 'assignments', component: TeacherAssignmentsComponent },
       { path: 'lms', component: LmsTeacherComponent },
       { path: 'library', component: LmsLibraryComponent },
+      { path: 'welfare', component: AdminWelfareComponent },
+      { path: 'meetings', component: MeetingsComponent },
+      { path: 'calendar', component: SchoolCalendarComponent },
+      { path: 'surveys', component: AdminSurveysComponent },
       { path: 'attendance', redirectTo: 'attendance/mark-register', pathMatch: 'full' },
       { path: 'attendance/mark-register', component: AttendanceMarkRegisterComponent },
       { path: 'attendance/report', component: AttendanceReportComponent },
@@ -266,6 +309,12 @@ export const routes: Routes = [
       { path: 'messages', component: MessagingCenterComponent },
       { path: 'notifications', component: NotificationsComponent },
       { path: 'send-email', component: ParentSendEmailComponent },
+      { path: 'welfare', component: AdminWelfareComponent },
+      { path: 'meetings', component: MeetingsComponent },
+      { path: 'calendar', component: SchoolCalendarComponent },
+      { path: 'consents', component: AdminConsentsComponent },
+      { path: 'surveys', component: AdminSurveysComponent },
+      { path: 'early-leave', component: ParentEarlyLeaveComponent },
       { path: 'change-password', component: ChangePasswordPageComponent },
     ],
   },
@@ -281,6 +330,7 @@ export const routes: Routes = [
       { path: 'homework', component: StudentHomeworkComponent },
       { path: 'lms', component: LmsStudentComponent },
       { path: 'library', component: LmsLibraryComponent },
+      { path: 'calendar', component: SchoolCalendarComponent },
       { path: 'messages', component: MessagingCenterComponent },
       { path: 'notifications', component: NotificationsComponent },
       { path: 'change-password', component: ChangePasswordPageComponent },

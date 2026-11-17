@@ -5,6 +5,9 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 // @ts-nocheck
 const express_1 = require("express");
+const multer_1 = __importDefault(require("multer"));
+const path_1 = __importDefault(require("path"));
+const crypto_1 = __importDefault(require("crypto"));
 const typeorm_1 = require("typeorm");
 const data_source_1 = require("../config/data-source");
 const entities_1 = require("../entities");
@@ -735,5 +738,40 @@ router.delete('/:id', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), stuDelete, 
         changes: [{ field: 'reason', before: null, after: reason }],
     });
     res.json({ message: 'Student record deleted', id: student.id });
+});
+const studentPhotoUpload = (0, multer_1.default)({
+    storage: multer_1.default.diskStorage({
+        destination: (_req, _file, cb) => {
+            const dir = path_1.default.join(process.cwd(), 'uploads', 'student-photos');
+            require('fs').mkdirSync(dir, { recursive: true });
+            cb(null, dir);
+        },
+        filename: (_req, file, cb) => {
+            const ext = path_1.default.extname(file.originalname || '').toLowerCase() || '.jpg';
+            cb(null, `${crypto_1.default.randomUUID()}${ext}`);
+        },
+    }),
+    limits: { fileSize: 5 * 1024 * 1024 },
+    fileFilter: (_req, file, cb) => {
+        cb(null, /^image\//.test(file.mimetype));
+    },
+});
+/** Upload or replace a student's passport photo. */
+router.post('/:id/photo', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.TEACHER, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL), studentPhotoUpload.single('photo'), async (req, res) => {
+    try {
+        if (!req.file)
+            return res.status(400).json({ message: 'No image file provided.' });
+        const repo = data_source_1.AppDataSource.getRepository(entities_1.Student);
+        const student = await repo.findOne({ where: { id: (0, typeorm_helpers_1.param)(req.params.id) } });
+        if (!student)
+            return res.status(404).json({ message: 'Student not found.' });
+        student.photoUrl = `/uploads/student-photos/${req.file.filename}`;
+        await repo.save(student);
+        res.json({ photoUrl: student.photoUrl });
+    }
+    catch (e) {
+        console.error('[students:photo]', e);
+        res.status(500).json({ message: 'Could not save photo.' });
+    }
 });
 exports.default = router;

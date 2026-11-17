@@ -4,7 +4,7 @@ import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
 import { ApiService } from '../../core/services/api.service';
 
-interface Channels { inApp: boolean; email: boolean; sms: boolean }
+interface Channels { inApp: boolean; email: boolean; sms: boolean; push: boolean }
 interface NotificationSettings {
   absenceAlerts: { enabled: boolean; channels: Channels; template: string };
   feeReminders: {

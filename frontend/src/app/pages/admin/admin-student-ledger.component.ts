@@ -37,7 +37,7 @@ interface StudentMatch {
 
 interface LedgerLine {
   date: string;
-  type: 'invoice' | 'payment' | 'opening' | 'debit_note' | 'credit_note' | 'tuition_exemption';
+  type: 'invoice' | 'payment' | 'opening' | 'debit_note' | 'credit_note' | 'tuition_exemption' | 'adjustment';
   reference: string;
   description: string;
   debit: number;
@@ -275,6 +275,7 @@ export class AdminStudentLedgerComponent implements OnInit {
     if (type === 'debit_note') return 'Debit note';
     if (type === 'credit_note') return 'Credit note';
     if (type === 'tuition_exemption') return 'Exemption';
+    if (type === 'adjustment') return 'Adjustment';
     return 'Opening';
   }
 

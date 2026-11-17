@@ -9,6 +9,20 @@
     <div class="toast" role="status" aria-live="polite" [class.error]="t.type === 'error'" [class.success]="t.type === 'success'">{{ t.msg }}</div>
   }
 
+  @if (paynowReturn(); as pr) {
+    <div class="paynow-banner" role="status" [attr.data-status]="pr.status">
+      <div class="pb-text">
+        <strong>Online payment {{ paynowStatusLabel(pr.status) }}</strong>
+        <span>
+          {{ money(pr.amount) }} · reference {{ pr.reference }}
+          @if (pr.receiptNumber) { · receipt {{ pr.receiptNumber }} }
+        </span>
+        @if (paynowReturnChecking()) { <span class="pb-note">Checking with Paynow…</span> }
+      </div>
+      <button type="button" class="btn btn--quiet btn--sm" (click)="dismissPaynowReturn()">Dismiss</button>
+    </div>
+  }
+
   <!-- ── Letterhead ─────────────────────────────────────────── -->
   <header class="letterhead">
     <div class="lh-text">
@@ -72,6 +86,10 @@
       </div>
 
       <div class="account-actions">
+        <button type="button" class="btn btn--pay" [disabled]="!selectedStudentId || outstandingBalance() <= 0" (click)="openPayNow()">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="2.5" y="5.5" width="19" height="13" rx="2" stroke="currentColor" stroke-width="1.7"/><path d="M2.5 10h19" stroke="currentColor" stroke-width="1.7"/><path d="M6 14.5h4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+          Pay now
+        </button>
         <button type="button" class="btn btn--line" [disabled]="pdfLoading() || !selectedStudentId" (click)="previewStatementPdf()">
           <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><circle cx="12" cy="12" r="2.8" stroke="currentColor" stroke-width="1.7"/></svg>
           {{ pdfLoading() ? 'Generating…' : 'Preview PDF' }}
@@ -210,6 +228,11 @@
                     <td class="num balance" [class.is-owing]="invoiceBalance(inv) > 0">{{ money(invoiceBalance(inv)) }}</td>
                     <td><span class="status" [attr.data-status]="inv.status">{{ inv.status }}</span></td>
                     <td class="actions">
+                      @if (invoiceBalance(inv) > 0) {
+                        <button type="button" class="btn btn--pay btn--sm" (click)="openPayNow(inv)" [attr.aria-label]="'Pay invoice ' + inv.invoiceNumber + ' online'">
+                          Pay
+                        </button>
+                      }
                       <button type="button" class="btn btn--quiet btn--sm" (click)="downloadInvoicePdf(inv)" [attr.aria-label]="'Download PDF for invoice ' + inv.invoiceNumber">
                         <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 4v11M7 10.5l5 5 5-5M5 19.5h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
                         PDF
@@ -294,6 +317,119 @@
         </div>
         @if (statementPdfPreviewUrl(); as url) {
           <iframe [src]="url" title="Statement PDF preview"></iframe>
+        }
+      </div>
+    </div>
+  }
+  <!-- ── Pay online (Paynow) ─────────────────────────────────── -->
+  @if (payNowOpen()) {
+    <div class="modal-overlay" (click)="closePayNow()">
+      <div class="pay-modal" role="dialog" aria-modal="true" aria-labelledby="paynow-title" (click)="$event.stopPropagation()">
+        <div class="pay-modal-head">
+          <h2 id="paynow-title">Pay school fees online</h2>
+          <button type="button" class="btn btn--quiet btn--sm" (click)="closePayNow()" [disabled]="payNowSubmitting()">Close</button>
+        </div>
+
+        @if (payNowInstructions(); as info) {
+          <div class="pay-instructions">
+            <span class="pay-spinner" aria-hidden="true"></span>
+            <p class="pi-lead">Approve the payment on your phone</p>
+            <p class="pi-body">{{ info }}</p>
+            <p class="pi-ref">Reference {{ payNowReference() }}</p>
+            <div class="pay-modal-actions">
+              <button type="button" class="btn btn--solid" (click)="checkPayNowStatus()">I've approved — check status</button>
+              <button type="button" class="btn btn--line" (click)="closePayNow()">Done</button>
+            </div>
+          </div>
+        } @else {
+          <form class="pay-form" (submit)="$event.preventDefault(); submitPayNow()">
+            <label class="field">
+              <span class="field-label">Amount</span>
+              <span class="field-money">
+                <span class="money-symbol" aria-hidden="true">{{ currencySymbol() }}</span>
+                <input
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  inputmode="decimal"
+                  [value]="payNowAmount()?.toString() ?? ''"
+                  (input)="setPayNowAmount($any($event.target).value)"
+                  placeholder="0.00"
+                  required
+                />
+              </span>
+              @if (outstandingBalance() > 0) {
+                <span class="field-hint">Outstanding balance {{ money(outstandingBalance()) }}</span>
+              }
+            </label>
+
+            @if (payableInvoices().length) {
+              <label class="field">
+                <span class="field-label">Apply to invoice</span>
+                <select [value]="payNowInvoiceId()" (change)="onPayNowInvoiceChange($any($event.target).value)">
+                  <option value="">Oldest outstanding first</option>
+                  @for (inv of payableInvoices(); track inv.id) {
+                    <option [value]="inv.id">{{ inv.invoiceNumber }} — {{ money(invoiceBalance(inv)) }} due</option>
+                  }
+                </select>
+              </label>
+            }
+
+            <fieldset class="field pay-methods">
+              <legend class="field-label">Payment method</legend>
+              <div class="method-grid">
+                <label class="method-card" [class.is-active]="payNowMethod() === 'ecocash'">
+                  <input type="radio" name="paynow-method" value="ecocash" [checked]="payNowMethod() === 'ecocash'" (change)="payNowMethod.set('ecocash')" />
+                  <span class="mc-name">EcoCash</span>
+                  <span class="mc-note">Mobile money</span>
+                </label>
+                <label class="method-card" [class.is-active]="payNowMethod() === 'onemoney'">
+                  <input type="radio" name="paynow-method" value="onemoney" [checked]="payNowMethod() === 'onemoney'" (change)="payNowMethod.set('onemoney')" />
+                  <span class="mc-name">OneMoney</span>
+                  <span class="mc-note">Mobile money</span>
+                </label>
+                <label class="method-card" [class.is-active]="payNowMethod() === 'visa'">
+                  <input type="radio" name="paynow-method" value="visa" [checked]="payNowMethod() === 'visa'" (change)="payNowMethod.set('visa')" />
+                  <span class="mc-name">Visa</span>
+                  <span class="mc-note">Card checkout</span>
+                </label>
+              </div>
+            </fieldset>
+
+            @if (payNowNeedsPhone()) {
+              <label class="field">
+                <span class="field-label">Mobile number</span>
+                <input
+                  type="tel"
+                  inputmode="tel"
+                  autocomplete="tel"
+                  [value]="payNowPhone()"
+                  (input)="payNowPhone.set($any($event.target).value)"
+                  placeholder="07XX XXX XXX"
+                />
+                <span class="field-hint">The number that will receive the approval prompt.</span>
+              </label>
+            } @else {
+              <label class="field">
+                <span class="field-label">Email <span class="optional">(optional)</span></span>
+                <input
+                  type="email"
+                  autocomplete="email"
+                  [value]="payNowEmail()"
+                  (input)="payNowEmail.set($any($event.target).value)"
+                  placeholder="name@example.com"
+                />
+              </label>
+            }
+
+            <div class="pay-modal-actions">
+              <button type="submit" class="btn btn--pay" [disabled]="payNowSubmitting()">
+                {{ payNowSubmitting() ? 'Starting…' : 'Continue to pay ' + money(payNowAmount() ?? 0) }}
+              </button>
+              <button type="button" class="btn btn--line" (click)="closePayNow()" [disabled]="payNowSubmitting()">Cancel</button>
+            </div>
+            <p class="pay-secure-note">Payments are processed securely by Paynow Zimbabwe.</p>
+          </form>
         }
       </div>
     </div>

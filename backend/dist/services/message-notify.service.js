@@ -5,6 +5,7 @@ const data_source_1 = require("../config/data-source");
 const env_1 = require("../config/env");
 const entities_1 = require("../entities");
 const email_service_1 = require("./email.service");
+const push_service_1 = require("./push.service");
 /**
  * Notify the recipient of a newly-created direct message: always an in-app
  * notification, plus a best-effort email. Safe to call fire-and-forget — never
@@ -29,6 +30,13 @@ async function notifyNewMessage(message) {
                 senderId: message.senderId,
             },
         }));
+        await (0, push_service_1.sendPushToUsers)([message.recipientId], {
+            title: `New message from ${senderName}`,
+            body: message.subject,
+            type: 'message_received',
+            url: '/messages',
+            metadata: { messageId: message.id, threadId: message.threadId },
+        }).catch((err) => console.error('notifyNewMessage push failed:', err));
         const recipient = message.recipient || (await userRepo.findOne({ where: { id: message.recipientId } }));
         if (recipient?.email) {
             const settings = await data_source_1.AppDataSource.getRepository(entities_1.SchoolSettings).findOne({

@@ -6,11 +6,11 @@ import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
 import { ApiService } from '../../core/services/api.service';
 import { TimetablePeriod, TimetablePeriodsService } from '../../core/services/timetable-periods.service';
-import { buildTeacherColorMap, teacherColorFor } from '../../core/utils/teacher-colors';
 import {
   isLunchBreakPeriod,
   compactClassGridLabel,
   formatPeriodRange,
+  dayGridLabel,
   isBreakPeriod,
   lessonPeriodNumber,
   teacherInitials,
@@ -56,6 +56,25 @@ interface Snapshot {
 type Mode = 'class' | 'teacher';
 type CheckKind = 'ok' | 'self' | 'teacher' | 'class' | 'locked';
 
+/** Sentinel value for the "All" selection, showing every class / teacher at once. */
+const ALL = '__all__';
+
+/** Saturated lesson-card palette, cycled per teacher (matches the classic desktop timetable look). */
+const CARD_PALETTE = [
+  '#22c3f0',
+  '#2fa53a',
+  '#a24be0',
+  '#d9742b',
+  '#c7d12b',
+  '#f2a0a0',
+  '#4fc4bf',
+  '#f0e46b',
+  '#3d7fe0',
+  '#d6457a',
+  '#8fb31f',
+  '#b58b5e',
+];
+
 interface MoveCheck {
   kind: CheckKind;
   msg: string;
@@ -77,6 +96,45 @@ interface PendingMove {
   slotId: string;
   day: number;
   periodId: string;
+  msg: string;
+}
+
+interface CtxMenu {
+  x: number;
+  y: number;
+  slot: SlotView;
+  day: number;
+  period: TimetablePeriod;
+}
+
+interface RoomRecord {
+  id: string;
+  name: string;
+  code?: string | null;
+  capacity?: number | null;
+}
+
+interface LessonChange {
+  id: string;
+  dayOfWeek: number;
+  startTime: string;
+  endTime: string;
+  room?: string | null;
+  isLocked?: boolean;
+  remove?: boolean;
+}
+
+type DialogKind = 'remove' | 'delete-row' | 'edit' | 'classroom' | 'test' | 'quick';
+
+interface DialogState {
+  kind: DialogKind;
+  slot: SlotView;
+}
+
+interface TestRow {
+  day: number;
+  label: string;
+  kind: CheckKind;
   msg: string;
 }
 
@@ -122,6 +180,7 @@ export class AdminTimetableManualEntryComponent implements OnInit, OnDestroy {
 
   readonly adminNav = ADMIN_NAV_SECTIONS;
   readonly days = DAYS;
+  readonly ALL = ALL;
   readonly formatPeriodRange = formatPeriodRange;
   readonly isBreakPeriod = isBreakPeriod;
   readonly lessonPeriodNumber = lessonPeriodNumber;
@@ -132,20 +191,45 @@ export class AdminTimetableManualEntryComponent implements OnInit, OnDestroy {
   loadError = signal(false);
   refreshing = signal(false);
 
-  mode = signal<Mode>('class');
-  selectedId = signal('');
+  mode = signal<Mode>('teacher');
+  selectedId = signal<string>(ALL);
 
   /** Card picked up by dragging or by clicking it (click a free period to drop it). */
   heldId = signal<string | null>(null);
   hoverKey = signal<string | null>(null);
   moving = signal(false);
+  bulkLockBusy = signal(false);
   pending = signal<PendingMove | null>(null);
   undoStack = signal<UndoEntry[]>([]);
   toast = signal<{ type: 'success' | 'error'; msg: string } | null>(null);
   clashPanelOpen = signal(true);
+  /** Right-click menu opened on a lesson card. */
+  ctxMenu = signal<CtxMenu | null>(null);
+  /** Which submenu (View, Find, …) is currently expanded in the context menu. */
+  ctxSub = signal<string | null>(null);
+  /** Dialog opened from the right-click menu (remove, edit, test, quick changes…). */
+  dialog = signal<DialogState | null>(null);
+  dialogBusy = signal(false);
+  editDay = signal(1);
+  editPeriodId = signal('');
+  editRoom = signal('');
+  masterRooms = signal<RoomRecord[]>([]);
 
   readonly teachers = computed(() => this.snapshot().teachers);
   readonly classes = computed(() => this.snapshot().classes);
+
+  readonly allSelected = computed(() => this.selectedId() === ALL);
+
+  /** Rows for the master "All" grid: every class or every teacher. */
+  readonly rows = computed<Array<{ id: string; name: string }>>(() => {
+    if (this.mode() === 'class') {
+      return this.classes().map((c) => ({ id: c.classId, name: c.className }));
+    }
+    return this.teachers().map((t) => ({ id: t.teacherId, name: t.teacherName }));
+  });
+
+  /** Lesson periods that can hold lessons (breaks excluded), used as the master grid's columns. */
+  readonly lessonPeriods = computed(() => this.periods().filter((p) => !isBreakPeriod(p)));
 
   /** Every lesson in the school timetable, de-duplicated by id. */
   readonly allSlots = computed<SlotView[]>(() => {
@@ -155,10 +239,15 @@ export class AdminTimetableManualEntryComponent implements OnInit, OnDestroy {
     return [...map.values()];
   });
 
-  private readonly colorMap = computed(() => buildTeacherColorMap(this.teachers().map((t) => t.teacherId)));
+  /** Stable palette index per teacher (sorted ids), so each teacher keeps the same card colour. */
+  private readonly teacherIndex = computed(() => {
+    const ids = [...new Set(this.teachers().map((t) => t.teacherId).filter(Boolean))].sort();
+    return new Map(ids.map((id, i) => [id, i] as const));
+  });
 
-  /** Lessons shown in the grid for the selected class / teacher. */
+  /** Lessons shown in the grid for the selected class / teacher (or all, when "All" is selected). */
   readonly viewSlots = computed<SlotView[]>(() => {
+    if (this.allSelected()) return this.allSlots();
     const id = this.selectedId();
     if (!id) return [];
     return this.allSlots().filter((s) => (this.mode() === 'class' ? s.classId === id : s.teacherId === id));
@@ -257,9 +346,22 @@ export class AdminTimetableManualEntryComponent implements OnInit, OnDestroy {
     };
   });
 
+  /** Room names from the master list (Timetable → Rooms). */
+  readonly rooms = computed<string[]>(() => this.masterRooms().map((r) => r.name));
+
+  /** Room choices for a lesson's dropdown: the master list, plus its current room if it is not on the list yet. */
+  roomChoices(slot: SlotView): string[] {
+    const list = this.rooms();
+    const current = (slot.room || '').trim();
+    return current && !list.includes(current) ? [...list, current] : list;
+  }
+
   readonly hasTimetable = computed(() => this.allSlots().length > 0);
 
   readonly selectedLabel = computed(() => {
+    if (this.allSelected()) {
+      return this.mode() === 'class' ? 'All classes' : 'All teachers';
+    }
     const id = this.selectedId();
     if (this.mode() === 'class') return this.classes().find((c) => c.classId === id)?.className ?? '';
     return this.teachers().find((t) => t.teacherId === id)?.teacherName ?? '';
@@ -280,14 +382,31 @@ export class AdminTimetableManualEntryComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     this.periods.set(this.periodsSvc.load());
     this.load();
+    this.loadRooms();
+  }
+
+  loadRooms(): void {
+    this.api.get<RoomRecord[]>('/timetable/rooms').subscribe({
+      next: (rows) => this.masterRooms.set(rows ?? []),
+      error: () => this.masterRooms.set([]),
+    });
   }
 
   ngOnDestroy(): void {
     if (this.toastTimer) clearTimeout(this.toastTimer);
   }
 
+  @HostListener('document:click')
+  onDocumentClick(): void {
+    if (this.ctxMenu()) this.closeCtxMenu();
+  }
+
   @HostListener('document:keydown.escape')
   onEscape(): void {
+    if (this.ctxMenu()) {
+      this.closeCtxMenu();
+      return;
+    }
     if (this.pending()) {
       this.cancelPending();
       return;
@@ -317,6 +436,7 @@ export class AdminTimetableManualEntryComponent implements OnInit, OnDestroy {
 
   private ensureSelection(): void {
     const id = this.selectedId();
+    if (id === ALL) return; // keep the master grid after reload
     if (this.mode() === 'class') {
       const list = this.classes();
       if (!list.some((c) => c.classId === id)) this.selectedId.set(list[0]?.classId ?? '');
@@ -330,8 +450,7 @@ export class AdminTimetableManualEntryComponent implements OnInit, OnDestroy {
     if (this.mode() === mode) return;
     this.clearHold();
     this.mode.set(mode);
-    this.selectedId.set('');
-    this.ensureSelection();
+    this.selectedId.set(ALL);
   }
 
   onSelect(id: string): void {
@@ -353,6 +472,20 @@ export class AdminTimetableManualEntryComponent implements OnInit, OnDestroy {
     return this.slotIndex().get(`${day}|${hhmm(period.startTime)}|${hhmm(period.endTime)}`) ?? [];
   }
 
+  /** Lessons for a specific row (class or teacher) at a day/period — used by the "All" master grid. */
+  slotsForRow(entityId: string, day: number, period: TimetablePeriod): SlotView[] {
+    const start = hhmm(period.startTime);
+    const end = hhmm(period.endTime);
+    const modeIsClass = this.mode() === 'class';
+    return this.allSlots().filter(
+      (s) =>
+        (modeIsClass ? s.classId === entityId : s.teacherId === entityId) &&
+        s.dayOfWeek === day &&
+        hhmm(s.startTime) === start &&
+        hhmm(s.endTime) === end,
+    );
+  }
+
   subjectShort(s: SlotView): string {
     return timetableSubjectShort(s.subjectCode, s.subjectName, s.subjectShort);
   }
@@ -365,15 +498,24 @@ export class AdminTimetableManualEntryComponent implements OnInit, OnDestroy {
     return teacherInitials(name);
   }
 
+  /** Row label: teacher initials (e.g. "De") or compact class code. */
+  rowLabel(name: string): string {
+    return this.mode() === 'class' ? this.classLabel(name) : this.initials(name);
+  }
+
+  /** Main text on a lesson card: the class code when viewing teachers, the subject when viewing classes. */
+  cardMain(s: SlotView): string {
+    return this.mode() === 'class' ? this.subjectShort(s) : this.classLabel(s.className);
+  }
+
+  /** Secondary text on a lesson card. */
   cardSub(s: SlotView): string {
-    return this.mode() === 'class' ? this.initials(s.teacherName) : this.classLabel(s.className);
+    return this.mode() === 'class' ? this.initials(s.teacherName) : this.subjectShort(s);
   }
 
   cardStyle(teacherId: string): Record<string, string> {
-    const c = teacherColorFor(teacherId, this.colorMap());
-    const style: Record<string, string> = { background: c.background, color: c.color };
-    if (c.border) style['border-color'] = c.border;
-    return style;
+    const idx = this.teacherIndex().get(teacherId) ?? 0;
+    return { background: CARD_PALETTE[idx % CARD_PALETTE.length], color: '#000' };
   }
 
   cardTitle(s: SlotView): string {
@@ -482,6 +624,7 @@ export class AdminTimetableManualEntryComponent implements OnInit, OnDestroy {
   /** Click a card: pick it up, put it down, or (when holding another card) try to place the held one here. */
   onCardActivate(slot: SlotView, day: number, period: TimetablePeriod, event: Event): void {
     event.stopPropagation();
+    this.closeCtxMenu();
     const held = this.heldId();
     if (held && held !== slot.id) {
       this.attemptMove(held, day, period);
@@ -502,8 +645,294 @@ export class AdminTimetableManualEntryComponent implements OnInit, OnDestroy {
   }
 
   onCellClick(day: number, period: TimetablePeriod): void {
+    this.closeCtxMenu();
     const held = this.heldId();
     if (held) this.attemptMove(held, day, period);
+  }
+
+  // ── Right-click menu ──
+  onCardContext(slot: SlotView, day: number, period: TimetablePeriod, event: Event): void {
+    const mouse = event as MouseEvent;
+    event.preventDefault();
+    event.stopPropagation();
+    const x = Math.min(mouse.clientX, window.innerWidth - 240);
+    const y = Math.min(mouse.clientY, window.innerHeight - 440);
+    this.ctxSub.set(null);
+    this.ctxMenu.set({ x: Math.max(8, x), y: Math.max(8, y), slot, day, period });
+  }
+
+  closeCtxMenu(): void {
+    this.ctxMenu.set(null);
+    this.ctxSub.set(null);
+  }
+
+  ctxTitle(m: CtxMenu): string {
+    const num = this.periodNumberOf(m.period) ?? '?';
+    return `${this.subjectShort(m.slot)} (${this.classLabel(m.slot.className)}) - ${dayGridLabel(m.day)}:${num}`;
+  }
+
+  menuToggleLock(event: Event): void {
+    const m = this.ctxMenu();
+    if (!m) return;
+    this.closeCtxMenu();
+    this.toggleLock(m.slot, event);
+  }
+
+  menuSetView(mode: Mode): void {
+    this.closeCtxMenu();
+    this.clearHold();
+    this.mode.set(mode);
+    this.selectedId.set(ALL);
+  }
+
+  /** "Lesson grid" and "Find" both jump to the class or teacher of the right-clicked lesson. */
+  menuJumpTo(target: 'class' | 'teacher'): void {
+    const m = this.ctxMenu();
+    if (!m) return;
+    this.closeCtxMenu();
+    this.clearHold();
+    this.mode.set(target);
+    this.selectedId.set(target === 'class' ? m.slot.classId : m.slot.teacherId);
+  }
+
+  // ── Context-menu actions ──
+  dayLabel(day: number): string {
+    return DAYS.find((d) => d.value === day)?.label ?? `Day ${day}`;
+  }
+
+  slotTime(s: SlotView): string {
+    return `${hhmm(s.startTime)}–${hhmm(s.endTime)}`;
+  }
+
+  periodNumberOf(period: TimetablePeriod): number | null {
+    return lessonPeriodNumber(this.periods(), this.periods().indexOf(period));
+  }
+
+  /** Every lesson period across the week, in order (breaks excluded). */
+  private orderedCells(): Array<{ day: number; period: TimetablePeriod }> {
+    const out: Array<{ day: number; period: TimetablePeriod }> = [];
+    for (const d of this.days) for (const p of this.lessonPeriods()) out.push({ day: d.value, period: p });
+    return out;
+  }
+
+  private periodFor(slot: SlotView): TimetablePeriod | undefined {
+    return this.lessonPeriods().find(
+      (p) => hhmm(p.startTime) === hhmm(slot.startTime) && hhmm(p.endTime) === hhmm(slot.endTime),
+    );
+  }
+
+  menuOpen(kind: DialogKind): void {
+    const m = this.ctxMenu();
+    if (!m) return;
+    this.closeCtxMenu();
+    this.openDialog(kind, m.slot);
+  }
+
+  menuRemove(): void {
+    this.menuOpen('remove');
+  }
+
+  menuDeleteRow(): void {
+    this.menuOpen('delete-row');
+  }
+
+  menuSetRoom(room: string): void {
+    const m = this.ctxMenu();
+    if (!m) return;
+    this.closeCtxMenu();
+    this.applyLessonChanges(
+      [{ slot: m.slot, change: { dayOfWeek: m.slot.dayOfWeek, startTime: m.slot.startTime, endTime: m.slot.endTime, room, isLocked: m.slot.isLocked } }],
+      room ? `Moved ${m.slot.subjectName} to room ${room}.` : `Cleared the room for ${m.slot.subjectName}.`,
+    );
+  }
+
+  /** Move to the next / previous free period in the week. */
+  menuQuickMove(direction: 1 | -1): void {
+    const m = this.ctxMenu();
+    if (!m) return;
+    this.closeCtxMenu();
+    const cells = this.orderedCells();
+    const current = cells.findIndex(
+      (c) => c.day === m.slot.dayOfWeek && hhmm(c.period.startTime) === hhmm(m.slot.startTime),
+    );
+    for (let i = current + direction; i >= 0 && i < cells.length; i += direction) {
+      const c = cells[i];
+      if (this.checkMove(m.slot, c.day, c.period).kind === 'ok') {
+        this.attemptMove(m.slot.id, c.day, c.period);
+        return;
+      }
+    }
+    this.showToast('error', `No free period ${direction > 0 ? 'later' : 'earlier'} in the week for ${m.slot.subjectName}.`);
+  }
+
+  pickQuickSlot(day: number, period: TimetablePeriod): void {
+    const d = this.dialog();
+    this.dialog.set(null);
+    if (d) this.attemptMove(d.slot.id, day, period);
+  }
+
+  /** Free periods (no clash) where the dialog's lesson could go. */
+  quickOptions(slot: SlotView): Array<{ day: number; period: TimetablePeriod }> {
+    return this.orderedCells().filter((c) => this.checkMove(slot, c.day, c.period).kind === 'ok');
+  }
+
+  /** Test result for every lesson period of the week. */
+  testRows(slot: SlotView): TestRow[] {
+    return this.orderedCells().map((c) => {
+      const check = this.checkMove(slot, c.day, c.period);
+      return {
+        day: c.day,
+        label: `${DAYS.find((d) => d.value === c.day)?.short ?? ''} P${this.periodNumberOf(c.period) ?? '?'}`,
+        kind: check.kind,
+        msg: check.msg,
+      };
+    });
+  }
+
+  private openDialog(kind: DialogKind, slot: SlotView): void {
+    const period = this.periodFor(slot);
+    this.editDay.set(slot.dayOfWeek);
+    this.editPeriodId.set(period?.id ?? '');
+    this.editRoom.set(slot.room ?? '');
+    this.dialog.set({ kind, slot });
+  }
+
+  closeDialog(): void {
+    if (this.dialogBusy()) return;
+    this.dialog.set(null);
+  }
+
+  dialogTitle(kind: DialogKind): string {
+    switch (kind) {
+      case 'remove': return 'Remove lesson';
+      case 'delete-row': return 'Delete row';
+      case 'edit': return 'Edit lesson';
+      case 'classroom': return 'Classroom';
+      case 'test': return 'Test lesson';
+      case 'quick': return 'Quick changes';
+    }
+  }
+
+  /** Lessons that a "Delete row" removes: the same teacher, class and subject, skipping locked ones. */
+  deleteRowTargets(slot: SlotView): { removable: SlotView[]; locked: number } {
+    const same = this.allSlots().filter(
+      (s) => s.teacherId === slot.teacherId && s.classId === slot.classId && s.subjectId === slot.subjectId,
+    );
+    return { removable: same.filter((s) => !s.isLocked), locked: same.filter((s) => s.isLocked).length };
+  }
+
+  confirmRemove(): void {
+    const d = this.dialog();
+    if (!d) return;
+    const s = d.slot;
+    this.applyLessonChanges(
+      [{ slot: s, change: { dayOfWeek: s.dayOfWeek, startTime: s.startTime, endTime: s.endTime, remove: true } }],
+      `Removed ${s.subjectName} (${s.className}) from the timetable.`,
+    );
+  }
+
+  confirmDeleteRow(): void {
+    const d = this.dialog();
+    if (!d) return;
+    const targets = this.deleteRowTargets(d.slot).removable;
+    if (!targets.length) {
+      this.showToast('error', 'Every lesson in this row is locked. Unlock them first.');
+      return;
+    }
+    this.applyLessonChanges(
+      targets.map((s) => ({
+        slot: s,
+        change: { dayOfWeek: s.dayOfWeek, startTime: s.startTime, endTime: s.endTime, remove: true },
+      })),
+      `Deleted ${targets.length} lesson${targets.length === 1 ? '' : 's'} of ${d.slot.subjectName} for ${d.slot.className}.`,
+    );
+  }
+
+  confirmEdit(): void {
+    const d = this.dialog();
+    if (!d) return;
+    const period = this.lessonPeriods().find((p) => p.id === this.editPeriodId());
+    if (!period) {
+      this.showToast('error', 'Choose a period.');
+      return;
+    }
+    const room = this.editRoom().trim();
+    this.applyLessonChanges(
+      [
+        {
+          slot: d.slot,
+          change: {
+            dayOfWeek: this.editDay(),
+            startTime: period.startTime,
+            endTime: period.endTime,
+            room,
+            isLocked: d.slot.isLocked,
+          },
+        },
+      ],
+      `Saved ${d.slot.subjectName} (${d.slot.className}).`,
+    );
+  }
+
+  confirmClassroom(): void {
+    const d = this.dialog();
+    if (!d) return;
+    const room = this.editRoom().trim();
+    this.applyLessonChanges(
+      [
+        {
+          slot: d.slot,
+          change: {
+            dayOfWeek: d.slot.dayOfWeek,
+            startTime: d.slot.startTime,
+            endTime: d.slot.endTime,
+            room,
+            isLocked: d.slot.isLocked,
+          },
+        },
+      ],
+      room ? `Room set to ${room}.` : 'Room cleared.',
+    );
+  }
+
+  /** Saves lesson changes through the existing per-teacher endpoint (atomic per teacher). */
+  private applyLessonChanges(
+    items: Array<{ slot: SlotView; change: Omit<LessonChange, 'id'> }>,
+    success: string,
+  ): void {
+    const byTeacher = new Map<string, LessonChange[]>();
+    for (const { slot, change } of items) {
+      const list = byTeacher.get(slot.teacherId) ?? [];
+      list.push({ id: slot.id, ...change });
+      byTeacher.set(slot.teacherId, list);
+    }
+    const jobs = [...byTeacher.entries()];
+    this.dialogBusy.set(true);
+    this.moving.set(true);
+
+    const fail = (msg: string) => {
+      this.dialogBusy.set(false);
+      this.moving.set(false);
+      this.showToast('error', msg);
+      this.load(true);
+    };
+    const succeed = () => {
+      this.dialogBusy.set(false);
+      this.moving.set(false);
+      this.dialog.set(null);
+      this.clearHold();
+      this.showToast('success', success);
+      this.load(true);
+    };
+    const run = (i: number): void => {
+      if (i >= jobs.length) return succeed();
+      const [teacherId, lessons] = jobs[i];
+      this.api.put(`/timetable/teachers/${teacherId}/lessons`, { lessons, ignoreConflicts: false }).subscribe({
+        next: () => run(i + 1),
+        error: (e) => fail(e?.error?.message || 'Could not save the change.'),
+      });
+    };
+    run(0);
   }
 
   // ── Moving ──
@@ -608,6 +1037,31 @@ export class AdminTimetableManualEntryComponent implements OnInit, OnDestroy {
           this.showToast('error', e?.error?.message || 'Could not undo the move.');
         },
       });
+  }
+
+  /** Locks every lesson in the timetable (locked = true) or unlocks every lesson (locked = false). */
+  setAllLocked(locked: boolean): void {
+    if (this.bulkLockBusy() || this.moving()) return;
+    this.bulkLockBusy.set(true);
+    this.api.patch<{ updated: number; isLocked: boolean }>('/timetable/slots/lock-bulk', { locked }).subscribe({
+      next: (res) => {
+        this.bulkLockBusy.set(false);
+        this.clearHold();
+        this.closeCtxMenu();
+        this.load(true);
+        const changed = res?.updated ?? 0;
+        this.showToast(
+          'success',
+          locked
+            ? `Locked ${changed} lesson${changed === 1 ? '' : 's'}.`
+            : `Unlocked ${changed} lesson${changed === 1 ? '' : 's'}.`,
+        );
+      },
+      error: (e) => {
+        this.bulkLockBusy.set(false);
+        this.showToast('error', e?.error?.message || 'Could not change the locks.');
+      },
+    });
   }
 
   toggleLock(slot: SlotView, event: Event): void {

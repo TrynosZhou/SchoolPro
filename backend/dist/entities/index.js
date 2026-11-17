@@ -14,8 +14,9 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
     for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.LeaveRequest = exports.StaffLeaveBalance = exports.Payslip = exports.PayrollRun = exports.StaffPayrollProfile = exports.StudentTermBalance = exports.ReportCardView = exports.ResultsPublication = exports.ClassPromotionRule = exports.SchoolFee = exports.SchoolSettings = exports.UniformSale = exports.TuckshopSale = exports.TuckshopItem = exports.Notification = exports.MessageAttachment = exports.Message = exports.WeeklyAssessment = exports.LearningSchedule = exports.TeacherAllocation = exports.Timetable = exports.CashbookEntry = exports.LedgerEntry = exports.Receipt = exports.Payment = exports.InvoiceLine = exports.Invoice = exports.HonourRoll = exports.ReportCard = exports.ExamMark = exports.ExamType = exports.StudentAttendance = exports.StaffAttendance = exports.Staff = exports.Guardian = exports.Student = exports.Parent = exports.TimetableSlot = exports.TeacherAssignment = exports.Section = exports.ClassSubject = exports.Department = exports.Subject = exports.SchoolClass = exports.Form = exports.Term = exports.SchoolYear = exports.SchoolRole = exports.User = exports.entities = void 0;
-exports.LibraryBookmark = exports.LibraryResource = exports.ClassRecording = exports.VirtualClass = exports.LessonContent = exports.LmsSubmission = exports.LmsAssignment = exports.NotificationLog = exports.HomeworkAssignment = exports.RecordBookMark = exports.RecordBookColumn = exports.AuditLog = exports.ReportTemplate = exports.StudentEnrollment = exports.BulkMessageRecipient = exports.BulkMessage = exports.ApplicationDocument = exports.Application = exports.GeneralLedgerEntry = exports.ChartOfAccount = exports.InvoiceAdjustment = exports.TuitionExemption = void 0;
+exports.Payslip = exports.PayrollRun = exports.StaffPayrollProfile = exports.StudentTermBalance = exports.ReportCardView = exports.ResultsPublication = exports.ClassPromotionRule = exports.SchoolFee = exports.SchoolSettings = exports.UniformSale = exports.TuckshopSale = exports.TuckshopItem = exports.PushSubscription = exports.Notification = exports.MessageAttachment = exports.Message = exports.WeeklyAssessment = exports.LearningSchedule = exports.TeacherAllocation = exports.Timetable = exports.CashbookEntry = exports.LedgerEntry = exports.Receipt = exports.PaymentIntent = exports.Payment = exports.InvoiceLine = exports.Invoice = exports.HonourRoll = exports.ReportCard = exports.ExamMark = exports.ExamType = exports.StudentAttendance = exports.StaffAttendance = exports.Staff = exports.Guardian = exports.Student = exports.Parent = exports.TimetableSlot = exports.TeacherAssignment = exports.Section = exports.ClassSubject = exports.Department = exports.Subject = exports.SchoolClass = exports.Form = exports.Term = exports.SchoolYear = exports.SchoolRole = exports.User = exports.entities = void 0;
+exports.House = exports.EarlyLeaveRequest = exports.AuthorizedPickup = exports.VisitorLog = exports.LibraryLoan = exports.LibraryBook = exports.HostelItem = exports.ExeatPass = exports.BoardingRollCall = exports.DormBed = exports.Dormitory = exports.TransportDelay = exports.TransportAssignment = exports.TransportVehicle = exports.TransportDriver = exports.TransportStop = exports.TransportRoute = exports.EventRsvp = exports.SchoolEvent = exports.MeetingBooking = exports.MeetingSlot = exports.StudentEmergencyContact = exports.SickbayVisit = exports.StudentImmunisation = exports.StudentHealthProfile = exports.DisciplineIncident = exports.LibraryBookmark = exports.LibraryResource = exports.ClassRecording = exports.VirtualClass = exports.LessonContent = exports.LmsSubmission = exports.LmsAssignment = exports.NotificationLog = exports.HomeworkAssignment = exports.RecordBookMark = exports.RecordBookColumn = exports.AuditLog = exports.ReportTemplate = exports.StudentEnrollment = exports.BulkMessageRecipient = exports.BulkMessage = exports.ApplicationDocument = exports.Application = exports.GeneralLedgerEntry = exports.ChartOfAccount = exports.InvoiceAdjustment = exports.TuitionExemption = exports.LeaveRequest = exports.StaffLeaveBalance = void 0;
+exports.AlumniDonation = exports.AlumniEvent = exports.Alumni = exports.SurveyResponse = exports.SurveyQuestion = exports.Survey = exports.JobApplication = exports.JobPosting = exports.StaffDocument = exports.StaffDevelopment = exports.StaffAppraisal = exports.StaffContract = exports.FixedAsset = exports.PurchaseOrderLine = exports.PurchaseOrder = exports.StockMovement = exports.InventoryItem = exports.Supplier = exports.ConsentSubmission = exports.ConsentForm = exports.IssuedDocument = exports.AttendanceScan = exports.StudentIdCard = exports.Competition = exports.ActivityPoints = exports.ActivityMember = exports.Activity = void 0;
 const User_1 = require("./User");
 Object.defineProperty(exports, "User", { enumerable: true, get: function () { return User_1.User; } });
 const SchoolRole_1 = require("./SchoolRole");
@@ -66,6 +67,8 @@ const InvoiceLine_1 = require("./InvoiceLine");
 Object.defineProperty(exports, "InvoiceLine", { enumerable: true, get: function () { return InvoiceLine_1.InvoiceLine; } });
 const Payment_1 = require("./Payment");
 Object.defineProperty(exports, "Payment", { enumerable: true, get: function () { return Payment_1.Payment; } });
+const PaymentIntent_1 = require("./PaymentIntent");
+Object.defineProperty(exports, "PaymentIntent", { enumerable: true, get: function () { return PaymentIntent_1.PaymentIntent; } });
 const Receipt_1 = require("./Receipt");
 Object.defineProperty(exports, "Receipt", { enumerable: true, get: function () { return Receipt_1.Receipt; } });
 const LedgerEntry_1 = require("./LedgerEntry");
@@ -86,6 +89,8 @@ const MessageAttachment_1 = require("./MessageAttachment");
 Object.defineProperty(exports, "MessageAttachment", { enumerable: true, get: function () { return MessageAttachment_1.MessageAttachment; } });
 const Notification_1 = require("./Notification");
 Object.defineProperty(exports, "Notification", { enumerable: true, get: function () { return Notification_1.Notification; } });
+const PushSubscription_1 = require("./PushSubscription");
+Object.defineProperty(exports, "PushSubscription", { enumerable: true, get: function () { return PushSubscription_1.PushSubscription; } });
 const TuckshopItem_1 = require("./TuckshopItem");
 Object.defineProperty(exports, "TuckshopItem", { enumerable: true, get: function () { return TuckshopItem_1.TuckshopItem; } });
 const TuckshopSale_1 = require("./TuckshopSale");
@@ -158,6 +163,75 @@ const LibraryResource_1 = require("./LibraryResource");
 Object.defineProperty(exports, "LibraryResource", { enumerable: true, get: function () { return LibraryResource_1.LibraryResource; } });
 const LibraryBookmark_1 = require("./LibraryBookmark");
 Object.defineProperty(exports, "LibraryBookmark", { enumerable: true, get: function () { return LibraryBookmark_1.LibraryBookmark; } });
+const DisciplineIncident_1 = require("./DisciplineIncident");
+Object.defineProperty(exports, "DisciplineIncident", { enumerable: true, get: function () { return DisciplineIncident_1.DisciplineIncident; } });
+const StudentHealth_1 = require("./StudentHealth");
+Object.defineProperty(exports, "StudentHealthProfile", { enumerable: true, get: function () { return StudentHealth_1.StudentHealthProfile; } });
+Object.defineProperty(exports, "StudentImmunisation", { enumerable: true, get: function () { return StudentHealth_1.StudentImmunisation; } });
+Object.defineProperty(exports, "SickbayVisit", { enumerable: true, get: function () { return StudentHealth_1.SickbayVisit; } });
+Object.defineProperty(exports, "StudentEmergencyContact", { enumerable: true, get: function () { return StudentHealth_1.StudentEmergencyContact; } });
+const Meeting_1 = require("./Meeting");
+Object.defineProperty(exports, "MeetingSlot", { enumerable: true, get: function () { return Meeting_1.MeetingSlot; } });
+Object.defineProperty(exports, "MeetingBooking", { enumerable: true, get: function () { return Meeting_1.MeetingBooking; } });
+const SchoolEvent_1 = require("./SchoolEvent");
+Object.defineProperty(exports, "SchoolEvent", { enumerable: true, get: function () { return SchoolEvent_1.SchoolEvent; } });
+Object.defineProperty(exports, "EventRsvp", { enumerable: true, get: function () { return SchoolEvent_1.EventRsvp; } });
+const Transport_1 = require("./Transport");
+Object.defineProperty(exports, "TransportRoute", { enumerable: true, get: function () { return Transport_1.TransportRoute; } });
+Object.defineProperty(exports, "TransportStop", { enumerable: true, get: function () { return Transport_1.TransportStop; } });
+Object.defineProperty(exports, "TransportDriver", { enumerable: true, get: function () { return Transport_1.TransportDriver; } });
+Object.defineProperty(exports, "TransportVehicle", { enumerable: true, get: function () { return Transport_1.TransportVehicle; } });
+Object.defineProperty(exports, "TransportAssignment", { enumerable: true, get: function () { return Transport_1.TransportAssignment; } });
+Object.defineProperty(exports, "TransportDelay", { enumerable: true, get: function () { return Transport_1.TransportDelay; } });
+const Hostel_1 = require("./Hostel");
+Object.defineProperty(exports, "Dormitory", { enumerable: true, get: function () { return Hostel_1.Dormitory; } });
+Object.defineProperty(exports, "DormBed", { enumerable: true, get: function () { return Hostel_1.DormBed; } });
+Object.defineProperty(exports, "BoardingRollCall", { enumerable: true, get: function () { return Hostel_1.BoardingRollCall; } });
+Object.defineProperty(exports, "ExeatPass", { enumerable: true, get: function () { return Hostel_1.ExeatPass; } });
+Object.defineProperty(exports, "HostelItem", { enumerable: true, get: function () { return Hostel_1.HostelItem; } });
+const PhysicalLibrary_1 = require("./PhysicalLibrary");
+Object.defineProperty(exports, "LibraryBook", { enumerable: true, get: function () { return PhysicalLibrary_1.LibraryBook; } });
+Object.defineProperty(exports, "LibraryLoan", { enumerable: true, get: function () { return PhysicalLibrary_1.LibraryLoan; } });
+const Gate_1 = require("./Gate");
+Object.defineProperty(exports, "VisitorLog", { enumerable: true, get: function () { return Gate_1.VisitorLog; } });
+Object.defineProperty(exports, "AuthorizedPickup", { enumerable: true, get: function () { return Gate_1.AuthorizedPickup; } });
+Object.defineProperty(exports, "EarlyLeaveRequest", { enumerable: true, get: function () { return Gate_1.EarlyLeaveRequest; } });
+const Activities_1 = require("./Activities");
+Object.defineProperty(exports, "House", { enumerable: true, get: function () { return Activities_1.House; } });
+Object.defineProperty(exports, "Activity", { enumerable: true, get: function () { return Activities_1.Activity; } });
+Object.defineProperty(exports, "ActivityMember", { enumerable: true, get: function () { return Activities_1.ActivityMember; } });
+Object.defineProperty(exports, "ActivityPoints", { enumerable: true, get: function () { return Activities_1.ActivityPoints; } });
+Object.defineProperty(exports, "Competition", { enumerable: true, get: function () { return Activities_1.Competition; } });
+const StudentIdCard_1 = require("./StudentIdCard");
+Object.defineProperty(exports, "StudentIdCard", { enumerable: true, get: function () { return StudentIdCard_1.StudentIdCard; } });
+Object.defineProperty(exports, "AttendanceScan", { enumerable: true, get: function () { return StudentIdCard_1.AttendanceScan; } });
+const IssuedDocument_1 = require("./IssuedDocument");
+Object.defineProperty(exports, "IssuedDocument", { enumerable: true, get: function () { return IssuedDocument_1.IssuedDocument; } });
+const Consent_1 = require("./Consent");
+Object.defineProperty(exports, "ConsentForm", { enumerable: true, get: function () { return Consent_1.ConsentForm; } });
+Object.defineProperty(exports, "ConsentSubmission", { enumerable: true, get: function () { return Consent_1.ConsentSubmission; } });
+const Inventory_1 = require("./Inventory");
+Object.defineProperty(exports, "Supplier", { enumerable: true, get: function () { return Inventory_1.Supplier; } });
+Object.defineProperty(exports, "InventoryItem", { enumerable: true, get: function () { return Inventory_1.InventoryItem; } });
+Object.defineProperty(exports, "StockMovement", { enumerable: true, get: function () { return Inventory_1.StockMovement; } });
+Object.defineProperty(exports, "PurchaseOrder", { enumerable: true, get: function () { return Inventory_1.PurchaseOrder; } });
+Object.defineProperty(exports, "PurchaseOrderLine", { enumerable: true, get: function () { return Inventory_1.PurchaseOrderLine; } });
+Object.defineProperty(exports, "FixedAsset", { enumerable: true, get: function () { return Inventory_1.FixedAsset; } });
+const StaffHr_1 = require("./StaffHr");
+Object.defineProperty(exports, "StaffContract", { enumerable: true, get: function () { return StaffHr_1.StaffContract; } });
+Object.defineProperty(exports, "StaffAppraisal", { enumerable: true, get: function () { return StaffHr_1.StaffAppraisal; } });
+Object.defineProperty(exports, "StaffDevelopment", { enumerable: true, get: function () { return StaffHr_1.StaffDevelopment; } });
+Object.defineProperty(exports, "StaffDocument", { enumerable: true, get: function () { return StaffHr_1.StaffDocument; } });
+Object.defineProperty(exports, "JobPosting", { enumerable: true, get: function () { return StaffHr_1.JobPosting; } });
+Object.defineProperty(exports, "JobApplication", { enumerable: true, get: function () { return StaffHr_1.JobApplication; } });
+const Survey_1 = require("./Survey");
+Object.defineProperty(exports, "Survey", { enumerable: true, get: function () { return Survey_1.Survey; } });
+Object.defineProperty(exports, "SurveyQuestion", { enumerable: true, get: function () { return Survey_1.SurveyQuestion; } });
+Object.defineProperty(exports, "SurveyResponse", { enumerable: true, get: function () { return Survey_1.SurveyResponse; } });
+const Alumni_1 = require("./Alumni");
+Object.defineProperty(exports, "Alumni", { enumerable: true, get: function () { return Alumni_1.Alumni; } });
+Object.defineProperty(exports, "AlumniEvent", { enumerable: true, get: function () { return Alumni_1.AlumniEvent; } });
+Object.defineProperty(exports, "AlumniDonation", { enumerable: true, get: function () { return Alumni_1.AlumniDonation; } });
 exports.entities = [
     User_1.User,
     SchoolRole_1.SchoolRole,
@@ -190,6 +264,7 @@ exports.entities = [
     Invoice_1.Invoice,
     InvoiceLine_1.InvoiceLine,
     Payment_1.Payment,
+    PaymentIntent_1.PaymentIntent,
     Receipt_1.Receipt,
     LedgerEntry_1.LedgerEntry,
     CashbookEntry_1.CashbookEntry,
@@ -200,6 +275,7 @@ exports.entities = [
     Message_1.Message,
     MessageAttachment_1.MessageAttachment,
     Notification_1.Notification,
+    PushSubscription_1.PushSubscription,
     TuckshopItem_1.TuckshopItem,
     TuckshopSale_1.TuckshopSale,
     UniformSale_1.UniformSale,
@@ -230,5 +306,58 @@ exports.entities = [
     ClassRecording_1.ClassRecording,
     LibraryResource_1.LibraryResource,
     LibraryBookmark_1.LibraryBookmark,
+    DisciplineIncident_1.DisciplineIncident,
+    StudentHealth_1.StudentHealthProfile,
+    StudentHealth_1.StudentImmunisation,
+    StudentHealth_1.SickbayVisit,
+    StudentHealth_1.StudentEmergencyContact,
+    Meeting_1.MeetingSlot,
+    Meeting_1.MeetingBooking,
+    SchoolEvent_1.SchoolEvent,
+    SchoolEvent_1.EventRsvp,
+    Transport_1.TransportRoute,
+    Transport_1.TransportStop,
+    Transport_1.TransportDriver,
+    Transport_1.TransportVehicle,
+    Transport_1.TransportAssignment,
+    Transport_1.TransportDelay,
+    Hostel_1.Dormitory,
+    Hostel_1.DormBed,
+    Hostel_1.BoardingRollCall,
+    Hostel_1.ExeatPass,
+    Hostel_1.HostelItem,
+    PhysicalLibrary_1.LibraryBook,
+    PhysicalLibrary_1.LibraryLoan,
+    Gate_1.VisitorLog,
+    Gate_1.AuthorizedPickup,
+    Gate_1.EarlyLeaveRequest,
+    Activities_1.House,
+    Activities_1.Activity,
+    Activities_1.ActivityMember,
+    Activities_1.ActivityPoints,
+    Activities_1.Competition,
+    StudentIdCard_1.StudentIdCard,
+    StudentIdCard_1.AttendanceScan,
+    IssuedDocument_1.IssuedDocument,
+    Consent_1.ConsentForm,
+    Consent_1.ConsentSubmission,
+    Inventory_1.Supplier,
+    Inventory_1.InventoryItem,
+    Inventory_1.StockMovement,
+    Inventory_1.PurchaseOrder,
+    Inventory_1.PurchaseOrderLine,
+    Inventory_1.FixedAsset,
+    StaffHr_1.StaffContract,
+    StaffHr_1.StaffAppraisal,
+    StaffHr_1.StaffDevelopment,
+    StaffHr_1.StaffDocument,
+    StaffHr_1.JobPosting,
+    StaffHr_1.JobApplication,
+    Survey_1.Survey,
+    Survey_1.SurveyQuestion,
+    Survey_1.SurveyResponse,
+    Alumni_1.Alumni,
+    Alumni_1.AlumniEvent,
+    Alumni_1.AlumniDonation,
 ];
 __exportStar(require("./enums"), exports);

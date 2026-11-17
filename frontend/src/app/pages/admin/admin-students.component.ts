@@ -13,6 +13,7 @@ import { formatGenderLabel, formatStudentClassLabel } from '../../core/utils/cla
 import { UnlessDemoDirective } from '../../core/directives/unless-demo.directive';
 import { TranslatePipe } from '../../core/pipes/translate.pipe';
 import { Student } from '../../core/models';
+import { environment } from '../../../environments/environment';
 
 interface FormOption {
   id: string;
@@ -69,6 +70,8 @@ export class AdminStudentsComponent implements OnInit {
   lastCreatedId = signal('');
   lastInvoiceInfo = signal('');
   saving = signal(false);
+  photoFile: File | null = null;
+  photoPreview = signal('');
   loading = signal(true);
   refreshing = signal(false);
   search = signal('');
@@ -271,6 +274,30 @@ export class AdminStudentsComponent implements OnInit {
     this.sortOrder.set('name-asc');
   }
 
+  onPhotoFile(ev: Event) {
+    const input = ev.target as HTMLInputElement;
+    const file = input.files?.[0] || null;
+    this.photoFile = file;
+    this.photoPreview.set(file ? URL.createObjectURL(file) : '');
+  }
+
+  photoUrl(student: Student | null): string {
+    const url = student?.photoUrl;
+    if (!url) return '';
+    if (url.startsWith('http')) return url;
+    const origin = (environment.apiUrl || '').replace(/\/api\/?$/, '');
+    return `${origin}${url}`;
+  }
+
+  private uploadPhotoIfNeeded(studentId: string) {
+    if (!this.photoFile) return;
+    const fd = new FormData();
+    fd.append('photo', this.photoFile);
+    this.api.postFormData(`/students/${studentId}/photo`, fd).subscribe({ error: () => {} });
+    this.photoFile = null;
+    this.photoPreview.set('');
+  }
+
   openEdit(student: Student) {
     this.detailStudent.set(null);
     this.registerDrawerOpen.set(false);
@@ -386,6 +413,7 @@ export class AdminStudentsComponent implements OnInit {
     this.api.post<RegisterStudentResponse>('/students', body).subscribe({
       next: (student) => {
         this.saving.set(false);
+        if (student?.id) this.uploadPhotoIfNeeded(student.id);
         this.registerDrawerOpen.set(false);
         this.lastCreatedId.set(student.admissionNumber);
         if (student.registrationInvoice) {
@@ -418,6 +446,7 @@ export class AdminStudentsComponent implements OnInit {
     this.api.put<Student>(`/students/${student.id}`, body).subscribe({
       next: () => {
         this.saving.set(false);
+        this.uploadPhotoIfNeeded(student.id);
         this.showToast('success', `${student.admissionNumber} updated successfully.`);
         this.closeEdit();
         this.load(true);
@@ -484,6 +513,8 @@ export class AdminStudentsComponent implements OnInit {
       isPrimary: true,
       guardianWhatsappConsent: false,
     };
+    this.photoFile = null;
+    this.photoPreview.set('');
     this.nextStudentId.set('');
   }
 

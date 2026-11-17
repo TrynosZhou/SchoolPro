@@ -553,6 +553,20 @@
       <label for="stuLastName">Last name *</label>
       <input id="stuLastName" [(ngModel)]="form.lastName" name="ln" required placeholder="Enter last name" autocomplete="family-name" />
     </div>
+    <div class="field" style="grid-column:1/-1">
+      <label for="stuPhoto">Passport photo</label>
+      <div style="display:flex;align-items:center;gap:.75rem">
+        @if (photoPreview() || photoUrl(editingStudent())) {
+          <img [src]="photoPreview() || photoUrl(editingStudent())" style="width:56px;height:72px;object-fit:cover;border-radius:6px;border:1px solid #cbd5e1;background:#e2e8f0" alt="Student photo" />
+        } @else {
+          <span style="width:56px;height:72px;display:flex;align-items:center;justify-content:center;border-radius:6px;border:1px dashed #cbd5e1;background:#f1f5f9;font-size:22px;color:#94a3b8">👤</span>
+        }
+        <div>
+          <input id="stuPhoto" type="file" accept="image/*" (change)="onPhotoFile($event)" style="font-size:.85rem" />
+          <div style="font-size:.75rem;color:#64748b;margin-top:.2rem">JPG/PNG, max 5MB. Optional — a default avatar is used if none is uploaded.</div>
+        </div>
+      </div>
+    </div>
     <div class="field">
       <label for="stuDob">Date of birth *</label>
       <input

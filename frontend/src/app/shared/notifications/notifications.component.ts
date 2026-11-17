@@ -9,6 +9,7 @@ import { DIRECTOR_NAV_ITEMS } from '../../core/config/director-nav';
 import { PRINCIPAL_NAV_ITEMS } from '../../core/config/principal-nav';
 import { ApiService } from '../../core/services/api.service';
 import { AuthService } from '../../core/services/auth.service';
+import { PushService } from '../../core/services/push.service';
 
 interface AppNotification {
   id: string;
@@ -21,6 +22,9 @@ interface AppNotification {
 }
 
 const TYPE_META: Record<string, { icon: string; label: string }> = {
+  push_test: { icon: '📲', label: 'Alerts' },
+  leave_request: { icon: '🗓️', label: 'Leave' },
+  payment: { icon: '🧾', label: 'Payment' },
   message_received: { icon: '💬', label: 'Message' },
   absence_alert: { icon: '🚫', label: 'Absence' },
   fee_reminder: { icon: '💳', label: 'Fees' },
@@ -38,6 +42,7 @@ const TYPE_META: Record<string, { icon: string; label: string }> = {
 export class NotificationsComponent implements OnInit {
   private api = inject(ApiService);
   private auth = inject(AuthService);
+  readonly push = inject(PushService);
 
   readonly role = (this.auth.user()?.role || '').toLowerCase();
 
@@ -99,6 +104,26 @@ export class NotificationsComponent implements OnInit {
 
   ngOnInit(): void {
     this.load();
+    void this.push.init();
+  }
+
+  togglePush(): void {
+    if (this.push.state() === 'on') void this.push.disable();
+    else void this.push.enable();
+  }
+
+  pushLabel(): string {
+    switch (this.push.state()) {
+      case 'on': return 'Browser alerts on';
+      case 'denied': return 'Alerts blocked in browser';
+      case 'unavailable': return 'Alerts not set up by school';
+      case 'unsupported': return 'Alerts unsupported here';
+      default: return 'Enable browser alerts';
+    }
+  }
+
+  pushDisabled(): boolean {
+    return this.push.busy() || ['denied', 'unavailable', 'unsupported'].includes(this.push.state());
   }
 
   load(): void {

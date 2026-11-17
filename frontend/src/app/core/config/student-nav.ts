@@ -16,6 +16,7 @@ export const STUDENT_NAV_SECTIONS: NavSection[] = [
       { label: 'My Learning', path: '/student/lms', icon: '💻' },
       { label: 'Library', path: '/student/library', icon: '📚' },
       { label: 'Attendance', path: '/student/attendance', icon: '📋' },
+      { label: 'Calendar', path: '/student/calendar', icon: '🗓️' },
     ],
   },
   {

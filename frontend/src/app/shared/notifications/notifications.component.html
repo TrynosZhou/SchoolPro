@@ -12,6 +12,9 @@
       <p>Absence alerts, fee reminders, published results, and new messages.</p>
     </div>
     <div class="hero-actions">
+      <button type="button" class="btn-outline" [disabled]="pushDisabled()" (click)="togglePush()">
+        {{ push.busy() ? 'Please wait…' : pushLabel() }}
+      </button>
       <button type="button" class="btn-outline" (click)="toggleFilter()">
         {{ filterUnread() ? 'Show all' : 'Unread only' }}
       </button>

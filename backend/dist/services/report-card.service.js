@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getClassTermAttendanceMap = getClassTermAttendanceMap;
+exports.getClassTermDisciplineMap = getClassTermDisciplineMap;
 exports.getStudentTermAttendance = getStudentTermAttendance;
 exports.attachAttendanceToReports = attachAttendanceToReports;
 exports.buildClassMeanMap = buildClassMeanMap;
@@ -59,6 +60,52 @@ async function getClassTermAttendanceMap(classId, termId) {
         map.set(String(row.studentId), parseAttendanceRow(row));
     }
     return map;
+}
+/**
+ * Per-student conduct summary for the term, derived from recorded discipline
+ * incidents (merits, demerits, sanctions). Fed into report-card remarks.
+ */
+async function getClassTermDisciplineMap(classId, termId) {
+    const map = new Map();
+    const term = await data_source_1.AppDataSource.getRepository(entities_1.Term).findOne({ where: { id: termId } });
+    if (!term)
+        return new Map();
+    const { startDate, endDate } = (0, helpers_1.termReportDateRange)(term);
+    const rows = await data_source_1.AppDataSource.getRepository(entities_1.DisciplineIncident).find({
+        where: { classId, termId },
+    });
+    const inTerm = rows.filter((r) => {
+        const d = String(r.date).slice(0, 10);
+        return d >= startDate && d <= endDate;
+    });
+    for (const r of inTerm) {
+        const agg = map.get(r.studentId) || { merits: 0, demerits: 0, incidents: 0, points: 0, sanctions: 0 };
+        if (r.kind === 'merit')
+            agg.merits += 1;
+        else if (r.kind === 'demerit')
+            agg.demerits += 1;
+        else
+            agg.incidents += 1;
+        agg.points += Number(r.points) || 0;
+        if (r.sanctionType && r.sanctionType !== 'none')
+            agg.sanctions += 1;
+        map.set(r.studentId, agg);
+    }
+    const out = new Map();
+    for (const [studentId, a] of map) {
+        const parts = [];
+        if (a.merits)
+            parts.push(`${a.merits} merit${a.merits > 1 ? 's' : ''}`);
+        if (a.demerits)
+            parts.push(`${a.demerits} demerit${a.demerits > 1 ? 's' : ''}`);
+        if (a.incidents)
+            parts.push(`${a.incidents} incident${a.incidents > 1 ? 's' : ''}`);
+        let sentence = `Discipline record this term: ${parts.join(', ')} recorded.`;
+        if (a.sanctions)
+            sentence += ` ${a.sanctions} sanction${a.sanctions > 1 ? 's were' : ' was'} applied.`;
+        out.set(studentId, sentence);
+    }
+    return out;
 }
 async function getStudentTermAttendance(studentId, termId, classId) {
     let resolvedClassId = classId;
@@ -565,6 +612,7 @@ async function generateClassReportCards(params) {
         ? await computeFormPositionMap(examTypeId, termId, formId)
         : new Map();
     const attendanceMap = await getClassTermAttendanceMap(classId, termId);
+    const disciplineMap = await getClassTermDisciplineMap(classId, termId);
     const saved = [];
     for (const row of scoreRows) {
         const student = students.find((s) => s.id === row.studentId);
@@ -600,6 +648,7 @@ async function generateClassReportCards(params) {
                 behaviorRating,
                 attitudeRating,
                 attendance,
+                disciplineSummary: disciplineMap.get(row.studentId) ?? null,
             });
             if (!behaviorRating)
                 report.behaviorRating = remarks.behaviorRating;

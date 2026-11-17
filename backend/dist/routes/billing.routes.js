@@ -20,7 +20,6 @@ const registration_invoice_service_1 = require("../services/registration-invoice
 const portal_roles_1 = require("../config/portal-roles");
 const school_branding_service_1 = require("../services/school-branding.service");
 const whatsapp_service_1 = require("../services/whatsapp.service");
-const gl_posting_service_1 = require("../services/gl-posting.service");
 const typeorm_helpers_1 = require("../utils/typeorm-helpers");
 const fin_reports_service_1 = require("../services/fin-reports.service");
 const term_balance_service_1 = require("../services/term-balance.service");
@@ -32,6 +31,11 @@ const pdf_2 = require("../utils/pdf");
 const invoice_lookup_service_1 = require("../services/invoice-lookup.service");
 const access_control_1 = require("../middleware/access-control");
 const access_control_service_1 = require("../services/access-control.service");
+const env_1 = require("../config/env");
+const payment_recording_service_1 = require("../services/payment-recording.service");
+const PaymentIntent_1 = require("../entities/PaymentIntent");
+const paynow_service_1 = require("../services/paynow.service");
+const paynow_intent_service_1 = require("../services/paynow-intent.service");
 const router = (0, express_1.Router)();
 router.use(auth_1.authenticate);
 const finView = (0, access_control_1.requireModuleAccess)('finance', 'view');
@@ -45,39 +49,6 @@ async function assertFinanceStudentAccess(req, studentId) {
         return 'You can only view finance records for students you are linked to';
     }
     return null;
-}
-async function notifyLinkedParentUsersOfReceipt(manager, senderId, student, receipt, payment) {
-    const guardianRepo = manager.getRepository(entities_1.Guardian);
-    const messageRepo = manager.getRepository(entities_1.Message);
-    const guardians = await guardianRepo.find({
-        where: { studentId: student.id },
-        relations: (0, typeorm_helpers_1.relations)('parent', 'parent.user'),
-    });
-    const parentUserIds = new Set();
-    for (const g of guardians) {
-        const user = g.parent?.user;
-        if (g.parent?.userId && user?.isActive !== false) {
-            parentUserIds.add(g.parent.userId);
-        }
-    }
-    if (!parentUserIds.size)
-        return;
-    const amount = Number(payment.amount);
-    const subject = `Payment receipt — ${student.firstName} ${student.lastName}`;
-    const body = `A payment of $${amount.toFixed(2)} was received for ${student.firstName} ${student.lastName}.\n\n` +
-        `Receipt number: ${receipt.receiptNumber}\n` +
-        `Payment reference: ${payment.paymentReference}\n` +
-        `Description: ${payment.label}\n\n` +
-        `Open Finance in the Parent Portal to view and download all receipts.`;
-    const messages = [...parentUserIds].map((recipientId) => messageRepo.create({
-        senderId,
-        recipientId,
-        studentId: student.id,
-        subject,
-        body,
-        isRead: false,
-    }));
-    await messageRepo.save(messages);
 }
 async function renderPdfHeaderWithLogo(doc, title, opts) {
     const margin = opts?.margin ?? 34;
@@ -620,24 +591,11 @@ router.post('/payments', (0, auth_1.authorize)(...portal_roles_1.FINANCE_WRITE_R
         return res.status(400).json({ message: 'Payment amount must be greater than zero' });
     }
     const studentRepo = data_source_1.AppDataSource.getRepository(entities_1.Student);
-    const student = await studentRepo.findOne({
-        where: { id: studentId },
-        relations: (0, typeorm_helpers_1.relations)('schoolClass', 'schoolClass.form', 'guardians'),
-    });
+    const student = await studentRepo.findOne({ where: { id: studentId } });
     if (!student)
         return res.status(404).json({ message: 'Student not found' });
-    const queryRunner = data_source_1.AppDataSource.createQueryRunner();
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
     try {
-        const paymentRepo = queryRunner.manager.getRepository(entities_1.Payment);
-        const invoiceRepo = queryRunner.manager.getRepository(entities_1.Invoice);
-        const ledgerRepo = queryRunner.manager.getRepository(entities_1.LedgerEntry);
-        const cashbookRepo = queryRunner.manager.getRepository(entities_1.CashbookEntry);
-        const receiptRepo = queryRunner.manager.getRepository(entities_1.Receipt);
-        const notifRepo = queryRunner.manager.getRepository(entities_1.Notification);
-        const payment = await paymentRepo.save(paymentRepo.create({
-            paymentReference: (0, helpers_1.generateNumber)('PAY'),
+        const { payment, receipt } = await (0, payment_recording_service_1.recordFeePayment)({
             studentId,
             invoiceId,
             amount: paymentAmount,
@@ -646,148 +604,119 @@ router.post('/payments', (0, auth_1.authorize)(...portal_roles_1.FINANCE_WRITE_R
             label,
             notes,
             recordedById: req.user.userId,
-        }));
-        let ledgerTermId;
-        let overpaymentRemaining = 0;
-        if (invoiceId) {
-            const invoice = await invoiceRepo.findOne({ where: { id: invoiceId, studentId } });
-            if (invoice) {
-                ledgerTermId = invoice.termId || undefined;
-                const due = Math.max(0, Number(invoice.totalAmount) - Number(invoice.amountPaid));
-                const applied = Math.min(due, paymentAmount);
-                overpaymentRemaining = (0, term_balance_service_1.roundMoney)(paymentAmount - applied);
-                invoice.amountPaid = Number(invoice.amountPaid) + applied;
-                invoice.status = Number(invoice.amountPaid) >= Number(invoice.totalAmount)
-                    ? enums_1.InvoiceStatus.PAID
-                    : enums_1.InvoiceStatus.PARTIAL;
-                await invoiceRepo.save(invoice);
-            }
-        }
-        else {
-            // Auto-allocate payment against outstanding invoices (oldest first).
-            let remaining = paymentAmount;
-            let primaryInvoiceId;
-            const outstanding = await invoiceRepo.find({
-                where: { studentId },
-                order: { dueDate: 'ASC', createdAt: 'ASC' },
-            });
-            for (const inv of outstanding) {
-                if (remaining <= 0)
-                    break;
-                const due = Math.max(0, Number(inv.totalAmount) - Number(inv.amountPaid));
-                if (due <= 0)
-                    continue;
-                const applied = Math.min(due, remaining);
-                inv.amountPaid = Number(inv.amountPaid) + applied;
-                inv.status = Number(inv.amountPaid) >= Number(inv.totalAmount)
-                    ? enums_1.InvoiceStatus.PAID
-                    : enums_1.InvoiceStatus.PARTIAL;
-                await invoiceRepo.save(inv);
-                if (!primaryInvoiceId)
-                    primaryInvoiceId = inv.id;
-                if (!ledgerTermId && inv.termId)
-                    ledgerTermId = inv.termId;
-                remaining -= applied;
-            }
-            overpaymentRemaining = (0, term_balance_service_1.roundMoney)(Math.max(0, remaining));
-            if (primaryInvoiceId) {
-                payment.invoiceId = primaryInvoiceId;
-                await paymentRepo.save(payment);
-            }
-        }
-        if (!ledgerTermId) {
-            ledgerTermId = await (0, term_balance_service_1.resolvePaymentTermId)(studentId, invoiceId);
-        }
-        const lastLedger = await ledgerRepo.findOne({
-            where: { studentId },
-            order: { createdAt: 'DESC' },
         });
-        const prevBalance = lastLedger ? Number(lastLedger.balance) : 0;
-        await ledgerRepo.save(ledgerRepo.create({
-            studentId,
-            termId: ledgerTermId,
-            entryDate: (0, helpers_1.today)(),
-            description: `Payment - ${label}`,
-            debit: 0,
-            credit: paymentAmount,
-            balance: prevBalance - paymentAmount,
-            referenceType: 'payment',
-            referenceId: payment.id,
-        }));
-        const lastCash = await (0, typeorm_helpers_1.findLatest)(cashbookRepo);
-        const cashBalance = lastCash ? Number(lastCash.balance) : 0;
-        await cashbookRepo.save(cashbookRepo.create({
-            entryDate: (0, helpers_1.today)(),
-            type: 'receipt',
-            description: `${label} - ${student.firstName} ${student.lastName}`,
-            moneyIn: paymentAmount,
-            moneyOut: 0,
-            balance: cashBalance + paymentAmount,
-            paymentMethod: method,
-            reference: payment.paymentReference,
-            studentId,
-            recordedById: req.user.userId,
-        }));
-        await (0, gl_posting_service_1.postFeePaymentToGl)(queryRunner.manager, payment, req.user.userId);
-        const branding = await (0, school_branding_service_1.loadSchoolBranding)();
-        const receiptNumber = (0, helpers_1.generateNumber)('RCP');
-        let linkedInvoiceNumber;
-        if (invoiceId) {
-            const linkedInv = await invoiceRepo.findOne({ where: { id: invoiceId, studentId } });
-            linkedInvoiceNumber = linkedInv?.invoiceNumber;
-        }
-        const pdfPath = await (0, pdf_1.generateReceiptPdf)({
-            receiptNumber,
-            studentName: `${student.firstName} ${student.lastName}`,
-            admissionNumber: student.admissionNumber,
-            className: student.schoolClass?.name || 'N/A',
-            amount: paymentAmount,
-            method,
-            label,
-            paidAt: new Date(),
-            paymentReference: payment.paymentReference,
-            notes: notes || undefined,
-            invoiceNumber: linkedInvoiceNumber,
-            invoiceBalance: await fetchStudentInvoiceBalance(studentId, queryRunner.manager),
-            ...branding,
-        });
-        const receipt = await receiptRepo.save(receiptRepo.create({
-            receiptNumber,
-            paymentId: payment.id,
-            pdfPath,
-        }));
-        await notifyLinkedParentUsersOfReceipt(queryRunner.manager, req.user.userId, student, receipt, payment);
-        await notifRepo.save(notifRepo.create({
-            title: 'Payment Received',
-            message: `${student.firstName} ${student.lastName} (${student.schoolClass?.name}) paid $${paymentAmount} for ${label}`,
-            type: 'payment',
-            metadata: { studentId, classId: student.classId, amount: paymentAmount, label },
-        }));
-        await queryRunner.commitTransaction();
-        if (overpaymentRemaining > 0.005) {
-            await (0, term_balance_service_1.recordOverpaymentPrepaid)(studentId, ledgerTermId, overpaymentRemaining);
-        }
-        if (ledgerTermId) {
-            await (0, term_balance_service_1.refreshTermClosingBalance)(studentId, ledgerTermId);
-        }
-        const primaryGuardian = student.guardians?.find((g) => g.isPrimary) || student.guardians?.[0];
-        if (primaryGuardian?.phone) {
-            try {
-                await (0, whatsapp_service_1.sendWhatsAppReminder)(primaryGuardian.phone, `Payment received for ${student.firstName}: $${paymentAmount} (${label}). Receipt: ${receiptNumber}`);
-            }
-            catch {
-                // WhatsApp delivery should not rollback successful accounting writes.
-            }
-        }
         return res.status(201).json({ payment, receipt });
     }
     catch (error) {
-        await queryRunner.rollbackTransaction();
+        if (error instanceof Error && error.message === 'Student not found') {
+            return res.status(404).json({ message: 'Student not found' });
+        }
         throw error;
     }
-    finally {
-        await queryRunner.release();
+});
+const PAYNOW_CHANNELS = ['ecocash', 'onemoney', 'visa'];
+// Parents (or staff on their behalf) start an online Paynow payment from the portal.
+router.post('/payments/paynow/initiate', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.ACCOUNTANT, enums_1.UserRole.PARENT, enums_1.UserRole.STUDENT), finView, async (req, res) => {
+    const { studentId, invoiceId, amount, method, phone, email, label } = req.body;
+    const paymentAmount = Number(amount) || 0;
+    const channel = String(method || '').toLowerCase();
+    if (!studentId) {
+        return res.status(400).json({ message: 'A student is required' });
     }
+    if (paymentAmount <= 0) {
+        return res.status(400).json({ message: 'Payment amount must be greater than zero' });
+    }
+    if (!PAYNOW_CHANNELS.includes(channel)) {
+        return res.status(400).json({ message: 'Choose a payment method: EcoCash, OneMoney or Visa' });
+    }
+    const accessError = await assertFinanceStudentAccess(req, studentId);
+    if (accessError)
+        return res.status(403).json({ message: accessError });
+    if (!(await (0, paynow_service_1.isPaynowConfigured)())) {
+        return res.status(503).json({
+            message: 'Online payments are not available yet. Please pay at the school office.',
+        });
+    }
+    const reference = (0, helpers_1.generateNumber)('PYI');
+    const resultUrl = `${env_1.env.apiPublicUrl.replace(/\/+$/, '')}/webhooks/paynow`;
+    const returnUrl = `${env_1.env.frontendUrl.replace(/\/+$/, '')}/parent/finance?paynow=${reference}`;
+    const init = await (0, paynow_service_1.initiatePaynowTransaction)({
+        reference,
+        amount: paymentAmount,
+        channel: channel,
+        phone: phone ? String(phone) : undefined,
+        authEmail: email ? String(email) : undefined,
+        additionalInfo: label ? String(label) : 'School fees',
+        resultUrl,
+        returnUrl,
+    });
+    const intentRepo = data_source_1.AppDataSource.getRepository(PaymentIntent_1.PaymentIntent);
+    const intent = await intentRepo.save(intentRepo.create({
+        reference,
+        studentId,
+        invoiceId,
+        amount: paymentAmount,
+        method: channel,
+        status: init.ok ? 'pending' : 'failed',
+        paynowReference: init.paynowReference,
+        pollUrl: init.pollUrl,
+        browserUrl: init.browserUrl,
+        createdById: req.user.userId,
+        payload: init.raw,
+    }));
+    if (!init.ok) {
+        return res.status(502).json({
+            message: init.error || 'Could not start the payment. Please try again.',
+            status: init.status,
+        });
+    }
+    return res.status(201).json({
+        intentId: intent.id,
+        reference,
+        method: channel,
+        browserUrl: init.browserUrl,
+        pollUrl: init.pollUrl,
+        instructions: init.instructions,
+    });
+});
+// Portal polls this when Paynow returns the payer to the app. If Paynow already
+// has a result it is applied immediately (idempotent), so a slow/missed webhook
+// never leaves a paid invoice showing as unpaid.
+router.get('/payments/paynow/:reference', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.ACCOUNTANT, enums_1.UserRole.PARENT, enums_1.UserRole.STUDENT), finView, async (req, res) => {
+    const reference = String(req.params.reference || '').trim();
+    if (!reference)
+        return res.status(400).json({ message: 'A payment reference is required' });
+    const intentRepo = data_source_1.AppDataSource.getRepository(PaymentIntent_1.PaymentIntent);
+    let intent = await intentRepo.findOne({ where: { reference } });
+    if (!intent)
+        return res.status(404).json({ message: 'Payment not found' });
+    const accessError = await assertFinanceStudentAccess(req, intent.studentId);
+    if (accessError)
+        return res.status(403).json({ message: accessError });
+    // Reconcile directly with Paynow while the intent is still open.
+    if (intent.status === 'pending' && intent.pollUrl) {
+        const polled = await (0, paynow_service_1.pollPaynowStatus)(intent.pollUrl);
+        if (polled.ok && polled.raw && Object.keys(polled.raw).length) {
+            await (0, paynow_intent_service_1.applyPaynowResult)(polled.raw);
+            intent = (await intentRepo.findOne({ where: { reference } })) || intent;
+        }
+    }
+    let receipt = null;
+    if (intent.paymentId) {
+        receipt = await data_source_1.AppDataSource.getRepository(entities_1.Receipt).findOne({
+            where: { paymentId: intent.paymentId },
+        });
+    }
+    return res.json({
+        reference: intent.reference,
+        status: intent.status,
+        method: intent.method,
+        amount: Number(intent.amount),
+        paynowReference: intent.paynowReference,
+        paymentId: intent.paymentId,
+        receiptId: receipt?.id,
+        receiptNumber: receipt?.receiptNumber,
+    });
 });
 router.get('/receipts/:id/pdf', (0, auth_1.authorize)(enums_1.UserRole.ADMIN, enums_1.UserRole.DIRECTOR, enums_1.UserRole.PRINCIPAL, enums_1.UserRole.ACCOUNTANT, enums_1.UserRole.PARENT, enums_1.UserRole.STUDENT), finView, async (req, res) => {
     const repo = data_source_1.AppDataSource.getRepository(entities_1.Receipt);

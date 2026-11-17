@@ -82,6 +82,9 @@
           } @else if (mode() === 'forgot') {
             <h2>Forgot password?</h2>
             <p>Enter your username or email and we will send reset instructions if an account exists</p>
+          } @else if (mode() === 'twofa') {
+            <h2>Two-factor verification</h2>
+            <p>{{ twoFactorBackupEntry() ? 'Enter one of your backup codes' : 'Enter the 6-digit code from your authenticator app' }}</p>
           } @else {
             <h2>Set a new password</h2>
             <p>Choose a strong password for your account</p>
@@ -89,6 +92,21 @@
         </header>
 
         <form class="signin-form" (ngSubmit)="onSubmit()">
+          @if (mode() === 'twofa') {
+            <div class="field">
+              <label for="twofa-code">{{ twoFactorBackupEntry() ? 'Backup code' : 'Verification code' }}</label>
+              <input
+                id="twofa-code"
+                type="text"
+                name="twofaCode"
+                [(ngModel)]="twoFactorCode"
+                autocomplete="one-time-code"
+                [placeholder]="twoFactorBackupEntry() ? 'ABCD-EFGH' : '123456'"
+                inputmode="numeric"
+                autofocus
+              />
+            </div>
+          } @else {
           @if (mode() === 'signin') {
             <div class="field role-select-field">
               <label for="signInRole">Sign in as</label>
@@ -371,6 +389,7 @@
                 @case ('signup') { Creating account… }
                 @case ('forgot') { Sending instructions… }
                 @case ('reset') { Updating password… }
+                @case ('twofa') { Verifying… }
                 @default { Signing in… }
               }
             } @else {
@@ -378,10 +397,21 @@
                 @case ('signup') { Create account }
                 @case ('forgot') { Send reset instructions }
                 @case ('reset') { Update password }
+                @case ('twofa') { Verify and sign in }
                 @default { Sign in to portal }
               }
             }
           </button>
+
+          @if (mode() === 'twofa') {
+            <div class="form-options">
+              <button type="button" class="link-btn" (click)="toggleBackupCodeEntry()">
+                {{ twoFactorBackupEntry() ? 'Use an authenticator code instead' : 'Use a backup code instead' }}
+              </button>
+              <button type="button" class="link-btn" (click)="cancelTwoFactor()">Back to sign in</button>
+            </div>
+          }
+          }
         </form>
 
         <p class="mode-switch">

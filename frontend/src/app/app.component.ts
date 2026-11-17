@@ -5,6 +5,7 @@ import { DemoModeBannerComponent } from './shared/demo-mode-banner/demo-mode-ban
 import { DemoOnboardingTourComponent } from './shared/demo-onboarding-tour/demo-onboarding-tour.component';
 import { ThemeService } from './core/services/theme.service';
 import { AuthService } from './core/services/auth.service';
+import { PushService } from './core/services/push.service';
 
 @Component({
   selector: 'app-root',
@@ -22,6 +23,7 @@ export class AppComponent {
   /** Eagerly construct so theme/font prefs apply before first paint settles. */
   private readonly theme = inject(ThemeService);
   private readonly auth = inject(AuthService);
+  private readonly push = inject(PushService);
 
   constructor() {
     // Whenever a user is signed in (page load or fresh login), re-read their name and other
@@ -33,6 +35,7 @@ export class AppComponent {
       if (loggedIn && user && refreshedFor !== user.id) {
         refreshedFor = user.id;
         this.auth.refreshProfile();
+        void this.push.init();
       } else if (!loggedIn) {
         refreshedFor = null;
       }

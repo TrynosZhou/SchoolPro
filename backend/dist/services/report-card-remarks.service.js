@@ -105,6 +105,9 @@ function buildClassTeacherRemarks(input) {
     const attendanceNote = criticalAttendanceSentence(input.attendance);
     if (attendanceNote)
         parts.push(attendanceNote);
+    const disciplineNote = (input.disciplineSummary || '').trim();
+    if (disciplineNote)
+        parts.push(disciplineNote);
     let body = parts.join(' ');
     const teacherName = (input.classTeacherName || '').trim();
     if (teacherName)
@@ -176,6 +179,7 @@ function buildReportCardRemarks(input) {
             attitudeRating,
             attendance: input.attendance,
             classTeacherName: input.classTeacherName,
+            disciplineSummary: input.disciplineSummary,
         }),
         principalRemarks: buildPrincipalRemarks({
             firstName: input.firstName,

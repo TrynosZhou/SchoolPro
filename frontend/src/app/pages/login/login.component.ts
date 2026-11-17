@@ -1,11 +1,12 @@
 import { Component, inject, OnInit, signal, computed } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { AuthService } from '../../core/services/auth.service';
+import { AuthService, isTwoFactorChallenge } from '../../core/services/auth.service';
 import { ApiService } from '../../core/services/api.service';
+import type { AuthResponse } from '../../core/models';
 import { environment } from '../../../environments/environment';
 
-type AuthMode = 'signin' | 'signup' | 'forgot' | 'reset';
+type AuthMode = 'signin' | 'signup' | 'forgot' | 'reset' | 'twofa';
 type SignInRole = 'staff' | 'parent' | 'student';
 
 interface PasswordPolicy {
@@ -54,6 +55,11 @@ export class LoginComponent implements OnInit {
   resetToken = '';
   resetConfirmPassword = '';
   devResetUrl = signal('');
+
+  // Two-factor verification step
+  twoFactorChallengeToken = '';
+  twoFactorCode = '';
+  twoFactorBackupEntry = signal(false);
 
   signup = {
     firstName: '',
@@ -156,6 +162,7 @@ export class LoginComponent implements OnInit {
     this.error.set('');
     this.success.set('');
     this.devResetUrl.set('');
+    if (next !== 'twofa') this.clearTwoFactorState();
     if (next === 'signin') {
       this.signInRole.set('staff');
     }
@@ -183,9 +190,77 @@ export class LoginComponent implements OnInit {
       this.submitSignUp();
     } else if (m === 'forgot') {
       this.submitForgotPassword();
+    } else if (m === 'twofa') {
+      this.submitTwoFactor();
     } else {
       this.submitResetPassword();
     }
+  }
+
+  // ── Two-factor verification ───────────────────────────────
+
+  toggleBackupCodeEntry() {
+    this.twoFactorBackupEntry.update((v) => !v);
+    this.twoFactorCode = '';
+    this.error.set('');
+  }
+
+  cancelTwoFactor() {
+    this.setMode('signin');
+  }
+
+  private startTwoFactor(challengeToken: string) {
+    this.twoFactorChallengeToken = challengeToken;
+    this.twoFactorCode = '';
+    this.twoFactorBackupEntry.set(false);
+    this.error.set('');
+    this.mode.set('twofa');
+  }
+
+  /**
+   * Route to the change-password page when the security policy requires a new
+   * password (first sign-in or expired), otherwise to the role's portal home.
+   */
+  private navigateAfterLogin(res: AuthResponse) {
+    if (res.passwordChangeRequired) {
+      const path = this.auth.getChangePasswordPath();
+      if (path) {
+        this.router.navigate([path], { queryParams: { required: res.passwordChangeReason || '1' } });
+        return;
+      }
+    }
+    this.router.navigate([this.auth.getPortalRoute()]);
+  }
+
+  private clearTwoFactorState() {
+    this.twoFactorChallengeToken = '';
+    this.twoFactorCode = '';
+    this.twoFactorBackupEntry.set(false);
+  }
+
+  private submitTwoFactor() {
+    const value = this.twoFactorCode.trim();
+    if (!value) {
+      this.error.set(this.twoFactorBackupEntry() ? 'Enter one of your backup codes.' : 'Enter the 6-digit code.');
+      return;
+    }
+
+    this.loading.set(true);
+    this.error.set('');
+
+    const submission = this.twoFactorBackupEntry() ? { backupCode: value } : { code: value };
+    this.auth.verifyTwoFactor(this.twoFactorChallengeToken, submission).subscribe({
+      next: (res) => this.navigateAfterLogin(res),
+      error: (e) => {
+        this.error.set(e.error?.message || 'That code is not valid. Please try again.');
+        this.twoFactorCode = '';
+        this.loading.set(false);
+        if (e.error?.restartLogin) {
+          this.setMode('signin');
+        }
+      },
+      complete: () => this.loading.set(false),
+    });
   }
 
   submitForgotPassword() {
@@ -271,7 +346,13 @@ export class LoginComponent implements OnInit {
     }
 
     this.auth.login(this.username.trim(), this.password, this.isParentRole() ? 'parent' : 'staff').subscribe({
-      next: () => this.router.navigate([this.auth.getPortalRoute()]),
+      next: (res) => {
+        if (isTwoFactorChallenge(res)) {
+          this.startTwoFactor(res.challengeToken);
+          return;
+        }
+        this.navigateAfterLogin(res);
+      },
       error: (e) => {
         this.error.set(e.error?.message || 'Invalid username or password. Please try again.');
         this.loading.set(false);
@@ -298,7 +379,7 @@ export class LoginComponent implements OnInit {
     }
 
     this.auth.studentLogin(id, this.password).subscribe({
-      next: () => this.router.navigate([this.auth.getPortalRoute()]),
+      next: (res) => this.navigateAfterLogin(res),
       error: (e) => {
         this.error.set(e.error?.message || 'Invalid Student ID or credentials.');
         this.loading.set(false);

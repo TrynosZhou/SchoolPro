@@ -89,6 +89,26 @@ __decorate([
     __metadata("design:type", Boolean)
 ], User.prototype, "portalPasswordCustomized", void 0);
 __decorate([
+    (0, typeorm_1.Column)({ default: false }),
+    __metadata("design:type", Boolean)
+], User.prototype, "twoFactorEnabled", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ nullable: true }),
+    __metadata("design:type", String)
+], User.prototype, "twoFactorSecret", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ nullable: true }),
+    __metadata("design:type", String)
+], User.prototype, "twoFactorPendingSecret", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'jsonb', nullable: true }),
+    __metadata("design:type", Array)
+], User.prototype, "twoFactorBackupCodes", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'timestamptz', nullable: true }),
+    __metadata("design:type", Date)
+], User.prototype, "twoFactorEnabledAt", void 0);
+__decorate([
     (0, typeorm_1.OneToOne)(() => Student_1.Student, (s) => s.user),
     __metadata("design:type", Student_1.Student)
 ], User.prototype, "studentProfile", void 0);

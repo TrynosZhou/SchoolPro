@@ -2,6 +2,7 @@ import { Component, inject } from '@angular/core';
 import { Router } from '@angular/router';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { ChangePasswordFormComponent } from '../../shared/change-password/change-password-form.component';
+import { TwoFactorSettingsComponent } from '../../shared/two-factor/two-factor-settings.component';
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
 import { PARENT_NAV_ITEMS } from '../../core/config/parent-nav';
 import { STUDENT_NAV_SECTIONS } from '../../core/config/student-nav';
@@ -14,7 +15,7 @@ import type { NavItem, NavSection } from '../../shared/portal-layout/portal-layo
 @Component({
   selector: 'app-change-password-page',
   standalone: true,
-  imports: [PortalLayoutComponent, ChangePasswordFormComponent],
+  imports: [PortalLayoutComponent, ChangePasswordFormComponent, TwoFactorSettingsComponent],
   template: `
     <app-portal-layout
       [portalTitle]="portalTitle"
@@ -58,6 +59,21 @@ import type { NavItem, NavSection } from '../../shared/portal-layout/portal-layo
             </ul>
           </aside>
         </div>
+
+        <section class="panel tf-panel">
+          <div class="panel-head">
+            <span class="seal" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M12 3.5 5 6.5v5c0 4 2.9 7.3 7 8.5 4.1-1.2 7-4.5 7-8.5v-5l-7-3z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M9.3 12.2l1.9 1.9 3.6-3.9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </span>
+            <div>
+              <h2>Two-factor authentication</h2>
+              <p>A second step at sign-in, plus single-use backup codes.</p>
+            </div>
+          </div>
+          <div class="panel-body">
+            <app-two-factor-settings />
+          </div>
+        </section>
       </div>
     </app-portal-layout>
   `,
@@ -197,6 +213,8 @@ import type { NavItem, NavSection } from '../../shared/portal-layout/portal-layo
     }
 
     .panel-body { padding: 1.75rem; }
+
+    .tf-panel { margin-top: 1.25rem; }
 
     .tips-list {
       margin: 0;

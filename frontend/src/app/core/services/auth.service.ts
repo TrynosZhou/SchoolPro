@@ -9,6 +9,31 @@ const TOKEN_KEY = 'school_pro_token';
 const USER_KEY = 'school_pro_user';
 const DEMO_KEY = 'school_pro_demo';
 
+/** Returned by POST /auth/login when the account has two-factor authentication on. */
+export interface TwoFactorChallenge {
+  twoFactorRequired: true;
+  challengeToken: string;
+}
+
+export interface TwoFactorStatus {
+  available: boolean;
+  enabled: boolean;
+  enabledAt: string | null;
+  backupCodesRemaining: number;
+}
+
+export interface TwoFactorEnrollment {
+  secret: string;
+  otpauthUrl: string;
+  qrDataUrl: string;
+}
+
+export type LoginResult = AuthResponse | TwoFactorChallenge;
+
+export function isTwoFactorChallenge(res: LoginResult): res is TwoFactorChallenge {
+  return (res as TwoFactorChallenge).twoFactorRequired === true;
+}
+
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   private api = inject(ApiService);
@@ -31,8 +56,9 @@ export class AuthService {
    * parent dashboard, using the same account.
    */
   login(username: string, password: string, portal: 'staff' | 'parent' = 'staff') {
-    return this.api.post<AuthResponse>('/auth/login', { username, password, portal }).pipe(
-      map((res) => {
+    return this.api.post<LoginResult>('/auth/login', { username, password, portal }).pipe(
+      map<LoginResult, LoginResult>((res) => {
+        if (isTwoFactorChallenge(res)) return res;
         // A parent account may only sign in through the Parent portal, never as staff.
         if (portal === 'staff' && res.user?.role === 'parent') {
           throw {
@@ -44,8 +70,37 @@ export class AuthService {
         }
         return this.applyPortal(res, portal);
       }),
-      tap((res) => this.persistSession(res))
+      tap((res) => {
+        if (!isTwoFactorChallenge(res)) this.persistSession(res);
+      })
     );
+  }
+
+  /** Second step of sign-in: exchange the password-step token plus a code for a session. */
+  verifyTwoFactor(challengeToken: string, submission: { code?: string; backupCode?: string }) {
+    return this.api
+      .post<AuthResponse>('/auth/2fa/challenge', { challengeToken, ...submission })
+      .pipe(tap((res) => this.persistSession(res)));
+  }
+
+  twoFactorStatus() {
+    return this.api.get<TwoFactorStatus>('/auth/2fa/status');
+  }
+
+  setupTwoFactor() {
+    return this.api.post<TwoFactorEnrollment>('/auth/2fa/setup', {});
+  }
+
+  enableTwoFactor(code: string) {
+    return this.api.post<{ message: string; backupCodes: string[] }>('/auth/2fa/enable', { code });
+  }
+
+  disableTwoFactor(payload: { password: string; code?: string; backupCode?: string }) {
+    return this.api.post<{ message: string }>('/auth/2fa/disable', payload);
+  }
+
+  regenerateBackupCodes(code: string) {
+    return this.api.post<{ backupCodes: string[] }>('/auth/2fa/backup-codes', { code });
   }
 
   /**

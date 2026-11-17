@@ -31,8 +31,9 @@ function round2(n) {
     return Math.round(n * 100) / 100;
 }
 function periodBounds(year, month) {
-    const start = new Date(year, month - 1, 1);
-    const end = new Date(year, month, 0);
+    // Built in UTC so the period never shifts by a day on servers east/west of UTC.
+    const start = new Date(Date.UTC(year, month - 1, 1));
+    const end = new Date(Date.UTC(year, month, 0));
     return {
         periodLabel: `${MONTH_NAMES[month - 1]} ${year}`,
         periodStart: start.toISOString().split('T')[0],

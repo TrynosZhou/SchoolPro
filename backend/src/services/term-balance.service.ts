@@ -91,11 +91,14 @@ export async function computeTermNetBalance(studentId: string, termId: string): 
   const tbRepo = AppDataSource.getRepository(StudentTermBalance);
 
   const invoices = await invoiceRepo.find({ where: { studentId, termId } });
+  // Same rule as Outstanding Invoices / Student Balance: cancelled and draft invoices
+  // never count, and each invoice is floored at 0 so an overpaid invoice cannot mask another.
   const invoiceDue = roundMoney(
-    invoices.reduce(
-      (sum, inv) => sum + Math.max(0, Number(inv.totalAmount) - Number(inv.amountPaid)),
-      0,
-    ),
+    invoices.reduce((sum, inv) => {
+      const status = String(inv.status);
+      if (status === 'cancelled' || status === 'draft') return sum;
+      return sum + Math.max(0, Number(inv.totalAmount) - Number(inv.amountPaid));
+    }, 0),
   );
 
   const tb = await tbRepo.findOne({ where: { studentId, termId } });

@@ -491,6 +491,7 @@ async function getTimetableSnapshot() {
         teacherId: r.teacherId,
         teacherName: staffName(r.teacher),
         employeeNumber: r.teacher?.employeeNumber || '',
+        room: r.room || null,
         isLocked: !!r.isLocked,
     }));
     const views = buildViewsFromSlots(slots);

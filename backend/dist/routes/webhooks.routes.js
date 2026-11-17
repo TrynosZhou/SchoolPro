@@ -6,8 +6,9 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const express_2 = __importDefault(require("express"));
 const notification_log_service_1 = require("../services/notification-log.service");
+const paynow_intent_service_1 = require("../services/paynow-intent.service");
 const router = (0, express_1.Router)();
-/** Twilio posts application/x-www-form-urlencoded status callbacks. */
+/** Twilio and Paynow both post application/x-www-form-urlencoded callbacks. */
 router.use(express_2.default.urlencoded({ extended: false }));
 /**
  * Twilio WhatsApp/SMS delivery status callback.
@@ -31,5 +32,20 @@ router.post('/whatsapp-status', async (req, res) => {
         // Return 200 so Twilio does not keep retrying on our DB errors.
         return res.status(200).send('');
     }
+});
+/**
+ * Paynow payment result callback.
+ *
+ * Paynow POSTs form-encoded fields (reference, paynowreference, amount, status,
+ * pollurl, hash). We verify the SHA512 hash, then finalise the matching payment
+ * intent (ledger + GL posting + receipt) exactly once.
+ */
+router.post('/paynow', async (req, res) => {
+    const payload = {};
+    for (const [key, value] of Object.entries(req.body || {})) {
+        payload[key] = String(value ?? '');
+    }
+    const result = await (0, paynow_intent_service_1.applyPaynowResult)(payload);
+    return res.status(result.httpStatus).send(result.message);
 });
 exports.default = router;

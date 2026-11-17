@@ -1,0 +1,219 @@
+<app-portal-layout portalTitle="Admin Portal" pageTitle="Early-Warning Analytics" [navSections]="adminNav">
+  <div class="ew-page">
+
+    <!-- ── Hero ─────────────────────────────────────────────── -->
+    <header class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">Student welfare</p>
+        <h2>Early-warning analytics</h2>
+        <p class="hero-sub">
+          Identifies learners who may need support by combining mark trends, recent absence and fee arrears.
+          A score of 6 or more is high risk, 3&ndash;5 is medium, and anything lower is low.
+        </p>
+        <div class="hero-actions">
+          <button type="button" class="btn-primary" (click)="load()" [disabled]="loading()">
+            {{ loading() ? 'Scanning…' : 'Run scan' }}
+          </button>
+        </div>
+      </div>
+
+      <div class="kpi-grid">
+        <article class="kpi">
+          <span class="kpi-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          </span>
+          <div><strong>{{ loaded() ? counts().total : '—' }}</strong><span>Students flagged</span></div>
+        </article>
+        <article class="kpi bad">
+          <span class="kpi-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+          </span>
+          <div><strong>{{ loaded() ? counts().high : '—' }}</strong><span>High risk</span></div>
+        </article>
+        <article class="kpi warn">
+          <span class="kpi-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+          </span>
+          <div><strong>{{ loaded() ? counts().medium : '—' }}</strong><span>Medium risk</span></div>
+        </article>
+        <article class="kpi ok">
+          <span class="kpi-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.1V12a10 10 0 1 1-5.9-9.1"/><path d="m9 11 3 3L22 4"/></svg>
+          </span>
+          <div><strong>{{ loaded() ? counts().low : '—' }}</strong><span>Low risk</span></div>
+        </article>
+      </div>
+    </header>
+
+    <!-- ── Filters + results ────────────────────────────────── -->
+    <section class="list-shell">
+      <div class="filters">
+        <label class="field">
+          <span>Class</span>
+          <select [(ngModel)]="classId" (ngModelChange)="load()" name="classId">
+            <option value="">All classes</option>
+            @for (c of classes; track c.id) { <option [value]="c.id">{{ c.name }}</option> }
+          </select>
+        </label>
+        <label class="field">
+          <span>Severity</span>
+          <select [(ngModel)]="severity" (ngModelChange)="load()" name="severity">
+            <option value="">All severities</option>
+            <option value="high">High only</option>
+            <option value="medium">Medium and above</option>
+          </select>
+        </label>
+        <label class="field grow">
+          <span>Search</span>
+          <input type="search" placeholder="Find a student by name…" [ngModel]="search()" (ngModelChange)="search.set($event)" name="search" autocomplete="off" />
+        </label>
+        <p class="results-meta" aria-live="polite">
+          @if (loaded() && !loading()) { Showing <b>{{ visible().length }}</b> of <b>{{ counts().total }}</b> } @else { &nbsp; }
+        </p>
+      </div>
+
+      @if (error()) {
+        <div class="alert-banner" role="alert">
+          <span>{{ error() }}</span>
+          <button type="button" class="link-btn" (click)="load()">Try again</button>
+        </div>
+      }
+
+      <div class="table-scroll">
+        <table class="ew-table">
+          <thead>
+            <tr>
+              <th [attr.aria-sort]="ariaSort('name')">
+                <button type="button" class="sort" (click)="sortBy('name')">Student <i>{{ sortKey() === 'name' ? (sortDir() === 'asc' ? '▲' : '▼') : '' }}</i></button>
+              </th>
+              <th>Severity</th>
+              <th [attr.aria-sort]="ariaSort('score')">
+                <button type="button" class="sort" (click)="sortBy('score')">Risk score <i>{{ sortKey() === 'score' ? (sortDir() === 'asc' ? '▲' : '▼') : '' }}</i></button>
+              </th>
+              <th>Reasons</th>
+              <th>Marks trend</th>
+              <th>Absence <small>(30 days)</small></th>
+              <th class="right" [attr.aria-sort]="ariaSort('arrears')">
+                <button type="button" class="sort right" (click)="sortBy('arrears')">Arrears <i>{{ sortKey() === 'arrears' ? (sortDir() === 'asc' ? '▲' : '▼') : '' }}</i></button>
+              </th>
+              <th><span class="sr-only">Actions</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            @if (loading()) {
+              <tr class="state-row"><td colspan="8"><span class="spinner" aria-hidden="true"></span> Scanning students…</td></tr>
+            } @else if (!loaded()) {
+              <tr class="state-row"><td colspan="8">Run a scan to see students who may need support.</td></tr>
+            } @else if (!flags().length && !error()) {
+              <tr class="state-row"><td colspan="8">
+                <div class="empty">
+                  <span class="empty-mark" aria-hidden="true">&#10003;</span>
+                  <h3>No at-risk students</h3>
+                  <p>Nobody matches the current filters. Try widening the class or severity selection.</p>
+                </div>
+              </td></tr>
+            } @else if (!visible().length && flags().length) {
+              <tr class="state-row"><td colspan="8">No student matches &ldquo;{{ search() }}&rdquo;.</td></tr>
+            } @else {
+              @for (f of visible(); track f.studentId) {
+                <tr [class.is-open]="progressFor()?.studentId === f.studentId">
+                  <td>
+                    <div class="who">
+                      <span class="initials" aria-hidden="true">{{ initials(f.studentName) }}</span>
+                      <strong>{{ f.studentName || 'Unknown student' }}</strong>
+                    </div>
+                  </td>
+                  <td><span class="sev-pill" [class]="f.severity">{{ f.severity }}</span></td>
+                  <td>
+                    <div class="meter" [attr.title]="'Risk score ' + f.score + ' of 11'">
+                      <span class="meter-num">{{ f.score }}</span>
+                      <span class="meter-track"><span class="meter-fill" [class]="f.severity" [style.width.%]="scorePct(f.score)"></span></span>
+                    </div>
+                  </td>
+                  <td class="reasons-cell">
+                    <ul class="reasons">
+                      @for (r of f.reasons; track r) { <li>{{ r }}</li> }
+                    </ul>
+                  </td>
+                  <td>
+                    @if (f.metrics.markTrend; as m) {
+                      <div class="trend" [class.down]="m.delta < 0" [class.up]="m.delta > 0">
+                        <span class="range">{{ m.previousAvg }}% &rarr; {{ m.currentAvg }}%</span>
+                        <span class="delta">{{ m.delta > 0 ? '▲' : m.delta < 0 ? '▼' : '■' }} {{ abs(m.delta) }} pts</span>
+                      </div>
+                    } @else { <span class="dash">—</span> }
+                  </td>
+                  <td>
+                    @if (f.metrics.absence; as a) {
+                      <div class="absence">
+                        <span class="range">{{ a.recentAbsences }} {{ a.recentAbsences === 1 ? 'absence' : 'absences' }}</span>
+                        <span class="sub">{{ a.recentRate }}% rate</span>
+                      </div>
+                    } @else { <span class="dash">—</span> }
+                  </td>
+                  <td class="right">
+                    @if (f.metrics.arrears; as ar) {
+                      <div class="arrears">
+                        <span class="range">${{ ar.outstanding | number:'1.0-2' }}</span>
+                        <span class="sub">{{ ar.overdueInvoices }} overdue</span>
+                      </div>
+                    } @else { <span class="dash">—</span> }
+                  </td>
+                  <td class="right">
+                    <button type="button" class="btn-outline view-btn" (click)="showProgress(f)">Progress</button>
+                  </td>
+                </tr>
+              }
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ── Progress panel ───────────────────────────────────── -->
+    @if (progressFor(); as pf) {
+      <section class="panel progress-panel" id="ew-progress">
+        <div class="panel-head">
+          <div>
+            <p class="eyebrow">Term-over-term progress</p>
+            <h3>{{ pf.studentName }}</h3>
+          </div>
+          <button type="button" class="btn-ghost" (click)="closeProgress()">Close</button>
+        </div>
+
+        @if (progressLoading()) {
+          <p class="panel-note"><span class="spinner" aria-hidden="true"></span> Loading progress…</p>
+        } @else if (progressError()) {
+          <p class="panel-note error">{{ progressError() }}</p>
+        } @else if (!progress().length) {
+          <p class="panel-note">No term results or attendance have been recorded for this student yet.</p>
+        } @else {
+          <div class="charts">
+            <div class="chart">
+              <h4>Average mark</h4>
+              @for (p of progress(); track p.termName) {
+                <div class="bar-row">
+                  <span class="bar-label">{{ p.termName }}</span>
+                  <span class="bar-track"><span class="bar-fill" [class]="markTone(p.average)" [style.width.%]="p.average || 0"></span></span>
+                  <span class="bar-value">{{ p.average !== null && p.average !== undefined ? p.average + '%' : '—' }}</span>
+                </div>
+              }
+              <p class="legend"><i class="bad"></i>Below 40% <i class="warn"></i>40&ndash;59% <i class="ok"></i>60% and above</p>
+            </div>
+            <div class="chart">
+              <h4>Attendance</h4>
+              @for (p of progress(); track p.termName) {
+                <div class="bar-row">
+                  <span class="bar-label">{{ p.termName }}</span>
+                  <span class="bar-track"><span class="bar-fill" [class]="attendanceTone(p.attendanceRate)" [style.width.%]="p.attendanceRate || 0"></span></span>
+                  <span class="bar-value">{{ p.attendanceRate !== null && p.attendanceRate !== undefined ? p.attendanceRate + '%' : '—' }}</span>
+                </div>
+              }
+              <p class="legend"><i class="bad"></i>Below 80% <i class="ok"></i>80% and above</p>
+            </div>
+          </div>
+        }
+      </section>
+    }
+  </div>
+</app-portal-layout>

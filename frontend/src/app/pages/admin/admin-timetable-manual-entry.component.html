@@ -1,169 +1,286 @@
 <app-portal-layout portalTitle="Admin Portal" pageTitle="Manual Entry" [navSections]="adminNav">
-  <div class="manual-page">
+  <div class="manual-page" [class.all-mode]="allSelected()">
     @if (toast(); as t) {
       <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'" role="status">{{ t.msg }}</div>
     }
 
-    <header class="hero">
-      <div>
-        <h2>Manual Timetable Entry</h2>
-        <p>
-          Adjust lessons by hand. Drag a lesson card to another period — the system checks every period for
-          teacher and class clashes before the card is placed.
-        </p>
+    <div class="asc">
+      <!-- Ribbon -->
+      <div class="ribbon-tabs" role="tablist" aria-label="Ribbon">
+        <button type="button" class="ribbon-tab active" role="tab" aria-selected="true">Main</button>
       </div>
-      <div class="hero-actions">
-        <button type="button" class="btn-outline" (click)="undo()" [disabled]="!undoStack().length || moving()">
-          Undo move@if (undoStack().length) { ({{ undoStack().length }}) }
-        </button>
-        <button type="button" class="btn-outline" (click)="load(true)" [disabled]="refreshing() || loading()">
-          {{ refreshing() ? 'Refreshing…' : 'Refresh' }}
-        </button>
-      </div>
-    </header>
 
-    @if (loading()) {
-      <div class="state-box"><p>Loading timetable…</p></div>
-    } @else if (loadError()) {
-      <div class="state-box error">
-        <h3>Could not load the timetable</h3>
-        <button type="button" class="btn-primary" (click)="load()">Try again</button>
-      </div>
-    } @else if (!hasTimetable()) {
-      <div class="state-box">
-        <h3>No lessons to adjust yet</h3>
-        <p>Generate a timetable first, then come back here to fine-tune it by hand.</p>
-        <a class="btn-primary" routerLink="/admin/timetable/generate">Go to Generate Timetable</a>
-      </div>
-    } @else if (!periods().length) {
-      <div class="state-box">
-        <h3>No periods configured</h3>
-        <p>Set up lesson periods under Timetable → Configure Periods.</p>
-      </div>
-    } @else {
-      <section class="toolbar">
-        <div class="seg" role="group" aria-label="View timetable by">
-          <button type="button" [class.active]="mode() === 'class'" [attr.aria-pressed]="mode() === 'class'" (click)="setMode('class')">By class</button>
-          <button type="button" [class.active]="mode() === 'teacher'" [attr.aria-pressed]="mode() === 'teacher'" (click)="setMode('teacher')">By teacher</button>
+      <div class="ribbon" role="toolbar" aria-label="Timetable tools">
+        @if (hasTimetable() && periods().length) {
+          <div class="ribbon-group">
+            <label class="combo">
+              <span class="sr-only">View timetable by</span>
+              <select [ngModel]="mode()" (ngModelChange)="setMode($event)" name="modePick">
+                <option value="teacher">Teachers</option>
+                <option value="class">Classes</option>
+              </select>
+            </label>
+            <label class="combo">
+              <span class="sr-only">{{ mode() === 'class' ? 'Class' : 'Teacher' }}</span>
+              <select [ngModel]="selectedId()" (ngModelChange)="onSelect($event)" name="entityPick">
+                <option [value]="ALL">{{ mode() === 'class' ? 'All classes' : 'All teachers' }}</option>
+                @if (mode() === 'class') {
+                  @for (c of classes(); track c.classId) {
+                    <option [value]="c.classId">{{ c.className }}</option>
+                  }
+                } @else {
+                  @for (t of teachers(); track t.teacherId) {
+                    <option [value]="t.teacherId">{{ t.teacherName }}@if (t.employeeNumber) { ({{ t.employeeNumber }}) }</option>
+                  }
+                }
+              </select>
+            </label>
+          </div>
+          <span class="ribbon-sep" aria-hidden="true"></span>
+        }
+
+        <div class="ribbon-group">
+          <button type="button" class="ribbon-btn" (click)="undo()" [disabled]="!undoStack().length || moving()" title="Undo the last lesson move">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M9 14L4 9l5-5" stroke="#1d4ed8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+              <path d="M4 9h10.5a5.5 5.5 0 010 11H11" stroke="#1d4ed8" stroke-width="2" stroke-linecap="round" />
+            </svg>
+            <span>Undo move@if (undoStack().length) { ({{ undoStack().length }}) }</span>
+          </button>
+          <button type="button" class="ribbon-btn" (click)="load(true)" [disabled]="refreshing() || loading()" title="Reload the timetable">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M20 12a8 8 0 11-2.34-5.66" stroke="#15803d" stroke-width="2" stroke-linecap="round" />
+              <path d="M20 4v5h-5" stroke="#15803d" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+            <span>{{ refreshing() ? 'Refreshing…' : 'Refresh' }}</span>
+          </button>
+          <span class="ribbon-sep ribbon-sep-inner" aria-hidden="true"></span>
+          <button type="button" class="ribbon-btn" (click)="setAllLocked(true)" [disabled]="bulkLockBusy() || moving() || !allSlots().length" title="Lock every lesson in the timetable">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <rect x="5" y="11" width="14" height="10" rx="2" stroke="#334155" stroke-width="2" />
+              <path d="M8 11V7a4 4 0 018 0v4" stroke="#334155" stroke-width="2" stroke-linecap="round" />
+            </svg>
+            <span>{{ bulkLockBusy() ? 'Working…' : 'Lock All' }}</span>
+          </button>
+          <button type="button" class="ribbon-btn" (click)="setAllLocked(false)" [disabled]="bulkLockBusy() || moving() || !allSlots().length" title="Unlock every lesson in the timetable">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <rect x="5" y="11" width="14" height="10" rx="2" stroke="#334155" stroke-width="2" />
+              <path d="M8 11V7a4 4 0 017.7-1.5" stroke="#334155" stroke-width="2" stroke-linecap="round" />
+            </svg>
+            <span>Unlock All</span>
+          </button>
         </div>
 
-        <label class="picker">
-          <span>{{ mode() === 'class' ? 'Class' : 'Teacher' }}</span>
-          <select [ngModel]="selectedId()" (ngModelChange)="onSelect($event)" name="entityPick">
-            @if (mode() === 'class') {
-              @for (c of classes(); track c.classId) {
-                <option [value]="c.classId">{{ c.className }}</option>
-              }
-            } @else {
-              @for (t of teachers(); track t.teacherId) {
-                <option [value]="t.teacherId">{{ t.teacherName }}@if (t.employeeNumber) { ({{ t.employeeNumber }}) }</option>
-              }
-            }
-          </select>
-        </label>
-
-        <div class="stats">
-          <span><strong>{{ stats().shown }}</strong> lessons shown</span>
-          <span><strong>{{ stats().lessons }}</strong> in school</span>
-          <span><strong>{{ stats().locked }}</strong> locked</span>
-          <span class="clash-count" [class.bad]="clashes().length"><strong>{{ clashes().length }}</strong> clash{{ clashes().length === 1 ? '' : 'es' }}</span>
-        </div>
-      </section>
-
-      <div class="status-bar" [class.holding]="!!heldSlot()" role="status" aria-live="polite">
-        <span class="status-text">{{ statusMessage() }}</span>
-        @if (heldSlot()) {
-          <button type="button" class="link-btn" (click)="clearHold()">Cancel (Esc)</button>
+        @if (hasTimetable() && periods().length) {
+          <span class="ribbon-sep" aria-hidden="true"></span>
+          <div class="ribbon-group">
+            <button
+              type="button"
+              class="ribbon-btn"
+              [class.active]="clashPanelOpen()"
+              [attr.aria-pressed]="clashPanelOpen()"
+              (click)="clashPanelOpen.set(!clashPanelOpen())"
+              title="Show or hide the clash report"
+            >
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M12 3l10 18H2L12 3z" stroke="#b45309" stroke-width="2" stroke-linejoin="round" />
+                <path d="M12 10v5M12 18h.01" stroke="#b45309" stroke-width="2" stroke-linecap="round" />
+              </svg>
+              <span>Clash report <span class="ribbon-badge" [class.bad]="clashes().length">{{ clashes().length }}</span></span>
+            </button>
+          </div>
         }
       </div>
 
-      <div class="legend" aria-label="Legend">
-        <span><i class="dot ok"></i> Free</span>
-        <span><i class="dot teacher"></i> Teacher clash (can be overridden)</span>
-        <span><i class="dot class"></i> Class clash (blocked)</span>
-        <span><i class="dot clash-outline"></i> Existing clash</span>
-        <span>🔒 Locked</span>
-      </div>
-
-      <section class="grid-panel">
-        <h3 class="grid-title">{{ selectedLabel() }}</h3>
-        <div class="grid-wrap">
-          <table class="mt-grid" [class.busy]="moving()">
-            <thead>
-              <tr>
-                <th class="corner" scope="col"><span class="sr-only">Day</span></th>
-                @for (p of periods(); track p.id; let i = $index) {
-                  <th scope="col" [class.break-head]="isBreakPeriod(p)">
-                    @if (isBreakPeriod(p)) {
-                      <span class="sr-only">{{ breakTimeLabel(p) }}</span>
-                    } @else {
-                      <strong>{{ lessonPeriodNumber(periods(), i) }}</strong>
-                      <small>{{ formatPeriodRange(p) }}</small>
-                    }
-                  </th>
-                }
-              </tr>
-            </thead>
-            <tbody>
-              @for (d of days; track d.value; let rowIdx = $index) {
-                <tr>
-                  <th scope="row" class="day-head">{{ d.short }}</th>
-                  @for (p of periods(); track p.id) {
-                    @if (isBreakPeriod(p)) {
-                      @if (rowIdx === 0) {
-                        <td class="break-cell" [attr.rowspan]="days.length">
-                          <span class="break-vertical">{{ breakTimeLabel(p) }}</span>
-                        </td>
-                      }
-                    } @else {
-                      <td
-                        class="cell"
-                        [attr.data-state]="cellState(d.value, p)"
-                        [class.hover]="hoverKey() === cellKey(d.value, p)"
-                        [attr.title]="cellTitle(d.value, p)"
-                        (click)="onCellClick(d.value, p)"
-                        (mouseenter)="onCellHover(d.value, p)"
-                        (dragover)="onCellDragOver(d.value, p, $event)"
-                        (drop)="onCellDrop(d.value, p, $event)"
-                      >
-                        @for (s of slotsAt(d.value, p); track s.id) {
-                          <div
-                            class="mt-card"
-                            tabindex="0"
-                            [class.held]="heldId() === s.id"
-                            [class.locked]="s.isLocked"
-                            [class.clash]="clashIds().has(s.id)"
-                            [ngStyle]="cardStyle(s.teacherId)"
-                            [attr.draggable]="s.isLocked || moving() ? null : true"
-                            [attr.aria-label]="cardTitle(s)"
-                            [title]="cardTitle(s)"
-                            (dragstart)="onDragStart(s, $event)"
-                            (dragend)="onDragEnd()"
-                            (click)="onCardActivate(s, d.value, p, $event)"
-                            (keydown.enter)="onCardKey(s, d.value, p, $event)"
-                            (keydown.space)="onCardKey(s, d.value, p, $event)"
-                          >
-                            <span class="card-main">{{ subjectShort(s) }}</span>
-                            <span class="card-sub">{{ cardSub(s) }}</span>
-                            <button
-                              type="button"
-                              class="lock-btn"
-                              [attr.aria-label]="s.isLocked ? 'Unlock lesson' : 'Lock lesson'"
-                              [title]="s.isLocked ? 'Locked — click to unlock' : 'Click to lock this lesson in place'"
-                              (click)="toggleLock(s, $event)"
-                            >{{ s.isLocked ? '🔒' : '🔓' }}</button>
-                          </div>
-                        }
-                      </td>
-                    }
-                  }
-                </tr>
-              }
-            </tbody>
-          </table>
+      @if (loading()) {
+        <div class="state-box"><p>Loading timetable…</p></div>
+      } @else if (loadError()) {
+        <div class="state-box error">
+          <h3>Could not load the timetable</h3>
+          <button type="button" class="btn-primary" (click)="load()">Try again</button>
         </div>
-      </section>
+      } @else if (!hasTimetable()) {
+        <div class="state-box">
+          <h3>No lessons to adjust yet</h3>
+          <p>Generate a timetable first, then come back here to fine-tune it by hand.</p>
+          <a class="btn-primary" routerLink="/admin/timetable/generate">Go to Generate Timetable</a>
+        </div>
+      } @else if (!periods().length) {
+        <div class="state-box">
+          <h3>No periods configured</h3>
+          <p>Set up lesson periods under Timetable → Configure Periods.</p>
+        </div>
+      } @else {
+        <!-- Grid -->
+        <section class="grid-panel">
+          <div class="grid-wrap">
+            @if (allSelected()) {
+              <!-- Master grid: rows = every class / teacher, columns = days × periods -->
+              <table class="mt-grid master" [class.busy]="moving()">
+                <thead>
+                  <tr>
+                    <th class="corner row-label-head" scope="col"><span class="sr-only">{{ mode() === 'class' ? 'Class' : 'Teacher' }}</span></th>
+                    @for (d of days; track d.value) {
+                      <th class="day-group" [attr.colspan]="lessonPeriods().length" scope="colgroup">{{ d.label }}</th>
+                    }
+                  </tr>
+                  <tr>
+                    <th class="corner row-label-head" scope="col"><span class="sr-only">Entity</span></th>
+                    @for (d of days; track d.value) {
+                      @for (p of lessonPeriods(); track p.id) {
+                        <th scope="col" class="period-head" [class.day-sep]="$index === 0" [attr.title]="formatPeriodRange(p)">
+                          <strong>{{ lessonPeriodNumber(periods(), periods().indexOf(p)) }}</strong>
+                        </th>
+                      }
+                    }
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (row of rows(); track row.id) {
+                    <tr>
+                      <th scope="row" class="row-label" [attr.title]="row.name">{{ rowLabel(row.name) }}</th>
+                      @for (d of days; track d.value) {
+                        @for (p of lessonPeriods(); track p.id; let pi = $index) {
+                          <td
+                            class="cell"
+                            [class.day-sep]="pi === 0"
+                            [attr.data-state]="cellState(d.value, p)"
+                            [class.hover]="hoverKey() === cellKey(d.value, p)"
+                            [attr.title]="cellTitle(d.value, p)"
+                            (click)="onCellClick(d.value, p)"
+                            (mouseenter)="onCellHover(d.value, p)"
+                            (dragover)="onCellDragOver(d.value, p, $event)"
+                            (drop)="onCellDrop(d.value, p, $event)"
+                          >
+                            <div class="cell-inner">
+                              @for (s of slotsForRow(row.id, d.value, p); track s.id) {
+                                <div
+                                  class="mt-card"
+                                  tabindex="0"
+                                  [class.held]="heldId() === s.id"
+                                  [class.locked]="s.isLocked"
+                                  [class.clash]="clashIds().has(s.id)"
+                                  [ngStyle]="cardStyle(s.teacherId)"
+                                  [attr.draggable]="s.isLocked || moving() ? null : true"
+                                  [attr.aria-label]="cardTitle(s)"
+                                  [title]="cardTitle(s)"
+                                  (dragstart)="onDragStart(s, $event)"
+                                  (dragend)="onDragEnd()"
+                                  (click)="onCardActivate(s, d.value, p, $event)"
+                                  (contextmenu)="onCardContext(s, d.value, p, $event)"
+                                  (keydown.enter)="onCardKey(s, d.value, p, $event)"
+                                  (keydown.space)="onCardKey(s, d.value, p, $event)"
+                                >
+                                  <span class="card-main">{{ cardMain(s) }}</span>
+                                  <span class="card-sub">{{ cardSub(s) }}</span>
+                                </div>
+                              }
+                            </div>
+                          </td>
+                        }
+                      }
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            } @else {
+              <!-- Single-entity grid: rows = days, columns = periods -->
+              <table class="mt-grid single" [class.busy]="moving()">
+                <thead>
+                  <tr>
+                    <th class="corner" scope="col"><span class="sr-only">Day</span></th>
+                    @for (p of periods(); track p.id; let i = $index) {
+                      <th scope="col" [class.break-head]="isBreakPeriod(p)" [attr.title]="formatPeriodRange(p)">
+                        @if (isBreakPeriod(p)) {
+                          <span class="sr-only">{{ breakTimeLabel(p) }}</span>
+                        } @else {
+                          <strong>{{ lessonPeriodNumber(periods(), i) }}</strong>
+                        }
+                      </th>
+                    }
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (d of days; track d.value; let rowIdx = $index) {
+                    <tr>
+                      <th scope="row" class="day-head">{{ d.short }}</th>
+                      @for (p of periods(); track p.id) {
+                        @if (isBreakPeriod(p)) {
+                          @if (rowIdx === 0) {
+                            <td class="break-cell" [attr.rowspan]="days.length">
+                              <span class="break-vertical">{{ breakTimeLabel(p) }}</span>
+                            </td>
+                          }
+                        } @else {
+                          <td
+                            class="cell"
+                            [attr.data-state]="cellState(d.value, p)"
+                            [class.hover]="hoverKey() === cellKey(d.value, p)"
+                            [attr.title]="cellTitle(d.value, p)"
+                            (click)="onCellClick(d.value, p)"
+                            (mouseenter)="onCellHover(d.value, p)"
+                            (dragover)="onCellDragOver(d.value, p, $event)"
+                            (drop)="onCellDrop(d.value, p, $event)"
+                          >
+                            <div class="cell-inner">
+                              @for (s of slotsAt(d.value, p); track s.id) {
+                                <div
+                                  class="mt-card"
+                                  tabindex="0"
+                                  [class.held]="heldId() === s.id"
+                                  [class.locked]="s.isLocked"
+                                  [class.clash]="clashIds().has(s.id)"
+                                  [ngStyle]="cardStyle(s.teacherId)"
+                                  [attr.draggable]="s.isLocked || moving() ? null : true"
+                                  [attr.aria-label]="cardTitle(s)"
+                                  [title]="cardTitle(s)"
+                                  (dragstart)="onDragStart(s, $event)"
+                                  (dragend)="onDragEnd()"
+                                  (click)="onCardActivate(s, d.value, p, $event)"
+                                  (contextmenu)="onCardContext(s, d.value, p, $event)"
+                                  (keydown.enter)="onCardKey(s, d.value, p, $event)"
+                                  (keydown.space)="onCardKey(s, d.value, p, $event)"
+                                >
+                                  <span class="card-main">{{ cardMain(s) }}</span>
+                                  <span class="card-sub">{{ cardSub(s) }}</span>
+                                </div>
+                              }
+                            </div>
+                          </td>
+                        }
+                      }
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            }
+          </div>
+        </section>
 
+        <!-- Status strip -->
+        <footer class="status-bar" [class.holding]="!!heldSlot()" role="status" aria-live="polite">
+          <span class="status-text">{{ statusMessage() }}</span>
+          @if (heldSlot()) {
+            <button type="button" class="link-btn" (click)="clearHold()">Cancel (Esc)</button>
+          }
+          <span class="legend" aria-label="Legend">
+            <span><i class="dot ok"></i> Free</span>
+            <span><i class="dot teacher"></i> Teacher clash (can be overridden)</span>
+            <span><i class="dot class"></i> Class clash (blocked)</span>
+            <span><i class="dot clash-outline"></i> Existing clash</span>
+            <span><i class="dot locked-line"></i> Locked (line through the lesson)</span>
+          </span>
+          <span class="status-stats">
+            <span><strong>{{ stats().shown }}</strong> shown</span>
+            <span><strong>{{ stats().lessons }}</strong> in school</span>
+            <span><strong>{{ stats().locked }}</strong> locked</span>
+            <span class="clash-count" [class.bad]="clashes().length"><strong>{{ clashes().length }}</strong> clash{{ clashes().length === 1 ? '' : 'es' }}</span>
+          </span>
+        </footer>
+      }
+    </div>
+
+    @if (hasTimetable() && periods().length && !loading() && !loadError()) {
       <section class="clash-panel" [class.has-clashes]="clashes().length">
         <button type="button" class="clash-head" (click)="clashPanelOpen.set(!clashPanelOpen())" [attr.aria-expanded]="clashPanelOpen()">
           <span>Clash report</span>
@@ -186,6 +303,195 @@
     }
   </div>
 </app-portal-layout>
+
+@if (ctxMenu(); as m) {
+  <div class="ctx-menu" role="menu" [style.left.px]="m.x" [style.top.px]="m.y" (click)="$event.stopPropagation()" (contextmenu)="$event.preventDefault()">
+    <div class="ctx-title">{{ ctxTitle(m) }}</div>
+
+    <button type="button" role="menuitem" class="ctx-item" (click)="menuToggleLock($event)" (mouseenter)="ctxSub.set(null)">
+      <span class="ctx-ico">🔒</span> {{ m.slot.isLocked ? 'Unlock' : 'Lock' }}
+    </button>
+    <button type="button" role="menuitem" class="ctx-item" (click)="menuRemove()" (mouseenter)="ctxSub.set(null)">Remove</button>
+    <button type="button" role="menuitem" class="ctx-item" (click)="menuDeleteRow()" (mouseenter)="ctxSub.set(null)">Delete row</button>
+    <div class="ctx-sep"></div>
+
+    <div class="ctx-row" (mouseenter)="ctxSub.set('classroom')">
+      <button type="button" role="menuitem" class="ctx-item" aria-haspopup="true">Classroom</button>
+      <span class="ctx-arrow">▶</span>
+      @if (ctxSub() === 'classroom') {
+        <div class="ctx-flyout" role="menu">
+          <button type="button" role="menuitem" class="ctx-item" (click)="menuSetRoom('')">No room</button>
+          @for (r of rooms(); track r) {
+            <button type="button" role="menuitem" class="ctx-item" (click)="menuSetRoom(r)">{{ r }}</button>
+          } @empty {
+            <span class="ctx-empty">No rooms yet. Add them under Timetable → Rooms.</span>
+          }
+          <div class="ctx-sep"></div>
+          <button type="button" role="menuitem" class="ctx-item" (click)="menuOpen('classroom')">Choose room…</button>
+        </div>
+      }
+    </div>
+    <div class="ctx-sep"></div>
+
+    <button type="button" role="menuitem" class="ctx-item" (click)="menuOpen('edit')" (mouseenter)="ctxSub.set(null)">Edit lesson</button>
+    <button type="button" role="menuitem" class="ctx-item" (click)="menuJumpTo('class')" (mouseenter)="ctxSub.set(null)">Lesson grid</button>
+
+    <div class="ctx-row" (mouseenter)="ctxSub.set('view')">
+      <button type="button" role="menuitem" class="ctx-item" aria-haspopup="true">View</button>
+      <span class="ctx-arrow">▶</span>
+      @if (ctxSub() === 'view') {
+        <div class="ctx-flyout" role="menu">
+          <button type="button" role="menuitem" class="ctx-item" (click)="menuSetView('class')">By class</button>
+          <button type="button" role="menuitem" class="ctx-item" (click)="menuSetView('teacher')">By teacher</button>
+        </div>
+      }
+    </div>
+
+    <div class="ctx-row" (mouseenter)="ctxSub.set('find')">
+      <button type="button" role="menuitem" class="ctx-item" aria-haspopup="true">Find:</button>
+      <span class="ctx-arrow">▶</span>
+      @if (ctxSub() === 'find') {
+        <div class="ctx-flyout" role="menu">
+          <button type="button" role="menuitem" class="ctx-item" (click)="menuJumpTo('class')">Class: {{ m.slot.className }}</button>
+          <button type="button" role="menuitem" class="ctx-item" (click)="menuJumpTo('teacher')">Teacher: {{ m.slot.teacherName }}</button>
+        </div>
+      }
+    </div>
+    <div class="ctx-sep"></div>
+
+    <div class="ctx-row" (mouseenter)="ctxSub.set('timeoff')">
+      <button type="button" role="menuitem" class="ctx-item" aria-haspopup="true">Time off</button>
+      <span class="ctx-arrow">▶</span>
+      @if (ctxSub() === 'timeoff') {
+        <div class="ctx-flyout" role="menu">
+          <span class="ctx-empty">Teacher absences are not recorded in the timetable yet.</span>
+        </div>
+      }
+    </div>
+
+    <div class="ctx-row" (mouseenter)="ctxSub.set(null)">
+      <button type="button" role="menuitem" class="ctx-item" (click)="menuOpen('test')">Test</button>
+      <span class="ctx-arrow">▶</span>
+    </div>
+    <div class="ctx-sep"></div>
+
+    <div class="ctx-row" (mouseenter)="ctxSub.set('quick')">
+      <button type="button" role="menuitem" class="ctx-item" aria-haspopup="true">Quick changes</button>
+      <span class="ctx-arrow">▶</span>
+      @if (ctxSub() === 'quick') {
+        <div class="ctx-flyout" role="menu">
+          <button type="button" role="menuitem" class="ctx-item" (click)="menuQuickMove(1)">Next free period</button>
+          <button type="button" role="menuitem" class="ctx-item" (click)="menuQuickMove(-1)">Previous free period</button>
+          <div class="ctx-sep"></div>
+          <button type="button" role="menuitem" class="ctx-item" (click)="menuOpen('quick')">Choose free period…</button>
+        </div>
+      }
+    </div>
+  </div>
+}
+
+@if (dialog(); as d) {
+  <div class="confirm-backdrop" (click)="closeDialog()" role="presentation">
+    <div class="confirm-box dialog-box" role="dialog" aria-modal="true" aria-labelledby="dlgTitle" (click)="$event.stopPropagation()">
+      <h3 id="dlgTitle">{{ dialogTitle(d.kind) }}</h3>
+      <p class="dlg-lesson">{{ d.slot.subjectName }} · {{ d.slot.className }} · {{ d.slot.teacherName }} — {{ dayLabel(d.slot.dayOfWeek) }}, {{ slotTime(d.slot) }}</p>
+
+      @switch (d.kind) {
+        @case ('remove') {
+          <p>This takes the lesson out of the timetable. The teacher and class become free in that period.</p>
+        }
+        @case ('delete-row') {
+          <p>
+            Delete {{ deleteRowTargets(d.slot).removable.length }} lesson{{ deleteRowTargets(d.slot).removable.length === 1 ? '' : 's' }} of
+            {{ d.slot.subjectName }} for {{ d.slot.className }} taught by {{ d.slot.teacherName }}.
+            @if (deleteRowTargets(d.slot).locked) {
+              {{ deleteRowTargets(d.slot).locked }} locked lesson{{ deleteRowTargets(d.slot).locked === 1 ? ' is' : 's are' }} kept.
+            }
+          </p>
+        }
+        @case ('edit') {
+          <div class="dlg-form">
+            <label>Day
+              <select [ngModel]="editDay()" (ngModelChange)="editDay.set(+$event)" name="editDay">
+                @for (day of days; track day.value) {
+                  <option [ngValue]="day.value">{{ day.label }}</option>
+                }
+              </select>
+            </label>
+            <label>Period
+              <select [ngModel]="editPeriodId()" (ngModelChange)="editPeriodId.set($event)" name="editPeriod">
+                @for (p of lessonPeriods(); track p.id) {
+                  <option [ngValue]="p.id">{{ periodNumberOf(p) }} · {{ formatPeriodRange(p) }}</option>
+                }
+              </select>
+            </label>
+            <label>Room
+              <select [ngModel]="editRoom()" (ngModelChange)="editRoom.set($event)" name="editRoom">
+                <option value="">No room</option>
+                @for (r of roomChoices(d.slot); track r) {
+                  <option [value]="r">{{ r }}</option>
+                }
+              </select>
+            </label>
+          </div>
+        }
+        @case ('classroom') {
+          <div class="dlg-form">
+            <label>Room
+              <select [ngModel]="editRoom()" (ngModelChange)="editRoom.set($event)" name="classRoom">
+                <option value="">No room</option>
+                @for (r of roomChoices(d.slot); track r) {
+                  <option [value]="r">{{ r }}</option>
+                }
+              </select>
+            </label>
+          </div>
+        }
+        @case ('test') {
+          <p>Each period of the week, checked for this lesson's teacher and class.</p>
+          <ul class="test-grid">
+            @for (row of testRows(d.slot); track row.label + row.day) {
+              <li [attr.data-kind]="row.kind" [attr.title]="row.msg">
+                <strong>{{ row.label }}</strong>
+                <span>{{ row.kind === 'ok' ? 'Free' : row.kind === 'self' ? 'Current' : row.kind === 'locked' ? 'Locked' : row.kind === 'teacher' ? 'Teacher clash' : 'Class clash' }}</span>
+              </li>
+            }
+          </ul>
+        }
+        @case ('quick') {
+          @if (quickOptions(d.slot).length) {
+            <p>Pick a free period to move this lesson to.</p>
+            <div class="quick-list">
+              @for (c of quickOptions(d.slot); track c.day + c.period.id) {
+                <button type="button" class="btn-outline" (click)="pickQuickSlot(c.day, c.period)">
+                  {{ dayLabel(c.day) }} · period {{ periodNumberOf(c.period) }}
+                </button>
+              }
+            </div>
+          } @else {
+            <p>There are no free periods for this lesson.</p>
+          }
+        }
+      }
+
+      <div class="confirm-actions">
+        @if (d.kind === 'test' || d.kind === 'quick') {
+          <button type="button" class="btn-outline" (click)="closeDialog()">Close</button>
+        } @else if (d.kind === 'remove' || d.kind === 'delete-row') {
+          <button type="button" class="btn-outline" (click)="closeDialog()" [disabled]="dialogBusy()">Cancel</button>
+          <button type="button" class="btn-danger" (click)="d.kind === 'remove' ? confirmRemove() : confirmDeleteRow()" [disabled]="dialogBusy()">
+            {{ dialogBusy() ? 'Saving…' : (d.kind === 'remove' ? 'Remove' : 'Delete') }}
+          </button>
+        } @else {
+          <button type="button" class="btn-outline" (click)="closeDialog()" [disabled]="dialogBusy()">Cancel</button>
+          <button type="button" class="btn-primary" (click)="d.kind === 'classroom' ? confirmClassroom() : confirmEdit()" [disabled]="dialogBusy()">
+            {{ dialogBusy() ? 'Saving…' : 'Save' }}
+          </button>
+        }
+      </div>
+    </div>
+  </div>
+}
 
 @if (pending(); as p) {
   <div class="confirm-backdrop" (click)="cancelPending()" role="presentation">

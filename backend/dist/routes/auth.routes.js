@@ -23,7 +23,21 @@ const student_portal_auth_service_1 = require("../services/student-portal-auth.s
 const gender_1 = require("../utils/gender");
 const tenant_context_1 = require("../config/tenant-context");
 const demo_accounts_1 = require("../config/demo-accounts");
+const two_factor_service_1 = require("../services/two-factor.service");
 const router = (0, express_1.Router)();
+/** Short-lived token proving the password step passed, before the TOTP/backup-code step. */
+function signTwoFactorChallenge(userId) {
+    return jsonwebtoken_1.default.sign({ userId, purpose: '2fa' }, env_1.env.jwt.secret, { expiresIn: '5m' });
+}
+function readTwoFactorChallenge(token) {
+    try {
+        const payload = jsonwebtoken_1.default.verify(token, env_1.env.jwt.secret);
+        return payload.purpose === '2fa' && payload.userId ? payload.userId : null;
+    }
+    catch {
+        return null;
+    }
+}
 function resolveUserGender(user) {
     return (user.staffProfile?.gender ??
         user.studentProfile?.gender ??
@@ -177,6 +191,13 @@ router.post('/login', async (req, res) => {
         user.lockedUntil = null;
         await userRepo.save(user);
         const fullUser = (await (0, role_permissions_service_1.loadUserWithRole)(user.id)) ?? user;
+        // Privileged accounts with 2FA enabled must complete a second step before any token is issued.
+        if ((0, two_factor_service_1.isTwoFactorEnabled)(fullUser)) {
+            return res.json({
+                twoFactorRequired: true,
+                challengeToken: signTwoFactorChallenge(fullUser.id),
+            });
+        }
         await issueAuthToken(fullUser, res);
     }
     catch (err) {
@@ -343,6 +364,149 @@ router.get('/password-policy', async (_req, res) => {
         requireNumber: policy.requireNumber,
         requireSpecialChar: policy.requireSpecialChar,
     });
+});
+// ── Two-factor authentication ────────────────────────────────
+/** Whether the signed-in account can use 2FA, and whether it is already on. */
+router.get('/2fa/status', auth_1.authenticate, async (req, res) => {
+    const user = await data_source_1.AppDataSource.getRepository(entities_1.User).findOne({ where: { id: req.user.userId } });
+    if (!user)
+        return res.status(404).json({ message: 'Account not found' });
+    res.json({
+        available: (0, two_factor_service_1.isTwoFactorAvailable)(user),
+        enabled: !!user.twoFactorEnabled,
+        enabledAt: user.twoFactorEnabledAt ?? null,
+        backupCodesRemaining: (user.twoFactorBackupCodes || []).length,
+    });
+});
+/** Start enrolment: returns a fresh secret plus a scannable QR code. */
+router.post('/2fa/setup', auth_1.authenticate, async (req, res) => {
+    const repo = data_source_1.AppDataSource.getRepository(entities_1.User);
+    const user = await repo.findOne({ where: { id: req.user.userId } });
+    if (!user)
+        return res.status(404).json({ message: 'Account not found' });
+    if (!(0, two_factor_service_1.isTwoFactorAvailable)(user)) {
+        return res.status(403).json({ message: 'Two-factor authentication is not available for this account' });
+    }
+    const enrollment = await (0, two_factor_service_1.startEnrollment)(user);
+    user.twoFactorPendingSecret = enrollment.secret;
+    await repo.save(user);
+    res.json({
+        secret: enrollment.secret,
+        otpauthUrl: enrollment.otpauthUrl,
+        qrDataUrl: enrollment.qrDataUrl,
+    });
+});
+/** Confirm enrolment with a generated code; returns the one-time backup codes. */
+router.post('/2fa/enable', auth_1.authenticate, async (req, res) => {
+    const code = String(req.body?.code || '').trim();
+    if (!code)
+        return res.status(400).json({ message: 'Enter the 6-digit code from your authenticator app' });
+    const repo = data_source_1.AppDataSource.getRepository(entities_1.User);
+    const user = await repo.findOne({ where: { id: req.user.userId } });
+    if (!user)
+        return res.status(404).json({ message: 'Account not found' });
+    if (!(0, two_factor_service_1.isTwoFactorAvailable)(user)) {
+        return res.status(403).json({ message: 'Two-factor authentication is not available for this account' });
+    }
+    const backupCodes = await (0, two_factor_service_1.confirmEnrollment)(user, code);
+    if (!backupCodes) {
+        return res.status(400).json({ message: 'That code is not valid. Check your authenticator app and try again.' });
+    }
+    await repo.save(user);
+    res.json({
+        message: 'Two-factor authentication is now on',
+        backupCodes,
+    });
+});
+/** Turn 2FA off. Requires the account password, and a code when one is available. */
+router.post('/2fa/disable', auth_1.authenticate, async (req, res) => {
+    const { password, code, backupCode } = req.body || {};
+    if (!password)
+        return res.status(400).json({ message: 'Enter your password to turn off two-factor authentication' });
+    const repo = data_source_1.AppDataSource.getRepository(entities_1.User);
+    const user = await repo.findOne({ where: { id: req.user.userId } });
+    if (!user)
+        return res.status(404).json({ message: 'Account not found' });
+    if (!(await bcryptjs_1.default.compare(String(password), user.passwordHash))) {
+        return res.status(401).json({ message: 'Incorrect password' });
+    }
+    if (user.twoFactorEnabled && user.twoFactorSecret) {
+        const ok = await (0, two_factor_service_1.verifyChallenge)(user, { code, backupCode });
+        if (!ok) {
+            return res.status(401).json({ message: 'Enter a valid authenticator or backup code to turn off two-factor authentication' });
+        }
+    }
+    (0, two_factor_service_1.revokeTwoFactor)(user);
+    await repo.save(user);
+    res.json({ message: 'Two-factor authentication is off' });
+});
+/** Replace the backup-code set (requires a valid authenticator code). */
+router.post('/2fa/backup-codes', auth_1.authenticate, async (req, res) => {
+    const code = String(req.body?.code || '').trim();
+    if (!code)
+        return res.status(400).json({ message: 'Enter a code from your authenticator app' });
+    const repo = data_source_1.AppDataSource.getRepository(entities_1.User);
+    const user = await repo.findOne({ where: { id: req.user.userId } });
+    if (!user)
+        return res.status(404).json({ message: 'Account not found' });
+    if (!user.twoFactorEnabled) {
+        return res.status(400).json({ message: 'Two-factor authentication is not enabled' });
+    }
+    const backupCodes = await (0, two_factor_service_1.regenerateBackupCodes)(user, code);
+    if (!backupCodes)
+        return res.status(401).json({ message: 'That code is not valid' });
+    await repo.save(user);
+    res.json({ backupCodes });
+});
+/** Second step of sign-in: exchange the password-step token plus a code for a session. */
+router.post('/2fa/challenge', async (req, res) => {
+    try {
+        const { challengeToken, code, backupCode } = req.body || {};
+        const userId = readTwoFactorChallenge(String(challengeToken || ''));
+        if (!userId) {
+            return res.status(401).json({
+                message: 'This sign-in attempt has expired. Please sign in again.',
+                restartLogin: true,
+            });
+        }
+        const repo = data_source_1.AppDataSource.getRepository(entities_1.User);
+        const user = await repo.findOne({ where: { id: userId } });
+        if (!user || !user.isActive || !(0, two_factor_service_1.isTwoFactorEnabled)(user)) {
+            return res.status(401).json({ message: 'Two-factor authentication is not active for this account', restartLogin: true });
+        }
+        if (user.lockedUntil && new Date() < new Date(user.lockedUntil)) {
+            return res.status(423).json({
+                message: `Account temporarily locked. Try again in ${formatLockoutRemaining(new Date(user.lockedUntil))}.`,
+            });
+        }
+        const policy = await (0, security_policy_service_1.getSecurityPolicy)();
+        if (!(await (0, two_factor_service_1.verifyChallenge)(user, { code, backupCode }))) {
+            user.failedLoginAttempts = (user.failedLoginAttempts || 0) + 1;
+            if (user.failedLoginAttempts >= policy.maxLoginAttempts) {
+                user.lockedUntil = new Date(Date.now() + policy.lockoutDurationMinutes * 60000);
+                user.failedLoginAttempts = 0;
+                await repo.save(user);
+                return res.status(423).json({
+                    message: `Too many failed attempts. Account locked for ${policy.lockoutDurationMinutes} minutes.`,
+                    lockedUntil: user.lockedUntil,
+                });
+            }
+            await repo.save(user);
+            const remaining = policy.maxLoginAttempts - user.failedLoginAttempts;
+            return res.status(401).json({
+                message: `Incorrect code. ${remaining} attempt${remaining === 1 ? '' : 's'} remaining.`,
+            });
+        }
+        user.failedLoginAttempts = 0;
+        user.lockedUntil = null;
+        await repo.save(user);
+        const fullUser = (await (0, role_permissions_service_1.loadUserWithRole)(user.id)) ?? user;
+        await issueAuthToken(fullUser, res);
+    }
+    catch (err) {
+        console.error('Two-factor challenge error:', err);
+        res.status(500).json({ message: 'Could not verify the code' });
+    }
 });
 router.post('/register', async (req, res) => {
     try {

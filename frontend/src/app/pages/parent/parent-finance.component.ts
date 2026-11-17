@@ -58,6 +58,28 @@ interface StatementData {
 
 type FinanceTab = 'statement' | 'invoices' | 'receipts';
 
+type PaynowMethod = 'ecocash' | 'onemoney' | 'visa';
+
+interface PaynowInitiateResponse {
+  intentId: string;
+  reference: string;
+  method: PaynowMethod;
+  browserUrl?: string;
+  pollUrl?: string;
+  instructions?: string;
+}
+
+interface PaynowStatusResponse {
+  reference: string;
+  status: 'pending' | 'processing' | 'paid' | 'failed' | 'cancelled' | string;
+  method: string;
+  amount: number;
+  paynowReference?: string;
+  paymentId?: string;
+  receiptId?: string;
+  receiptNumber?: string;
+}
+
 interface ReceiptRow {
   id: string;
   receiptNumber: string;
@@ -106,6 +128,24 @@ export class ParentFinanceComponent implements OnInit, OnDestroy {
   statementPdfPreviewUrl = signal<SafeResourceUrl | null>(null);
   toast = signal<{ type: 'success' | 'error'; msg: string } | null>(null);
 
+  // ── Online payments (Paynow) ──────────────────────────────
+  payNowOpen = signal(false);
+  payNowMethod = signal<PaynowMethod>('ecocash');
+  payNowAmount = signal<number | null>(null);
+  payNowPhone = signal('');
+  payNowEmail = signal('');
+  payNowInvoiceId = signal('');
+  payNowSubmitting = signal(false);
+  payNowInstructions = signal<string | null>(null);
+  payNowReference = signal<string | null>(null);
+
+  /** Banner shown after Paynow redirects the payer back to the portal. */
+  paynowReturn = signal<PaynowStatusResponse | null>(null);
+  paynowReturnChecking = signal(false);
+
+  private paynowPollTimer: ReturnType<typeof setTimeout> | null = null;
+  private currentPaynowReturn: string | null = null;
+
   private statementPdfObjectUrl: string | null = null;
 
   ngOnInit() {
@@ -123,6 +163,11 @@ export class ParentFinanceComponent implements OnInit, OnDestroy {
       if (fromQuery) {
         this.selectedStudentId = fromQuery;
         this.loadFinance();
+      }
+      const paynowRef = q.get('paynow');
+      if (paynowRef && paynowRef !== this.currentPaynowReturn) {
+        this.currentPaynowReturn = paynowRef;
+        this.watchPaynowReturn(paynowRef);
       }
     });
 
@@ -237,6 +282,7 @@ export class ParentFinanceComponent implements OnInit, OnDestroy {
   @HostListener('document:keydown.escape')
   onEscape() {
     if (this.statementPdfPreviewOpen()) this.closeStatementPdfPreview();
+    else if (this.payNowOpen()) this.closePayNow();
   }
 
   onStudentChange() {
@@ -277,6 +323,167 @@ export class ParentFinanceComponent implements OnInit, OnDestroy {
         this.showToast('error', e?.error?.message || 'Could not load receipts');
       },
     });
+  }
+
+  // ── Online payments (Paynow) ──────────────────────────────
+
+  /** Outstanding amount on the selected student's account (never negative). */
+  outstandingBalance(): number {
+    const stmt = this.statement();
+    if (!stmt) return 0;
+    return Math.max(0, Number(stmt.summary.balance) || 0);
+  }
+
+  /** Outstanding invoices that can be paid online. */
+  payableInvoices(): InvoiceRow[] {
+    const stmt = this.statement();
+    if (!stmt) return [];
+    return stmt.invoices.filter((inv) => this.invoiceBalance(inv) > 0);
+  }
+
+  payNowNeedsPhone(): boolean {
+    return this.payNowMethod() !== 'visa';
+  }
+
+  openPayNow(invoice?: InvoiceRow) {
+    this.payNowInvoiceId.set(invoice?.id || '');
+    this.payNowAmount.set(invoice ? this.invoiceBalance(invoice) : this.outstandingBalance());
+    this.payNowMethod.set('ecocash');
+    this.payNowInstructions.set(null);
+    this.payNowReference.set(null);
+    this.paynowReturn.set(null);
+    this.payNowOpen.set(true);
+  }
+
+  closePayNow() {
+    if (this.payNowSubmitting()) return;
+    this.payNowOpen.set(false);
+    this.payNowInstructions.set(null);
+  }
+
+  setPayNowAmount(value: string) {
+    const n = Number(value);
+    this.payNowAmount.set(value === '' || isNaN(n) ? null : n);
+  }
+
+  /** Choosing an invoice defaults the amount to what is owed on it. */
+  onPayNowInvoiceChange(invoiceId: string) {
+    this.payNowInvoiceId.set(invoiceId);
+    const inv = this.payableInvoices().find((i) => i.id === invoiceId);
+    this.payNowAmount.set(inv ? this.invoiceBalance(inv) : this.outstandingBalance());
+  }
+
+  submitPayNow() {
+    if (!this.selectedStudentId || this.payNowSubmitting()) return;
+
+    const amount = Number(this.payNowAmount()) || 0;
+    if (amount <= 0) {
+      this.showToast('error', 'Enter an amount greater than zero');
+      return;
+    }
+    if (this.payNowNeedsPhone() && !String(this.payNowPhone()).trim()) {
+      this.showToast('error', 'Enter the mobile number that will authorise this payment');
+      return;
+    }
+
+    this.payNowSubmitting.set(true);
+    this.api
+      .post<PaynowInitiateResponse>('/billing/payments/paynow/initiate', {
+        studentId: this.selectedStudentId,
+        invoiceId: this.payNowInvoiceId() || undefined,
+        amount,
+        method: this.payNowMethod(),
+        phone: this.payNowPhone() || undefined,
+        email: this.payNowEmail() || undefined,
+        label: this.payNowInvoiceId() ? 'School fees invoice' : 'School fees',
+      })
+      .subscribe({
+        next: (res) => {
+          this.payNowSubmitting.set(false);
+          this.payNowReference.set(res.reference);
+
+          if (res.browserUrl) {
+            // Card checkout: hand off to Paynow's secure page.
+            window.location.href = res.browserUrl;
+            return;
+          }
+
+          this.payNowInstructions.set(
+            res.instructions || 'Approve the payment prompt on your handset to complete this payment.',
+          );
+        },
+        error: (e) => {
+          this.payNowSubmitting.set(false);
+          this.showToast('error', e?.error?.message || 'Could not start the payment. Please try again.');
+        },
+      });
+  }
+
+  /** Manually re-check a mobile-money payment from the instructions panel. */
+  checkPayNowStatus() {
+    const ref = this.payNowReference();
+    if (!ref) return;
+    this.fetchPaynowStatus(ref).subscribe((res) => this.applyPaynowReturn(res));
+  }
+
+  /** Poll Paynow (via our API) after the payer is redirected back to the portal. */
+  private watchPaynowReturn(reference: string) {
+    this.paynowReturnChecking.set(true);
+    this.paynowReturn.set(null);
+    let attempts = 0;
+
+    const poll = () => {
+      this.fetchPaynowStatus(reference).subscribe({
+        next: (res) => {
+          this.applyPaynowReturn(res, attempts);
+          const settled = ['paid', 'failed', 'cancelled'].includes(res.status);
+          if (settled || attempts >= 20) {
+            this.paynowReturnChecking.set(false);
+            return;
+          }
+          attempts += 1;
+          this.paynowPollTimer = setTimeout(poll, 3000);
+        },
+        error: () => {
+          this.paynowReturnChecking.set(false);
+        },
+      });
+    };
+
+    poll();
+  }
+
+  private fetchPaynowStatus(reference: string) {
+    return this.api.get<PaynowStatusResponse>(`/billing/payments/paynow/${encodeURIComponent(reference)}`);
+  }
+
+  private applyPaynowReturn(res: PaynowStatusResponse, attempts = 0) {
+    this.paynowReturn.set(res);
+    if (res.status === 'paid') {
+      this.showToast('success', 'Payment received. A receipt has been issued.');
+      this.payNowOpen.set(false);
+      this.loadFinance();
+    } else if (res.status === 'failed' || res.status === 'cancelled') {
+      this.showToast('error', 'The payment was not completed.');
+    } else if (attempts === 0) {
+      // Still awaiting the mobile-money authorisation prompt.
+      this.showToast('success', 'Waiting for you to approve the payment on your phone…');
+    }
+  }
+
+  dismissPaynowReturn() {
+    this.paynowReturn.set(null);
+  }
+
+  paynowStatusLabel(status: string): string {
+    const map: Record<string, string> = {
+      pending: 'Awaiting approval',
+      processing: 'Processing',
+      paid: 'Paid',
+      failed: 'Failed',
+      cancelled: 'Cancelled',
+    };
+    return map[status] || status;
   }
 
   previewStatementPdf() {
@@ -340,6 +547,7 @@ export class ParentFinanceComponent implements OnInit, OnDestroy {
 
   ngOnDestroy() {
     this.closeStatementPdfPreview();
+    if (this.paynowPollTimer) clearTimeout(this.paynowPollTimer);
   }
 
   /** Stops the page behind the full-screen preview from scrolling. */

@@ -216,7 +216,7 @@
               </div>
               <div class="field">
                 <label>Merchant / Account ID</label>
-                <input [(ngModel)]="form.payment.merchantId" name="payMerchant" />
+                <input [(ngModel)]="form.payment.merchantId" name="payMerchant" placeholder="Paynow integration ID" />
               </div>
               <div class="field span-2">
                 <label>API Key / Integration Key</label>
@@ -224,13 +224,14 @@
                   type="password"
                   [(ngModel)]="form.payment.apiKey"
                   name="payKey"
-                  [placeholder]="form.payment.hasApiKey ? secretMask : 'Secret key'"
+                  [placeholder]="form.payment.hasApiKey ? secretMask : 'Paynow integration key'"
                   autocomplete="off"
                 />
               </div>
               <div class="field span-2">
-                <label>Return / Webhook URL</label>
-                <input [(ngModel)]="form.payment.webhookUrl" name="payWebhook" placeholder="https://your-school.com/api/payments/callback" />
+                <label>Result / Webhook URL</label>
+                <input [(ngModel)]="form.payment.webhookUrl" name="payWebhook" placeholder="https://your-api-host/webhooks/paynow" />
+                <small class="field-hint">Paynow results are delivered to this API automatically; no Paynow dashboard setup is needed.</small>
               </div>
             </div>
           </section>

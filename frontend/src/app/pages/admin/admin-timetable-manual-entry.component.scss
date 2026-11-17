@@ -3,102 +3,80 @@
 }
 
 .manual-page {
-  max-width: 1280px;
+  width: 100%;
+  max-width: none;
+  font-family: Arial, Helvetica, sans-serif;
+  color: #000;
 }
 
+/* Full-height grid when the master "All" view is shown. */
+.manual-page.all-mode .grid-wrap {
+  max-height: calc(100vh - 17rem);
+  min-height: 22rem;
+}
+
+/* ── Toast ── */
 .toast {
   position: fixed;
   top: 1rem;
   right: 1rem;
   z-index: 4000;
   max-width: min(32rem, 92vw);
-  padding: 0.85rem 1.25rem;
-  border-radius: 12px;
-  font-weight: 500;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
+  padding: 0.7rem 1rem;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
 
   &.success {
     background: #ecfdf5;
     color: #047857;
-    border: 1px solid #a7f3d0;
+    border: 1px solid #6ee7b7;
   }
 
   &.error {
     background: #fef2f2;
     color: #b91c1c;
-    border: 1px solid #fecaca;
+    border: 1px solid #fca5a5;
   }
 }
 
-.hero {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 1rem;
-  flex-wrap: wrap;
-  padding: 1rem 1.25rem;
-  margin-bottom: 1rem;
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-left: 4px solid #b08d3c;
-  border-radius: 12px;
-
-  h2 {
-    margin: 0 0 0.25rem;
-    font-family: 'Source Serif 4', Georgia, 'Times New Roman', serif;
-    color: #14213d;
-  }
-
-  p {
-    margin: 0;
-    color: #475569;
-    max-width: 46rem;
-    line-height: 1.5;
-  }
-}
-
-.hero-actions {
-  display: flex;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
-
+/* ── Buttons (used by state boxes and dialogs) ── */
 .btn-primary,
 .btn-outline,
 .btn-danger {
   display: inline-block;
-  border-radius: 10px;
+  border-radius: 3px;
   font-weight: 600;
   cursor: pointer;
-  padding: 0.5rem 1rem;
+  padding: 0.4rem 0.9rem;
   text-decoration: none;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
 
   &:disabled {
-    opacity: 0.55;
+    opacity: 0.5;
     cursor: not-allowed;
   }
 }
 
 .btn-primary {
-  border: none;
-  background: #14213d;
+  border: 1px solid #1e3a8a;
+  background: #2563eb;
   color: #fff;
 }
 
 .btn-outline {
-  border: 1px solid #cbd5e1;
+  border: 1px solid #9a9a9a;
   background: #fff;
-  color: #0f172a;
+  color: #1f1f1f;
 
   &:hover:not(:disabled) {
-    background: #f8fafc;
-    border-color: #14213d;
+    background: #e8f0fb;
   }
 }
 
 .btn-danger {
-  border: none;
+  border: 1px solid #92400e;
   background: #b45309;
   color: #fff;
 }
@@ -109,7 +87,7 @@
   padding: 0;
   font: inherit;
   font-weight: 600;
-  color: #4338ca;
+  color: #1d4ed8;
   text-decoration: underline;
   cursor: pointer;
 }
@@ -118,132 +96,558 @@
   padding: 2rem 1.25rem;
   text-align: center;
   background: #fff;
-  border: 1px dashed #cbd5e1;
-  border-radius: 12px;
+  border: 1px solid #b9b9b9;
   color: #475569;
 
   &.error {
-    border-color: #fecaca;
+    border-color: #fca5a5;
   }
 
   h3 {
     margin: 0 0 0.5rem;
-    color: #14213d;
+    color: #000;
   }
 }
 
-.toolbar {
+/* ── Application frame (ribbon + grid + status strip) ── */
+.asc {
+  background: #fff;
+  border: 1px solid #b9b9b9;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+}
+
+.ribbon-tabs {
   display: flex;
   align-items: flex-end;
-  gap: 1rem;
-  flex-wrap: wrap;
-  margin-bottom: 0.75rem;
+  gap: 2px;
+  padding: 4px 6px 0;
+  background: #f3f3f3;
+  border-bottom: 1px solid #c6c6c6;
 }
 
-.seg {
-  display: inline-flex;
-  border: 1px solid #cbd5e1;
-  border-radius: 10px;
-  overflow: hidden;
-  background: #fff;
+.ribbon-tab {
+  padding: 4px 14px 5px;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 4px 4px 0 0;
+  background: transparent;
+  font-size: 0.85rem;
+  color: #1f1f1f;
+  cursor: pointer;
 
-  button {
-    border: none;
-    background: transparent;
-    padding: 0.5rem 1rem;
-    font-weight: 600;
-    color: #334155;
-    cursor: pointer;
-
-    &.active {
-      background: #14213d;
-      color: #fff;
-    }
+  &.active {
+    background: #fff;
+    border-color: #c6c6c6;
+    font-weight: 700;
+    position: relative;
+    top: 1px;
   }
 }
 
-.picker {
+.ribbon {
+  display: flex;
+  align-items: stretch;
+  flex-wrap: wrap;
+  gap: 2px;
+  min-height: 4.4rem;
+  padding: 4px 6px;
+  background: #fff;
+  border-bottom: 1px solid #c6c6c6;
+}
+
+.ribbon-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ribbon-sep {
+  width: 1px;
+  margin: 4px 6px;
+  background: #d4d4d4;
+}
+
+.ribbon-btn {
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
-  min-width: 14rem;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-width: 4.6rem;
+  padding: 4px 8px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: transparent;
+  color: #1f1f1f;
+  font-size: 0.75rem;
+  text-align: center;
+  cursor: pointer;
 
-  span {
-    font-size: 0.72rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: #64748b;
+  svg {
+    width: 26px;
+    height: 26px;
   }
+
+  &:hover:not(:disabled) {
+    background: #e8f0fb;
+    border-color: #9fc0ea;
+  }
+
+  &.active {
+    background: #dce9fa;
+    border-color: #7ea8dc;
+  }
+
+  &:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+}
+
+.ribbon-badge {
+  display: inline-block;
+  min-width: 1.2rem;
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  background: #e5e5e5;
+  color: #333;
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1.25rem;
+  text-align: center;
+
+  &.bad {
+    background: #dc2626;
+    color: #fff;
+  }
+}
+
+.combo {
+  display: inline-flex;
 
   select {
-    padding: 0.5rem 0.65rem;
-    border: 1px solid #cbd5e1;
-    border-radius: 10px;
-    background: #fff;
-    color: #0f172a;
+    height: 2rem;
+    min-width: 13rem;
+    padding: 0 0.5rem;
+    border: 1px solid #7a7a7a;
+    border-radius: 2px;
+    background-color: #fff;
+    color: #000;
     font-size: 0.95rem;
+    font-weight: 600;
+    opacity: 1;
+  }
+
+  option {
+    background: #fff;
+    color: #000;
+    font-size: 0.95rem;
+    font-weight: 400;
   }
 }
 
-.stats {
+/* ── Right-click menu on lesson cards (classic desktop style) ── */
+.ctx-menu {
+  position: fixed;
+  z-index: 3500;
+  min-width: 12.5rem;
+  padding: 2px 0;
+  background: #fff;
+  border: 1px solid #8a8a8a;
+  box-shadow: 2px 3px 8px rgba(0, 0, 0, 0.25);
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 0.85rem;
+  color: #000;
+}
+
+.ctx-title {
+  padding: 0.35rem 0.8rem;
+  border-bottom: 1px solid #d4d4d4;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.ctx-sep {
+  height: 1px;
+  margin: 3px 0;
+  background: #d4d4d4;
+}
+
+.ctx-row {
+  position: relative;
   display: flex;
-  gap: 1rem;
-  flex-wrap: wrap;
-  margin-left: auto;
-  color: #475569;
-  font-size: 0.9rem;
+  align-items: center;
+}
 
-  strong {
-    color: #14213d;
+.ctx-row .ctx-item {
+  flex: 1;
+}
+
+.ctx-arrow {
+  padding-right: 0.6rem;
+  font-size: 0.6rem;
+  color: #444;
+}
+
+.ctx-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: 100%;
+  padding: 0.3rem 0.9rem 0.3rem 1.9rem;
+  border: none;
+  background: transparent;
+  color: #000;
+  font: inherit;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: #cfe3f8;
   }
 
-  .clash-count.bad,
-  .clash-count.bad strong {
-    color: #b91c1c;
+  &:disabled {
+    color: #8a8a8a;
+    cursor: default;
   }
 }
 
+.ctx-ico {
+  position: absolute;
+  left: 0.55rem;
+  font-size: 0.8rem;
+}
+
+.ctx-flyout {
+  position: absolute;
+  top: -3px;
+  left: 100%;
+  min-width: 11rem;
+  padding: 2px 0;
+  background: #fff;
+  border: 1px solid #8a8a8a;
+  box-shadow: 2px 3px 8px rgba(0, 0, 0, 0.25);
+  z-index: 1;
+}
+
+/* ── Grid ── */
+.grid-panel {
+  padding: 6px;
+  background: #fff;
+}
+
+.grid-wrap {
+  overflow: auto;
+  border: 1px solid #9d9d9d;
+}
+
+.mt-grid {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 0.7rem;
+  color: #000;
+  background: #dcdcdc;
+
+  &.busy {
+    opacity: 0.7;
+    pointer-events: none;
+  }
+
+  th,
+  td {
+    border: 1px solid #b0b0b0;
+    padding: 0;
+  }
+
+  th {
+    background: #f1f1f1;
+    font-weight: 400;
+    color: #000;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+
+    strong {
+      font-size: 0.72rem;
+      font-weight: 400;
+    }
+  }
+
+  th.corner {
+    width: 2.6rem;
+    background: #fff;
+    border-color: #b0b0b0;
+  }
+
+  th.day-head {
+    width: 2.6rem;
+    font-weight: 700;
+    background: #efefef;
+  }
+
+  th.break-head {
+    background: #e5e5e5;
+  }
+
+  .break-cell {
+    background: repeating-linear-gradient(45deg, #ececec, #ececec 4px, #dcdcdc 4px, #dcdcdc 8px);
+    text-align: center;
+    vertical-align: middle;
+  }
+
+  /* Rotated 90° clockwise, reading top to bottom. */
+  .break-vertical {
+    display: inline-block;
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    white-space: nowrap;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.25em;
+    color: #444;
+    padding: 0.4rem 0;
+  }
+}
+
+/* Master "All" grid: rows = classes/teachers, columns = days × periods. */
+.mt-grid.master {
+  /* Auto layout: each period column keeps a readable width and the wrapper scrolls sideways. */
+  table-layout: auto;
+  width: max-content;
+  min-width: 100%;
+
+  th.day-group {
+    height: 1.6rem;
+    background: #e4e4e4;
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 0.8rem;
+    letter-spacing: 0.14em;
+    text-transform: none;
+    border-left: 2px solid #6e6e6e;
+
+    &:first-of-type {
+      border-left: none;
+    }
+  }
+
+  th.row-label-head,
+  th.corner {
+    background: #fff;
+  }
+
+  th.period-head {
+    height: 1.35rem;
+    background: #f1f1f1;
+  }
+
+  th.row-label {
+    width: 2.6rem;
+    background: #efefef;
+    font-weight: 700;
+    font-size: 0.72rem;
+    padding: 0;
+  }
+
+  th.period-head,
+  td.cell {
+    width: 2.6rem;
+    min-width: 2.6rem;
+  }
+
+  td.cell {
+    height: 1.65rem;
+  }
+
+  td.cell.day-sep,
+  th.period-head.day-sep {
+    border-left: 2px solid #6e6e6e;
+  }
+}
+
+/* Single-entity grid keeps the same look with a taller row per day. */
+.mt-grid.single {
+  min-width: 52rem;
+
+  td.cell,
+  th.break-head {
+    min-width: 3.6rem;
+  }
+
+  td.cell {
+    height: 3.4rem;
+  }
+
+  th {
+    height: 1.5rem;
+  }
+}
+
+.cell {
+  height: 1.65rem;
+  padding: 0;
+  vertical-align: top;
+  background: #dedede;
+  border-color: #b0b0b0;
+  transition: background 0.1s;
+
+  &[data-state='ok'] {
+    background: #bdf3c8;
+    box-shadow: inset 0 0 0 2px #22a447;
+    cursor: pointer;
+  }
+
+  &[data-state='teacher'] {
+    background: #fde68a;
+    box-shadow: inset 0 0 0 2px #d97706;
+    cursor: pointer;
+  }
+
+  &[data-state='class'] {
+    background: #fecaca;
+    box-shadow: inset 0 0 0 2px #dc2626;
+    cursor: not-allowed;
+  }
+
+  &[data-state='self'] {
+    box-shadow: inset 0 0 0 2px #64748b;
+  }
+
+  &[data-state='locked'] {
+    cursor: not-allowed;
+  }
+
+  &.hover[data-state='ok'] {
+    background: #9be9b2;
+  }
+
+  &.hover[data-state='teacher'] {
+    background: #fcd34d;
+  }
+
+  &.hover[data-state='class'] {
+    background: #fca5a5;
+  }
+}
+
+.cell-inner {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 1.65rem;
+}
+
+/* Lesson cards fill their cell, as in the classic desktop timetable. */
+.mt-card {
+  position: relative;
+  flex: 1 1 0;
+  align-self: stretch;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 1.6rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 1px 2px;
+  color: #000;
+  text-align: center;
+  cursor: grab;
+  user-select: none;
+
+  & + .mt-card {
+    border-top: 1px solid rgba(0, 0, 0, 0.35);
+  }
+
+  &:focus-visible {
+    outline: 2px solid #1d4ed8;
+    outline-offset: -2px;
+  }
+
+  &.held {
+    outline: 2px solid #1d4ed8;
+    outline-offset: -2px;
+    opacity: 0.7;
+  }
+
+  &.locked {
+    cursor: not-allowed;
+  }
+
+  &.clash {
+    box-shadow: inset 0 0 0 2px #dc2626;
+  }
+
+  .card-main {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.78rem;
+    font-weight: 700;
+    line-height: 1.1;
+  }
+
+  .card-sub {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.6rem;
+    line-height: 1.1;
+  }
+
+}
+
+/* Master grid is dense: show the main line only, full details live in the tooltip. */
+.mt-grid.master .mt-card .card-sub {
+  display: none;
+}
+
+/* ── Status strip ── */
 .status-bar {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  gap: 1rem;
-  padding: 0.6rem 0.9rem;
-  margin-bottom: 0.5rem;
-  border-radius: 10px;
-  background: #f1f5f9;
-  border: 1px solid #e2e8f0;
-  color: #334155;
-  font-size: 0.92rem;
-  min-height: 2.6rem;
+  flex-wrap: wrap;
+  gap: 0.6rem 1rem;
+  padding: 0.45rem 0.7rem;
+  background: #f0f0f0;
+  border-top: 1px solid #c6c6c6;
+  color: #1f1f1f;
+  font-size: 0.8rem;
 
   &.holding {
-    background: #eef2ff;
-    border-color: #c7d2fe;
-    color: #312e81;
+    background: #e6edff;
+    color: #1e3a8a;
   }
+}
+
+.status-text {
+  flex: 1 1 18rem;
+  min-width: 0;
 }
 
 .legend {
   display: flex;
-  gap: 1rem;
+  gap: 0.8rem;
   flex-wrap: wrap;
-  margin-bottom: 0.75rem;
-  font-size: 0.85rem;
-  color: #475569;
+  font-size: 0.72rem;
+  color: #333;
 
   .dot {
     display: inline-block;
-    width: 0.9rem;
-    height: 0.9rem;
-    border-radius: 4px;
+    width: 0.8rem;
+    height: 0.8rem;
     vertical-align: -0.1rem;
     border: 2px solid transparent;
 
     &.ok {
-      background: #bbf7d0;
-      border-color: #22c55e;
+      background: #bdf3c8;
+      border-color: #22a447;
     }
 
     &.teacher {
@@ -263,225 +667,32 @@
   }
 }
 
-.grid-panel {
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-top: 3px solid #b08d3c;
-  border-radius: 12px;
-  padding: 0.9rem 1rem 1rem;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05), 0 8px 24px rgba(15, 23, 42, 0.06);
-}
-
-.grid-title {
-  margin: 0 0 0.6rem;
-  font-family: 'Source Serif 4', Georgia, 'Times New Roman', serif;
-  color: #14213d;
-}
-
-.grid-wrap {
-  overflow-x: auto;
-}
-
-.mt-grid {
-  width: 100%;
-  min-width: 52rem;
-  border-collapse: separate;
-  border-spacing: 4px;
-  table-layout: fixed;
-
-  &.busy {
-    opacity: 0.7;
-    pointer-events: none;
-  }
-
-  th {
-    font-weight: 600;
-    color: #e9edf7;
-    background: #14213d;
-    border-radius: 8px;
-    padding: 0.45rem 0.25rem;
-    text-align: center;
-
-    strong {
-      display: block;
-      font-size: 1rem;
-    }
-
-    small {
-      display: block;
-      font-size: 0.7rem;
-      font-weight: 400;
-      opacity: 0.8;
-    }
-
-    &.corner {
-      background: transparent;
-      width: 3.2rem;
-    }
-
-    &.day-head {
-      width: 3.2rem;
-    }
-
-    &.break-head {
-      width: 2.8rem;
-      background: #64748b;
-    }
-  }
-
-  .break-cell {
-    background: repeating-linear-gradient(45deg, #f1f5f9, #f1f5f9 6px, #e8edf3 6px, #e8edf3 12px);
-    border-radius: 8px;
-    text-align: center;
-    vertical-align: middle;
-    padding: 0;
-  }
-
-  /* Rotated 90° clockwise, reading top to bottom. */
-  .break-vertical {
-    display: inline-block;
-    writing-mode: vertical-rl;
-    text-orientation: mixed;
-    white-space: nowrap;
-    font-size: 0.85rem;
-    font-weight: 700;
-    letter-spacing: 0.2em;
-    color: #475569;
-    padding: 0.5rem 0;
-  }
-}
-
-.cell {
-  height: 4.6rem;
-  vertical-align: top;
-  padding: 3px;
-  background: #f8fafc;
-  border: 2px solid #e2e8f0;
-  border-radius: 8px;
-  transition: background 0.12s, border-color 0.12s;
-
-  &[data-state='ok'] {
-    background: #dcfce7;
-    border-color: #22c55e;
-    cursor: pointer;
-  }
-
-  &[data-state='teacher'] {
-    background: #fef3c7;
-    border-color: #d97706;
-    cursor: pointer;
-  }
-
-  &[data-state='class'] {
-    background: #fee2e2;
-    border-color: #dc2626;
-    cursor: not-allowed;
-  }
-
-  &[data-state='self'] {
-    border-style: dashed;
-    border-color: #94a3b8;
-  }
-
-  &[data-state='locked'] {
-    cursor: not-allowed;
-  }
-
-  &.hover[data-state='ok'] {
-    background: #bbf7d0;
-  }
-
-  &.hover[data-state='teacher'] {
-    background: #fde68a;
-  }
-
-  &.hover[data-state='class'] {
-    background: #fecaca;
-  }
-}
-
-.mt-card {
-  position: relative;
+.status-stats {
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.1rem;
-  min-height: 3.3rem;
-  padding: 0.25rem 0.3rem;
-  margin-bottom: 3px;
-  border: 2px solid transparent;
-  border-radius: 6px;
-  text-align: center;
-  cursor: grab;
-  user-select: none;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.2);
+  gap: 0.8rem;
+  flex-wrap: wrap;
+  font-size: 0.72rem;
+  color: #333;
 
-  &:focus-visible {
-    outline: 3px solid rgba(67, 56, 202, 0.5);
-    outline-offset: 1px;
+  strong {
+    color: #000;
   }
 
-  &.held {
-    outline: 3px solid #4338ca;
-    outline-offset: 1px;
-    opacity: 0.75;
-  }
-
-  &.locked {
-    cursor: not-allowed;
-  }
-
-  &.clash {
-    border-color: #dc2626;
-    box-shadow: 0 0 0 2px #fecaca;
-  }
-
-  .card-main {
-    font-weight: 700;
-    font-size: 0.95rem;
-    line-height: 1.1;
-  }
-
-  .card-sub {
-    font-size: 0.72rem;
-    opacity: 0.9;
-    line-height: 1.1;
-  }
-
-  .lock-btn {
-    position: absolute;
-    top: -2px;
-    right: -2px;
-    border: none;
-    background: rgba(255, 255, 255, 0.85);
-    border-radius: 50%;
-    width: 1.1rem;
-    height: 1.1rem;
-    font-size: 0.65rem;
-    line-height: 1;
-    padding: 0;
-    cursor: pointer;
-    opacity: 0;
-    transition: opacity 0.12s;
-  }
-
-  &:hover .lock-btn,
-  &:focus-within .lock-btn,
-  &.locked .lock-btn {
-    opacity: 1;
+  .clash-count.bad,
+  .clash-count.bad strong {
+    color: #b91c1c;
   }
 }
 
+/* ── Clash report ── */
 .clash-panel {
-  margin-top: 1rem;
+  margin-top: 0.75rem;
   background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
+  border: 1px solid #b9b9b9;
   overflow: hidden;
 
   &.has-clashes {
-    border-color: #fecaca;
+    border-color: #fca5a5;
   }
 }
 
@@ -490,21 +701,22 @@
   justify-content: space-between;
   align-items: center;
   width: 100%;
-  padding: 0.75rem 1rem;
+  padding: 0.6rem 0.9rem;
   border: none;
-  background: #f8fafc;
+  background: #f3f3f3;
   font-weight: 700;
-  color: #14213d;
+  font-size: 0.9rem;
+  color: #000;
   cursor: pointer;
 }
 
 .badge {
-  min-width: 1.6rem;
-  padding: 0.1rem 0.5rem;
+  min-width: 1.5rem;
+  padding: 0.05rem 0.5rem;
   border-radius: 999px;
   background: #dcfce7;
   color: #047857;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   text-align: center;
 
   &.bad {
@@ -515,8 +727,9 @@
 
 .ok-note {
   margin: 0;
-  padding: 0.85rem 1rem;
+  padding: 0.75rem 0.9rem;
   color: #047857;
+  font-size: 0.9rem;
 }
 
 .clash-list {
@@ -527,18 +740,18 @@
   overflow-y: auto;
 
   li + li {
-    border-top: 1px solid #f1f5f9;
+    border-top: 1px solid #f1f1f1;
   }
 
   button {
     display: block;
     width: 100%;
-    padding: 0.6rem 1rem;
+    padding: 0.5rem 0.9rem;
     border: none;
     background: transparent;
     text-align: left;
     color: #7f1d1d;
-    font-size: 0.9rem;
+    font-size: 0.85rem;
     cursor: pointer;
 
     &:hover {
@@ -547,6 +760,7 @@
   }
 }
 
+/* ── Clash dialog ── */
 .confirm-backdrop {
   position: fixed;
   inset: 0;
@@ -555,21 +769,20 @@
   align-items: center;
   justify-content: center;
   padding: 1rem;
-  background: rgba(15, 23, 42, 0.45);
+  background: rgba(15, 23, 42, 0.4);
 }
 
 .confirm-box {
   width: 100%;
   max-width: 30rem;
-  padding: 1.25rem;
+  padding: 1.1rem 1.25rem;
   background: #fff;
-  border-top: 3px solid #d97706;
-  border-radius: 14px;
-  box-shadow: 0 24px 48px rgba(15, 23, 42, 0.2);
+  border: 1px solid #9a9a9a;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.25);
 
   h3 {
     margin: 0 0 0.5rem;
-    color: #14213d;
+    color: #000;
   }
 
   p {
@@ -601,4 +814,144 @@
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
+}
+
+/* ── Context-menu dialogs ── */
+.dialog-box {
+  max-width: 34rem;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 0.9rem;
+}
+
+.dlg-lesson {
+  font-weight: 700;
+  color: #000 !important;
+}
+
+.dlg-form {
+  display: grid;
+  gap: 0.6rem;
+  margin-top: 0.5rem;
+
+  label {
+    display: grid;
+    gap: 0.2rem;
+    font-weight: 600;
+    color: #000;
+  }
+
+  select,
+  input {
+    height: 2rem;
+    padding: 0 0.5rem;
+    border: 1px solid #7a7a7a;
+    border-radius: 2px;
+    font-size: 0.95rem;
+    color: #000;
+    background: #fff;
+  }
+}
+
+.ctx-empty {
+  display: block;
+  padding: 0.3rem 0.9rem;
+  color: #555;
+  font-size: 0.8rem;
+  white-space: normal;
+  max-width: 14rem;
+}
+
+.test-grid {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(8rem, 1fr));
+  gap: 0.35rem;
+  max-height: 22rem;
+  overflow-y: auto;
+
+  li {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.4rem;
+    padding: 0.3rem 0.5rem;
+    border: 1px solid #94a3b8;
+    font-size: 0.8rem;
+    color: #000;
+
+    &[data-kind='ok'] {
+      background: #bdf3c8;
+      border-color: #22a447;
+    }
+
+    &[data-kind='self'] {
+      background: #e0e7ff;
+      border-color: #6366f1;
+    }
+
+    &[data-kind='locked'] {
+      background: #e5e7eb;
+    }
+
+    &[data-kind='teacher'] {
+      background: #fde68a;
+      border-color: #d97706;
+    }
+
+    &[data-kind='class'] {
+      background: #fecaca;
+      border-color: #dc2626;
+    }
+  }
+}
+
+.quick-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+  max-height: 20rem;
+  overflow-y: auto;
+
+  button {
+    font-size: 0.85rem;
+  }
+}
+
+/* Locked lessons: a short diagonal line cuts the bottom-right corner of the card (no lock icon). */
+.mt-card.locked::after {
+  content: '';
+  position: absolute;
+  right: 0.15rem;
+  bottom: 0.15rem;
+  width: 0.5rem;
+  height: 1px;
+  background: rgba(17, 24, 39, 0.45);
+  transform: rotate(-45deg);
+  transform-origin: center;
+  pointer-events: none;
+}
+
+/* Legend swatch with the same corner line. */
+.legend .dot.locked-line {
+  position: relative;
+  background: #fff;
+  border-color: #111827;
+
+  &::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    width: 0.35rem;
+    height: 1px;
+    background: rgba(17, 24, 39, 0.45);
+    transform: rotate(-45deg);
+    transform-origin: center;
+  }
+}
+
+.ribbon-sep-inner {
+  margin: 4px 2px;
 }

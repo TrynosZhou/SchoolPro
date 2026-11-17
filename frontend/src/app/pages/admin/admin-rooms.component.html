@@ -1,0 +1,126 @@
+<app-portal-layout portalTitle="Admin Portal" pageTitle="Rooms" [navSections]="adminNav">
+  <div class="rooms-page">
+    @if (toast(); as t) {
+      <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'" role="status">{{ t.msg }}</div>
+    }
+
+    <header class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">Timetable</p>
+        <h2>Master list of rooms</h2>
+        <p class="hero-sub">
+          Rooms listed here are the only ones that can be given to a lesson on the timetable. Renaming a room
+          updates every lesson that uses it.
+        </p>
+      </div>
+      <div class="kpi-grid">
+        <div class="kpi"><span>Rooms</span><strong>{{ rooms().length }}</strong><small>On the master list</small></div>
+        <div class="kpi"><span>Total capacity</span><strong>{{ totalCapacity() }}</strong><small>Seats across all rooms</small></div>
+      </div>
+    </header>
+
+    <section class="panel add-panel">
+      <div class="panel-head">
+        <div>
+          <h3>Add a room</h3>
+          <p class="panel-meta">Give each room a name, an optional short code and its seating capacity.</p>
+        </div>
+      </div>
+      <form class="add-form" (ngSubmit)="add()" #addForm="ngForm">
+        <label>
+          <span>Name</span>
+          <input type="text" name="name" [(ngModel)]="draft.name" maxlength="64" placeholder="e.g. Lab 1" required />
+        </label>
+        <label>
+          <span>Code</span>
+          <input type="text" name="code" [(ngModel)]="draft.code" maxlength="16" placeholder="e.g. LAB1" />
+        </label>
+        <label>
+          <span>Capacity</span>
+          <input type="number" name="capacity" [(ngModel)]="draft.capacity" min="1" max="1000" placeholder="Seats" />
+        </label>
+        <button type="submit" class="btn-primary" [disabled]="saving() || !draft.name.trim()">
+          {{ saving() ? 'Saving…' : 'Add room' }}
+        </button>
+      </form>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head list-head">
+        <h3>Rooms <span class="count">{{ rooms().length }}</span></h3>
+        <input
+          type="search"
+          class="search"
+          placeholder="Search rooms"
+          [ngModel]="search()"
+          (ngModelChange)="search.set($event)"
+          name="search"
+          aria-label="Search rooms"
+        />
+      </div>
+
+      @if (loading()) {
+        <p class="state"><span class="spinner"></span>Loading rooms…</p>
+      } @else if (loadError()) {
+        <div class="state error">
+          <p>Could not load rooms.</p>
+          <button type="button" class="btn-primary" (click)="load()">Try again</button>
+        </div>
+      } @else if (!rooms().length) {
+        <div class="state empty-state">
+          <span class="empty-icon">⌂</span>
+          <h3>No rooms yet</h3>
+          <p>Add the rooms your school uses above.</p>
+        </div>
+      } @else if (!filtered().length) {
+        <div class="state empty-state">
+          <span class="empty-icon">⌕</span>
+          <h3>No matches</h3>
+          <p>No rooms match “{{ search() }}”.</p>
+        </div>
+      } @else {
+        <div class="table-scroll">
+          <table class="rooms-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Code</th>
+                <th class="num">Capacity</th>
+                <th class="actions">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (r of filtered(); track r.id) {
+                <tr [class.editing]="editingId() === r.id">
+                  @if (editingId() === r.id) {
+                    <td><input type="text" name="editName" [(ngModel)]="editDraft.name" maxlength="64" aria-label="Room name" /></td>
+                    <td><input type="text" name="editCode" [(ngModel)]="editDraft.code" maxlength="16" aria-label="Room code" /></td>
+                    <td class="num"><input type="number" name="editCapacity" [(ngModel)]="editDraft.capacity" min="1" max="1000" aria-label="Capacity" /></td>
+                    <td class="actions">
+                      <button type="button" class="btn-outline" (click)="cancelEdit()" [disabled]="saving()">Cancel</button>
+                      <button type="button" class="btn-primary" (click)="saveEdit(r)" [disabled]="saving()">Save</button>
+                    </td>
+                  } @else {
+                    <td class="name">{{ r.name }}</td>
+                    <td>@if (r.code) { <span class="code-pill">{{ r.code }}</span> } @else { <span class="muted">—</span> }</td>
+                    <td class="num">{{ r.capacity ?? '—' }}</td>
+                    <td class="actions">
+                      @if (confirmDeleteId() === r.id) {
+                        <span class="confirm-text">Delete {{ r.name }}?</span>
+                        <button type="button" class="btn-outline" (click)="confirmDeleteId.set(null)">No</button>
+                        <button type="button" class="btn-danger" (click)="remove(r)">Yes, delete</button>
+                      } @else {
+                        <button type="button" class="btn-outline" (click)="startEdit(r)">Edit</button>
+                        <button type="button" class="btn-outline danger-text" (click)="askDelete(r)">Delete</button>
+                      }
+                    </td>
+                  }
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </section>
+  </div>
+</app-portal-layout>

@@ -8,6 +8,7 @@ const entities_1 = require("../entities");
 const typeorm_helpers_1 = require("../utils/typeorm-helpers");
 const email_service_1 = require("./email.service");
 const whatsapp_service_1 = require("./whatsapp.service");
+const push_service_1 = require("./push.service");
 const notification_settings_service_1 = require("./notification-settings.service");
 function normalizePhone(phone) {
     const trimmed = phone.trim();
@@ -77,6 +78,15 @@ async function deliver(channels, opts) {
         for (const userId of contact.userIds) {
             await notifRepo.save(notifRepo.create({ userId, title, message: body, type, metadata }));
         }
+    }
+    if (channels.push && contact.userIds.size) {
+        await (0, push_service_1.sendPushToUsers)([...contact.userIds], {
+            title,
+            body,
+            type,
+            url: '/notifications',
+            metadata,
+        }).catch((err) => console.error('[auto-notify] push failed:', err));
     }
     if (channels.email) {
         for (const email of contact.emails) {

@@ -16,7 +16,14 @@ export const ADMIN_NAV_SECTIONS: NavSection[] = [
       { label: 'Class Promotion', path: '/admin/class-promotion' },
     ],
   },
-  { heading: 'Parents', path: '/admin/parents', items: [] },
+  {
+    heading: 'Parents',
+    items: [
+      { label: 'Parent Directory', path: '/admin/parents' },
+      { label: 'Portal Accounts', path: '/admin/parent-accounts' },
+      { label: 'Family Links', path: '/admin/family-links' },
+    ],
+  },
   {
     heading: 'Staff',
     items: [
@@ -59,6 +66,7 @@ export const ADMIN_NAV_SECTIONS: NavSection[] = [
       { label: 'View Timetable', path: '/admin/timetable/view' },
       { label: 'Class Assignments', path: '/admin/class-assignments' },
       { label: 'Manual Generate', path: '/admin/timetable/manual-entry' },
+      { label: 'Rooms', path: '/admin/timetable/rooms' },
     ],
   },
   {
@@ -120,6 +128,44 @@ export const ADMIN_NAV_SECTIONS: NavSection[] = [
       { label: 'User Permissions', path: '/admin/user-permissions' },
       { label: 'Integrations', path: '/admin/integrations' },
       { label: 'Audit Trail', path: '/admin/audit-trail' },
+    ],
+  },
+
+  // WELFARE & OPERATIONS — phases 2-5 modules
+  {
+    heading: 'Student Welfare',
+    items: [
+      { label: 'Discipline & Health', path: '/admin/welfare' },
+      { label: 'Meetings', path: '/admin/meetings' },
+      { label: 'Consent Forms', path: '/admin/consents' },
+      { label: 'Surveys', path: '/admin/surveys' },
+    ],
+  },
+  {
+    heading: 'School Operations',
+    items: [
+      { label: 'Calendar & Events', path: '/admin/calendar' },
+      { label: 'Transport', path: '/admin/transport' },
+      { label: 'Boarding & Hostel', path: '/admin/hostel' },
+      { label: 'Library', path: '/admin/physical-library' },
+      { label: 'Gate & Visitors', path: '/admin/gate' },
+      { label: 'Co-Curricular', path: '/admin/activities' },
+    ],
+  },
+  {
+    heading: 'Modern Tools',
+    items: [
+      { label: 'ID Cards & QR', path: '/admin/id-cards' },
+      { label: 'Certificates & Letters', path: '/admin/documents' },
+      { label: 'Early Warning', path: '/admin/early-warning' },
+    ],
+  },
+  {
+    heading: 'Management',
+    items: [
+      { label: 'Inventory & Assets', path: '/admin/inventory' },
+      { label: 'Staff HR', path: '/admin/hr' },
+      { label: 'Alumni', path: '/admin/alumni' },
     ],
   },
 ];

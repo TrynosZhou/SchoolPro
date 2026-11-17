@@ -16,6 +16,7 @@ const teacher_load_pdf_1 = require("../utils/teacher-load.pdf");
 const typeorm_helpers_1 = require("../utils/typeorm-helpers");
 const timetable_move_service_1 = require("../services/timetable-move.service");
 const timetable_lock_service_1 = require("../services/timetable-lock.service");
+const teacher_lessons_service_1 = require("../services/teacher-lessons.service");
 const timetable_context_service_1 = require("../services/timetable-context.service");
 const teacher_allocation_service_1 = require("../services/teacher-allocation.service");
 const router = (0, express_1.Router)();
@@ -424,6 +425,21 @@ router.patch('/slots/:id/move', (0, auth_1.authorize)(...manageRoles), async (re
             return res.status(409).json({ message: e.message, conflict: e.conflict });
         }
         res.status(400).json({ message: e.message || 'Failed to move timetable slot.' });
+    }
+});
+/** Save the lessons edited in the "Edit lessons" modal for one teacher (atomic). */
+router.put('/teachers/:teacherId/lessons', (0, auth_1.authorize)(...manageRoles), async (req, res) => {
+    try {
+        const { lessons, ignoreConflicts } = req.body || {};
+        const result = await (0, teacher_lessons_service_1.saveTeacherLessons)(String(req.params.teacherId), {
+            lessons,
+            ignoreConflicts: ignoreConflicts === true || ignoreConflicts === 'true',
+        });
+        res.json(result);
+    }
+    catch (err) {
+        const e = err;
+        res.status(e.conflict ? 409 : 400).json({ message: e.message || 'Failed to save lessons.' });
     }
 });
 router.patch('/slots/lock-bulk', (0, auth_1.authorize)(...manageRoles), async (req, res) => {

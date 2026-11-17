@@ -761,6 +761,7 @@
   &[data-type='debit_note']        { background: #fbf4e6; border-color: #e6d3a8; color: var(--brass-ink); }
   &[data-type='credit_note']       { background: #eaf2f8; border-color: #bcd3e6; color: #1f4e79; }
   &[data-type='tuition_exemption'] { background: #f2eef7; border-color: #d5c9e4; color: #5a3d85; }
+  &[data-type='adjustment'] { background: #fefce8; border-color: #fde68a; color: #854d0e; }
 }
 
 .empty {

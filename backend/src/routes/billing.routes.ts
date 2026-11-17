@@ -1675,6 +1675,7 @@ router.get('/reports/student-ledger/export.pdf', authorize(...FINANCE_ROLES), as
     if (type === 'debit_note') return 'DEBIT NOTE';
     if (type === 'credit_note') return 'CREDIT NOTE';
     if (type === 'tuition_exemption') return 'EXEMPTION';
+    if (type === 'adjustment') return 'ADJUSTMENT';
     return 'OPENING';
   };
 
@@ -1817,14 +1818,16 @@ router.get('/reports/student-ledger/export.pdf', authorize(...FINANCE_ROLES), as
           : type === 'debit_note' ? '#ffedd5'
             : type === 'credit_note' ? '#dbeafe'
               : type === 'tuition_exemption' ? '#ede9fe'
-                : '#e0e7ff';
+                : type === 'adjustment' ? '#fef9c3'
+                  : '#e0e7ff';
     const pillText =
       type === 'payment' ? '#166534'
         : type === 'invoice' ? '#991b1b'
           : type === 'debit_note' ? '#c2410c'
             : type === 'credit_note' ? '#1d4ed8'
               : type === 'tuition_exemption' ? '#6d28d9'
-                : '#3730a3';
+                : type === 'adjustment' ? '#854d0e'
+                  : '#3730a3';
     doc.save();
     doc.roundedRect(pillX, pillY, pillW, 11, 5).fill(pillTone);
     doc.restore();

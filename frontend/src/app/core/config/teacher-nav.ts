@@ -74,6 +74,15 @@ export const TEACHER_NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
+    heading: 'Welfare & Events',
+    items: [
+      { label: 'Discipline & Health', path: '/teacher/welfare' },
+      { label: 'Meetings', path: '/teacher/meetings' },
+      { label: 'Calendar', path: '/teacher/calendar' },
+      { label: 'Surveys', path: '/teacher/surveys' },
+    ],
+  },
+  {
     heading: 'Account',
     items: [{ label: CHANGE_PASSWORD_LABEL, path: CHANGE_PASSWORD_PATHS.teacher, icon: CHANGE_PASSWORD_ICON }],
   },

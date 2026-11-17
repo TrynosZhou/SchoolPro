@@ -159,6 +159,16 @@ button:focus-visible {
     min-height: 34px;
     padding: 0.35rem 0.8rem;
   }
+
+  &--pay {
+    background: var(--settled);
+    border-color: var(--settled);
+    color: #ffffff;
+
+    &:hover:not(:disabled) {
+      filter: brightness(1.08);
+    }
+  }
 }
 
 // ── Letterhead ──────────────────────────────────────────────
@@ -786,6 +796,227 @@ button:focus-visible {
   }
 }
 
+// ── Online payments (Paynow) ────────────────────────────────
+.paynow-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 1rem 0 1.25rem;
+  padding: 0.9rem 1.1rem;
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--brass);
+  border-radius: 3px;
+  background: var(--wash);
+
+  &[data-status='paid'] { border-left-color: var(--settled); background: var(--settled-wash); }
+  &[data-status='failed'],
+  &[data-status='cancelled'] { border-left-color: var(--owing); background: var(--owing-wash); }
+
+  .pb-text {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+
+    strong { color: var(--heading); font-size: 0.92rem; }
+    span { color: var(--ink-2); font-size: 0.82rem; }
+    .pb-note { color: var(--ink-3); font-style: italic; }
+  }
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+  background: rgba(15, 29, 54, 0.55);
+  backdrop-filter: blur(2px);
+}
+
+.pay-modal {
+  width: 100%;
+  max-width: 460px;
+  max-height: 92dvh;
+  overflow-y: auto;
+  background: var(--paper);
+  border-top: 3px solid var(--brass);
+  border-radius: 4px;
+  box-shadow: 0 24px 60px rgba(15, 29, 54, 0.3);
+}
+
+.pay-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--rule);
+
+  h2 {
+    margin: 0;
+    font-family: var(--serif);
+    font-size: 1.45rem;
+    font-weight: 600;
+    color: var(--heading);
+  }
+}
+
+.pay-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+  padding: 1.25rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin: 0;
+  border: 0;
+  padding: 0;
+
+  .field-label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+  }
+
+  .optional {
+    font-weight: 400;
+    text-transform: none;
+    color: var(--ink-3);
+  }
+
+  .field-hint {
+    font-size: 0.78rem;
+    color: var(--ink-3);
+  }
+
+  input[type='number'],
+  input[type='tel'],
+  input[type='email'],
+  select {
+    width: 100%;
+    min-height: 42px;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--rule-strong);
+    border-radius: 3px;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: inherit;
+    font-size: 0.9rem;
+    box-sizing: border-box;
+
+    &:focus {
+      outline: none;
+      border-color: var(--brass);
+      box-shadow: var(--ring);
+    }
+  }
+}
+
+.field-money {
+  position: relative;
+  display: block;
+
+  .money-symbol {
+    position: absolute;
+    top: 50%;
+    left: 0.8rem;
+    transform: translateY(-50%);
+    color: var(--ink-3);
+    font-size: 0.95rem;
+  }
+
+  input { padding-left: 1.75rem; }
+}
+
+.pay-methods {
+  .method-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.6rem;
+  }
+}
+
+.method-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.7rem 0.65rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: 3px;
+  cursor: pointer;
+  transition: border-color 160ms ease, background 160ms ease;
+
+  input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .mc-name { font-size: 0.88rem; font-weight: 600; color: var(--heading); }
+  .mc-note { font-size: 0.72rem; color: var(--ink-3); }
+
+  &:hover { border-color: var(--brass-line); }
+
+  &.is-active {
+    border-color: var(--brass);
+    background: var(--brass-soft);
+  }
+}
+
+.pay-modal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  margin-top: 0.25rem;
+
+  .btn { flex: 1; min-width: 150px; }
+}
+
+.pay-secure-note {
+  margin: 0;
+  text-align: center;
+  font-size: 0.76rem;
+  color: var(--ink-3);
+}
+
+.pay-instructions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 2rem 1.5rem;
+  text-align: center;
+
+  .pi-lead { margin: 0; font-size: 1rem; font-weight: 600; color: var(--heading); }
+  .pi-body { margin: 0; font-size: 0.88rem; color: var(--ink-2); }
+  .pi-ref { margin: 0; font-size: 0.8rem; color: var(--ink-3); }
+
+  .pay-modal-actions { width: 100%; margin-top: 0.75rem; }
+}
+
+.pay-spinner {
+  width: 30px;
+  height: 30px;
+  border: 3px solid var(--rule);
+  border-top-color: var(--brass);
+  border-radius: 50%;
+  animation: pay-spin 0.8s linear infinite;
+}
+
+@keyframes pay-spin {
+  to { transform: rotate(360deg); }
+}
+
 // ── Small screens ───────────────────────────────────────────
 @media (max-width: 760px) {
   .summary-figures {
@@ -822,6 +1053,19 @@ button:focus-visible {
   :host .ledger-table {
     th:first-child, td:first-child { padding-left: 1.1rem; }
     th:last-child, td:last-child { padding-right: 1.1rem; }
+  }
+
+  .paynow-banner {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .pay-methods .method-grid { grid-template-columns: 1fr; }
+  .method-card {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.6rem;
   }
 }
 

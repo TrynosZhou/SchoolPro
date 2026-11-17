@@ -1778,11 +1778,13 @@ function serializeParent(parent: Parent) {
       className: g.student.schoolClass?.name ?? null,
       formName: g.student.form?.name ?? null,
       relationship: g.relationship || 'Parent',
+      isPrimary: Boolean(g.isPrimary),
     }));
 
   return {
     id: parent.id,
     userId: user.id,
+    username: user.username ?? null,
     firstName: user.firstName,
     lastName: user.lastName,
     email: user.email,
@@ -1934,6 +1936,40 @@ router.delete('/parents/:id/students/:studentId/unlink', authorize(UserRole.ADMI
   }
 
   guardian.parentId = null;
+  await guardianRepo.save(guardian);
+
+  const full = await loadParentRecord(parent.id);
+  res.json({ parent: serializeParent(full!) });
+});
+
+router.patch('/parents/:id/students/:studentId/link', authorize(UserRole.ADMIN), async (req: AuthRequest, res: Response) => {
+  const parent = await loadParentRecord(req.params.id);
+  if (!parent) return res.status(404).json({ message: 'Parent not found' });
+
+  const guardianRepo = AppDataSource.getRepository(Guardian);
+  const guardian = await guardianRepo.findOne({
+    where: { studentId: req.params.studentId, parentId: parent.id },
+  });
+  if (!guardian) {
+    return res.status(404).json({ message: 'This student is not linked to the parent' });
+  }
+
+  const { isPrimary, relationship } = req.body || {};
+  if (relationship !== undefined) {
+    guardian.relationship = String(relationship).trim() || 'Parent';
+  }
+  if (isPrimary !== undefined) {
+    guardian.isPrimary = Boolean(isPrimary);
+    // A student has one primary contact: clear the flag on every other guardian.
+    if (guardian.isPrimary) {
+      await guardianRepo
+        .createQueryBuilder()
+        .update(Guardian)
+        .set({ isPrimary: false })
+        .where('"studentId" = :studentId AND id != :id', { studentId: guardian.studentId, id: guardian.id })
+        .execute();
+    }
+  }
   await guardianRepo.save(guardian);
 
   const full = await loadParentRecord(parent.id);

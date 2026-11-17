@@ -1,5 +1,6 @@
 import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute } from '@angular/router';
 import { ApiService } from '../../core/services/api.service';
 import { AuthService } from '../../core/services/auth.service';
 import {
@@ -19,10 +20,14 @@ import {
 export class ChangePasswordFormComponent implements OnInit {
   private api = inject(ApiService);
   private auth = inject(AuthService);
+  private route = inject(ActivatedRoute);
 
   passwordPolicy = signal<PasswordPolicy | null>(null);
   submitting = signal(false);
   toast = signal<{ type: 'success' | 'error'; msg: string } | null>(null);
+
+  /** Set when the security policy sent the user here to pick a new password. */
+  readonly requiredNotice = signal<string | null>(null);
 
   currentPassword = '';
   newPassword = '';
@@ -39,6 +44,13 @@ export class ChangePasswordFormComponent implements OnInit {
   readonly isStudent = computed(() => this.auth.user()?.role === 'student');
 
   ngOnInit(): void {
+    const required = this.route.snapshot.queryParamMap.get('required');
+    if (required === 'expired') {
+      this.requiredNotice.set('Your password has expired. Choose a new one to continue.');
+    } else if (required) {
+      this.requiredNotice.set('Set your own password before continuing.');
+    }
+
     this.api.get<PasswordPolicy>('/auth/password-policy').subscribe({
       next: (policy) => this.passwordPolicy.set(policy),
       error: () => this.passwordPolicy.set(null),

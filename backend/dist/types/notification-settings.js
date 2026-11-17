@@ -5,12 +5,12 @@ exports.normalizeNotificationSettings = normalizeNotificationSettings;
 exports.DEFAULT_NOTIFICATION_SETTINGS = {
     absenceAlerts: {
         enabled: true,
-        channels: { inApp: true, email: true, sms: false },
+        channels: { inApp: true, email: true, sms: false, push: true },
         template: '{school}: {student} was marked absent on {date}. If this is unexpected, please contact the school office.',
     },
     feeReminders: {
         enabled: true,
-        channels: { inApp: true, email: true, sms: false },
+        channels: { inApp: true, email: true, sms: false, push: true },
         daysBefore: [7, 3, 1],
         overdueEnabled: true,
         overdueEveryDays: 7,
@@ -19,7 +19,7 @@ exports.DEFAULT_NOTIFICATION_SETTINGS = {
     },
     examResults: {
         enabled: true,
-        channels: { inApp: true, email: true, sms: true },
+        channels: { inApp: true, email: true, sms: true, push: true },
         template: '{school}: {exam} results for {term} have been published. Sign in to the portal to view the report card.',
     },
     dailyRunHour: 7,
@@ -32,6 +32,7 @@ function normalizeNotificationSettings(stored) {
         inApp: patch?.inApp ?? base.inApp,
         email: patch?.email ?? base.email,
         sms: patch?.sms ?? base.sms,
+        push: patch?.push ?? base.push,
     });
     return {
         absenceAlerts: {

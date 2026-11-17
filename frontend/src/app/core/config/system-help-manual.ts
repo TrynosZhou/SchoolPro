@@ -81,11 +81,37 @@ export const ADMIN_HELP_TOPICS: HelpTopic[] = [
     path: '/admin/parents',
     summary: 'Manage parent/guardian accounts linked to students.',
     steps: [
-      'Go to All Parents.',
+      'Open Parents, then Parent Directory.',
       'Search by name or linked student.',
       'Open a parent record to view guardians and contact details.',
     ],
     keywords: ['parent', 'parents', 'guardian', 'family'],
+  },
+  {
+    id: 'parent-accounts',
+    section: 'Parents',
+    title: 'Parent Portal Accounts',
+    path: '/admin/parent-accounts',
+    summary: 'See who can sign in to the parent portal, reset a login, or switch access on or off.',
+    steps: [
+      'Open Parents, then Portal Accounts.',
+      'Filter by active, deactivated or no children linked.',
+      'Use Reset login to set a new username or password, or Deactivate / Activate to change access.',
+    ],
+    keywords: ['parent', 'portal', 'login', 'password', 'reset', 'deactivate', 'account'],
+  },
+  {
+    id: 'family-links',
+    section: 'Parents',
+    title: 'Family Links',
+    path: '/admin/family-links',
+    summary: 'Link parents to their children, see siblings together and set the primary contact.',
+    steps: [
+      'Open Parents, then Family Links.',
+      'Use + Link child to search for a student and link them to the parent.',
+      'Use Make primary to choose the primary contact for a child, or Unlink to remove a link.',
+    ],
+    keywords: ['family', 'siblings', 'link', 'guardian', 'primary contact', 'child'],
   },
   {
     id: 'attendance-mark',

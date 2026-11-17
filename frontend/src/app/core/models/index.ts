@@ -27,6 +27,9 @@ export interface AuthResponse {
   /** Present on tokens issued by POST /auth/demo-login. */
   demo?: boolean;
   sessionTimeoutMinutes?: number;
+  /** Set when the security policy requires the user to pick a new password. */
+  passwordChangeRequired?: boolean;
+  passwordChangeReason?: 'first-login' | 'expired' | null;
 }
 
 export interface DemoAccount {
@@ -56,6 +59,7 @@ export interface Student {
   guardians?: Guardian[];
   address?: string;
   previousSchool?: string;
+  photoUrl?: string;
 }
 
 export interface Guardian {

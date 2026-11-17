@@ -300,14 +300,14 @@
                     [(ngModel)]="securityForm.passwordExpiryDays"
                     name="pwdExpiry"
                   />
-                  <small>0 = never expires (expiry enforcement coming soon)</small>
+                  <small>0 = never expires. Users are prompted to change their password once it is older than this.</small>
                 </div>
                 <div class="field toggle-field">
                   <label class="toggle block">
                     <input type="checkbox" [(ngModel)]="securityForm.requirePasswordChangeOnFirstLogin" name="pwdFirstLogin" />
                     <span>Require password change on first login</span>
                   </label>
-                  <small>Prompt new users to set their own password (coming soon)</small>
+                  <small>New users must set their own password the first time they sign in.</small>
                 </div>
               </div>
             </section>

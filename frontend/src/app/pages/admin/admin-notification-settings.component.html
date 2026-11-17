@@ -36,6 +36,7 @@
         <label class="check"><input type="checkbox" [(ngModel)]="m.absenceAlerts.channels.inApp" /> In-app</label>
         <label class="check"><input type="checkbox" [(ngModel)]="m.absenceAlerts.channels.email" /> Email</label>
         <label class="check"><input type="checkbox" [(ngModel)]="m.absenceAlerts.channels.sms" /> SMS</label>
+        <label class="check"><input type="checkbox" [(ngModel)]="m.absenceAlerts.channels.push" /> Browser push</label>
       </div>
       <label class="field-label">Message template</label>
       <textarea class="input" rows="2" [(ngModel)]="m.absenceAlerts.template"></textarea>
@@ -56,6 +57,7 @@
         <label class="check"><input type="checkbox" [(ngModel)]="m.feeReminders.channels.inApp" /> In-app</label>
         <label class="check"><input type="checkbox" [(ngModel)]="m.feeReminders.channels.email" /> Email</label>
         <label class="check"><input type="checkbox" [(ngModel)]="m.feeReminders.channels.sms" /> SMS</label>
+        <label class="check"><input type="checkbox" [(ngModel)]="m.feeReminders.channels.push" /> Browser push</label>
       </div>
 
       <div class="grid-2">
@@ -95,6 +97,7 @@
         <label class="check"><input type="checkbox" [(ngModel)]="m.examResults.channels.inApp" /> In-app</label>
         <label class="check"><input type="checkbox" [(ngModel)]="m.examResults.channels.email" /> Email</label>
         <label class="check"><input type="checkbox" [(ngModel)]="m.examResults.channels.sms" /> SMS</label>
+        <label class="check"><input type="checkbox" [(ngModel)]="m.examResults.channels.push" /> Browser push</label>
       </div>
       <label class="field-label">Message template</label>
       <textarea class="input" rows="2" [(ngModel)]="m.examResults.template"></textarea>

@@ -9,6 +9,7 @@ const auth_1 = require("../middleware/auth");
 const typeorm_helpers_1 = require("../utils/typeorm-helpers");
 const notification_settings_service_1 = require("../services/notification-settings.service");
 const auto_notify_service_1 = require("../services/auto-notify.service");
+const push_service_1 = require("../services/push.service");
 const bulk_messaging_service_1 = require("../services/bulk-messaging.service");
 const access_control_1 = require("../middleware/access-control");
 const audit_log_service_1 = require("../services/audit-log.service");
@@ -68,6 +69,65 @@ router.patch('/notification-settings', (0, auth_1.authorize)(enums_1.UserRole.AD
 router.post('/fee-reminders/run', (0, auth_1.authorize)(enums_1.UserRole.ADMIN), async (_req, res) => {
     const result = await (0, auto_notify_service_1.runFeeReminderJob)();
     res.json({ message: `Fee reminder scan complete. Sent ${result.reminders} reminder(s).`, ...result });
+});
+/* ------------------------------------------------------------------ */
+/* Browser / PWA push subscriptions (all authenticated users)         */
+/* ------------------------------------------------------------------ */
+/** Public VAPID key the browser needs to subscribe, plus whether push is live. */
+router.get('/push/public-key', async (_req, res) => {
+    res.json({ publicKey: (0, push_service_1.getVapidPublicKey)(), enabled: (0, push_service_1.isPushConfigured)() });
+});
+/** Register (or refresh) a browser push subscription for the current user. */
+router.post('/push/subscribe', async (req, res) => {
+    const endpoint = String(req.body?.endpoint || '').trim();
+    const p256dh = String(req.body?.keys?.p256dh || '').trim();
+    const auth = String(req.body?.keys?.auth || '').trim();
+    if (!endpoint || !p256dh || !auth) {
+        return res.status(400).json({ message: 'endpoint and keys.p256dh / keys.auth are required' });
+    }
+    const repo = data_source_1.AppDataSource.getRepository(entities_1.PushSubscription);
+    let sub = await repo.findOne({ where: { endpoint } });
+    if (sub) {
+        sub.userId = req.user.userId;
+        sub.p256dh = p256dh;
+        sub.auth = auth;
+        sub.userAgent = String(req.headers['user-agent'] || '').slice(0, 255) || sub.userAgent;
+    }
+    else {
+        sub = repo.create({
+            userId: req.user.userId,
+            endpoint,
+            p256dh,
+            auth,
+            userAgent: String(req.headers['user-agent'] || '').slice(0, 255) || undefined,
+        });
+    }
+    await repo.save(sub);
+    res.status(201).json({ ok: true });
+});
+/** Remove a browser push subscription (e.g. user disabled notifications). */
+router.post('/push/unsubscribe', async (req, res) => {
+    const endpoint = String(req.body?.endpoint || '').trim();
+    if (!endpoint)
+        return res.status(400).json({ message: 'endpoint is required' });
+    await data_source_1.AppDataSource.getRepository(entities_1.PushSubscription).delete({
+        endpoint,
+        userId: req.user.userId,
+    });
+    res.json({ ok: true });
+});
+/** Send a test push to the current user's devices. */
+router.post('/push/test', async (req, res) => {
+    const summary = await (0, push_service_1.sendPushToUsers)([req.user.userId], {
+        title: 'School Pro',
+        body: 'Browser notifications are now enabled on this device.',
+        type: 'push_test',
+        url: '/notifications',
+    });
+    if (summary.skipped) {
+        return res.status(503).json({ message: 'Push is not configured on the server.', ...summary });
+    }
+    res.json(summary);
 });
 /* ------------------------------------------------------------------ */
 /* Bulk SMS / email (admin/staff)                                     */

@@ -15,7 +15,6 @@ export interface TimetablePeriodInput {
   startTime: string;
   endTime: string;
   name?: string;
-  slotType?: 'lesson' | 'break';
 }
 
 export interface GenerateTimetableInput {
@@ -107,8 +106,6 @@ export interface GenerateTimetableResult {
 interface LessonPeriod {
   startTime: string;
   endTime: string;
-  /** True when a break / lunch (or any gap) separates this period from the previous lesson period. */
-  breakBefore?: boolean;
 }
 
 interface AssignmentTask {
@@ -151,58 +148,14 @@ function slotKey(prefix: string, id: string, day: number, startTime: string): st
   return `${prefix}:${id}:${day}:${startTime}`;
 }
 
-function timeToMinutes(time: string): number {
-  const [h, m] = String(time || '0:0').split(':').map(Number);
-  return (h || 0) * 60 + (m || 0);
-}
-
 function normalizePeriods(periods: TimetablePeriodInput[]): LessonPeriod[] {
-  const sorted = periods
+  return periods
     .map((p) => ({
       startTime: String(p.startTime || '').trim(),
       endTime: String(p.endTime || '').trim(),
-      isBreak: p.slotType === 'break',
     }))
     .filter((p) => p.startTime && p.endTime)
     .sort((a, b) => a.startTime.localeCompare(b.startTime));
-
-  // Lesson periods only, but each remembers whether a break / lunch (or a time gap) sits before it,
-  // so a double / triple lesson is never placed across a break.
-  const lessons: LessonPeriod[] = [];
-  let breakSeen = false;
-  for (const p of sorted) {
-    if (p.isBreak) {
-      breakSeen = true;
-      continue;
-    }
-    const prev = lessons[lessons.length - 1];
-    const gap = !!prev && timeToMinutes(p.startTime) > timeToMinutes(prev.endTime);
-    lessons.push({
-      startTime: p.startTime,
-      endTime: p.endTime,
-      breakBefore: !!prev && (breakSeen || gap),
-    });
-    breakSeen = false;
-  }
-  return lessons;
-}
-
-/** A multi-period lesson can only start at `periodIndex` if no break / lunch falls inside the block. */
-function blockFitsWithoutBreak(periods: LessonPeriod[], periodIndex: number, blockSize: number): boolean {
-  for (let i = 1; i < blockSize; i += 1) {
-    if (periods[periodIndex + i]?.breakBefore) return false;
-  }
-  return true;
-}
-
-function longestUnbrokenRun(periods: LessonPeriod[]): number {
-  let best = 0;
-  let run = 0;
-  for (const p of periods) {
-    run = p.breakBefore ? 1 : run + 1;
-    if (run > best) best = run;
-  }
-  return best;
 }
 
 function canPlaceBlock(
@@ -213,7 +166,6 @@ function canPlaceBlock(
   occupied: Set<string>,
 ): boolean {
   if (periodIndex < 0 || periodIndex + task.blockSize > periods.length) return false;
-  if (!blockFitsWithoutBreak(periods, periodIndex, task.blockSize)) return false;
   for (let i = 0; i < task.blockSize; i += 1) {
     const p = periods[periodIndex + i];
     const ck = slotKey('c', task.classId, day, p.startTime);
@@ -428,9 +380,6 @@ function explainFailure(
   }
   if (cLoad > weekCapacity) {
     return `${task.className} has ${cLoad} periods/week assigned but only ${weekCapacity} lesson slots exist. Reduce the class's weekly periods or add periods.`;
-  }
-  if (task.blockSize > 1 && task.blockSize <= periods.length && task.blockSize > longestUnbrokenRun(periods)) {
-    return `${task.subjectName} uses ${task.blockSize}-period lessons but no ${task.blockSize} lesson periods in a row exist without a break or lunch in between. Use shorter lessons or change the periods.`;
   }
   if (task.blockSize > periods.length) {
     return `${task.subjectName} uses ${task.blockSize}-period lessons but only ${periods.length} lesson periods exist per day.`;
