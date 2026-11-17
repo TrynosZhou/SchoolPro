@@ -69,6 +69,9 @@ import { VirtualClass } from './VirtualClass';
 import { ClassRecording } from './ClassRecording';
 import { LibraryResource } from './LibraryResource';
 import { LibraryBookmark } from './LibraryBookmark';
+import { PaymentIntent } from './PaymentIntent';
+import { PushSubscription } from './PushSubscription';
+import { Room } from './Room';
 
 export const entities = [
   User,
@@ -142,6 +145,9 @@ export const entities = [
   ClassRecording,
   LibraryResource,
   LibraryBookmark,
+  PaymentIntent,
+  PushSubscription,
+  Room,
 ];
 
 export * from './enums';
@@ -217,5 +223,8 @@ export {
   ClassRecording,
   LibraryResource,
   LibraryBookmark,
+  PaymentIntent,
+  PushSubscription,
+  Room,
 };
 
