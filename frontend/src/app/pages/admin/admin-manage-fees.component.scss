@@ -549,17 +549,6 @@
   width: 100%;
   max-width: 26rem;
 
-  .search-icon {
-    position: absolute;
-    left: 0.85rem;
-    top: 50%;
-    z-index: 1;
-    display: inline-flex;
-    transform: translateY(-50%);
-    color: var(--brass-ink, #7a5a1f);
-    pointer-events: none;
-  }
-
   .search-input {
     width: 100%;
     min-height: 2.6rem;

@@ -4,6 +4,23 @@
       <div class="toast" role="status" aria-live="polite" [class.success]="toastMsg.type === 'success'" [class.error]="toastMsg.type === 'error'">{{ toastMsg.msg }}</div>
     }
 
+    @if (registeredStudent(); as rs) {
+      <div class="reg-success-backdrop" (click)="registeredStudent.set(null)">
+        <div class="reg-success-card" role="dialog" aria-modal="true" (click)="$event.stopPropagation()">
+          <div class="success-icon">✓</div>
+          <h3>Registration successful</h3>
+          <p class="reg-name">{{ rs.name }}</p>
+          <p class="reg-id">{{ rs.admissionNumber }}</p>
+          @if (rs.invoiceInfo) { <p class="reg-note">{{ rs.invoiceInfo }}</p> }
+          <div class="reg-actions">
+            <a routerLink="/admin/payment" class="btn-primary">Record payment</a>
+            <a routerLink="/admin/enrollment" class="btn-ghost">Enroll in a class</a>
+            <button type="button" class="btn-ghost" (click)="registeredStudent.set(null)">Dismiss</button>
+          </div>
+        </div>
+      </div>
+    }
+
     <header class="hero">
       <div class="hero-copy">
         <p class="eyebrow">{{ 'students.eyebrow' | t }}</p>
@@ -542,7 +559,9 @@
 <ng-template #studentFields>
   <div class="section-title">
     <h3>Student details</h3>
-    <p>{{ selectedFormHint() }}</p>
+    @if (selectedFormHint()) {
+      <p>{{ selectedFormHint() }}</p>
+    }
   </div>
   <div class="form-grid">
     <div class="field">

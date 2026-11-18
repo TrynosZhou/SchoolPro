@@ -9,7 +9,8 @@ export type StorageFolder =
   | 'lms-submissions'
   | 'lesson-content'
   | 'library'
-  | 'class-recordings';
+  | 'class-recordings'
+  | 'student-photos';
 
 export interface StoredObject {
   key: string;

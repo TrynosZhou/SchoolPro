@@ -650,9 +650,8 @@
   }
 
   // ── Refinements found in visual review ──────────────────────
-  // global form-control padding is !important, so keep room for the icon
+  // global form-control padding is !important, so keep room for the clear (×) button
   .search-wrap input.search-input[type='search'] {
-    padding-left: 2.5rem !important;
     padding-right: 2.25rem !important;
   }
 

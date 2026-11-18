@@ -719,13 +719,6 @@ select {
   background-position: right 0.8rem center;
 }
 
-input[type='search'] {
-  padding-left: 2.6rem;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%237a5a1f' stroke-width='2.2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='M20 20l-3.5-3.5'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: 0.85rem center;
-}
-
 input[type='file'] {
   padding: 0.55rem;
   min-height: 2.75rem;

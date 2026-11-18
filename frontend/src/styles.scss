@@ -646,3 +646,10 @@ body label,
 body .form-grid label {
   font-size: 0.82rem !important;
 }
+
+/* Search boxes carry no magnifier icon. Safari/iOS draws one natively on
+   input[type=search]; hide it. (The native clear button is left alone.) */
+input[type='search']::-webkit-search-decoration {
+  -webkit-appearance: none;
+  display: none;
+}

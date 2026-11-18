@@ -200,6 +200,8 @@ export class AdminStaffComponent implements OnInit {
     lessonLength: 'single' as LessonLength,
   };
 
+  registeredStaff = signal<{ name: string; employeeNumber: string; role: string; email: string } | null>(null);
+
   newStaff = {
     title: '' as string,
     gender: '' as string,
@@ -715,10 +717,16 @@ export class AdminStaffComponent implements OnInit {
       return;
     }
     this.submitting.set(true);
+    const submitted = { ...this.newStaff };
     this.api.post<StaffMember>('/admin/staff', this.newStaff).subscribe({
-      next: () => {
+      next: (created) => {
         this.submitting.set(false);
-        this.showToast('success', 'Staff member added');
+        this.registeredStaff.set({
+          name: `${submitted.firstName} ${submitted.lastName}`,
+          employeeNumber: created?.employeeNumber || this.nextEmployeeId(),
+          role: String(submitted.role || ''),
+          email: submitted.email,
+        });
         this.closeRegister();
         this.loadStaff();
       },
@@ -750,7 +758,7 @@ export class AdminStaffComponent implements OnInit {
     if (this.newStaff.role === 'admin') {
       return 'Administrator account selected. This role can manage operations and records.';
     }
-    return 'Teacher account selected. This role is focused on academics and class workflows.';
+    return '';
   }
 
   toggleInitialPasswordVisibility(): void {

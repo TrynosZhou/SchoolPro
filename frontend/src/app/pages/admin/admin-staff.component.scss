@@ -234,15 +234,6 @@
   }
 }
 
-.search-icon {
-  position: absolute;
-  left: 0.75rem;
-  top: 50%;
-  transform: translateY(-50%);
-  opacity: 0.5;
-  pointer-events: none;
-}
-
 .search-input {
   width: 100%;
   padding: 0.6rem 2rem 0.6rem 2.25rem;
@@ -1929,4 +1920,47 @@ $list-cols: 40px 7.5rem 1.4fr 6.5rem 1fr 1.2fr 5.5rem 6.5rem;
 .dbl-name {
   cursor: pointer;
   user-select: none;
+}
+
+.reg-success-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+}
+
+.reg-success-card {
+  width: min(24rem, 100%);
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 1.5rem;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  align-items: center;
+  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.2);
+
+  .success-icon {
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 999px;
+    background: #dcfce7;
+    color: #15803d;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+  }
+
+  h3 { margin: 0; color: #0f172a; }
+  .reg-name { margin: 0; font-weight: 700; color: #0f172a; }
+  .reg-id { margin: 0; font-size: 1.35rem; font-weight: 700; color: #15803d; }
+  .reg-note { margin: 0; color: #64748b; font-size: 0.9rem; }
+  .reg-actions { display: flex; flex-direction: column; gap: 0.4rem; width: 100%; margin-top: 0.4rem; }
 }

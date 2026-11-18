@@ -727,20 +727,6 @@ $card-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
   &.compact { margin-bottom: 0.75rem; }
 }
 
-.search-icon {
-  position: absolute;
-  left: 0.7rem;
-  display: flex;
-  align-items: center;
-  color: $muted;
-  pointer-events: none;
-
-  svg {
-    width: 16px;
-    height: 16px;
-  }
-}
-
 .search-input {
   width: 100%;
   padding: 0.6rem 2.25rem 0.6rem 2.25rem;

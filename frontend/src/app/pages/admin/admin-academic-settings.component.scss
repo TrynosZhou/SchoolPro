@@ -1405,19 +1405,10 @@ tr.row-completion td {
   flex: 0 1 22rem;
   min-width: 12rem;
 
-  svg {
-    position: absolute;
-    left: 0.8rem;
-    top: 50%;
-    transform: translateY(-50%);
-    color: var(--sj-muted);
-    pointer-events: none;
-  }
-
   input {
     width: 100%;
     height: 2.4rem;
-    padding: 0 0.85rem 0 2.35rem;
+    padding: 0 0.85rem;
     font: inherit;
     font-size: 0.86rem;
     color: var(--sj-ink);

@@ -4,6 +4,21 @@
       <div class="toast" [class.success]="t.type === 'success'" [class.error]="t.type === 'error'">{{ t.msg }}</div>
     }
 
+    @if (registeredStaff(); as rs) {
+      <div class="reg-success-backdrop" (click)="registeredStaff.set(null)">
+        <div class="reg-success-card" role="dialog" aria-modal="true" (click)="$event.stopPropagation()">
+          <div class="success-icon">✓</div>
+          <h3>Registration successful</h3>
+          <p class="reg-name">{{ rs.name }}</p>
+          <p class="reg-id">{{ rs.employeeNumber }}</p>
+          <p class="reg-note">{{ rs.role }} · {{ rs.email }}</p>
+          <div class="reg-actions">
+            <button type="button" class="btn-primary" (click)="registeredStaff.set(null)">Done</button>
+          </div>
+        </div>
+      </div>
+    }
+
     <header class="hero">
       <div class="hero-copy">
         <p class="eyebrow">Human Resources</p>
@@ -458,7 +473,9 @@
 
       <div class="section-title">
         <h3>Staff details</h3>
-        <p>{{ roleHint() }} Default password is <code>Teacher123!</code> if left blank.</p>
+        @if (roleHint()) {
+          <p>{{ roleHint() }}</p>
+        }
       </div>
 
       <div class="form-grid drawer-form-grid">

@@ -227,21 +227,6 @@
   min-width: min(100%, 220px);
 }
 
-.search-icon {
-  position: absolute;
-  left: 0.85rem;
-  top: 50%;
-  transform: translateY(-50%);
-  display: inline-flex;
-  color: #64748b;
-  pointer-events: none;
-
-  svg {
-    width: 16px;
-    height: 16px;
-  }
-}
-
 .search-input {
   width: 100%;
   border: 1px solid #cbd5e1;

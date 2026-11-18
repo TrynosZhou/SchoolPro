@@ -69,24 +69,6 @@ export class User {
   @Column({ default: false })
   portalPasswordCustomized!: boolean;
 
-  /** Two-factor authentication (TOTP) — see services/two-factor.service.ts. */
-  @Column({ default: false })
-  twoFactorEnabled!: boolean;
-
-  @Column({ type: 'varchar', nullable: true })
-  twoFactorSecret?: string | null;
-
-  /** Secret generated during enrolment; promoted to twoFactorSecret once the first code is verified. */
-  @Column({ type: 'varchar', nullable: true })
-  twoFactorPendingSecret?: string | null;
-
-  /** Bcrypt hashes of unused one-time backup codes. */
-  @Column({ type: 'jsonb', nullable: true })
-  twoFactorBackupCodes?: string[] | null;
-
-  @Column({ type: 'timestamptz', nullable: true })
-  twoFactorEnabledAt?: Date | null;
-
   @OneToOne(() => Student, (s) => s.user)
   studentProfile?: Student;
 

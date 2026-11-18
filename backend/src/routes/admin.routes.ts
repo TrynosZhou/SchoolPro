@@ -46,6 +46,8 @@ import fs from 'fs';
 import { ensureUploadDirs } from '../utils/pdf';
 import { resolveParentGender } from '../utils/gender';
 import { SCHOOL_READ_ROLES } from '../config/portal-roles';
+import { blockInDemo } from '../middleware/demo-guard.middleware';
+import { logAudit } from '../services/audit-log.service';
 
 const router = Router();
 router.use(authenticate);
@@ -267,6 +269,134 @@ router.post('/settings/test-whatsapp', authorize(UserRole.ADMIN), async (req, re
   if (!ok) return res.status(400).json({ message: 'WhatsApp not configured or send failed. Check Integrations settings.' });
   res.json({ sent: true });
 });
+
+/**
+ * Tables that survive "Clear All Data": school configuration the app needs to
+ * run (profile, roles, chart of accounts, templates, exam types) and the audit
+ * trail. `users` is not kept here; admin accounts are backed up and restored.
+ */
+const CLEAR_DATA_KEEP_TABLES = new Set([
+  'school_settings',
+  'school_roles',
+  'chart_of_accounts',
+  'report_templates',
+  'exam_types',
+  'audit_logs',
+]);
+
+/**
+ * Wipes demo/test school data so real records can be captured. Runs in a single
+ * transaction: if anything fails, nothing is deleted. Admin accounts are copied
+ * aside, the tables are truncated, then the admin accounts are put back. Non-admin
+ * accounts are removed. Requires the body to carry the exact word DELETE
+ * (re-checked here, not only in the UI).
+ */
+router.post(
+  '/settings/clear-all-data',
+  authorize(UserRole.ADMIN),
+  blockInDemo,
+  async (req: AuthRequest, res: Response) => {
+    if (String(req.body?.confirmation ?? '').trim() !== 'DELETE') {
+      return res.status(400).json({ message: 'Type DELETE to confirm clearing all school data.' });
+    }
+
+    const tablesToClear = AppDataSource.entityMetadatas
+      .map((meta) => meta.tableName)
+      .filter((name) => !CLEAR_DATA_KEEP_TABLES.has(name));
+
+    // Admin foreign keys that point at tables being cleared (e.g. a linked staff
+    // or parent record) must be blanked, or the restored admin rows would point
+    // at rows that no longer exist. Links to kept tables (e.g. school_roles) stay.
+    const clearedFkColumns = AppDataSource.getMetadata(User)
+      .relations.filter(
+        (r) => r.isOwner && r.joinColumns.length > 0 && !CLEAR_DATA_KEEP_TABLES.has(r.inverseEntityMetadata.tableName),
+      )
+      .flatMap((r) => r.joinColumns.map((j) => j.databaseName));
+
+    let totalUsers = 0;
+    let adminsKept = 0;
+    let alsoCleared: string[] = [];
+    try {
+    await AppDataSource.transaction(async (manager) => {
+      const [{ count }] = await manager.query('SELECT COUNT(*)::int AS count FROM "users"');
+      totalUsers = Number(count);
+
+      // Any table that holds a foreign key into the wipe list must be wiped too,
+      // or PostgreSQL refuses the TRUNCATE. Find those from the live database
+      // catalogue (this also catches references not declared in the entities),
+      // and repeat until nothing new is found. Protected tables are never wiped:
+      // if one references school data, stop and name it.
+      const clearSet = new Set(tablesToClear);
+      for (let pass = 0; pass < 20; pass++) {
+        const rows: { name: string }[] = await manager.query(
+          `SELECT DISTINCT rc.relname AS name
+             FROM pg_constraint c
+             JOIN pg_class rc ON rc.oid = c.conrelid
+             JOIN pg_class tc ON tc.oid = c.confrelid
+            WHERE c.contype = 'f'
+              AND tc.relname = ANY($1::text[])
+              AND NOT (rc.relname = ANY($1::text[]))`,
+          [[...clearSet]],
+        );
+        const blockers = rows.map((r) => r.name).filter((n) => !clearSet.has(n));
+        if (blockers.length === 0) break;
+        const protectedBlockers = blockers.filter((n) => CLEAR_DATA_KEEP_TABLES.has(n));
+        if (protectedBlockers.length) {
+          throw new Error(
+            `Protected table(s) ${protectedBlockers.join(', ')} still reference school data. Nothing was deleted.`,
+          );
+        }
+        for (const n of blockers) {
+          clearSet.add(n);
+          alsoCleared.push(n);
+        }
+      }
+
+      const list = [...clearSet].map((t) => `"${t}"`).join(', ');
+      await manager.query(
+        `CREATE TEMP TABLE admin_users_backup ON COMMIT DROP AS SELECT * FROM "users" WHERE "role" = '${UserRole.ADMIN}'`,
+      );
+      adminsKept = Number(
+        (await manager.query('SELECT COUNT(*)::int AS count FROM admin_users_backup'))[0].count,
+      );
+      if (clearedFkColumns.length) {
+        const sets = clearedFkColumns.map((c) => `"${c}" = NULL`).join(', ');
+        await manager.query(`UPDATE admin_users_backup SET ${sets}`);
+      }
+
+      await manager.query(`TRUNCATE TABLE ${list} RESTART IDENTITY`);
+
+      await manager.query('INSERT INTO "users" SELECT * FROM admin_users_backup');
+    });
+    } catch (err: any) {
+      // Nothing was deleted (the transaction rolled back). Return the database
+      // message so the admin can see the exact cause on screen.
+      console.error('[clear-all-data] failed:', err);
+      return res.status(500).json({
+        message: `Clear failed and nothing was deleted: ${err?.message || 'unknown database error'}`,
+      });
+    }
+
+    await logAudit({
+      userId: req.user!.userId,
+      userRole: req.user!.role,
+      userEmail: req.user!.email,
+      action: 'delete',
+      module: 'settings',
+      recordId: 'school-data',
+      recordLabel: 'Clear All Data',
+      changes: [],
+    }).catch(() => null);
+
+    res.json({
+      cleared: true,
+      tablesCleared: tablesToClear.length + alsoCleared.length,
+      alsoCleared,
+      usersRemoved: totalUsers - adminsKept,
+      message: 'All school data was cleared. School profile, settings and admin accounts were kept.',
+    });
+  },
+);
 
 router.get('/integrations', authorize(UserRole.ADMIN), async (_req, res: Response) => {
   res.json(await getIntegrationsPublic());
@@ -1778,13 +1908,11 @@ function serializeParent(parent: Parent) {
       className: g.student.schoolClass?.name ?? null,
       formName: g.student.form?.name ?? null,
       relationship: g.relationship || 'Parent',
-      isPrimary: Boolean(g.isPrimary),
     }));
 
   return {
     id: parent.id,
     userId: user.id,
-    username: user.username ?? null,
     firstName: user.firstName,
     lastName: user.lastName,
     email: user.email,
@@ -1936,40 +2064,6 @@ router.delete('/parents/:id/students/:studentId/unlink', authorize(UserRole.ADMI
   }
 
   guardian.parentId = null;
-  await guardianRepo.save(guardian);
-
-  const full = await loadParentRecord(parent.id);
-  res.json({ parent: serializeParent(full!) });
-});
-
-router.patch('/parents/:id/students/:studentId/link', authorize(UserRole.ADMIN), async (req: AuthRequest, res: Response) => {
-  const parent = await loadParentRecord(req.params.id);
-  if (!parent) return res.status(404).json({ message: 'Parent not found' });
-
-  const guardianRepo = AppDataSource.getRepository(Guardian);
-  const guardian = await guardianRepo.findOne({
-    where: { studentId: req.params.studentId, parentId: parent.id },
-  });
-  if (!guardian) {
-    return res.status(404).json({ message: 'This student is not linked to the parent' });
-  }
-
-  const { isPrimary, relationship } = req.body || {};
-  if (relationship !== undefined) {
-    guardian.relationship = String(relationship).trim() || 'Parent';
-  }
-  if (isPrimary !== undefined) {
-    guardian.isPrimary = Boolean(isPrimary);
-    // A student has one primary contact: clear the flag on every other guardian.
-    if (guardian.isPrimary) {
-      await guardianRepo
-        .createQueryBuilder()
-        .update(Guardian)
-        .set({ isPrimary: false })
-        .where('"studentId" = :studentId AND id != :id', { studentId: guardian.studentId, id: guardian.id })
-        .execute();
-    }
-  }
   await guardianRepo.save(guardian);
 
   const full = await loadParentRecord(parent.id);

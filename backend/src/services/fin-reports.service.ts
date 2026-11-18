@@ -4,7 +4,6 @@ import { relations } from '../utils/typeorm-helpers';
 import { formatGenderLabel, formatStudentClassLabel } from '../utils/class-display';
 import {
   BALANCE_FORWARD_FEE_TYPE,
-  computeTermNetBalance,
   ensureTermBalanceInitialized,
   findPreviousTerm,
   getAvailablePrepaidCredit,
@@ -38,7 +37,7 @@ function mapStudentSearchRow(r: Record<string, string>): StudentSearchRow {
 
 export interface LedgerLine {
   date: string;
-  type: 'invoice' | 'payment' | 'opening' | 'debit_note' | 'credit_note' | 'tuition_exemption' | 'adjustment';
+  type: 'invoice' | 'payment' | 'opening' | 'debit_note' | 'credit_note' | 'tuition_exemption';
   reference: string;
   description: string;
   debit: number;
@@ -228,25 +227,16 @@ function sumOpenInvoiceBalance(invoices: Invoice[]): number {
   );
 }
 
-/**
- * Term holding the largest open invoice balance for the student. Derived from
- * invoices (same rule as Outstanding Invoices / Student Balance) rather than the
- * cached student_term_balances.closingBalance, which can be stale.
- */
 async function findBalanceTerm(
   studentId: string,
 ): Promise<{ termId: string; termName: string } | null> {
   const rows = await AppDataSource.query(
     `
-      SELECT i."termId" as "termId", t.name as "termName",
-             SUM(GREATEST(i."totalAmount" - i."amountPaid", 0)) as due
-      FROM invoices i
-      JOIN terms t ON t.id = i."termId"
-      WHERE i."studentId" = $1
-        AND i.status NOT IN ('cancelled', 'draft')
-      GROUP BY i."termId", t.name, t."termNumber"
-      HAVING SUM(GREATEST(i."totalAmount" - i."amountPaid", 0)) > 0.005
-      ORDER BY due DESC, t."termNumber" DESC
+      SELECT stb."termId" as "termId", t.name as "termName", stb."closingBalance" as "closingBalance"
+      FROM student_term_balances stb
+      JOIN terms t ON t.id = stb."termId"
+      WHERE stb."studentId" = $1 AND stb."closingBalance" > 0
+      ORDER BY stb."closingBalance" DESC, t."termNumber" DESC
       LIMIT 1
     `,
     [studentId],
@@ -465,12 +455,7 @@ export async function buildStudentLedgerReport(
   txns.sort((a, b) => a.sortAt - b.sortAt || a.reference.localeCompare(b.reference));
 
   const lines: LedgerLine[] = [];
-  // Signed running balance: positive = owed, negative = credit. It is NOT floored
-  // per step, otherwise a payment received before an invoice (or any credit larger
-  // than the current balance) is silently discarded and later balances are overstated.
-  // Displayed line balances are floored at 0 only for presentation.
-  let running = Math.max(0, openingBalance);
-  const shown = (n: number) => roundMoney(Math.max(0, n));
+  let owedRunning = Math.max(0, openingBalance);
 
   if (openingBalance !== 0 || prepaidAvailable > 0) {
     const prevLabel = prevTerm?.name || 'previous term';
@@ -485,7 +470,7 @@ export async function buildStudentLedgerReport(
       description,
       debit: openingBalance > 0 ? openingBalance : 0,
       credit: openingBalance < 0 ? Math.abs(openingBalance) : 0,
-      balance: shown(running),
+      balance: owedRunning,
     });
   }
 
@@ -493,7 +478,7 @@ export async function buildStudentLedgerReport(
   let totalCredits = 0;
 
   for (const txn of txns) {
-    running = roundMoney(running + txn.debit - txn.credit);
+    owedRunning = roundMoney(Math.max(0, owedRunning + txn.debit - txn.credit));
     totalDebits += txn.debit;
     totalCredits += txn.credit;
     lines.push({
@@ -503,36 +488,7 @@ export async function buildStudentLedgerReport(
       description: txn.description,
       debit: txn.debit,
       credit: txn.credit,
-      balance: shown(running),
-    });
-  }
-
-  // Authoritative closing balance = what the invoices say is owed, exactly as
-  // Outstanding Invoices / Student Balance compute it:
-  //   sum(max(0, totalAmount - amountPaid)) over billable invoices, less any unapplied prepaid credit.
-  // Ledger rows and payment records can disagree with invoices (payments applied to
-  // another term's invoice, credit notes spread over several invoices, invoices
-  // edited without a ledger row, ...). Any such gap is shown as an explicit
-  // adjustment line instead of silently producing a different balance.
-  const authoritativeClosing = roundMoney(await computeTermNetBalance(studentId, termId));
-  const gap = roundMoney(authoritativeClosing - running);
-  if (Math.abs(gap) > 0.005) {
-    const adjDebit = gap > 0 ? gap : 0;
-    const adjCredit = gap < 0 ? Math.abs(gap) : 0;
-    running = roundMoney(running + adjDebit - adjCredit);
-    totalDebits += adjDebit;
-    totalCredits += adjCredit;
-    lines.push({
-      date: termEndDate || toDateKey(term.endDate),
-      type: 'adjustment',
-      reference: '—',
-      description:
-        gap > 0
-          ? 'Balance adjustment — charges still open on invoices that are not itemised above (e.g. payments or credits applied to another term, or invoice changes)'
-          : 'Balance adjustment — credit not itemised above (e.g. prepaid credit or overpayment held on account)',
-      debit: adjDebit,
-      credit: adjCredit,
-      balance: shown(running),
+      balance: owedRunning,
     });
   }
 
@@ -543,7 +499,7 @@ export async function buildStudentLedgerReport(
   const termOverpayment = roundMoney(Math.max(0, totalCredits - termCharges));
   const termInvoiceBalance = sumOpenInvoiceBalance(termInvoices);
   const invoiceBalance = await fetchStudentInvoiceBalance(studentId);
-  const closingBalance = shown(authoritativeClosing);
+  const closingBalance = owedRunning;
   const balanceTerm = await findBalanceTerm(studentId);
 
   return {

@@ -350,17 +350,6 @@
   flex: 1 1 220px;
   max-width: 360px;
 
-  .search-icon {
-    position: absolute;
-    left: 0.75rem;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 1rem;
-    height: 1rem;
-    color: #94a3b8;
-    pointer-events: none;
-  }
-
   input {
     width: 100%;
     padding: 0.55rem 0.75rem 0.55rem 2.35rem;

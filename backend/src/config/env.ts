@@ -71,10 +71,6 @@ const envS3SecretAccessKey = cleanStr(process.env.S3_SECRET_ACCESS_KEY);
 const envS3Endpoint = cleanStr(process.env.S3_ENDPOINT);
 const envS3PublicBaseUrl = cleanStr(process.env.S3_PUBLIC_BASE_URL);
 
-const envVapidPublicKey = cleanStr(process.env.VAPID_PUBLIC_KEY);
-const envVapidPrivateKey = cleanStr(process.env.VAPID_PRIVATE_KEY);
-const envVapidSubject = cleanStr(process.env.VAPID_SUBJECT);
-
 const DEFAULT_DB_SSL_MODE = ON_RENDER ? 'require' : 'auto';
 
 export const env = {
@@ -110,13 +106,6 @@ export const env = {
   },
   sms: {
     from: envTwilioSmsFrom || '',
-  },
-  push: {
-    /** VAPID key pair for Web Push; leave unset to disable push sends. */
-    publicKey: envVapidPublicKey || '',
-    privateKey: envVapidPrivateKey || '',
-    /** Contact URI required by push services (mailto: or https:). */
-    subject: envVapidSubject || 'mailto:admin@schoolpro.local',
   },
   demo: {
     enabled: envDemoFeatureEnabled !== 'false',

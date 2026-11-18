@@ -7,7 +7,7 @@ import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
 import { ApiService } from '../../core/services/api.service';
 import { environment } from '../../../environments/environment';
 
-type Tab = 'profile' | 'bank' | 'security' | 'notifications' | 'store';
+type Tab = 'profile' | 'bank' | 'security' | 'notifications' | 'store' | 'data';
 
 interface SecurityPolicy {
   minPasswordLength: number;
@@ -152,6 +152,7 @@ export class AdminSettingsComponent implements OnInit {
     { id: 'security', label: 'Security', icon: '🔒', desc: 'Password policy & login protection' },
     { id: 'notifications', label: 'WhatsApp', icon: '📱', desc: 'Parent messaging' },
     { id: 'store', label: 'Tuckshop', icon: '🛒', desc: 'Inventory & stock' },
+    { id: 'data', label: 'Clear Data', icon: '🗑️', desc: 'Remove demo & test records' },
   ];
 
   activeTab = signal<Tab>('profile');
@@ -209,6 +210,15 @@ export class AdminSettingsComponent implements OnInit {
   };
 
   securityPreviewPassword = signal('SamplePass1');
+
+  /** Clear All Data: the user must type this exact word before the wipe is sent. */
+  readonly clearDataConfirmWord = 'DELETE';
+  clearDataModalOpen = signal(false);
+  clearDataConfirmText = signal('');
+  clearingData = signal(false);
+  canConfirmClearData = computed(
+    () => this.clearDataConfirmText().trim() === this.clearDataConfirmWord && !this.clearingData()
+  );
 
   newYear = { name: '', startDate: '', endDate: '', isCurrent: false };
   newTerm = { name: '', termNumber: 1, startDate: '', endDate: '', schoolYearId: '', isCurrent: false };
@@ -810,6 +820,48 @@ export class AdminSettingsComponent implements OnInit {
 
   classStudentCount(cls: ClassRow): number {
     return cls.students?.length ?? 0;
+  }
+
+  openClearDataModal() {
+    this.clearDataConfirmText.set('');
+    this.clearDataModalOpen.set(true);
+  }
+
+  closeClearDataModal() {
+    if (this.clearingData()) return;
+    this.clearDataModalOpen.set(false);
+    this.clearDataConfirmText.set('');
+  }
+
+  confirmClearAllData() {
+    if (!this.canConfirmClearData()) return;
+    this.clearingData.set(true);
+    this.api
+      .post<{ message: string }>('/admin/settings/clear-all-data', {
+        confirmation: this.clearDataConfirmText().trim(),
+      })
+      .subscribe({
+        next: (res) => {
+          this.clearingData.set(false);
+          this.clearDataModalOpen.set(false);
+          this.clearDataConfirmText.set('');
+          // Reset the lists this page holds so nothing from the old data lingers.
+          this.schoolYears.set([]);
+          this.forms.set([]);
+          this.classes.set([]);
+          this.subjects.set([]);
+          this.classSubjects.set([]);
+          this.staff.set([]);
+          this.examTypes.set([]);
+          this.selectedClassId.set('');
+          this.loadAll();
+          this.showToast('success', res.message || 'All school data was cleared.');
+        },
+        error: (e) => {
+          this.clearingData.set(false);
+          this.showToast('error', e.error?.message || 'Failed to clear school data. Nothing was deleted.');
+        },
+      });
   }
 
   private reloadYears() {

@@ -69,9 +69,6 @@ import { VirtualClass } from './VirtualClass';
 import { ClassRecording } from './ClassRecording';
 import { LibraryResource } from './LibraryResource';
 import { LibraryBookmark } from './LibraryBookmark';
-import { PaymentIntent } from './PaymentIntent';
-import { PushSubscription } from './PushSubscription';
-import { Room } from './Room';
 import { IdCard } from './IdCard';
 import { IdCardScan } from './IdCardScan';
 
@@ -147,9 +144,6 @@ export const entities = [
   ClassRecording,
   LibraryResource,
   LibraryBookmark,
-  PaymentIntent,
-  PushSubscription,
-  Room,
   IdCard,
   IdCardScan,
 ];
@@ -227,9 +221,6 @@ export {
   ClassRecording,
   LibraryResource,
   LibraryBookmark,
-  PaymentIntent,
-  PushSubscription,
-  Room,
   IdCard,
   IdCardScan,
 };

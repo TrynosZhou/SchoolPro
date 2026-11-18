@@ -69,6 +69,7 @@ export class AdminStudentsComponent implements OnInit {
   forms = signal<FormOption[]>([]);
   nextStudentId = signal('');
   lastCreatedId = signal('');
+  registeredStudent = signal<{ name: string; admissionNumber: string; invoiceInfo: string } | null>(null);
   lastInvoiceInfo = signal('');
   saving = signal(false);
   photoFile: File | null = null;
@@ -460,6 +461,13 @@ export class AdminStudentsComponent implements OnInit {
         if (student?.id) this.uploadPhotoIfNeeded(student.id);
         this.registerDrawerOpen.set(false);
         this.lastCreatedId.set(student.admissionNumber);
+        this.registeredStudent.set({
+          name: `${student.firstName} ${student.lastName}`,
+          admissionNumber: student.admissionNumber,
+          invoiceInfo: student.registrationInvoice
+            ? `Invoice ${student.registrationInvoice.invoiceNumber} created ($${student.registrationInvoice.totalAmount.toFixed(2)}).`
+            : '',
+        });
         if (student.registrationInvoice) {
           const amt = student.registrationInvoice.totalAmount;
           this.lastInvoiceInfo.set(
@@ -577,7 +585,7 @@ export class AdminStudentsComponent implements OnInit {
 
   selectedFormHint(): string {
     const selected = this.forms().find((f) => f.id === this.form.formId);
-    if (!selected) return 'Select a form to auto-apply the correct tuition structure.';
+    if (!selected) return '';
     if (selected.level <= 4) return 'Ordinary Level selected. Tuition follows O-Level settings.';
     return 'Advanced Level selected. Tuition follows A-Level settings.';
   }
