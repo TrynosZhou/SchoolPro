@@ -71,6 +71,9 @@ import { LibraryResource } from './LibraryResource';
 import { LibraryBookmark } from './LibraryBookmark';
 import { IdCard } from './IdCard';
 import { IdCardScan } from './IdCardScan';
+import { PaymentIntent } from './PaymentIntent';
+import { PushSubscription } from './PushSubscription';
+import { Room } from './Room';
 
 export const entities = [
   User,
@@ -146,6 +149,9 @@ export const entities = [
   LibraryBookmark,
   IdCard,
   IdCardScan,
+  PaymentIntent,
+  PushSubscription,
+  Room,
 ];
 
 export * from './enums';
@@ -223,5 +229,8 @@ export {
   LibraryBookmark,
   IdCard,
   IdCardScan,
+  PaymentIntent,
+  PushSubscription,
+  Room,
 };
 

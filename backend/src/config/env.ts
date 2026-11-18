@@ -70,6 +70,9 @@ const envS3AccessKeyId = cleanStr(process.env.S3_ACCESS_KEY_ID);
 const envS3SecretAccessKey = cleanStr(process.env.S3_SECRET_ACCESS_KEY);
 const envS3Endpoint = cleanStr(process.env.S3_ENDPOINT);
 const envS3PublicBaseUrl = cleanStr(process.env.S3_PUBLIC_BASE_URL);
+const envVapidPublicKey = cleanStr(process.env.VAPID_PUBLIC_KEY);
+const envVapidPrivateKey = cleanStr(process.env.VAPID_PRIVATE_KEY);
+const envVapidSubject = cleanStr(process.env.VAPID_SUBJECT);
 
 const DEFAULT_DB_SSL_MODE = ON_RENDER ? 'require' : 'auto';
 
@@ -103,6 +106,11 @@ export const env = {
     useTemplate: envWhatsappUseTemplate === 'true',
     contentSid: envTwilioContentSid || '',
     statusCallbackUrl: envTwilioStatusCallbackUrl || '',
+  },
+  push: {
+    publicKey: envVapidPublicKey || '',
+    privateKey: envVapidPrivateKey || '',
+    subject: envVapidSubject || 'mailto:admin@example.com',
   },
   sms: {
     from: envTwilioSmsFrom || '',

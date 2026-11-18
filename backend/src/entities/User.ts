@@ -69,6 +69,21 @@ export class User {
   @Column({ default: false })
   portalPasswordCustomized!: boolean;
 
+  @Column({ default: false })
+  twoFactorEnabled!: boolean;
+
+  @Column({ type: 'varchar', nullable: true })
+  twoFactorSecret?: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  twoFactorPendingSecret?: string | null;
+
+  @Column({ type: 'jsonb', nullable: true })
+  twoFactorBackupCodes?: string[] | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  twoFactorEnabledAt?: Date | null;
+
   @OneToOne(() => Student, (s) => s.user)
   studentProfile?: Student;
 
