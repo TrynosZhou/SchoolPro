@@ -28,6 +28,10 @@ interface ManagedUser {
   firstName: string;
   lastName: string;
   phone: string | null;
+  gender?: string | null;
+  maritalStatus?: string | null;
+  usesMaidenName?: boolean;
+  salutation?: string | null;
   role: PortalRole;
   roleLabel: string;
   isActive: boolean;
@@ -111,6 +115,10 @@ export class AdminUserManagementComponent implements OnInit {
     lastName: '',
     email: '',
     phone: '',
+    gender: '',
+    maritalStatus: '',
+    usesMaidenName: false,
+    salutation: '',
     password: '',
     role: 'teacher' as PortalRole,
     schoolRoleId: '',
@@ -297,6 +305,17 @@ export class AdminUserManagementComponent implements OnInit {
     this.applyFilters();
   }
 
+  /** Gender, marital status and title as sent to the API (marital status only applies to women). */
+  private personalDetailsBody(): Record<string, unknown> {
+    const female = this.form.gender === 'female';
+    return {
+      gender: this.form.gender || null,
+      maritalStatus: female ? this.form.maritalStatus || null : null,
+      usesMaidenName: female && this.form.maritalStatus === 'married' ? this.form.usesMaidenName : false,
+      salutation: this.form.salutation || null,
+    };
+  }
+
   openCreate() {
     this.drawerMode.set('create');
     this.editingUser.set(null);
@@ -306,6 +325,10 @@ export class AdminUserManagementComponent implements OnInit {
       lastName: '',
       email: '',
       phone: '',
+      gender: '',
+      maritalStatus: '',
+      usesMaidenName: false,
+      salutation: '',
       password: '',
       role: 'teacher',
       schoolRoleId: '',
@@ -329,6 +352,10 @@ export class AdminUserManagementComponent implements OnInit {
       lastName: user.lastName,
       email: user.email,
       phone: user.phone ?? '',
+      gender: (user.gender ?? '').toLowerCase(),
+      maritalStatus: user.maritalStatus ?? '',
+      usesMaidenName: !!user.usesMaidenName,
+      salutation: user.salutation ?? '',
       password: '',
       role: user.role,
       schoolRoleId: user.schoolRoleId ?? '',
@@ -365,6 +392,7 @@ export class AdminUserManagementComponent implements OnInit {
         lastName: this.form.lastName.trim(),
         email: this.form.email.trim(),
         phone: this.form.phone.trim() || undefined,
+        ...this.personalDetailsBody(),
       };
       if (this.canEditRole() && this.form.role !== user.role) {
         body['role'] = this.form.role;
@@ -391,6 +419,14 @@ export class AdminUserManagementComponent implements OnInit {
       this.api.patch<ManagedUser>(`/admin/users/${user.id}`, body).subscribe({
         next: (updated) => {
           this.users.update((list) => list.map((u) => (u.id === updated.id ? updated : u)));
+          if (updated.id === this.auth.user()?.id) {
+            this.auth.patchUser({
+              gender: updated.gender ?? null,
+              maritalStatus: updated.maritalStatus ?? null,
+              usesMaidenName: !!updated.usesMaidenName,
+              salutation: updated.salutation ?? null,
+            });
+          }
           this.submitting.set(false);
           this.showToast('success', 'User updated successfully');
           this.closeDrawer();
@@ -421,6 +457,7 @@ export class AdminUserManagementComponent implements OnInit {
       phone: this.form.phone.trim() || undefined,
       password: this.form.password,
       role: this.form.role,
+      ...this.personalDetailsBody(),
     };
     if (this.isStaffRole()) {
       if (this.form.schoolRoleId) body['schoolRoleId'] = this.form.schoolRoleId;

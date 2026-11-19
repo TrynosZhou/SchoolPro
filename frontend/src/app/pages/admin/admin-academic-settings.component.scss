@@ -1164,7 +1164,7 @@ tr.row-completion td {
   --sj-line: var(--color-border, #e2e8f0);
   --sj-navy: #14213d;
   --sj-indigo: var(--color-accent, #4f46e5);
-  --sj-serif: Georgia, 'Times New Roman', 'Source Serif Pro', serif;
+  --sj-serif: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
 }
 
 /* ---------- Hero ---------- */
@@ -2257,8 +2257,8 @@ tr.row-completion td {
 
 /* Compact replacements for the dropped shared academics layer */
 :host {
-  --serif: 'Cormorant Garamond', Georgia, 'Times New Roman', serif;
-  --numeric: 'Source Serif 4', 'Cormorant Garamond', Georgia, serif;
+  --serif: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+  --numeric: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
   --ac-ring: 0 0 0 3px rgba(184, 146, 74, 0.28);
 }
 

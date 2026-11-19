@@ -30,10 +30,10 @@
     --brass-line: rgba(184, 146, 74, 0.45);
     --brass-ink: #7a5a1f;
     --ivory: #fbf9f4;
-    --serif: 'Cormorant Garamond', Georgia, 'Times New Roman', serif;
+    --serif: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
     // Cormorant's default figures are old-style (1 looks like a small capital I),
     // so numerals use its companion Source Serif 4 — lining figures, same colour on the page.
-    --numeric: 'Source Serif 4', 'Cormorant Garamond', Georgia, serif;
+    --numeric: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
     --ac-ring: 0 0 0 3px rgba(184, 146, 74, 0.28);
     --ac-lift: 0 14px 28px -20px rgba(15, 29, 54, 0.55);
   }

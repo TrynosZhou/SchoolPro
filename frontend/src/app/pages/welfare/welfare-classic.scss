@@ -1,0 +1,892 @@
+// Shared "navy & brass" layer for the welfare / operations pages
+// (ID Cards & QR, Calendar, Transport, Hostel, Library, Activities).
+// Reuses the same classic layer as Students, Staff, Finance, etc.
+@use '../../../styles/admin-classic' as classic;
+
+:host {
+  display: block;
+}
+
+.card {
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 3px;
+  box-shadow: none;
+  padding: 1.25rem 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.card .card {
+  background: var(--color-bg-subtle);
+}
+
+// Section headings: navy, quiet hairline underneath
+.card h3 {
+  color: var(--navy);
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin-bottom: 0.9rem;
+  padding-bottom: 0.55rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.toolbar h3,
+.card .card h3 {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+// Tabs → underlined brass tabs (same as Staff / Finance)
+.tab-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin-bottom: 1.1rem;
+  padding: 0 0.5rem;
+}
+
+// Toolbar controls
+.toolbar {
+  gap: 0.6rem;
+
+  input,
+  select {
+    border-radius: 2px !important;
+    min-height: 2.5rem;
+  }
+
+  .btn-primary,
+  .btn-outline {
+    min-height: 2.5rem;
+    padding: 0.5rem 1.1rem;
+    font-size: 0.85rem;
+    letter-spacing: 0.01em;
+  }
+}
+
+.btn-primary:disabled,
+.btn-outline:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.error {
+  color: var(--color-negative);
+  font-weight: 500;
+}
+
+.success {
+  color: var(--color-positive);
+  font-weight: 500;
+}
+
+.badge {
+  display: inline-block;
+}
+
+// ID card preview (moved from the component's inline styles)
+.id-card table { border-collapse: collapse; }
+.id-card td { padding: 1px 0 !important; border: 0 !important; background: transparent !important; line-height: 1.3 !important; vertical-align: top; }
+.id-card td:first-child { padding-right: 6px !important; }
+
+
+// ═════════════════════════════════════════════════════════════
+// Page header with summary figures
+// ═════════════════════════════════════════════════════════════
+.wf-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1.25rem 2rem;
+  margin-bottom: 1rem;
+  padding: 1.35rem 1.5rem;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-top: 3px solid var(--brass);
+  border-radius: 3px;
+}
+
+.wf-eyebrow {
+  margin: 0 0 0.35rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--brass-ink);
+}
+
+.wf-title {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 1.75rem;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  color: var(--navy);
+}
+
+.wf-sub {
+  margin: 0.4rem 0 0;
+  max-width: 52ch;
+  font-size: 0.92rem;
+  line-height: 1.55;
+  color: var(--color-text-secondary);
+}
+
+.wf-stats {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.wf-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 5.5rem;
+  padding: 0.1rem 1.25rem;
+  border-left: 1px solid var(--color-border);
+
+  &:first-child {
+    border-left: 0;
+    padding-left: 0;
+  }
+
+  &:last-child {
+    padding-right: 0;
+  }
+
+  strong {
+    font-size: 1.65rem;
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: -0.02em;
+    font-variant-numeric: lining-nums tabular-nums;
+    color: var(--navy);
+  }
+
+  span {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+  }
+}
+
+// ═════════════════════════════════════════════════════════════
+// Inset form panels
+// ═════════════════════════════════════════════════════════════
+.wf-form {
+  margin: 0.75rem 0 1.1rem;
+  padding: 1rem 1.1rem;
+  background: var(--color-bg-subtle);
+  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--brass);
+  border-radius: 2px;
+}
+
+.form-grid.wf-form {
+  display: grid;
+  gap: 0.65rem;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  align-items: center;
+}
+
+// ═════════════════════════════════════════════════════════════
+// Empty states
+// ═════════════════════════════════════════════════════════════
+.wf-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 2.25rem 1rem;
+  text-align: center;
+  background: var(--color-bg-subtle);
+  border: 1px dashed var(--color-border-strong);
+  border-radius: 3px;
+
+  strong {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--navy);
+  }
+
+  span {
+    font-size: 0.88rem;
+    color: var(--color-text-secondary);
+  }
+}
+
+tr.wf-empty-row td {
+  padding: 1.6rem 1rem !important;
+  text-align: center;
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+  background: var(--color-bg-subtle) !important;
+}
+
+// ═════════════════════════════════════════════════════════════
+// Pills & counts
+// ═════════════════════════════════════════════════════════════
+.wf-pill {
+  display: inline-block;
+  padding: 0.15rem 0.55rem;
+  border-radius: 2px;
+  background: var(--brass-soft);
+  border: 1px solid transparent;
+  color: var(--brass-ink);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: capitalize;
+  white-space: nowrap;
+
+  &.alt {
+    background: var(--color-bg-muted);
+    border-color: var(--color-border);
+    color: var(--color-text-secondary);
+  }
+
+  &.on {
+    background: rgba(22, 163, 74, 0.12);
+    color: var(--color-positive);
+  }
+
+  &.text-red {
+    background: rgba(220, 38, 38, 0.1);
+    color: var(--color-negative);
+  }
+}
+
+.wf-count {
+  display: inline-block;
+  min-width: 1.6rem;
+  margin-left: 0.4rem;
+  padding: 0 0.45rem;
+  border-radius: 2px;
+  background: var(--color-bg-muted);
+  color: var(--color-text-secondary);
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1.4rem;
+  text-align: center;
+  vertical-align: middle;
+}
+
+// ═════════════════════════════════════════════════════════════
+// Calendar events
+// ═════════════════════════════════════════════════════════════
+.wf-event {
+  display: grid;
+  grid-template-columns: 4rem 1fr auto;
+  gap: 1rem 1.25rem;
+  align-items: start;
+  padding: 1rem 0;
+  border-top: 1px solid var(--color-border);
+
+  &:first-of-type {
+    border-top: 0;
+  }
+}
+
+.wf-date {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0.5rem 0 0.45rem;
+  background: var(--navy);
+  border-bottom: 3px solid var(--brass);
+  border-radius: 2px;
+  color: #fff;
+
+  strong {
+    font-size: 1.5rem;
+    font-weight: 700;
+    line-height: 1.1;
+    font-variant-numeric: lining-nums tabular-nums;
+  }
+
+  span {
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    opacity: 0.85;
+  }
+}
+
+.wf-event-body {
+  min-width: 0;
+
+  h4 {
+    margin: 0 0 0.4rem;
+    font-size: 1.02rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: var(--navy);
+  }
+}
+
+.wf-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 0.35rem;
+}
+
+.wf-meta {
+  margin: 0.15rem 0 0;
+  font-size: 0.84rem;
+  color: var(--color-text-muted);
+}
+
+.wf-desc {
+  margin: 0.35rem 0 0;
+  font-size: 0.9rem;
+  line-height: 1.55;
+  color: var(--color-text-secondary);
+}
+
+.wf-event-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
+
+  select,
+  .btn-outline {
+    min-height: 2.25rem;
+    font-size: 0.82rem;
+  }
+}
+
+@media (max-width: 720px) {
+  .wf-head {
+    padding: 1.1rem;
+  }
+
+  .wf-title {
+    font-size: 1.45rem;
+  }
+
+  .wf-event {
+    grid-template-columns: 3.4rem 1fr;
+  }
+
+  .wf-event-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+}
+
+// ═════════════════════════════════════════════════════════════
+// Student Welfare pages — Discipline & Health · Meetings · Consents
+// Shared building blocks (labelled fields, status pills, detail
+// tiles, notices). Same navy & brass language as the dashboard.
+// ═════════════════════════════════════════════════════════════
+
+// Filter / action bar above a table
+.wf-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem;
+  margin-bottom: 1.1rem;
+
+  select,
+  input {
+    min-height: 2.5rem;
+    border-radius: 2px !important;
+  }
+
+  .wf-spacer {
+    flex: 1 1 auto;
+  }
+
+  .wf-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .btn-primary,
+  .btn-outline {
+    min-height: 2.5rem;
+    padding: 0.5rem 1.1rem;
+    font-size: 0.85rem;
+  }
+}
+
+// Caption-above-control field
+.wf-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-width: 0;
+
+  > span {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+  }
+
+  &.wide {
+    grid-column: 1 / -1;
+  }
+}
+
+.wf-check {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.5rem;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--navy);
+  cursor: pointer;
+
+  input {
+    width: auto !important;
+    min-height: 0 !important;
+    accent-color: var(--navy);
+  }
+}
+
+// Inset form panels get a title row and an action row
+.wf-form {
+  .wf-form-title {
+    margin: 0 0 0.75rem;
+    padding: 0;
+    border: 0;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--brass-ink);
+  }
+
+  .wf-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.9rem;
+  }
+
+  &.danger {
+    border-left-color: var(--color-negative);
+    background: rgba(220, 38, 38, 0.04);
+
+    .wf-form-title {
+      color: var(--color-negative);
+    }
+  }
+}
+
+.btn-danger-solid {
+  background: var(--color-negative) !important;
+  border-color: var(--color-negative) !important;
+  box-shadow: none !important;
+  color: #fff !important;
+}
+
+.btn-warn-outline {
+  color: var(--color-negative) !important;
+  border-color: rgba(220, 38, 38, 0.45) !important;
+
+  &:hover:not(:disabled) {
+    background: rgba(220, 38, 38, 0.06) !important;
+    border-color: var(--color-negative) !important;
+  }
+}
+
+// Section heading with a count / meta on the right
+.wf-section {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 1.5rem 0 0.7rem;
+  padding-bottom: 0.55rem;
+  border-bottom: 1px solid var(--color-border);
+
+  &:first-of-type {
+    margin-top: 0.25rem;
+  }
+
+  h3 {
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    font-size: 1.05rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: var(--navy);
+  }
+
+  small {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--color-text-muted);
+  }
+}
+
+// Two-up layout for compact tables
+.wf-split {
+  display: grid;
+  gap: 0 1.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+}
+
+// Tables
+.wf-table {
+  th.num,
+  td.num {
+    text-align: right;
+  }
+
+  td {
+    vertical-align: middle;
+  }
+
+  .wf-strong {
+    font-weight: 600;
+    color: var(--navy);
+  }
+
+  .wf-muted {
+    color: var(--color-text-muted);
+  }
+
+  .wf-clip {
+    max-width: 26ch;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .wf-row-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.4rem;
+  }
+
+  .btn-outline,
+  .btn-primary {
+    min-height: 2rem;
+    padding: 0.25rem 0.8rem;
+    font-size: 0.78rem;
+  }
+}
+
+tr.wf-empty-row td {
+  .wf-empty-inline {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    align-items: center;
+
+    strong {
+      color: var(--navy);
+      font-size: 0.95rem;
+    }
+  }
+}
+
+// Person cell: initials disc + name
+.wf-person {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+
+  .wf-disc {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 1.9rem;
+    height: 1.9rem;
+    border-radius: 50%;
+    background: var(--navy);
+    border: 1px solid var(--brass);
+    color: #e6d3a8;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+  }
+
+  .wf-person-name {
+    font-weight: 600;
+    color: var(--navy);
+  }
+}
+
+// Status & kind pills (extend .wf-pill)
+.wf-pill {
+  &.ok {
+    background: rgba(22, 163, 74, 0.12);
+    color: var(--color-positive);
+  }
+
+  &.warn {
+    background: rgba(217, 119, 6, 0.13);
+    color: var(--color-warning);
+  }
+
+  &.bad {
+    background: rgba(220, 38, 38, 0.1);
+    color: var(--color-negative);
+  }
+
+  &.info {
+    background: rgba(22, 41, 74, 0.09);
+    color: var(--navy-2);
+  }
+
+  &.muted {
+    background: var(--color-bg-muted);
+    border-color: var(--color-border);
+    color: var(--color-text-secondary);
+  }
+}
+
+.wf-pts {
+  font-weight: 700;
+  font-variant-numeric: lining-nums tabular-nums;
+
+  &.pos {
+    color: var(--color-positive);
+  }
+
+  &.neg {
+    color: var(--color-negative);
+  }
+}
+
+.wf-tick {
+  font-weight: 700;
+  color: var(--color-positive);
+
+  &.off {
+    color: var(--color-text-muted);
+    font-weight: 400;
+  }
+}
+
+// Detail tiles (health profile)
+.wf-detail {
+  display: grid;
+  gap: 0;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  border: 1px solid var(--color-border);
+  border-top: 3px solid var(--brass);
+  border-radius: 3px;
+  background: var(--color-bg);
+
+  > div {
+    padding: 0.85rem 1.1rem;
+    border-left: 1px solid var(--color-border);
+
+    &:first-child {
+      border-left: 0;
+    }
+  }
+
+  dt,
+  .wf-detail-k {
+    display: block;
+    margin: 0 0 0.25rem;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+  }
+
+  .wf-detail-v {
+    display: block;
+    font-size: 0.95rem;
+    font-weight: 600;
+    line-height: 1.4;
+    color: var(--navy);
+    overflow-wrap: anywhere;
+
+    &.flag {
+      color: var(--color-negative);
+    }
+
+    &.none {
+      font-weight: 400;
+      color: var(--color-text-muted);
+    }
+  }
+}
+
+// Feedback banner
+.wf-notice {
+  margin: 0 0 1rem;
+  padding: 0.7rem 1rem;
+  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--navy);
+  border-radius: 2px;
+  background: var(--color-bg-subtle);
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--navy);
+
+  &.ok {
+    border-left-color: var(--color-positive);
+  }
+
+  &.bad {
+    border-left-color: var(--color-negative);
+    color: var(--color-negative);
+  }
+}
+
+// Consent cards (parent view) and consent wording preview
+.wf-consent {
+  margin-bottom: 1rem;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-top: 3px solid var(--brass);
+  border-radius: 3px;
+
+  .wf-consent-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem 1rem;
+    padding: 1rem 1.25rem 0;
+
+    h4 {
+      margin: 0;
+      font-size: 1.1rem;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      color: var(--navy);
+    }
+  }
+
+  .wf-consent-body {
+    margin: 0;
+    padding: 0.75rem 1.25rem 1rem;
+    max-width: 78ch;
+    font-size: 0.92rem;
+    line-height: 1.65;
+    white-space: pre-wrap;
+    color: var(--color-text-secondary);
+  }
+
+  .wf-consent-child {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.6rem 1rem;
+    padding: 0.8rem 1.25rem;
+    border-top: 1px solid var(--color-border);
+    background: var(--color-bg-subtle);
+
+    .wf-person {
+      flex: 1 1 12rem;
+    }
+
+    input {
+      flex: 1 1 14rem;
+      min-height: 2.5rem;
+      border-radius: 2px !important;
+    }
+  }
+}
+
+.wf-progress {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 9rem;
+
+  .wf-progress-track {
+    position: relative;
+    flex: 1;
+    height: 6px;
+    overflow: hidden;
+    border-radius: 1px;
+    background: var(--color-bg-muted);
+  }
+
+  .wf-progress-fill {
+    position: absolute;
+    inset: 0 auto 0 0;
+    background: var(--navy);
+    border-right: 2px solid var(--brass);
+  }
+
+  small {
+    font-size: 0.78rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: var(--color-text-secondary);
+    white-space: nowrap;
+  }
+}
+
+// Date chip beside time-slot rows
+.wf-slot {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+
+  .wf-slot-date {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 2.9rem;
+    padding: 0.25rem 0 0.2rem;
+    border-bottom: 2px solid var(--brass);
+    border-radius: 2px;
+    background: var(--navy);
+    color: #fff;
+    line-height: 1.1;
+
+    strong {
+      font-size: 1.05rem;
+      font-weight: 700;
+    }
+
+    span {
+      font-size: 0.6rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      opacity: 0.85;
+    }
+  }
+
+  .wf-slot-time {
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: var(--navy);
+  }
+}
+
+@media (max-width: 720px) {
+  .wf-bar .wf-spacer {
+    display: none;
+  }
+
+  .wf-detail > div {
+    border-left: 0;
+    border-top: 1px solid var(--color-border);
+
+    &:first-child {
+      border-top: 0;
+    }
+  }
+}
+
+@include classic.page;

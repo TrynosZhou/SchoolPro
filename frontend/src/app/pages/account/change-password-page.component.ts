@@ -3,6 +3,7 @@ import { Router } from '@angular/router';
 import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.component';
 import { ChangePasswordFormComponent } from '../../shared/change-password/change-password-form.component';
 import { TwoFactorSettingsComponent } from '../../shared/two-factor/two-factor-settings.component';
+import { ProfileTitleFormComponent } from '../../shared/profile-title/profile-title-form.component';
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
 import { PARENT_NAV_ITEMS } from '../../core/config/parent-nav';
 import { STUDENT_NAV_SECTIONS } from '../../core/config/student-nav';
@@ -15,7 +16,7 @@ import type { NavItem, NavSection } from '../../shared/portal-layout/portal-layo
 @Component({
   selector: 'app-change-password-page',
   standalone: true,
-  imports: [PortalLayoutComponent, ChangePasswordFormComponent, TwoFactorSettingsComponent],
+  imports: [PortalLayoutComponent, ChangePasswordFormComponent, TwoFactorSettingsComponent, ProfileTitleFormComponent],
   template: `
     <app-portal-layout
       [portalTitle]="portalTitle"
@@ -62,6 +63,18 @@ import type { NavItem, NavSection } from '../../shared/portal-layout/portal-layo
 
         <section class="panel tf-panel">
           <div class="panel-head">
+            <div>
+              <h2>Your title &amp; personal details</h2>
+              <p>Choose how you are addressed in greetings, e.g. “Good morning, Mrs Zhou”.</p>
+            </div>
+          </div>
+          <div class="panel-body">
+            <app-profile-title-form />
+          </div>
+        </section>
+
+        <section class="panel tf-panel">
+          <div class="panel-head">
             <span class="seal" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="none"><path d="M12 3.5 5 6.5v5c0 4 2.9 7.3 7 8.5 4.1-1.2 7-4.5 7-8.5v-5l-7-3z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M9.3 12.2l1.9 1.9 3.6-3.9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </span>
@@ -90,8 +103,8 @@ import type { NavItem, NavSection } from '../../shared/portal-layout/portal-layo
       --rule: var(--color-border, #e4e4e7);
       --rule-strong: var(--color-border-strong, #d4d4d8);
       --ink-2: var(--color-text-secondary, #52525b);
-      --serif: 'Cormorant Garamond', Georgia, 'Times New Roman', serif;
-      --numeric: 'Source Serif 4', 'Cormorant Garamond', Georgia, serif;
+      --serif: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+      --numeric: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
     }
 
     :host-context([data-theme='dark']) {

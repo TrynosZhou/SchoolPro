@@ -37,6 +37,20 @@ export class User {
   @Column({ nullable: true })
   phone?: string;
 
+  /** Personal details kept on the account itself (admins/principals may have no staff profile). */
+  @Column({ type: 'varchar', length: 16, nullable: true })
+  gender?: string | null;
+
+  @Column({ type: 'varchar', length: 16, nullable: true })
+  maritalStatus?: string | null;
+
+  @Column({ type: 'boolean', default: false })
+  usesMaidenName!: boolean;
+
+  /** Optional explicit courtesy title: Dr, Prof, Rev, Eng, Hon… */
+  @Column({ type: 'varchar', length: 16, nullable: true })
+  salutation?: string | null;
+
   @Column({ type: 'enum', enum: UserRole })
   role!: UserRole;
 

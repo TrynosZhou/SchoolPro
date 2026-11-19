@@ -63,6 +63,52 @@ router.get('/', async (req: AuthRequest, res: Response) => {
   }
 });
 
+/**
+ * Headline figures for the Discipline page header.
+ * Parents only ever see figures for their own children.
+ */
+router.get('/overview', async (req: AuthRequest, res: Response) => {
+  try {
+    const { termId, from, to } = req.query as any;
+    const qb = AppDataSource.getRepository(DisciplineIncident).createQueryBuilder('d');
+    if (termId) qb.andWhere('d.termId = :termId', { termId });
+    if (from) qb.andWhere('d.date >= :from', { from });
+    if (to) qb.andWhere('d.date <= :to', { to });
+    let rows = await qb.getMany();
+
+    if (req.user!.role === UserRole.PARENT) {
+      const parentId = (req.user as any).parentId;
+      const kids = await AppDataSource.getRepository(Student)
+        .createQueryBuilder('s')
+        .innerJoin('guardians', 'g', 'g.studentId = s.id')
+        .where('g.parentId = :parentId', { parentId: parentId || req.user!.userId })
+        .select('s.id', 'id')
+        .getRawMany();
+      const kidIds = new Set(kids.map((k: any) => k.id || k.s_id));
+      rows = rows.filter((r: any) => kidIds.has(r.studentId));
+    }
+
+    const t = today();
+    res.json({
+      total: rows.length,
+      merits: rows.filter((r) => r.kind === 'merit').length,
+      demerits: rows.filter((r) => r.kind === 'demerit').length,
+      incidents: rows.filter((r) => r.kind === 'incident').length,
+      activeSanctions: rows.filter(
+        (r) =>
+          r.sanctionType &&
+          r.sanctionType !== 'none' &&
+          r.status === 'open' &&
+          (!r.sanctionEndDate || r.sanctionEndDate >= t),
+      ).length,
+      awaitingParentNotice: rows.filter((r) => !r.parentNotified).length,
+    });
+  } catch (e) {
+    console.error('[discipline:overview]', e);
+    res.status(500).json({ message: 'Could not load discipline overview.' });
+  }
+});
+
 router.get('/conduct-summary', async (req: AuthRequest, res: Response) => {
   try {
     const { studentId, termId, from, to } = req.query as any;

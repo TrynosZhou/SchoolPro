@@ -58,7 +58,7 @@ const TABS = [
         </div>
 
         <div class="search-row">
-          <input [(ngModel)]="search" placeholder="Search name/email/occupation…" (keyup.enter)="loadDirectory()" />
+          <input class="has-search-icon" [(ngModel)]="search" placeholder="Search name/email/occupation…" (keyup.enter)="loadDirectory()" />
           <button class="btn-primary" (click)="loadDirectory()">Search</button>
         </div>
 

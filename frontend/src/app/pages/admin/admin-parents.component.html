@@ -344,6 +344,25 @@
               }
             </select>
           </label>
+          @if (form.gender === 'female') {
+            <label class="field">
+              <span>Marital status</span>
+              <select [(ngModel)]="form.maritalStatus" name="maritalStatus">
+                <option value="">— Select —</option>
+                <option value="single">Single</option>
+                <option value="married">Married</option>
+              </select>
+            </label>
+            @if (form.maritalStatus === 'married') {
+              <label class="field">
+                <span>Surname used</span>
+                <select [(ngModel)]="form.usesMaidenName" name="usesMaidenName">
+                  <option [ngValue]="false">Husband's surname (Mrs)</option>
+                  <option [ngValue]="true">Maiden name (Ms)</option>
+                </select>
+              </label>
+            }
+          }
           <label class="field span-2">
             <span>Address</span>
             <input [(ngModel)]="form.address" name="address" />

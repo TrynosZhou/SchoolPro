@@ -3,7 +3,7 @@ import { Router, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { AppDataSource } from '../config/data-source';
-import { User, Parent, Student, Guardian } from '../entities';
+import { User, Parent, Student, Guardian, Staff } from '../entities';
 import { UserRole } from '../entities/enums';
 import { env } from '../config/env';
 import { authenticate, AuthRequest } from '../middleware/auth';
@@ -19,7 +19,7 @@ import { requestPasswordReset, resetPasswordWithToken } from '../services/passwo
 import { findActiveUserByLoginIdentifier, normalizeLoginIdentifier } from '../utils/user-auth';
 import { verifyUserPassword } from '../utils/user-password';
 import { authenticateStudentPortal } from '../services/student-portal-auth.service';
-import { resolveParentGender } from '../utils/gender';
+import { resolveParentGender, normalizeGender, normalizeMaritalStatus, resolveUsesMaidenName } from '../utils/gender';
 import { tenantContext } from '../config/tenant-context';
 import { DEMO_ACCOUNTS, findDemoAccount } from '../config/demo-accounts';
 
@@ -30,8 +30,26 @@ function resolveUserGender(user: User): string | null {
     user.staffProfile?.gender ??
     user.studentProfile?.gender ??
     user.parentProfile?.gender ??
+    user.gender ??
     null
   );
+}
+
+const HONORIFIC_RE = /^(mr|mrs|ms|miss|dr|prof|rev|eng|hon)$/i;
+
+function cleanHonorific(v?: string | null): string {
+  const raw = String(v || '').trim().replace(/\.$/, '');
+  return HONORIFIC_RE.test(raw) ? raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase() : '';
+}
+
+/** Courtesy-title details used by the app for greetings (Mr / Mrs / Miss / Ms). */
+function resolveUserTitleInfo(user: User) {
+  const profile = user.staffProfile ?? user.parentProfile ?? null;
+  const maritalStatus = profile?.maritalStatus ?? user.maritalStatus ?? null;
+  const usesMaidenName = profile?.maritalStatus ? !!profile.usesMaidenName : !!user.usesMaidenName;
+  // The account's own title wins, then an honorific recorded as the staff title.
+  const salutation = cleanHonorific(user.salutation) || cleanHonorific(user.staffProfile?.title) || null;
+  return { maritalStatus, usesMaidenName, salutation };
 }
 
 async function issueAuthToken(fullUser: User, res: Response, opts: { demo?: boolean } = {}) {
@@ -77,6 +95,7 @@ async function issueAuthToken(fullUser: User, res: Response, opts: { demo?: bool
       firstName: fullUser.firstName,
       lastName: fullUser.lastName,
       gender: resolveUserGender(fullUser),
+      ...resolveUserTitleInfo(fullUser),
       role: fullUser.role,
       schoolRoleId: fullUser.schoolRoleId ?? null,
       schoolRoleName: fullUser.schoolRole?.name ?? null,
@@ -282,6 +301,7 @@ router.get('/me', authenticate, async (req: AuthRequest, res: Response) => {
     firstName: user.firstName,
     lastName: user.lastName,
     gender: resolveUserGender(user),
+    ...resolveUserTitleInfo(user),
     role: user.role,
     phone: user.phone,
     schoolRoleId: user.schoolRoleId ?? null,
@@ -290,6 +310,53 @@ router.get('/me', authenticate, async (req: AuthRequest, res: Response) => {
     staffId: user.staffProfile?.id,
     parentId: user.parentProfile?.id,
     studentId: user.studentProfile?.id,
+  });
+});
+
+/** The signed-in user updates their own title details (used for greetings such as "Mrs Zhou"). */
+router.patch('/me', authenticate, async (req: AuthRequest, res: Response) => {
+  const userRepo = AppDataSource.getRepository(User);
+  const user = await loadUserWithRole(req.user!.userId);
+  if (!user) return res.status(404).json({ message: 'User not found' });
+
+  const { gender, maritalStatus, usesMaidenName, salutation } = req.body || {};
+  const g = gender !== undefined ? normalizeGender(gender) : normalizeGender(resolveUserGender(user));
+  const ms = g === 'female' ? normalizeMaritalStatus(maritalStatus !== undefined ? maritalStatus : user.maritalStatus) : null;
+  const um = resolveUsesMaidenName(g, ms, usesMaidenName !== undefined ? usesMaidenName : user.usesMaidenName);
+
+  const changes: Partial<User> = { maritalStatus: ms, usesMaidenName: um };
+  if (gender !== undefined) changes.gender = g;
+  if (salutation !== undefined) {
+    const clean = cleanHonorific(salutation);
+    if (String(salutation || '').trim() && !clean) {
+      return res.status(400).json({ message: 'Title must be one of Mr, Mrs, Ms, Miss, Dr, Prof, Rev, Eng or Hon.' });
+    }
+    changes.salutation = clean || null;
+  }
+  await userRepo.update(user.id, changes);
+  Object.assign(user, changes);
+
+  // Keep a linked staff / parent profile in step with the account.
+  if (user.staffProfile) {
+    const repo = AppDataSource.getRepository(Staff);
+    if (gender !== undefined) user.staffProfile.gender = g;
+    user.staffProfile.maritalStatus = ms;
+    user.staffProfile.usesMaidenName = um;
+    await repo.save(user.staffProfile);
+  }
+  if (user.parentProfile) {
+    const repo = AppDataSource.getRepository(Parent);
+    if (gender !== undefined) user.parentProfile.gender = g;
+    user.parentProfile.maritalStatus = ms;
+    user.parentProfile.usesMaidenName = um;
+    await repo.save(user.parentProfile);
+  }
+
+  res.json({
+    gender: g ?? resolveUserGender(user),
+    maritalStatus: ms,
+    usesMaidenName: um,
+    salutation: cleanHonorific(user.salutation) || cleanHonorific(user.staffProfile?.title) || null,
   });
 });
 
@@ -470,6 +537,7 @@ router.post('/register', async (req, res: Response) => {
         firstName: fullUser!.firstName,
         lastName: fullUser!.lastName,
         gender: resolveUserGender(fullUser!),
+        ...resolveUserTitleInfo(fullUser!),
         role: fullUser!.role,
         staffId: fullUser!.staffProfile?.id,
         parentId: fullUser!.parentProfile?.id,

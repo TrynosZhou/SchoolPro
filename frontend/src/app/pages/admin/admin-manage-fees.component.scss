@@ -171,7 +171,7 @@
 
   h3 {
     margin: 0 0 0.3rem;
-    font-family: var(--serif, Georgia, serif);
+    font-family: var(--serif);
     font-size: 1.6rem;
     font-weight: 600;
     color: var(--navy, #0f1d36);
@@ -240,7 +240,7 @@
 }
 
 .kpi-value {
-  font-family: var(--numeric, var(--serif, Georgia, serif));
+  font-family: var(--numeric, var(--serif));
   font-size: 2.3rem;
   font-weight: 600;
   line-height: 1.05;
@@ -269,7 +269,7 @@
   h3 {
     margin: 0 0 1rem;
     padding-bottom: 0.8rem;
-    font-family: var(--serif, Georgia, serif);
+    font-family: var(--serif);
     font-size: 1.5rem;
     font-weight: 600;
     line-height: 1.1;
@@ -343,7 +343,7 @@
   flex-shrink: 0;
   width: 2.4rem;
   height: 2.4rem;
-  font-family: var(--serif, Georgia, serif);
+  font-family: var(--serif);
   font-size: 0.95rem;
   font-weight: 700;
   color: #e6d3a8;
@@ -808,7 +808,7 @@
 
   h3 {
     margin: 0 0 0.2rem;
-    font-family: var(--serif, Georgia, serif);
+    font-family: var(--serif);
     font-size: 1.6rem;
     font-weight: 600;
     line-height: 1.1;
@@ -906,7 +906,7 @@
 
   h3 {
     margin: 0.85rem 0 0.15rem;
-    font-family: var(--serif, Georgia, serif);
+    font-family: var(--serif);
     font-size: 1.45rem;
     font-weight: 600;
     line-height: 1.15;
@@ -945,7 +945,7 @@
 
 .category-amount {
   margin: 0 0 0.6rem;
-  font-family: var(--numeric, var(--serif, Georgia, serif));
+  font-family: var(--numeric, var(--serif));
   font-size: 1.5rem;
   font-weight: 600;
   font-variant-numeric: lining-nums tabular-nums;

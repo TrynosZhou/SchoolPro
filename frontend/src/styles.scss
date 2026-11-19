@@ -653,3 +653,170 @@ input[type='search']::-webkit-search-decoration {
   -webkit-appearance: none;
   display: none;
 }
+
+/* ============================================================
+   STRONG, CLEARLY VISIBLE FORM FIELDS (all pages)
+   Darker 1.5px borders, solid backgrounds, stronger text and
+   placeholder contrast, and a bold focus ring. Uses !important so
+   it overrides per-component styles without editing every file.
+   ============================================================ */
+:root {
+  --field-bg: #ffffff;
+  --field-border: #64748b;
+  --field-border-hover: #334155;
+  --field-text: #0f172a;
+  --field-placeholder: #64748b;
+  --field-focus: #1d4ed8;
+  --field-focus-ring: rgba(29, 78, 216, 0.28);
+  --field-disabled-bg: #e2e8f0;
+}
+
+[data-theme='dark'] {
+  --field-bg: #0b0b0d;
+  --field-border: #8b8b96;
+  --field-border-hover: #c4c4cc;
+  --field-text: #fafafa;
+  --field-placeholder: #a1a1aa;
+  --field-focus: #a5b4fc;
+  --field-focus-ring: rgba(165, 180, 252, 0.35);
+  --field-disabled-bg: #27272a;
+}
+
+body input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']):not([type='button']):not([type='submit']):not([type='reset']):not([type='image']):not([type='hidden']),
+body select,
+body textarea {
+  background-color: var(--field-bg) !important;
+  color: var(--field-text) !important;
+  border: 1.5px solid var(--field-border) !important;
+  border-radius: 8px !important;
+  font-weight: 500 !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12) !important;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+body input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']):not([type='button']):not([type='submit']):not([type='reset']):not([type='image']):not([type='hidden']):hover,
+body select:hover,
+body textarea:hover {
+  border-color: var(--field-border-hover) !important;
+}
+
+body input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']):not([type='button']):not([type='submit']):not([type='reset']):not([type='image']):not([type='hidden']):focus,
+body select:focus,
+body textarea:focus {
+  border-color: var(--field-focus) !important;
+  box-shadow: 0 0 0 3px var(--field-focus-ring) !important;
+  outline: none !important;
+}
+
+body input::placeholder,
+body textarea::placeholder {
+  color: var(--field-placeholder) !important;
+  opacity: 1 !important;
+  font-weight: 400;
+}
+
+body input:disabled,
+body select:disabled,
+body textarea:disabled,
+body input[readonly] {
+  background-color: var(--field-disabled-bg) !important;
+  border-style: dashed !important;
+  cursor: not-allowed;
+}
+
+body input[type='checkbox'],
+body input[type='radio'] {
+  accent-color: var(--field-focus);
+  outline: 1px solid var(--field-border);
+  outline-offset: 1px;
+}
+
+body label {
+  color: var(--text) !important;
+  font-weight: 600 !important;
+}
+
+body select option {
+  background-color: var(--field-bg);
+  color: var(--field-text);
+}
+
+/* ============================================================
+   SEARCH ICON IN EVERY SEARCH TEXTBOX
+   Applies to input[type=search] and any input tagged
+   .has-search-icon. A magnifier sits at the left edge; the text
+   starts 2.75rem (~11 mm) from the edge, i.e. about 3-4 mm clear of
+   the icon, so typed text is never covered by it.
+   ============================================================ */
+:root {
+  --search-icon-url: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23334155' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='10.5' cy='10.5' r='6.5'/%3E%3Cpath d='M20 20l-4.9-4.9'/%3E%3C/svg%3E");
+}
+
+[data-theme='dark'] {
+  --search-icon-url: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23e4e4e7' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='10.5' cy='10.5' r='6.5'/%3E%3Cpath d='M20 20l-4.9-4.9'/%3E%3C/svg%3E");
+}
+
+html body input[type='search']:not(#_s),
+html body input.has-search-icon:not(#_s) {
+  background-image: var(--search-icon-url) !important;
+  background-repeat: no-repeat !important;
+  background-position: 0.85rem 50% !important;
+  background-size: 1.1rem 1.1rem !important;
+  padding-left: 2.75rem !important;
+  text-indent: 0 !important;
+}
+
+/* Never let the native Safari/Chrome magnifier double up with ours */
+input[type='search']::-webkit-search-decoration,
+input[type='search']::-webkit-search-results-button,
+input[type='search']::-webkit-search-results-decoration {
+  -webkit-appearance: none;
+  display: none;
+}
+
+/* ============================================================
+   TYPOGRAPHY — Inter everywhere
+   One family for the whole system: headings, body, tables, forms.
+   Lining + tabular numerals keep amounts, marks and IDs aligned.
+   ============================================================ */
+:root {
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+  --serif: var(--font-sans);
+  --numeric: var(--font-sans);
+}
+
+html,
+body {
+  font-family: var(--font-sans);
+  font-optical-sizing: auto;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-variant-numeric: lining-nums;
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-sans);
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+}
+
+table,
+td,
+th,
+input[type='number'],
+.num,
+.nu,
+.amount,
+.stat-value,
+.kpi-value,
+.value {
+  font-variant-numeric: lining-nums tabular-nums;
+}

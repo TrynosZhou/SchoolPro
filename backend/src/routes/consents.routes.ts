@@ -41,18 +41,42 @@ router.get('/forms', async (req: AuthRequest, res: Response) => {
 
     // submission counts
     const subs = await AppDataSource.getRepository(ConsentSubmission).find();
-    const counts = new Map<string, { total: number; signed: number; pending: number }>();
+    const counts = new Map<string, { total: number; signed: number; pending: number; declined: number }>();
     for (const s of subs) {
-      const c = counts.get(s.formId) || { total: 0, signed: 0, pending: 0 };
+      const c = counts.get(s.formId) || { total: 0, signed: 0, pending: 0, declined: 0 };
       c.total++;
       if (s.status === 'signed') c.signed++;
       else if (s.status === 'pending') c.pending++;
+      else if (s.status === 'declined') c.declined++;
       counts.set(s.formId, c);
     }
-    res.json(rows.map((f) => ({ ...f, submissions: counts.get(f.id) || { total: 0, signed: 0, pending: 0 } })));
+    res.json(rows.map((f) => ({ ...f, submissions: counts.get(f.id) || { total: 0, signed: 0, pending: 0, declined: 0 } })));
   } catch (e) {
     console.error('[consents:forms]', e);
     res.status(500).json({ message: 'Could not load consent forms.' });
+  }
+});
+
+/** Headline figures for the Consent Forms page header (managers only). */
+router.get('/overview', authorize(...MANAGE), async (_req: AuthRequest, res: Response) => {
+  try {
+    const [forms, subs] = await Promise.all([
+      AppDataSource.getRepository(ConsentForm).find(),
+      AppDataSource.getRepository(ConsentSubmission).find(),
+    ]);
+    const t = today();
+    res.json({
+      forms: forms.length,
+      published: forms.filter((f) => f.status === 'published').length,
+      archived: forms.filter((f) => f.status === 'archived').length,
+      overdue: forms.filter((f) => f.status === 'published' && f.dueDate && f.dueDate < t).length,
+      signed: subs.filter((s) => s.status === 'signed').length,
+      pending: subs.filter((s) => s.status === 'pending').length,
+      declined: subs.filter((s) => s.status === 'declined').length,
+    });
+  } catch (e) {
+    console.error('[consents:overview]', e);
+    res.status(500).json({ message: 'Could not load consents overview.' });
   }
 });
 

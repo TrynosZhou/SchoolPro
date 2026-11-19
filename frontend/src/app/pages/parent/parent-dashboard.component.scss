@@ -38,9 +38,9 @@
   --bar-present: var(--navy);
   --bar-excused: #94a3b8;
 
-  --serif: 'Cormorant Garamond', Georgia, 'Times New Roman', serif;
+  --serif: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
   // Cormorant's own figures are old-style; Source Serif 4 gives lining numerals
-  --numeric: 'Source Serif 4', 'Cormorant Garamond', Georgia, serif;
+  --numeric: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
   --ring: 0 0 0 3px rgba(184, 146, 74, 0.32);
 }
 

@@ -31,7 +31,7 @@ const TABS = [
   @if (tab() === 'visitors') {
     <div class="toolbar" style="margin-bottom:1rem">
       <input type="date" [(ngModel)]="visitorDate" (change)="loadVisitors()" />
-      <input [(ngModel)]="visitorSearch" placeholder="Search…" (keyup.enter)="loadVisitors()" />
+      <input class="has-search-icon" [(ngModel)]="visitorSearch" placeholder="Search…" (keyup.enter)="loadVisitors()" />
       <button class="btn-primary" (click)="showVisitorForm=!showVisitorForm">+ Sign in</button>
     </div>
     @if (showVisitorForm) {

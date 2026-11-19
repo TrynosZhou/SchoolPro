@@ -13,19 +13,25 @@ interface Scan { id: string; studentId: string; studentName?: string; date: stri
 @Component({
   selector: 'app-admin-id-cards',
   standalone: true,
+  styleUrls: ['./welfare-classic.scss'],
   imports: [PortalLayoutComponent, FormsModule],
-  styles: [`
-    .id-card table { border-collapse: collapse; }
-    .id-card td { padding: 1px 0 !important; border: 0 !important; background: transparent !important; line-height: 1.3 !important; vertical-align: top; }
-    .id-card td:first-child { padding-right: 6px !important; }
-  `],
   template: `
 <app-portal-layout portalTitle="Admin Portal" pageTitle="ID Cards & QR Attendance" [navSections]="adminNav">
+<header class="wf-head">
+  <div class="wf-head-copy">
+    <p class="wf-eyebrow">Modern tools</p>
+    <h2 class="wf-title">ID Cards &amp; QR Attendance</h2>
+    <p class="wf-sub">Issue student ID cards and record arrivals and departures by scanning QR codes.</p>
+  </div>
+  <div class="wf-stats">
+    <div class="wf-stat"><strong>{{ scans.length }}</strong><span>Recent scans</span></div>
+  </div>
+</header>
 <div class="grid-2">
   <div class="card">
     <h3>Student ID card</h3>
     <div class="toolbar">
-      <input type="text" [(ngModel)]="searchText" placeholder="Name or student ID" (keyup.enter)="loadCard()" style="min-width:16rem" />
+      <input class="has-search-icon" type="text" [(ngModel)]="searchText" placeholder="Name or student ID" (keyup.enter)="loadCard()" style="min-width:16rem" />
       <button class="btn-primary" (click)="loadCard()" [disabled]="!searchText.trim() || loadingCard">{{ loadingCard ? 'Loading…' : 'Load' }}</button>
       <button class="btn-outline" (click)="ensureAll()" [disabled]="ensuring()">{{ ensuring() ? 'Generating…' : 'Ensure all cards' }}</button>
       @if (ensureMsg) { <span class="badge" [class.text-green]="!ensureError">{{ ensureMsg }}</span> }
@@ -73,7 +79,7 @@ interface Scan { id: string; studentId: string; studentName?: string; date: stri
         </div>
         <div class="toolbar" style="justify-content:center;margin-top:.75rem;width:100%">
           <button type="button" class="btn-primary" (click)="printCard()">Print card</button>
-          @if (printError) { <span class="badge">{{ printError }}</span> }
+          @if (printError) { <span class="wf-pill">{{ printError }}</span> }
         </div>
       </div>
     }
@@ -92,8 +98,8 @@ interface Scan { id: string; studentId: string; studentName?: string; date: stri
     <div class="toolbar" style="justify-content:space-between;margin-top:1rem"><h3 style="margin:0">Recent scans</h3><button class="btn-outline" (click)="loadScans()">Refresh</button></div>
     @if (scansError) { <p class="error">{{ scansError }}</p> }
     <table class="data-table"><thead><tr><th>Time</th><th>Student</th><th>Direction</th></tr></thead><tbody>
-      @for (s of scans; track s.id) { <tr><td>{{ s.date }} {{ s.time }}</td><td>{{ s.studentName }}</td><td>{{ s.direction }}</td></tr> }
-      @empty { <tr><td colspan="3">No scans yet</td></tr> }
+      @for (s of scans; track s.id) { <tr><td>{{ s.date }} {{ s.time }}</td><td>{{ s.studentName }}</td><td><span class="wf-pill">{{ s.direction }}</span></td></tr> }
+      @empty { <tr class="wf-empty-row"><td colspan="3">No scans yet</td></tr> }
     </tbody></table>
   </div>
 </div>

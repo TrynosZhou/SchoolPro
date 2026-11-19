@@ -30,6 +30,8 @@ export interface StaffMember {
   userId: string;
   title?: string | null;
   gender?: string | null;
+  maritalStatus?: string | null;
+  usesMaidenName?: boolean;
   department?: string;
   qualification?: string;
   hireDate?: string;
@@ -205,6 +207,8 @@ export class AdminStaffComponent implements OnInit {
   newStaff = {
     title: '' as string,
     gender: '' as string,
+    maritalStatus: '' as string,
+    usesMaidenName: false,
     firstName: '',
     lastName: '',
     email: '',
@@ -219,6 +223,8 @@ export class AdminStaffComponent implements OnInit {
   editForm = {
     title: '' as string,
     gender: '' as string,
+    maritalStatus: '' as string,
+    usesMaidenName: false,
     firstName: '',
     lastName: '',
     email: '',
@@ -822,6 +828,8 @@ export class AdminStaffComponent implements OnInit {
     this.editForm = {
       title: s.title || '',
       gender: s.gender || '',
+      maritalStatus: s.maritalStatus || '',
+      usesMaidenName: !!s.usesMaidenName,
       firstName: s.user.firstName,
       lastName: s.user.lastName,
       email: s.user.email,
@@ -978,6 +986,8 @@ export class AdminStaffComponent implements OnInit {
     this.newStaff = {
       title: '',
       gender: '',
+      maritalStatus: '',
+      usesMaidenName: false,
       firstName: '',
       lastName: '',
       email: '',

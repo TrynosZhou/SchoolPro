@@ -5,6 +5,7 @@ import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
 import { ApiService } from '../../core/services/api.service';
 import { AuthService } from '../../core/services/auth.service';
 import { DashboardOverview } from '../../core/models';
+import { titledName } from '../../core/utils/salutation.util';
 
 type KpiTone = 'lavender' | 'mint' | 'sky' | 'peach';
 
@@ -51,8 +52,7 @@ export class AdminDashboardComponent implements OnInit {
   });
 
   readonly adminName = computed(() => {
-    const u = this.auth.user();
-    return u ? `${u.firstName ?? ''} ${u.lastName ?? ''}`.trim() : '';
+    return titledName(this.auth.user());
   });
 
   readonly attendance = computed(() => {

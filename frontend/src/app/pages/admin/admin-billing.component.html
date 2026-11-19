@@ -224,7 +224,7 @@
                       <input
                         #paymentStudentSearch
                         type="text"
-                        class="search-input"
+                        class="has-search-icon search-input"
                         placeholder="Student ID, First Name, or Last Name…"
                         [ngModel]="studentSearch()"
                         (ngModelChange)="studentSearch.set($event); searchAttempted.set(false)"
@@ -375,7 +375,7 @@
                 <div class="search-wrap">
                   <input
                     type="text"
-                    class="search-input"
+                    class="has-search-icon search-input"
                     placeholder="e.g. Chipo, Moyo, or STU-001…"
                     [ngModel]="invoiceStudentSearch()"
                     (ngModelChange)="invoiceStudentSearch.set($event)"
@@ -724,7 +724,7 @@
                 <div class="search-wrap">
                   <input
                     type="text"
-                    class="search-input"
+                    class="has-search-icon search-input"
                     placeholder="Student ID, First Name, or Last Name…"
                     [ngModel]="getInvoiceStudentSearch()"
                     (ngModelChange)="getInvoiceStudentSearch.set($event); getInvoiceSearchAttempted.set(false)"
@@ -872,7 +872,7 @@
                 <div class="search-wrap">
                   <input
                     type="text"
-                    class="search-input"
+                    class="has-search-icon search-input"
                     placeholder="Student ID, First Name, or Last Name…"
                     [ngModel]="noteSearch()"
                     (ngModelChange)="noteSearch.set($event); noteSearchAttempted.set(false)"

@@ -84,7 +84,7 @@
           <div class="field stu-search">
             <span>Student</span>
             <div class="stu-box">
-              <input
+              <input class="has-search-icon"
                 [ngModel]="studentQuery()" (ngModelChange)="onStudentQuery($event)" name="studentQuery"
                 (focus)="showSuggest.set(true)" (blur)="hideSuggestSoon()" (keydown)="onStudentKey($event)"
                 placeholder="Type first name, last name or student ID…" autocomplete="off"

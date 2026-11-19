@@ -74,6 +74,7 @@ import { IdCardScan } from './IdCardScan';
 import { PaymentIntent } from './PaymentIntent';
 import { PushSubscription } from './PushSubscription';
 import { Room } from './Room';
+import { ConsentForm, ConsentSubmission } from './Consent';
 
 export const entities = [
   User,
@@ -152,6 +153,8 @@ export const entities = [
   PaymentIntent,
   PushSubscription,
   Room,
+  ConsentForm,
+  ConsentSubmission,
 ];
 
 export * from './enums';
@@ -232,5 +235,7 @@ export {
   PaymentIntent,
   PushSubscription,
   Room,
+  ConsentForm,
+  ConsentSubmission,
 };
 

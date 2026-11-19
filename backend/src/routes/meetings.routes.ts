@@ -67,17 +67,57 @@ router.get('/slots', async (req: AuthRequest, res: Response) => {
     }
     let slots = await qb.getMany();
 
-    // Attach booking counts
-    const bookingRepo = AppDataSource.getRepository(MeetingBooking);
-    const enriched = [];
-    for (const s of slots) {
-      const bookings = await bookingRepo.find({ where: { slotId: s.id, status: 'confirmed' as any } });
-      enriched.push({ ...s, bookedCount: bookings.length });
+    // Attach confirmed-booking counts with a single grouped query (was one query per slot)
+    const counts = new Map<string, number>();
+    if (slots.length) {
+      const grouped = await AppDataSource.getRepository(MeetingBooking)
+        .createQueryBuilder('b')
+        .select('b.slotId', 'slotId')
+        .addSelect('COUNT(*)', 'n')
+        .where('b.slotId IN (:...ids)', { ids: slots.map((s) => s.id) })
+        .andWhere('b.status = :st', { st: 'confirmed' })
+        .groupBy('b.slotId')
+        .getRawMany();
+      for (const g of grouped) counts.set(g.slotId, Number(g.n));
     }
-    res.json(enriched);
+    res.json(slots.map((s) => ({ ...s, bookedCount: counts.get(s.id) || 0 })));
   } catch (e) {
     console.error('[meetings:slots]', e);
     res.status(500).json({ message: 'Could not load meeting slots.' });
+  }
+});
+
+/** Headline figures for the Meetings page header (same visibility rules as the lists). */
+router.get('/overview', async (req: AuthRequest, res: Response) => {
+  try {
+    const { from, to } = req.query as any;
+    const slotQb = AppDataSource.getRepository(MeetingSlot).createQueryBuilder('s');
+    if (from) slotQb.andWhere('s.date >= :from', { from });
+    if (to) slotQb.andWhere('s.date <= :to', { to });
+    if (req.user!.role === UserRole.TEACHER) slotQb.andWhere('s.teacherId = :me', { me: req.user!.userId });
+    const slots = await slotQb.getMany();
+
+    const bookQb = AppDataSource.getRepository(MeetingBooking).createQueryBuilder('b');
+    if (req.user!.role === UserRole.PARENT) {
+      bookQb.andWhere('b.parentId = :pid', { pid: (req.user as any).parentId || req.user!.userId });
+    } else if (slots.length) {
+      bookQb.andWhere('b.slotId IN (:...ids)', { ids: slots.map((s) => s.id) });
+    } else {
+      bookQb.andWhere('1 = 0');
+    }
+    const bookings = await bookQb.getMany();
+    const by = (st: string) => bookings.filter((b) => b.status === st).length;
+
+    res.json({
+      slots: slots.length,
+      openSlots: slots.filter((s) => s.status === 'open').length,
+      confirmed: by('confirmed'),
+      completed: by('completed'),
+      cancelled: by('cancelled'),
+    });
+  } catch (e) {
+    console.error('[meetings:overview]', e);
+    res.status(500).json({ message: 'Could not load meetings overview.' });
   }
 });
 

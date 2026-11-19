@@ -20,9 +20,20 @@ const TYPES = ['holiday', 'exam', 'event', 'meeting', 'deadline', 'other'];
 @Component({
   selector: 'app-school-calendar',
   standalone: true,
+  styleUrls: ['./welfare-classic.scss'],
   imports: [PortalLayoutComponent, FormsModule],
   template: `
 <app-portal-layout [portalTitle]="portalTitle" pageTitle="School Calendar" [navSections]="navSections" [navItems]="navItems">
+<header class="wf-head">
+  <div class="wf-head-copy">
+    <p class="wf-eyebrow">School operations</p>
+    <h2 class="wf-title">School Calendar</h2>
+    <p class="wf-sub">Terms, holidays, exams, meetings and events for the whole school community.</p>
+  </div>
+  <div class="wf-stats">
+    <div class="wf-stat"><strong>{{ events.length }}</strong><span>Events in range</span></div>
+  </div>
+</header>
 <div class="card">
   <div class="toolbar" style="margin-bottom:1rem">
     <input type="date" [(ngModel)]="from" (change)="load()" />
@@ -35,7 +46,7 @@ const TYPES = ['holiday', 'exam', 'event', 'meeting', 'deadline', 'other'];
   </div>
 
   @if (showForm && canManage) {
-    <div class="card" style="margin-bottom:1rem">
+    <div class="wf-form">
       <div class="form-grid">
         <input [(ngModel)]="ev.title" placeholder="Title" />
         <select [(ngModel)]="ev.type">@for (t of types; track t) { <option [value]="t">{{ t }}</option> }</select>
@@ -53,30 +64,33 @@ const TYPES = ['holiday', 'exam', 'event', 'meeting', 'deadline', 'other'];
   }
 
   @for (e of events; track e.id) {
-    <div class="card" style="margin-bottom:.75rem">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start">
-        <div>
-          <b>{{ e.title }}</b> <span class="badge">{{ e.type }}</span>
-          @if (e.location) { <span class="badge">{{ e.location }}</span> }
-          <div>{{ e.startDate }}{{ e.endDate && e.endDate !== e.startDate ? ' → ' + e.endDate : '' }} · {{ e.audience }}</div>
-          @if (e.description) { <div style="color:#555;margin-top:.25rem">{{ e.description }}</div> }
-          @if (e.rsvps && e.rsvps.total) { <div style="font-size:.85rem;color:#555">RSVP: {{ e.rsvps.attending }} attending · {{ e.rsvps.maybe }} maybe · {{ e.rsvps.notAttending }} not attending</div> }
+    <article class="wf-event">
+      <div class="wf-date"><strong>{{ e.startDate.slice(8, 10) }}</strong><span>{{ monthShort(e.startDate) }}</span></div>
+      <div class="wf-event-body">
+        <h4>{{ e.title }}</h4>
+        <div class="wf-tags">
+          <span class="wf-pill">{{ e.type }}</span>
+          @if (e.location) { <span class="wf-pill alt">{{ e.location }}</span> }
+          <span class="wf-pill alt">{{ e.audience }}</span>
         </div>
-        <div class="toolbar">
-          @if (canManage) {
-            <button class="btn-outline" (click)="edit(e)">Edit</button>
-            <button class="btn-outline" (click)="del(e)">Delete</button>
-          }
-          @if (!canManage || true) {
-            <select [(ngModel)]="myRsvp[e.id]" (change)="rsvp(e)">
-              <option value="">RSVP…</option><option value="attending">Attending</option>
-              <option value="maybe">Maybe</option><option value="not_attending">Not attending</option>
-            </select>
-          }
-        </div>
+        <p class="wf-meta">{{ e.startDate }}{{ e.endDate && e.endDate !== e.startDate ? ' → ' + e.endDate : '' }}</p>
+        @if (e.description) { <p class="wf-desc">{{ e.description }}</p> }
+        @if (e.rsvps && e.rsvps.total) { <p class="wf-meta">RSVP: {{ e.rsvps.attending }} attending · {{ e.rsvps.maybe }} maybe · {{ e.rsvps.notAttending }} not attending</p> }
       </div>
-    </div>
-  } @empty { <p>No events in this range.</p> }
+      <div class="wf-event-actions">
+        @if (canManage) {
+          <button class="btn-outline" (click)="edit(e)">Edit</button>
+          <button class="btn-outline" (click)="del(e)">Delete</button>
+        }
+        <select [(ngModel)]="myRsvp[e.id]" (change)="rsvp(e)" aria-label="RSVP">
+          <option value="">RSVP…</option><option value="attending">Attending</option>
+          <option value="maybe">Maybe</option><option value="not_attending">Not attending</option>
+        </select>
+      </div>
+    </article>
+  } @empty {
+    <div class="wf-empty"><strong>No events in this range</strong><span>Change the dates above, or add a new event.</span></div>
+  }
 </div>
 </app-portal-layout>`,
 })
@@ -104,6 +118,7 @@ export class SchoolCalendarComponent implements OnInit {
   get navItems() { return this.role === 'parent' ? this.parentNav : []; }
 
   events: CalEvent[] = [];
+  monthShort(d: string): string { return ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][Number(d.slice(5, 7)) - 1] || ''; }
   myRsvp: Record<string, string> = {};
   showForm = false;
   editingId = '';

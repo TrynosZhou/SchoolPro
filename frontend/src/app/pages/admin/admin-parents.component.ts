@@ -32,6 +32,8 @@ interface ParentRow {
   isActive: boolean;
   occupation: string | null;
   gender: string | null;
+  maritalStatus?: string | null;
+  usesMaidenName?: boolean;
   address: string | null;
   receivesWhatsApp: boolean;
   linkedStudents: LinkedStudent[];
@@ -83,6 +85,8 @@ export class AdminParentsComponent implements OnInit {
     password: '',
     occupation: '',
     gender: '',
+    maritalStatus: '',
+    usesMaidenName: false,
     address: '',
     receivesWhatsApp: true,
     isActive: true,
@@ -191,6 +195,8 @@ export class AdminParentsComponent implements OnInit {
       password: '',
       occupation: '',
       gender: '',
+      maritalStatus: '',
+      usesMaidenName: false,
       address: '',
       receivesWhatsApp: true,
       isActive: true,
@@ -238,6 +244,8 @@ export class AdminParentsComponent implements OnInit {
       password: '',
       occupation: parent.occupation ?? '',
       gender: parent.gender ?? '',
+      maritalStatus: parent.maritalStatus ?? '',
+      usesMaidenName: !!parent.usesMaidenName,
       address: parent.address ?? '',
       receivesWhatsApp: parent.receivesWhatsApp,
       isActive: parent.isActive,
@@ -268,6 +276,8 @@ export class AdminParentsComponent implements OnInit {
       phone: this.form.phone.trim() || undefined,
       occupation: this.form.occupation.trim() || undefined,
       gender: this.form.gender.trim() || undefined,
+      maritalStatus: this.form.gender.trim() === 'female' ? this.form.maritalStatus || undefined : undefined,
+      usesMaidenName: this.form.maritalStatus === 'married' ? this.form.usesMaidenName : false,
       address: this.form.address.trim() || undefined,
       receivesWhatsApp: this.form.receivesWhatsApp,
       linkAdmissionNumber: this.form.linkAdmissionNumber.trim() || undefined,

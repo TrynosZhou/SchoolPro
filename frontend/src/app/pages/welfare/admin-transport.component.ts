@@ -22,13 +22,27 @@ const TABS = [
 @Component({
   selector: 'app-admin-transport',
   standalone: true,
+  styleUrls: ['./welfare-classic.scss'],
   imports: [PortalLayoutComponent, FormsModule],
   template: `
 <app-portal-layout portalTitle="Admin Portal" pageTitle="Transport" [navSections]="adminNav">
+<header class="wf-head">
+  <div class="wf-head-copy">
+    <p class="wf-eyebrow">School operations</p>
+    <h2 class="wf-title">Transport</h2>
+    <p class="wf-sub">Routes, vehicles, drivers and student pickups in one place.</p>
+  </div>
+  <div class="wf-stats">
+    <div class="wf-stat"><strong>{{ routes.length }}</strong><span>Routes</span></div>
+    <div class="wf-stat"><strong>{{ vehicles.length }}</strong><span>Vehicles</span></div>
+    <div class="wf-stat"><strong>{{ drivers.length }}</strong><span>Drivers</span></div>
+    <div class="wf-stat"><strong>{{ assignments.length }}</strong><span>Assignments</span></div>
+  </div>
+</header>
 <div class="card">
-  <div class="toolbar" style="margin-bottom:1rem">
+  <div class="tab-bar" role="tablist">
     @for (t of tabs; track t.key) {
-      <button class="btn-outline" [style.fontWeight]="tab()===t.key?'700':'400'" (click)="tab.set(t.key)">{{ t.label }}</button>
+      <button type="button" role="tab" [class.active]="tab()===t.key" [attr.aria-selected]="tab()===t.key" (click)="tab.set(t.key)">{{ t.label }}</button>
     }
   </div>
 
@@ -38,7 +52,7 @@ const TABS = [
         <h3>Routes</h3>
         <div class="toolbar"><button class="btn-primary" (click)="showRouteForm=!showRouteForm">+ Route</button></div>
         @if (showRouteForm) {
-          <div class="form-grid" style="margin:.5rem 0">
+          <div class="form-grid wf-form">
             <input [(ngModel)]="route.code" placeholder="Code" /><input [(ngModel)]="route.name" placeholder="Name" />
             <input [(ngModel)]="route.description" placeholder="Description" />
             <button class="btn-primary" (click)="saveRoute()">Save</button>
@@ -53,7 +67,7 @@ const TABS = [
               <tr><td></td><td style="padding-left:1.5rem">↳ {{ s.name }} {{ s.pickupTime ? '('+s.pickupTime+')' : '' }}</td>
                 <td><button class="btn-outline" (click)="delStop(s)">×</button></td></tr>
             }
-          } @empty { <tr><td colspan="3">No routes</td></tr> }
+          } @empty { <tr class="wf-empty-row"><td colspan="3">No routes</td></tr> }
         </tbody></table>
       </div>
       <div>
@@ -63,7 +77,7 @@ const TABS = [
           <button class="btn-outline" (click)="showDriverForm=!showDriverForm">+ Driver</button>
         </div>
         @if (showVehicleForm) {
-          <div class="form-grid" style="margin:.5rem 0">
+          <div class="form-grid wf-form">
             <input [(ngModel)]="vehicle.registration" placeholder="Registration" /><input [(ngModel)]="vehicle.make" placeholder="Make" />
             <input [(ngModel)]="vehicle.capacity" type="number" placeholder="Capacity" />
             <select [(ngModel)]="vehicle.routeId"><option value="">Route…</option>@for (r of routes; track r.id) { <option [value]="r.id">{{ r.code }}</option> }</select>
@@ -72,7 +86,7 @@ const TABS = [
           </div>
         }
         @if (showDriverForm) {
-          <div class="form-grid" style="margin:.5rem 0">
+          <div class="form-grid wf-form">
             <input [(ngModel)]="driver.name" placeholder="Name" /><input [(ngModel)]="driver.phone" placeholder="Phone" />
             <input [(ngModel)]="driver.licenseNumber" placeholder="License no." /><input [(ngModel)]="driver.licenseExpiry" type="date" placeholder="License expiry" />
             <button class="btn-primary" (click)="saveDriver()">Save</button>
@@ -80,14 +94,14 @@ const TABS = [
         }
         <table class="data-table"><thead><tr><th>Reg</th><th>Make</th><th>Route</th><th>Driver</th><th>Status</th></tr></thead><tbody>
           @for (v of vehicles; track v.id) {
-            <tr><td>{{ v.registration }}</td><td>{{ v.make }}</td><td>{{ v.routeCode || '—' }}</td><td>{{ v.driverName || '—' }}</td><td>{{ v.status }}</td></tr>
-          } @empty { <tr><td colspan="5">No vehicles</td></tr> }
+            <tr><td>{{ v.registration }}</td><td>{{ v.make }}</td><td>{{ v.routeCode || '—' }}</td><td>{{ v.driverName || '—' }}</td><td><span class="wf-pill">{{ v.status }}</span></td></tr>
+          } @empty { <tr class="wf-empty-row"><td colspan="5">No vehicles</td></tr> }
         </tbody></table>
         <h3 style="margin-top:1rem">Drivers</h3>
         <table class="data-table"><thead><tr><th>Name</th><th>Phone</th><th>License</th><th>Expiry</th></tr></thead><tbody>
           @for (d of drivers; track d.id) {
             <tr><td>{{ d.name }}</td><td>{{ d.phone || '—' }}</td><td>{{ d.licenseNumber || '—' }}</td><td>{{ d.licenseExpiry || '—' }}</td></tr>
-          } @empty { <tr><td colspan="4">No drivers</td></tr> }
+          } @empty { <tr class="wf-empty-row"><td colspan="4">No drivers</td></tr> }
         </tbody></table>
       </div>
     </div>
@@ -98,7 +112,7 @@ const TABS = [
       <button class="btn-primary" (click)="showAssignForm=!showAssignForm">+ Assign student</button>
     </div>
     @if (showAssignForm) {
-      <div class="card" style="margin-bottom:1rem">
+      <div class="wf-form">
         <div class="form-grid">
           <select [(ngModel)]="assign.studentId"><option value="">Student…</option>@for (s of students; track s.id) { <option [value]="s.id">{{ s.firstName }} {{ s.lastName }}</option> }</select>
           <select [(ngModel)]="assign.routeId"><option value="">Route…</option>@for (r of routes; track r.id) { <option [value]="r.id">{{ r.code }} — {{ r.name }}</option> }</select>
@@ -113,9 +127,9 @@ const TABS = [
     }
     <table class="data-table"><thead><tr><th>Student</th><th>Route</th><th>Stop</th><th>Active</th><th></th></tr></thead><tbody>
       @for (a of assignments; track a.id) {
-        <tr><td>{{ a.studentName }}</td><td>{{ a.route?.name }}</td><td>{{ a.stop?.name || '—' }}</td><td>{{ a.isActive ? 'Yes' : 'No' }}</td>
+        <tr><td>{{ a.studentName }}</td><td>{{ a.route?.name }}</td><td>{{ a.stop?.name || '—' }}</td><td><span class="wf-pill" [class.on]="a.isActive">{{ a.isActive ? 'Active' : 'Inactive' }}</span></td>
           <td><button class="btn-outline" (click)="toggleAssignment(a)">{{ a.isActive ? 'Deactivate' : 'Activate' }}</button></td></tr>
-      } @empty { <tr><td colspan="5">No assignments</td></tr> }
+      } @empty { <tr class="wf-empty-row"><td colspan="5">No assignments</td></tr> }
     </tbody></table>
   }
 
@@ -124,7 +138,7 @@ const TABS = [
       <button class="btn-primary" (click)="showDelayForm=!showDelayForm">+ Report delay</button>
     </div>
     @if (showDelayForm) {
-      <div class="card" style="margin-bottom:1rem">
+      <div class="wf-form">
         <div class="form-grid">
           <select [(ngModel)]="delay.routeId"><option value="">Route…</option>@for (r of routes; track r.id) { <option [value]="r.id">{{ r.code }} — {{ r.name }}</option> }</select>
           <select [(ngModel)]="delay.vehicleId"><option value="">Vehicle…</option>@for (v of vehicles; track v.id) { <option [value]="v.id">{{ v.registration }}</option> }</select>
@@ -141,7 +155,7 @@ const TABS = [
     <table class="data-table"><thead><tr><th>Date</th><th>Route</th><th>Scheduled</th><th>Actual</th><th>Reason</th><th>Parents notified</th></tr></thead><tbody>
       @for (d of delays; track d.id) {
         <tr><td>{{ d.date }}</td><td>{{ d.route?.name }}</td><td>{{ d.scheduledTime || '—' }}</td><td>{{ d.actualTime || '—' }}</td><td>{{ d.reason }}</td><td>{{ d.parentsNotified ? 'Yes' : 'No' }}</td></tr>
-      } @empty { <tr><td colspan="6">No delays reported</td></tr> }
+      } @empty { <tr class="wf-empty-row"><td colspan="6">No delays reported</td></tr> }
     </tbody></table>
   }
 

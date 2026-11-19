@@ -228,6 +228,38 @@ router.get('/sickbay', async (req: AuthRequest, res: Response) => {
   }
 });
 
+/** Headline figures for the Health & Medical tab. */
+router.get('/overview', async (req: AuthRequest, res: Response) => {
+  try {
+    const allowed = await parentStudentIds(req);
+    const keep = (r: any) => !allowed || allowed.includes(r.studentId);
+    const t = today();
+    const monthStart = `${t.slice(0, 7)}-01`;
+    const in30 = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+
+    const [profiles, visits, immunisations] = await Promise.all([
+      AppDataSource.getRepository(StudentHealthProfile).find(),
+      AppDataSource.getRepository(SickbayVisit).find(),
+      AppDataSource.getRepository(StudentImmunisation).find(),
+    ]);
+
+    const monthVisits = visits.filter(keep).filter((v) => v.date >= monthStart);
+    res.json({
+      profiles: profiles.filter(keep).length,
+      withAllergies: profiles.filter(keep).filter((p) => (p.allergies || '').trim()).length,
+      visitsThisMonth: monthVisits.length,
+      sentHomeThisMonth: monthVisits.filter((v) => v.sentHome).length,
+      parentNoticePending: visits.filter(keep).filter((v) => !v.parentNotified).length,
+      immunisationsDueSoon: immunisations
+        .filter(keep)
+        .filter((i) => i.nextDueDate && i.nextDueDate >= t && i.nextDueDate <= in30).length,
+    });
+  } catch (e) {
+    console.error('[health:overview]', e);
+    res.status(500).json({ message: 'Could not load health overview.' });
+  }
+});
+
 router.post('/sickbay', authorize(...STAFF_ROLES), async (req: AuthRequest, res: Response) => {
   try {
     const b = req.body ?? {};

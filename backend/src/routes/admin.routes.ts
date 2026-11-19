@@ -44,7 +44,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { ensureUploadDirs } from '../utils/pdf';
-import { resolveParentGender } from '../utils/gender';
+import { resolveParentGender, normalizeMaritalStatus, resolveUsesMaidenName, normalizeHonorific, buildPersonalDetails } from '../utils/gender';
 import { SCHOOL_READ_ROLES } from '../config/portal-roles';
 import { blockInDemo } from '../middleware/demo-guard.middleware';
 import { logAudit } from '../services/audit-log.service';
@@ -1266,6 +1266,8 @@ router.post('/staff', authorize(UserRole.ADMIN), async (req, res: Response) => {
     hireDate,
     title,
     gender,
+    maritalStatus,
+    usesMaidenName,
     employeeNumber: _ignored,
   } = req.body;
   const userRepo = AppDataSource.getRepository(User);
@@ -1300,6 +1302,8 @@ router.post('/staff', authorize(UserRole.ADMIN), async (req, res: Response) => {
     employeeNumber,
     title: title ? String(title).trim() : null,
     gender: normalizedGender,
+    maritalStatus: normalizedGender === 'female' ? normalizeMaritalStatus(maritalStatus) : null,
+    usesMaidenName: resolveUsesMaidenName(normalizedGender, maritalStatus, usesMaidenName),
     department,
     qualification,
     hireDate: hireDate || today(),
@@ -1335,6 +1339,8 @@ router.patch('/staff/:id', authorize(UserRole.ADMIN), async (req, res: Response)
     hireDate,
     title,
     gender,
+    maritalStatus,
+    usesMaidenName,
     employeeNumber: _ignored,
     isActive,
   } = req.body;
@@ -1364,6 +1370,13 @@ router.patch('/staff/:id', authorize(UserRole.ADMIN), async (req, res: Response)
   }
   if (title !== undefined) staff.title = title ? String(title).trim() : null;
   if (gender !== undefined) staff.gender = normalizeGender(gender);
+  if (gender !== undefined || maritalStatus !== undefined || usesMaidenName !== undefined) {
+    const g = gender !== undefined ? gender : staff.gender;
+    const ms = maritalStatus !== undefined ? maritalStatus : staff.maritalStatus;
+    const um = usesMaidenName !== undefined ? usesMaidenName : staff.usesMaidenName;
+    staff.maritalStatus = normalizeGender(g) === 'female' ? normalizeMaritalStatus(ms) : null;
+    staff.usesMaidenName = resolveUsesMaidenName(g, ms, um);
+  }
   if (isActive !== undefined) {
     staff.isActive = isActive;
     staff.user.isActive = isActive;
@@ -1447,6 +1460,10 @@ function serializeManagedUser(user: User) {
     firstName: user.firstName,
     lastName: user.lastName,
     phone: user.phone ?? null,
+    gender: user.gender ?? user.staffProfile?.gender ?? user.parentProfile?.gender ?? user.studentProfile?.gender ?? null,
+    maritalStatus: user.maritalStatus ?? user.staffProfile?.maritalStatus ?? user.parentProfile?.maritalStatus ?? null,
+    usesMaidenName: !!(user.usesMaidenName || user.staffProfile?.usesMaidenName || user.parentProfile?.usesMaidenName),
+    salutation: user.salutation ?? null,
     role: user.role,
     roleLabel: PORTAL_ROLE_LABELS[user.role] ?? user.role,
     isActive: user.isActive,
@@ -1537,6 +1554,9 @@ router.post('/users', authorize(UserRole.ADMIN), async (req: AuthRequest, res: R
     linkAdmissionNumber,
     relationship,
     gender,
+    maritalStatus,
+    usesMaidenName,
+    salutation,
   } = req.body || {};
 
   const trimmedEmail = String(email || '').trim().toLowerCase();
@@ -1598,6 +1618,8 @@ router.post('/users', authorize(UserRole.ADMIN), async (req: AuthRequest, res: R
     phone: phone?.trim() || undefined,
     role: schoolRole ? schoolRole.baseRole : portalRole,
     schoolRoleId: schoolRole?.id,
+    ...buildPersonalDetails({ gender, maritalStatus, usesMaidenName }),
+    salutation: normalizeHonorific(salutation) || null,
   }));
 
   if (STAFF_PORTAL_ROLES.includes(portalRole)) {
@@ -1611,6 +1633,7 @@ router.post('/users', authorize(UserRole.ADMIN), async (req: AuthRequest, res: R
         qualification: qualification?.trim() || undefined,
         hireDate: hireDate || today(),
         isActive: true,
+        ...buildPersonalDetails({ gender, maritalStatus, usesMaidenName }),
       }));
     }
   } else if (portalRole === UserRole.PARENT) {
@@ -1618,7 +1641,7 @@ router.post('/users', authorize(UserRole.ADMIN), async (req: AuthRequest, res: R
     const parentGender = resolveParentGender(gender, relationship);
     const parent = await parentRepo.save(parentRepo.create({
       userId: user.id,
-      gender: parentGender ?? undefined,
+      ...buildPersonalDetails({ gender: parentGender ?? gender, maritalStatus, usesMaidenName }),
     }));
 
     const linkAdmission = String(linkAdmissionNumber || '').trim().toUpperCase();
@@ -1676,6 +1699,10 @@ router.patch('/users/:id', authorize(UserRole.ADMIN), async (req: AuthRequest, r
     department,
     qualification,
     hireDate,
+    gender,
+    maritalStatus,
+    usesMaidenName,
+    salutation,
   } = req.body || {};
 
   if (req.params.id === req.user!.userId && isActive === false) {
@@ -1779,6 +1806,26 @@ router.patch('/users/:id', authorize(UserRole.ADMIN), async (req: AuthRequest, r
   if (isActive !== undefined) {
     user.isActive = Boolean(isActive);
     if (user.staffProfile && STAFF_PORTAL_ROLES.includes(user.role)) user.staffProfile.isActive = user.isActive;
+  }
+
+  if (gender !== undefined || maritalStatus !== undefined || usesMaidenName !== undefined || salutation !== undefined) {
+    const details = buildPersonalDetails(
+      { gender, maritalStatus, usesMaidenName },
+      {
+        gender: user.gender ?? user.staffProfile?.gender ?? user.parentProfile?.gender ?? user.studentProfile?.gender,
+        maritalStatus: user.maritalStatus ?? user.staffProfile?.maritalStatus ?? user.parentProfile?.maritalStatus,
+        usesMaidenName: user.usesMaidenName || user.staffProfile?.usesMaidenName || user.parentProfile?.usesMaidenName,
+      },
+    );
+    user.gender = details.gender;
+    user.maritalStatus = details.maritalStatus;
+    user.usesMaidenName = details.usesMaidenName;
+    if (salutation !== undefined) user.salutation = normalizeHonorific(salutation) || null;
+    if (user.staffProfile) Object.assign(user.staffProfile, details);
+    if (user.parentProfile) {
+      Object.assign(user.parentProfile, details);
+      await AppDataSource.getRepository(Parent).save(user.parentProfile);
+    }
   }
 
   await userRepo.save(user);
@@ -1920,6 +1967,8 @@ function serializeParent(parent: Parent) {
     isActive: user.isActive,
     occupation: parent.occupation ?? null,
     gender: parent.gender ?? null,
+    maritalStatus: parent.maritalStatus ?? null,
+    usesMaidenName: !!parent.usesMaidenName,
     address: parent.address ?? null,
     receivesWhatsApp: parent.receivesWhatsApp,
     linkedStudents,
@@ -2083,6 +2132,8 @@ router.post('/parents', authorize(UserRole.ADMIN), async (req: AuthRequest, res:
     linkAdmissionNumber,
     relationship,
     gender,
+    maritalStatus,
+    usesMaidenName,
   } = req.body || {};
 
   const trimmedEmail = String(email || '').trim().toLowerCase();
@@ -2121,6 +2172,8 @@ router.post('/parents', authorize(UserRole.ADMIN), async (req: AuthRequest, res:
     address: address?.trim() || undefined,
     receivesWhatsApp: receivesWhatsApp !== false,
     gender: parentGender ?? undefined,
+    maritalStatus: parentGender === 'female' ? normalizeMaritalStatus(maritalStatus) : null,
+    usesMaidenName: resolveUsesMaidenName(parentGender, maritalStatus, usesMaidenName),
   }));
 
   const linkAdmission = String(linkAdmissionNumber || '').trim().toUpperCase();
@@ -2171,6 +2224,8 @@ router.patch('/parents/:id', authorize(UserRole.ADMIN), async (req: AuthRequest,
     linkAdmissionNumber,
     relationship,
     gender,
+    maritalStatus,
+    usesMaidenName,
   } = req.body || {};
 
   const userRepo = AppDataSource.getRepository(User);
@@ -2207,6 +2262,12 @@ router.patch('/parents/:id', authorize(UserRole.ADMIN), async (req: AuthRequest,
       gender !== undefined ? gender : parent.gender,
       rel,
     ) ?? undefined;
+  }
+  if (gender !== undefined || relationship !== undefined || maritalStatus !== undefined || usesMaidenName !== undefined) {
+    const ms = maritalStatus !== undefined ? maritalStatus : parent.maritalStatus;
+    const um = usesMaidenName !== undefined ? usesMaidenName : parent.usesMaidenName;
+    parent.maritalStatus = parent.gender === 'female' ? normalizeMaritalStatus(ms) : null;
+    parent.usesMaidenName = resolveUsesMaidenName(parent.gender, ms, um);
   }
 
   await userRepo.save(user);

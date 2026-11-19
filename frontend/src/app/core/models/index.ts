@@ -7,6 +7,12 @@ export interface User {
   firstName: string;
   lastName: string;
   gender?: string | null;
+  /** 'single' | 'married' – used to choose Miss / Mrs / Ms in greetings. */
+  maritalStatus?: string | null;
+  /** Married women who still use their maiden name are addressed as Ms. */
+  usesMaidenName?: boolean | null;
+  /** Optional explicit title (Dr, Prof, Rev…) that overrides the automatic rule. */
+  salutation?: string | null;
   role: UserRole;
   schoolRoleId?: string | null;
   schoolRoleName?: string | null;

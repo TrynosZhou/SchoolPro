@@ -21,13 +21,27 @@ const TABS = [
 @Component({
   selector: 'app-admin-activities',
   standalone: true,
+  styleUrls: ['./welfare-classic.scss'],
   imports: [PortalLayoutComponent, FormsModule],
   template: `
 <app-portal-layout portalTitle="Admin Portal" pageTitle="Co-Curricular" [navSections]="adminNav">
+<header class="wf-head">
+  <div class="wf-head-copy">
+    <p class="wf-eyebrow">School operations</p>
+    <h2 class="wf-title">Co-Curricular</h2>
+    <p class="wf-sub">Clubs, sports and houses, with members, points and competitions.</p>
+  </div>
+  <div class="wf-stats">
+    <div class="wf-stat"><strong>{{ activities.length }}</strong><span>Activities</span></div>
+    <div class="wf-stat"><strong>{{ houses.length }}</strong><span>Houses</span></div>
+    <div class="wf-stat"><strong>{{ members.length }}</strong><span>Members</span></div>
+    <div class="wf-stat"><strong>{{ competitions.length }}</strong><span>Competitions</span></div>
+  </div>
+</header>
 <div class="card">
-  <div class="toolbar" style="margin-bottom:1rem">
+  <div class="tab-bar" role="tablist">
     @for (t of tabs; track t.key) {
-      <button class="btn-outline" [style.fontWeight]="tab()===t.key?'700':'400'" (click)="tab.set(t.key)">{{ t.label }}</button>
+      <button type="button" role="tab" [class.active]="tab()===t.key" [attr.aria-selected]="tab()===t.key" (click)="tab.set(t.key)">{{ t.label }}</button>
     }
   </div>
 
@@ -54,11 +68,11 @@ const TABS = [
       <table class="data-table"><thead><tr><th>Name</th><th>Type</th><th>Coach</th><th>Members</th></tr></thead><tbody>
         @for (a of activities; track a.id) {
           <tr><td>{{ a.name }}</td><td>{{ a.type }}</td><td>{{ a.coachName || '—' }}</td><td>{{ a.memberCount }}</td></tr>
-        } @empty { <tr><td colspan="4">No activities</td></tr> }
+        } @empty { <tr class="wf-empty-row"><td colspan="4">No activities</td></tr> }
       </tbody></table>
       <table class="data-table"><thead><tr><th>House</th><th>Color</th><th>Motto</th></tr></thead><tbody>
         @for (h of houses; track h.id) { <tr><td>{{ h.name }}</td><td>{{ h.color || '—' }}</td><td>{{ h.motto || '—' }}</td></tr> }
-        @empty { <tr><td colspan="3">No houses</td></tr> }
+        @empty { <tr class="wf-empty-row"><td colspan="3">No houses</td></tr> }
       </tbody></table>
     </div>
   }
@@ -80,7 +94,7 @@ const TABS = [
       @for (m of members; track m.id) {
         <tr><td>{{ m.studentName }}</td><td>{{ m.role }}</td>
           <td><button class="btn-outline" (click)="removeMember(m)">Remove</button></td></tr>
-      } @empty { <tr><td colspan="3">Select an activity to view members</td></tr> }
+      } @empty { <tr class="wf-empty-row"><td colspan="3">Select an activity to view members</td></tr> }
     </tbody></table>
   }
 
@@ -108,7 +122,7 @@ const TABS = [
     <h3>Recent points</h3>
     <table class="data-table"><thead><tr><th>Date</th><th>Student</th><th>Points</th><th>Reason</th></tr></thead><tbody>
       @for (p of points; track p.id) { <tr><td>{{ p.date }}</td><td>{{ p.studentName }}</td><td>{{ p.points }}</td><td>{{ p.reason }}</td></tr> }
-      @empty { <tr><td colspan="4">No points recorded</td></tr> }
+      @empty { <tr class="wf-empty-row"><td colspan="4">No points recorded</td></tr> }
     </tbody></table>
   }
 
@@ -123,8 +137,8 @@ const TABS = [
       </div>
     }
     @for (c of competitions; track c.id) {
-      <div class="card" style="margin-bottom:.75rem">
-        <b>{{ c.name }}</b> <span class="badge">{{ c.status }}</span>
+      <div class="wf-form">
+        <b>{{ c.name }}</b> <span class="wf-pill">{{ c.status }}</span>
         <div>{{ c.date || '—' }}{{ c.location ? ' · ' + c.location : '' }}{{ c.activity ? ' · ' + c.activity.name : '' }}</div>
         @if (c.results?.length) {
           <table class="data-table" style="margin-top:.5rem"><thead><tr><th>Student</th><th>Position</th><th>Points</th></tr></thead><tbody>
@@ -133,7 +147,7 @@ const TABS = [
         }
         @if (c.status !== 'completed') { <button class="btn-outline" style="margin-top:.5rem" (click)="completeComp(c)">Mark completed</button> }
       </div>
-    } @empty { <p>No competitions</p> }
+    } @empty { <div class="wf-empty"><strong>No competitions yet</strong><span>Competitions you create will be listed here.</span></div> }
   }
 </div>
 </app-portal-layout>`,

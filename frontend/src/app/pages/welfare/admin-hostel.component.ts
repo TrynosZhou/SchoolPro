@@ -22,13 +22,27 @@ const TABS = [
 @Component({
   selector: 'app-admin-hostel',
   standalone: true,
+  styleUrls: ['./welfare-classic.scss'],
   imports: [PortalLayoutComponent, FormsModule, DatePipe],
   template: `
 <app-portal-layout portalTitle="Admin Portal" pageTitle="Boarding & Hostel" [navSections]="adminNav">
+<header class="wf-head">
+  <div class="wf-head-copy">
+    <p class="wf-eyebrow">School operations</p>
+    <h2 class="wf-title">Boarding &amp; Hostel</h2>
+    <p class="wf-sub">Dormitories, beds, exeat passes, roll calls and hostel inventory.</p>
+  </div>
+  <div class="wf-stats">
+    <div class="wf-stat"><strong>{{ dorms.length }}</strong><span>Dormitories</span></div>
+    <div class="wf-stat"><strong>{{ beds.length }}</strong><span>Beds</span></div>
+    <div class="wf-stat"><strong>{{ exeats.length }}</strong><span>Exeat passes</span></div>
+    <div class="wf-stat"><strong>{{ items.length }}</strong><span>Inventory items</span></div>
+  </div>
+</header>
 <div class="card">
-  <div class="toolbar" style="margin-bottom:1rem">
+  <div class="tab-bar" role="tablist">
     @for (t of tabs; track t.key) {
-      <button class="btn-outline" [style.fontWeight]="tab()===t.key?'700':'400'" (click)="tab.set(t.key)">{{ t.label }}</button>
+      <button type="button" role="tab" [class.active]="tab()===t.key" [attr.aria-selected]="tab()===t.key" (click)="tab.set(t.key)">{{ t.label }}</button>
     }
   </div>
 
@@ -51,8 +65,8 @@ const TABS = [
       </div>
     }
     @for (d of dorms; track d.id) {
-      <div class="card" style="margin-bottom:.75rem">
-        <b>{{ d.name }}</b> <span class="badge">{{ d.type }}</span>
+      <div class="wf-form">
+        <b>{{ d.name }}</b> <span class="wf-pill">{{ d.type }}</span>
         <span style="color:#555">{{ d.occupied }}/{{ d.totalBeds }} beds · capacity {{ d.capacity }}{{ d.wardenName ? ' · warden ' + d.wardenName : '' }}</span>
         <div class="toolbar" style="margin-top:.5rem">
           <button class="btn-outline" (click)="showBedDorm=d.id; showBedForm=true; bed={}">+ Bed</button>
@@ -69,18 +83,18 @@ const TABS = [
         }
         <table class="data-table" style="margin-top:.5rem"><thead><tr><th>Bed</th><th>Room</th><th>Occupant</th><th>Status</th><th></th></tr></thead><tbody>
           @for (b of bedsFor(d.id); track b.id) {
-            <tr><td>{{ b.bedNumber }}</td><td>{{ b.roomLabel || '—' }}</td><td>{{ studentName(b.studentId) }}</td><td>{{ b.status }}</td>
+            <tr><td>{{ b.bedNumber }}</td><td>{{ b.roomLabel || '—' }}</td><td>{{ studentName(b.studentId) }}</td><td><span class="wf-pill">{{ b.status }}</span></td>
               <td>@if (b.status==='occupied') { <button class="btn-outline" (click)="vacate(b)">Vacate</button> }</td></tr>
-          } @empty { <tr><td colspan="5">No beds</td></tr> }
+          } @empty { <tr class="wf-empty-row"><td colspan="5">No beds</td></tr> }
         </tbody></table>
       </div>
-    } @empty { <p>No dormitories yet.</p> }
+    } @empty { <div class="wf-empty"><strong>No dormitories yet</strong><span>Add a dormitory to start allocating beds.</span></div> }
   }
 
   @if (tab() === 'exeats') {
     <div class="toolbar" style="margin-bottom:1rem"><button class="btn-primary" (click)="showExeatForm=!showExeatForm">+ New exeat</button></div>
     @if (showExeatForm) {
-      <div class="card" style="margin-bottom:1rem">
+      <div class="wf-form">
         <div class="form-grid">
           <select [(ngModel)]="exeat.studentId"><option value="">Student…</option>@for (s of students; track s.id) { <option [value]="s.id">{{ s.firstName }} {{ s.lastName }}</option> }</select>
           <input [(ngModel)]="exeat.destination" placeholder="Destination" />
@@ -97,7 +111,7 @@ const TABS = [
     <table class="data-table"><thead><tr><th>Student</th><th>Destination</th><th>Departure</th><th>Return</th><th>Status</th><th></th></tr></thead><tbody>
       @for (x of exeats; track x.id) {
         <tr><td>{{ x.studentName }}</td><td>{{ x.destination }}</td><td>{{ x.departureAt | date:'short' }}</td><td>{{ x.returnAt | date:'short' }}</td>
-          <td><span class="badge">{{ x.status }}</span></td>
+          <td><span class="wf-pill">{{ x.status }}</span></td>
           <td>
             @if (x.status==='requested') {
               <button class="btn-outline" (click)="reviewExeat(x,'approved')">Approve</button>
@@ -105,7 +119,7 @@ const TABS = [
             }
             @if (x.status==='approved') { <button class="btn-outline" (click)="reviewExeat(x,'returned')">Mark returned</button> }
           </td></tr>
-      } @empty { <tr><td colspan="6">No exeat passes</td></tr> }
+      } @empty { <tr class="wf-empty-row"><td colspan="6">No exeat passes</td></tr> }
     </tbody></table>
   }
 
@@ -116,7 +130,7 @@ const TABS = [
       <button class="btn-primary" (click)="startRollCall()" [disabled]="!rollDorm">Start roll call</button>
     </div>
     @if (rollBeds.length) {
-      <div class="card" style="margin-bottom:1rem">
+      <div class="wf-form">
         <table class="data-table"><thead><tr><th>Bed</th><th>Student</th><th>Status</th></tr></thead><tbody>
           @for (b of rollBeds; track b.id) {
             <tr><td>{{ b.bedNumber }}</td><td>{{ studentName(b.studentId) }}</td>
@@ -131,7 +145,7 @@ const TABS = [
       @for (r of rollCalls; track r.id) {
         <tr><td>{{ r.date }} {{ r.time }}</td><td>{{ dormName(r.dormitoryId) }}</td><td>{{ r.conductedByName || '—' }}</td>
           <td>{{ countStatus(r,'present') }}</td><td>{{ countStatus(r,'absent') + countStatus(r,'sick') }}</td></tr>
-      } @empty { <tr><td colspan="5">No roll calls</td></tr> }
+      } @empty { <tr class="wf-empty-row"><td colspan="5">No roll calls</td></tr> }
     </tbody></table>
   }
 
@@ -149,7 +163,7 @@ const TABS = [
       @for (i of items; track i.id) {
         <tr><td>{{ i.name }}</td><td>{{ i.category }}</td><td>{{ i.quantity }}</td><td>{{ i.condition }}%</td><td>{{ dormName(i.dormitoryId) }}</td>
           <td><button class="btn-outline" (click)="editItem(i)">Edit</button></td></tr>
-      } @empty { <tr><td colspan="6">No items</td></tr> }
+      } @empty { <tr class="wf-empty-row"><td colspan="6">No items</td></tr> }
     </tbody></table>
   }
 </div>

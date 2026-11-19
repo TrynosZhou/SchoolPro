@@ -198,6 +198,9 @@ export class AuthService {
           if (typeof me.email === 'string') fresh.email = me.email;
           if (me.username !== undefined) fresh.username = me.username;
           if (me.gender != null) fresh.gender = me.gender;
+          if (me.maritalStatus != null) fresh.maritalStatus = me.maritalStatus;
+          if (me.usesMaidenName != null) fresh.usesMaidenName = me.usesMaidenName;
+          if (me.salutation != null) fresh.salutation = me.salutation;
           if (Array.isArray(me.permissions)) fresh.permissions = me.permissions;
           const cur = this.userSignal();
           const changed = !!cur && (Object.keys(fresh) as (keyof User)[]).some(

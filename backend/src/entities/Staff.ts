@@ -23,6 +23,14 @@ export class Staff {
   @Column({ type: 'varchar', length: 16, nullable: true })
   gender?: string | null;
 
+  /** 'single' | 'married' – drives the Miss / Mrs / Ms greeting. */
+  @Column({ type: 'varchar', length: 16, nullable: true })
+  maritalStatus?: string | null;
+
+  /** A married woman who still uses her maiden name is addressed as Ms. */
+  @Column({ type: 'boolean', default: false })
+  usesMaidenName!: boolean;
+
   @OneToOne(() => User, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'userId' })
   user!: User;
