@@ -15,6 +15,7 @@ import type { NavItem, NavSection } from '../../shared/portal-layout/portal-layo
 import { ApiService } from '../../core/services/api.service';
 import { classDisplayName, formatStudentClassLabel, isALevelForm, reportCardClassValue } from '../../core/utils/class-display';
 import { environment } from '../../../environments/environment';
+import { sortExamTypes } from '../../core/utils/exam-type-order';
 
 interface StudentTermAttendance {
   daysMarked: number;
@@ -286,7 +287,7 @@ export class AdminReportCardsComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     this.currentRole = this.getCurrentRole();
     this.applyPortalForRole();
-    this.api.get<{ id: string; name: string }[]>('/exams/types').subscribe((t) => this.examTypes.set(t));
+    this.api.get<{ id: string; name: string }[]>('/exams/types').subscribe((t) => this.examTypes.set(sortExamTypes(t)));
     this.api.get<{ id: string; name: string; isCurrent?: boolean }[]>('/exams/terms').subscribe((terms) => {
       this.terms.set(terms);
       const current = terms.find((t) => t.isCurrent);

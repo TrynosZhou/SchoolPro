@@ -8,6 +8,7 @@ import { AuthService } from '../../core/services/auth.service';
 import { formatStudentClassLabel } from '../../core/utils/class-display';
 import { loadTeacherClassOptions } from '../../core/utils/teacher-classes.util';
 import { resolvePortalLayout } from '../../core/utils/portal-layout.util';
+import { sortExamTypes } from '../../core/utils/exam-type-order';
 
 interface ProgressRow {
   classId: string;
@@ -111,7 +112,7 @@ export class AdminMarkEntryProgressComponent implements OnInit {
 
   ngOnInit(): void {
     this.api.get<{ id: string; name: string }[]>('/exams/types').subscribe({
-      next: (t) => this.examTypes.set(t),
+      next: (t) => this.examTypes.set(sortExamTypes(t)),
       error: () => this.showToast('error', 'Could not load exam types.'),
     });
     this.api.get<{ id: string; name: string; isCurrent?: boolean }[]>('/exams/terms').subscribe({

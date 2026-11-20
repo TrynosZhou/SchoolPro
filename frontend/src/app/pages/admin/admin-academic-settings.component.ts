@@ -8,6 +8,7 @@ import { PortalLayoutComponent } from '../../shared/portal-layout/portal-layout.
 import { ADMIN_NAV_SECTIONS } from '../../core/config/admin-nav';
 import { ApiService } from '../../core/services/api.service';
 import { promotionClassLabel } from '../../core/utils/class-display';
+import { sortExamTypes } from '../../core/utils/exam-type-order';
 
 const OL_COMPLETE = '__OL_COMPLETE__';
 const AL_COMPLETE = '__AL_COMPLETE__';
@@ -608,7 +609,7 @@ export class AdminAcademicSettingsComponent implements OnInit {
         this.classSubjects.set(data.classSubjects);
         this.staff.set(data.staff ?? []);
         this.staffLoadFailed.set(data.staff === null);
-        this.examTypes.set(data.examTypes);
+        this.examTypes.set(sortExamTypes(data.examTypes));
         this.applyPromotionRules(data.promotionRules);
         const currentYear = data.years.find((y) => y.isCurrent) || data.years[0];
         if (currentYear) this.newTerm.schoolYearId = currentYear.id;

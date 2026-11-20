@@ -200,7 +200,7 @@ select:focus-visible {
 .lh-date {
   margin: 0 0 0.35rem;
   font-family: var(--serif);
-  font-size: 1.1rem;
+  font-size: 0.55rem; // 50% smaller than the previous 1.1rem
   font-style: italic;
   font-weight: 600;
   color: var(--brass-ink);
@@ -209,7 +209,7 @@ select:focus-visible {
 .lh-title {
   margin: 0 0 0.55rem;
   font-family: var(--serif);
-  font-size: 2.7rem;
+  font-size: 1.35rem; // 50% smaller than the previous 2.7rem
   font-weight: 600;
   line-height: 1.04;
   letter-spacing: 0;
@@ -286,7 +286,7 @@ select:focus-visible {
   h2 {
     margin: 0 0 0.3rem;
     font-family: var(--serif);
-    font-size: 1.55rem;
+    font-size: 0.775rem; // 50% smaller than the previous 1.55rem
     font-weight: 600;
     line-height: 1.15;
     color: var(--heading);
@@ -936,7 +936,7 @@ select:focus-visible {
   }
 
   .lh-title {
-    font-size: 2.05rem;
+    font-size: 1.025rem; // 50% smaller than the previous 2.05rem
   }
 
   .lh-figure dd {

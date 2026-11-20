@@ -1,0 +1,270 @@
+<app-portal-layout
+  [portalTitle]="portalTitle"
+  pageTitle="Surveys & Feedback"
+  [navSections]="isParent || isTeacher ? [] : adminNav"
+  [navItems]="isParent ? parentNav : []"
+>
+  <div class="surveys">
+    @if (canManage) {
+      <header class="page-intro">
+        <div class="intro-copy">
+          <p class="eyebrow">Student welfare</p>
+          <h1>Surveys and feedback</h1>
+          <p class="intro-meta">
+            Gather opinions from parents, staff, and students. Publish a survey to make it visible to its audience.
+          </p>
+        </div>
+        <div class="intro-actions">
+          <button type="button" class="btn-primary" (click)="showForm = !showForm">
+            {{ showForm ? 'Close form' : 'New survey' }}
+          </button>
+        </div>
+      </header>
+
+      <nav class="status-tabs" aria-label="Filter surveys by status">
+        @for (opt of statusOptions; track opt.value) {
+          <button
+            type="button"
+            class="status-tab"
+            [class.active]="statusFilter === opt.value"
+            [attr.aria-pressed]="statusFilter === opt.value"
+            (click)="setFilter(opt.value)"
+          >
+            {{ opt.label }}
+          </button>
+        }
+      </nav>
+
+      @if (showForm) {
+        <section class="panel form-panel">
+          <header class="panel-head">
+            <h2>New survey</h2>
+            <p>Set the details, then add the questions your audience will answer.</p>
+          </header>
+
+          <div class="form-grid">
+            <label class="field">
+              <span class="field-label">Title <em>*</em></span>
+              <input [(ngModel)]="survey.title" placeholder="e.g. Term 3 parent feedback" />
+            </label>
+            <label class="field">
+              <span class="field-label">Description</span>
+              <input [(ngModel)]="survey.description" placeholder="Optional context for respondents" />
+            </label>
+            <label class="field">
+              <span class="field-label">Audience</span>
+              <select [(ngModel)]="survey.audience">
+                <option value="all">Everyone</option>
+                <option value="parent">Parents</option>
+                <option value="staff">Staff</option>
+                <option value="student">Students</option>
+              </select>
+            </label>
+            <label class="field">
+              <span class="field-label">Closes on</span>
+              <input type="date" [(ngModel)]="survey.closesAt" />
+            </label>
+            <label class="field">
+              <span class="field-label">Status</span>
+              <select [(ngModel)]="survey.status">
+                <option value="draft">Draft</option>
+                <option value="published">Published</option>
+              </select>
+            </label>
+          </div>
+
+          <h3 class="subhead">Questions</h3>
+
+          @for (q of surveyQuestions; track $index; let i = $index) {
+            <div class="question-row">
+              <span class="q-num">{{ i + 1 }}</span>
+              <input class="q-text" [(ngModel)]="q.text" placeholder="Question text" aria-label="Question text" />
+              <select [(ngModel)]="q.type" aria-label="Answer type">
+                @for (t of qTypes; track t) {
+                  <option [value]="t">{{ typeLabel(t) }}</option>
+                }
+              </select>
+              <input
+                class="q-options"
+                [(ngModel)]="q.options"
+                placeholder="Options, comma-separated"
+                aria-label="Answer options"
+              />
+              <label class="check">
+                <input type="checkbox" [(ngModel)]="q.required" />
+                Required
+              </label>
+            </div>
+          } @empty {
+            <p class="muted">No questions yet. Add at least one question before creating the survey.</p>
+          }
+
+          @if (formError) {
+            <p class="form-error" role="alert">{{ formError }}</p>
+          }
+
+          <div class="form-actions">
+            <button type="button" class="btn-ghost" (click)="addQuestion()">+ Add question</button>
+            <span class="spacer"></span>
+            <button type="button" class="btn-ghost" (click)="cancelForm()">Cancel</button>
+            <button type="button" class="btn-primary" (click)="save()">Create survey</button>
+          </div>
+        </section>
+      }
+
+      <section class="panel">
+        @if (surveys.length) {
+          <div class="table-wrap">
+            <table class="survey-table">
+              <thead>
+                <tr>
+                  <th scope="col">Survey</th>
+                  <th scope="col">Audience</th>
+                  <th scope="col">Status</th>
+                  <th scope="col" class="num">Responses</th>
+                  <th scope="col">Closes</th>
+                  <th scope="col"><span class="sr-only">Actions</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (s of surveys; track s.id) {
+                  <tr>
+                    <td>
+                      <span class="s-title">{{ s.title }}</span>
+                      @if (s.description) {
+                        <span class="s-desc">{{ s.description }}</span>
+                      }
+                    </td>
+                    <td><span class="pill pill-neutral">{{ audienceLabel(s.audience) }}</span></td>
+                    <td><span class="pill" [attr.data-status]="s.status">{{ s.status }}</span></td>
+                    <td class="num">{{ s.responseCount || 0 }}</td>
+                    <td class="muted">{{ s.closesAt || '—' }}</td>
+                    <td class="row-actions">
+                      <button type="button" class="btn-ghost btn-sm" (click)="viewResults(s)">Results</button>
+                      <button type="button" class="btn-outline btn-sm" (click)="toggleStatus(s)">
+                        {{ s.status === 'published' ? 'Close' : 'Publish' }}
+                      </button>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        } @else {
+          <div class="empty-state">
+            <h3>{{ statusFilter ? 'No ' + statusFilter + ' surveys' : 'No surveys yet' }}</h3>
+            <p>Create a survey to gather feedback from parents, staff, or students.</p>
+            @if (!showForm) {
+              <button type="button" class="btn-primary" (click)="showForm = true">Create a survey</button>
+            }
+          </div>
+        }
+      </section>
+
+      @if (results) {
+        <section class="panel results-panel">
+          <header class="panel-head with-action">
+            <div>
+              <h2>{{ results.title }}</h2>
+              <p>{{ results.totalResponses }} responses</p>
+            </div>
+            <button type="button" class="btn-ghost btn-sm" (click)="results = null">Close</button>
+          </header>
+
+          @for (q of results.questions; track q.question.id; let i = $index) {
+            <article class="result-item">
+              <div class="result-q">
+                <span class="q-num">{{ i + 1 }}</span>
+                <strong>{{ q.question.text }}</strong>
+              </div>
+              <div class="result-meta">
+                @if (q.average != null) {
+                  <span class="stat">Average <b>{{ q.average }}</b> / 5 · {{ q.count }} answers</span>
+                }
+                @for (d of q.distribution || []; track d.value) {
+                  <span class="pill pill-neutral">{{ d.value }}: {{ d.count }}</span>
+                }
+              </div>
+              @if (q.answers) {
+                <ul class="answers">
+                  @for (a of q.answers.slice(0, 5); track $index) {
+                    <li>{{ a }}</li>
+                  }
+                </ul>
+              }
+            </article>
+          }
+        </section>
+      }
+    } @else {
+      <header class="page-intro">
+        <div class="intro-copy">
+          <p class="eyebrow">Feedback</p>
+          <h1>Your surveys</h1>
+          <p class="intro-meta">Your answers help the school improve. Each survey can be answered once.</p>
+        </div>
+      </header>
+
+      @for (s of available; track s.id) {
+        <article class="panel survey-card">
+          <header class="panel-head">
+            <h2>{{ s.title }}</h2>
+            @if (s.description) {
+              <p>{{ s.description }}</p>
+            }
+          </header>
+
+          @if (s.myResponse) {
+            <p class="thanks">Thank you. Your response has been recorded.</p>
+          } @else {
+            @for (q of s.questions; track q.id; let i = $index) {
+              <div class="respond-q">
+                <p class="q-label">
+                  <span class="q-num">{{ i + 1 }}</span>
+                  {{ q.text }}
+                  @if (q.required) {
+                    <span class="req" aria-label="Required">*</span>
+                  }
+                </p>
+
+                @if (q.type === 'rating') {
+                  <div class="rating-scale" role="group" [attr.aria-label]="q.text">
+                    @for (n of ratingRange(q); track n) {
+                      <button
+                        type="button"
+                        class="rating-btn"
+                        [class.active]="answers[q.id] === n"
+                        [attr.aria-pressed]="answers[q.id] === n"
+                        (click)="answers[q.id] = n"
+                      >
+                        {{ n }}
+                      </button>
+                    }
+                  </div>
+                } @else if (q.type === 'single_choice') {
+                  <select [(ngModel)]="answers[q.id]" aria-label="Choose an answer">
+                    <option value="">Choose an option</option>
+                    @for (o of options(q); track o) {
+                      <option [value]="o">{{ o }}</option>
+                    }
+                  </select>
+                } @else {
+                  <textarea [(ngModel)]="answers[q.id]" rows="3" placeholder="Type your answer" aria-label="Your answer"></textarea>
+                }
+              </div>
+            }
+
+            <div class="form-actions">
+              <button type="button" class="btn-primary" (click)="submit(s)">Submit response</button>
+            </div>
+          }
+        </article>
+      } @empty {
+        <section class="panel empty-state">
+          <h3>No surveys right now</h3>
+          <p>New surveys for you will appear here.</p>
+        </section>
+      }
+    }
+  </div>
+</app-portal-layout>

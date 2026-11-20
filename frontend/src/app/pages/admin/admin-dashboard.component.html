@@ -1,4 +1,5 @@
 <app-portal-layout
+  [showTopbarLabels]="true"
   portalTitle="Admin Portal"
   pageTitle="Admin Dashboard"
   homePath="/admin"
@@ -106,7 +107,10 @@
         @if (loading()) {
           <div class="skeleton skeleton-block"></div>
         } @else if (attendance().total === 0) {
-          <p class="empty-state">Attendance has not been marked yet today.</p>
+          <div class="empty-action">
+            <p class="empty-state">Attendance has not been marked yet today.</p>
+            <a class="action-btn solid" routerLink="/admin/attendance/mark-register">Mark attendance</a>
+          </div>
         } @else {
           <div class="attendance-figure">
             <span class="big-number">{{ attendance().present }}</span>

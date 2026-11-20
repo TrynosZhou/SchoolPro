@@ -1,67 +1,22 @@
 <div class="login-shell">
-  <div class="login-bg" aria-hidden="true">
-  </div>
-
-  <nav class="public-nav" aria-label="Admissions">
-    <a routerLink="/demo" class="public-nav-link demo-link">Try demo</a>
-    <a routerLink="/apply/status" class="public-nav-link">Check status</a>
-    <a routerLink="/apply" class="apply-now-btn">Apply now</a>
-  </nav>
-
-  <div class="login-layout" [class.mode-signup]="mode() === 'signup'">
-    <aside class="brand-panel">
-      <div class="brand-panel-inner">
-        <div class="brand-lockup">
-          <span class="brand-mark" [class.has-logo]="schoolLogoUrl()">
-            @if (schoolLogoUrl(); as logo) {
-              <img [src]="logo" [alt]="schoolName()" />
-            } @else {
-              {{ schoolInitials() }}
-            }
-          </span>
-          <div>
-            <h1 class="brand-name">{{ schoolName() }}</h1>
-            <p class="brand-tagline">{{ schoolTagline() }}</p>
-          </div>
-        </div>
-
-        <p class="brand-lead">
-          One platform for students, staff, exams, finance, and parent communication — built for modern schools.
-        </p>
-
-        <ul class="feature-list">
-          @for (f of features; track f.title) {
-            <li class="feature-item">
-              <div>
-                <strong>{{ f.title }}</strong>
-                <span>{{ f.text }}</span>
-              </div>
-            </li>
+  <main class="login-stage">
+    <div class="login-card" [class.login-card--wide]="mode() === 'signup'">
+      <header class="login-band">
+        <span class="brand-mark" [class.has-logo]="schoolLogoUrl()">
+          @if (schoolLogoUrl(); as logo) {
+            <img [src]="logo" [alt]="schoolName()" />
+          } @else {
+            {{ schoolInitials() }}
           }
-        </ul>
+        </span>
+        <div class="brand-text">
+          <h1 class="brand-name">{{ schoolName() }}</h1>
+          <p class="brand-tagline">{{ schoolTagline() }}</p>
+        </div>
+      </header>
 
-        <footer class="brand-footer">
-          <span>© {{ currentYear }} School Pro Academy</span>
-          <span class="dot" aria-hidden="true">|</span>
-          <span>Harare, Zimbabwe</span>
-        </footer>
-      </div>
-    </aside>
-
-    <main class="signin-panel">
-      <div class="signin-card" [class.signin-card--wide]="mode() === 'signup'">
-        <header class="signin-header">
-          <div class="mobile-brand">
-            <span class="brand-mark sm" [class.has-logo]="schoolLogoUrl()">
-              @if (schoolLogoUrl(); as logo) {
-                <img [src]="logo" [alt]="schoolName()" />
-              } @else {
-                {{ schoolInitials() }}
-              }
-            </span>
-            <span class="mobile-brand-name">{{ schoolName() }}</span>
-          </div>
-
+      <div class="login-body">
+        <div class="signin-header">
           @if (mode() === 'signin' || mode() === 'signup') {
             <nav class="mode-tabs" aria-label="Authentication mode">
               <button type="button" class="mode-tab" [class.active]="mode() === 'signin'" (click)="setMode('signin')">
@@ -89,7 +44,7 @@
             <h2>Set a new password</h2>
             <p>Choose a strong password for your account</p>
           }
-        </header>
+        </div>
 
         <form class="signin-form" (ngSubmit)="onSubmit()">
           @if (mode() === 'twofa') {
@@ -258,6 +213,9 @@
                   required
                   autocomplete="current-password"
                   placeholder="First sign-in: your date of birth"
+                  (keydown)="checkCapsLock($event)"
+                  (keyup)="checkCapsLock($event)"
+                  (blur)="capsLockOn.set(false)"
                 />
                 <button
                   type="button"
@@ -268,6 +226,9 @@
                   {{ showPassword() ? 'Hide' : 'Show' }}
                 </button>
               </div>
+              @if (capsLockOn()) {
+                <small class="caps-warning"><span class="caps-icon" aria-hidden="true">!</span>Caps lock is on</small>
+              }
               <small class="field-hint">
                 First time signing in? Enter your date of birth as recorded at the school (e.g. 01/01/2012 or 2012-01-01).
                 After you change your password, use your new password here instead.
@@ -294,6 +255,9 @@
                   [required]="mode() !== 'forgot'"
                   [autocomplete]="mode() === 'signin' ? 'current-password' : 'new-password'"
                   [placeholder]="mode() === 'reset' ? 'Enter new password' : 'Enter your password'"
+                  (keydown)="checkCapsLock($event)"
+                  (keyup)="checkCapsLock($event)"
+                  (blur)="capsLockOn.set(false)"
                 />
                 <button
                   type="button"
@@ -304,6 +268,9 @@
                   {{ showPassword() ? 'Hide' : 'Show' }}
                 </button>
               </div>
+              @if (capsLockOn()) {
+                <small class="caps-warning"><span class="caps-icon" aria-hidden="true">!</span>Caps lock is on</small>
+              }
             </div>
           }
 
@@ -433,14 +400,13 @@
             }
           }
         </p>
-
-        @if (mode() === 'signin' || mode() === 'signup') {
-          <p class="apply-prompt">
-            New to the school?
-            <a routerLink="/apply" class="link-btn">Apply for admission online</a>
-          </p>
-        }
       </div>
-    </main>
-  </div>
+
+      <footer class="login-footer" aria-label="Admissions and public links">
+        <a routerLink="/demo" class="public-nav-link">Try demo</a>
+        <a routerLink="/apply/status" class="public-nav-link">Check status</a>
+        <a routerLink="/apply" class="public-nav-link public-nav-link--strong">Apply now</a>
+      </footer>
+    </div>
+  </main>
 </div>

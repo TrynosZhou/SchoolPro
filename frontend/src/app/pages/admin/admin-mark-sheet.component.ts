@@ -11,6 +11,7 @@ import { classDisplayName, formatStudentClassLabel } from '../../core/utils/clas
 import { formatSubjectAbbrev } from '../../core/utils/subject-abbrev';
 import { loadTeacherClassOptions } from '../../core/utils/teacher-classes.util';
 import { resolvePortalLayout } from '../../core/utils/portal-layout.util';
+import { sortExamTypes } from '../../core/utils/exam-type-order';
 
 interface MarkSheetSubject {
   id: string;
@@ -117,7 +118,7 @@ export class AdminMarkSheetComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.api.get<{ id: string; name: string }[]>('/exams/types').subscribe({
-      next: (t) => this.examTypes.set(t),
+      next: (t) => this.examTypes.set(sortExamTypes(t)),
       error: () => this.showToast('error', 'Could not load exam types.'),
     });
     this.api.get<{ id: string; name: string; isCurrent?: boolean }[]>('/exams/terms').subscribe({

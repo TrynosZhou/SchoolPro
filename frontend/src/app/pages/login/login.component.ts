@@ -48,6 +48,7 @@ export class LoginComponent implements OnInit {
   password = '';
   rememberMe = true;
   showPassword = signal(false);
+  capsLockOn = signal(false);
   loading = signal(false);
   error = signal('');
   success = signal('');
@@ -80,16 +81,6 @@ export class LoginComponent implements OnInit {
     requireNumber: true,
     requireSpecialChar: false,
   });
-
-  readonly features = [
-    { icon: '🎓', title: 'Student lifecycle', text: 'Registration, enrollment & report cards' },
-    { icon: '📊', title: 'Exams & academics', text: 'Marks entry with auto-save to report cards' },
-    { icon: '💳', title: 'Finance & billing', text: 'Invoices, payments, and debt tracking' },
-    { icon: '👩‍🏫', title: 'Staff & attendance', text: 'Directory, roles, and daily attendance' },
-    { icon: '💬', title: 'Communication', text: 'School–parent updates and teacher–student messaging' },
-  ];
-
-  readonly currentYear = new Date().getFullYear();
 
   schoolInitials = computed(() => {
     const words = this.schoolName().trim().split(/\s+/).filter(Boolean);
@@ -180,6 +171,11 @@ export class LoginComponent implements OnInit {
 
   togglePassword() {
     this.showPassword.update((v) => !v);
+  }
+
+  /** Detects Caps Lock while typing in a password field so the user can correct it. */
+  checkCapsLock(event: KeyboardEvent) {
+    this.capsLockOn.set(event.getModifierState('CapsLock'));
   }
 
   onSubmit() {

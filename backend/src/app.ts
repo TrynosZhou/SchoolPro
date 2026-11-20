@@ -31,6 +31,8 @@ import webhooksRoutes from './routes/webhooks.routes';
 import lmsRoutes from './routes/lms.routes';
 import idCardsRoutes from './routes/id-cards.routes';
 import consentsRoutes from './routes/consents.routes';
+import surveysRoutes from './routes/surveys.routes';
+import meetingsRoutes from './routes/meetings.routes';
 import { tenantContextMiddleware } from './middleware/tenant-context.middleware';
 import { demoGlobalWriteGuard, demoWriteRateLimiter } from './middleware/demo-guard.middleware';
 
@@ -194,6 +196,8 @@ app.use('/api/access-control', accessControlRoutes);
 app.use('/api/lms', lmsRoutes);
 app.use('/api/id-cards', idCardsRoutes);
 app.use('/api/consents', consentsRoutes);
+app.use('/api/surveys', surveysRoutes);
+app.use('/api/meetings', meetingsRoutes);
 app.use('/webhooks', webhooksRoutes);
 
 if (frontendDir) {

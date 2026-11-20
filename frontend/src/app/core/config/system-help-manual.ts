@@ -24,12 +24,12 @@ export const ADMIN_HELP_TOPICS: HelpTopic[] = [
   },
   {
     id: 'students',
-    section: 'Students',
+    section: 'Students and parents',
     title: 'Manage Students',
     path: '/admin/students',
     summary: 'Search, add, edit, and deactivate student records.',
     steps: [
-      'Go to Students under All Students.',
+      'Open Students and parents, then All Students.',
       'Search by admission number, first name, or last name.',
       'Click a student to view details or use Add Student for new enrolments.',
     ],
@@ -37,12 +37,12 @@ export const ADMIN_HELP_TOPICS: HelpTopic[] = [
   },
   {
     id: 'enrollment',
-    section: 'Students',
+    section: 'Students and parents',
     title: 'Student Enrolment',
     path: '/admin/enrollment',
     summary: 'Register new students and assign class and form.',
     steps: [
-      'Open Enrolment under All Students.',
+      'Open Students and parents, then Enrolment.',
       'Complete the student and guardian details.',
       'Assign class/form and save — a registration invoice is created automatically.',
     ],
@@ -50,7 +50,7 @@ export const ADMIN_HELP_TOPICS: HelpTopic[] = [
   },
   {
     id: 'class-list',
-    section: 'Students',
+    section: 'Students and parents',
     title: 'Class List',
     path: '/admin/class-list',
     summary: 'View students grouped by class.',
@@ -63,7 +63,7 @@ export const ADMIN_HELP_TOPICS: HelpTopic[] = [
   },
   {
     id: 'class-promotion',
-    section: 'Students',
+    section: 'Students and parents',
     title: 'Class Promotion',
     path: '/admin/class-promotion',
     summary: 'Promote students to the next class at end of year.',
@@ -76,12 +76,12 @@ export const ADMIN_HELP_TOPICS: HelpTopic[] = [
   },
   {
     id: 'parents',
-    section: 'Parents',
+    section: 'Students and parents',
     title: 'Parent Records',
     path: '/admin/parents',
     summary: 'Manage parent/guardian accounts linked to students.',
     steps: [
-      'Open Parents, then Parent Directory.',
+      'Open Students and parents, then Parent Directory.',
       'Search by name or linked student.',
       'Open a parent record to view guardians and contact details.',
     ],
@@ -89,12 +89,12 @@ export const ADMIN_HELP_TOPICS: HelpTopic[] = [
   },
   {
     id: 'parent-accounts',
-    section: 'Parents',
+    section: 'Students and parents',
     title: 'Parent Portal Accounts',
     path: '/admin/parent-accounts',
     summary: 'See who can sign in to the parent portal, reset a login, or switch access on or off.',
     steps: [
-      'Open Parents, then Portal Accounts.',
+      'Open Students and parents, then Portal Accounts.',
       'Filter by active, deactivated or no children linked.',
       'Use Reset login to set a new username or password, or Deactivate / Activate to change access.',
     ],
@@ -102,12 +102,12 @@ export const ADMIN_HELP_TOPICS: HelpTopic[] = [
   },
   {
     id: 'family-links',
-    section: 'Parents',
+    section: 'Students and parents',
     title: 'Family Links',
     path: '/admin/family-links',
     summary: 'Link parents to their children, see siblings together and set the primary contact.',
     steps: [
-      'Open Parents, then Family Links.',
+      'Open Students and parents, then Family Links.',
       'Use + Link child to search for a student and link them to the parent.',
       'Use Make primary to choose the primary contact for a child, or Unlink to remove a link.',
     ],
@@ -115,12 +115,12 @@ export const ADMIN_HELP_TOPICS: HelpTopic[] = [
   },
   {
     id: 'attendance-mark',
-    section: 'Attendance',
+    section: 'Academics',
     title: 'Mark Register',
     path: '/admin/attendance/mark-register',
     summary: 'Record daily student attendance by class.',
     steps: [
-      'Open Mark Register under Attendance.',
+      'Open Academics, then Mark Register.',
       'Select class and date.',
       'Mark each student present, absent, or late, then save.',
     ],
@@ -128,7 +128,7 @@ export const ADMIN_HELP_TOPICS: HelpTopic[] = [
   },
   {
     id: 'attendance-report',
-    section: 'Attendance',
+    section: 'Academics',
     title: 'Attendance Report',
     path: '/admin/attendance/report',
     summary: 'Review attendance statistics and exports.',
@@ -141,12 +141,12 @@ export const ADMIN_HELP_TOPICS: HelpTopic[] = [
   },
   {
     id: 'staff',
-    section: 'Staff',
+    section: 'Staff and HR',
     title: 'Staff Directory',
     path: '/admin/staff',
     summary: 'Manage teachers and non-teaching staff.',
     steps: [
-      'Go to Staff Directory under All Teachers.',
+      'Open Staff and HR, then Staff Directory.',
       'Add or edit staff profiles and departments.',
       'Deactivate staff who have left the school.',
     ],
@@ -154,7 +154,7 @@ export const ADMIN_HELP_TOPICS: HelpTopic[] = [
   },
   {
     id: 'payroll',
-    section: 'Staff',
+    section: 'Staff and HR',
     title: 'Payroll',
     path: '/admin/payroll',
     summary: 'Run payroll and generate payslips.',
@@ -297,12 +297,12 @@ export const ADMIN_HELP_TOPICS: HelpTopic[] = [
   },
   {
     id: 'student-ledger',
-    section: 'Fin. Reports',
+    section: 'Finance',
     title: 'Student Ledger',
     path: '/admin/fin-reports/student-ledger',
     summary: 'Term-by-term transaction history for a student.',
     steps: [
-      'Open Student Ledger under Fin. Reports.',
+      'Open Finance, then Student Ledger.',
       'Search for a student and select a term.',
       'Review invoices, payments, and running balance.',
     ],
@@ -310,7 +310,7 @@ export const ADMIN_HELP_TOPICS: HelpTopic[] = [
   },
   {
     id: 'outstanding-invoices',
-    section: 'Fin. Reports',
+    section: 'Finance',
     title: 'Outstanding Invoices',
     path: '/admin/fin-reports/outstanding-invoices',
     summary: 'List all unpaid invoice balances by class.',
@@ -323,7 +323,7 @@ export const ADMIN_HELP_TOPICS: HelpTopic[] = [
   },
   {
     id: 'student-reconciliation',
-    section: 'Fin. Reports',
+    section: 'Finance',
     title: 'Student Reconciliation',
     path: '/admin/fin-reports/student-reconciliation',
     summary: 'Reconcile student accounts against invoices and payments.',
@@ -336,7 +336,7 @@ export const ADMIN_HELP_TOPICS: HelpTopic[] = [
   },
   {
     id: 'debtor-aging',
-    section: 'Fin. Reports',
+    section: 'Finance',
     title: 'Debtor Aging',
     path: '/admin/fin-reports/debtor-aging',
     summary: 'See how long invoices have been outstanding.',
@@ -349,7 +349,7 @@ export const ADMIN_HELP_TOPICS: HelpTopic[] = [
   },
   {
     id: 'fee-collection',
-    section: 'Fin. Reports',
+    section: 'Finance',
     title: 'Fee Collection & Revenue',
     path: '/admin/fin-reports/fee-collection-revenue',
     summary: 'Track fee collection rates and revenue by period.',
@@ -362,12 +362,12 @@ export const ADMIN_HELP_TOPICS: HelpTopic[] = [
   },
   {
     id: 'report-builder',
-    section: 'Analytics & Reporting',
+    section: 'Reports and system',
     title: 'Custom Report Builder',
     path: '/admin/analytics/report-builder',
     summary: 'Build custom reports from school datasets, then export or save as templates.',
     steps: [
-      'Open Report Builder under Analytics & Reporting.',
+      'Open Reports and system, then Report Builder.',
       'Choose a dataset, select fields and filters, then click Run report.',
       'Export as CSV, Excel, or PDF, or save the configuration as a reusable template.',
     ],
@@ -375,12 +375,12 @@ export const ADMIN_HELP_TOPICS: HelpTopic[] = [
   },
   {
     id: 'lms',
-    section: 'Learning',
+    section: 'Academics',
     title: 'LMS Workspace',
     path: '/admin/lms',
     summary: 'Create graded assignments, lesson materials, and virtual classes.',
     steps: [
-      'Open LMS under Learning.',
+      'Open Academics, then LMS.',
       'Select a class and subject, then create assignments, upload lessons, or schedule virtual classes.',
       'Open an assignment to review submissions and enter grades.',
     ],
@@ -388,12 +388,12 @@ export const ADMIN_HELP_TOPICS: HelpTopic[] = [
   },
   {
     id: 'library',
-    section: 'Learning',
+    section: 'Academics',
     title: 'Digital Library',
     path: '/admin/library',
     summary: 'Publish and browse PDFs, books, videos, and links for classes.',
     steps: [
-      'Open Digital Library under Learning.',
+      'Open Academics, then Library (digital).',
       'Use Add resource to upload a file or paste a link, then set subject/form if needed.',
       'Search or filter the catalog, open files, and bookmark items for quick access.',
     ],
@@ -426,12 +426,12 @@ export const ADMIN_HELP_TOPICS: HelpTopic[] = [
   },
   {
     id: 'timetable-periods',
-    section: 'Timetable',
+    section: 'Academics',
     title: 'Configure Periods',
     path: '/admin/timetable/configure-periods',
     summary: 'Set up school periods and break times.',
     steps: [
-      'Open Configure Periods under Timetable.',
+      'Open Academics, then Configure Periods.',
       'Define period names, start times, and duration.',
       'Save before generating timetables.',
     ],
@@ -439,7 +439,7 @@ export const ADMIN_HELP_TOPICS: HelpTopic[] = [
   },
   {
     id: 'timetable-generate',
-    section: 'Timetable',
+    section: 'Academics',
     title: 'Generate Timetable',
     path: '/admin/timetable/generate',
     summary: 'Build class timetables from subjects and teachers.',
@@ -452,12 +452,12 @@ export const ADMIN_HELP_TOPICS: HelpTopic[] = [
   },
   {
     id: 'timetable-manual-entry',
-    section: 'Timetable',
+    section: 'Academics',
     title: 'Manual Generate',
     path: '/admin/timetable/manual-entry',
     summary: 'Move lesson cards by hand, with automatic teacher and class clash detection.',
     steps: [
-      'Open Timetable → Manual Generate.',
+      'Open Academics, then Manual Generate.',
       'Choose By class or By teacher, then pick the class or teacher.',
       'Drag a lesson card to another period (or click the card, then click the period).',
       'Green periods are free, amber means the teacher is already teaching, red means the class already has a lesson.',
@@ -467,7 +467,7 @@ export const ADMIN_HELP_TOPICS: HelpTopic[] = [
   },
   {
     id: 'timetable-view',
-    section: 'Timetable',
+    section: 'Academics',
     title: 'View Timetable',
     path: '/admin/timetable/view',
     summary: 'Print or review timetables by class or teacher.',
@@ -480,12 +480,12 @@ export const ADMIN_HELP_TOPICS: HelpTopic[] = [
   },
   {
     id: 'school-settings',
-    section: 'System Admin',
+    section: 'Reports and system',
     title: 'School Settings',
     path: '/admin/settings',
     summary: 'School name, logo, contact details, and branding.',
     steps: [
-      'Open School Settings under System Admin.',
+      'Open Reports and system, then School Settings.',
       'Update school profile and branding.',
       'Save changes — they appear on invoices and report cards.',
     ],
@@ -493,7 +493,7 @@ export const ADMIN_HELP_TOPICS: HelpTopic[] = [
   },
   {
     id: 'academic-settings',
-    section: 'System Admin',
+    section: 'Reports and system',
     title: 'Academic Settings',
     path: '/admin/academic-settings',
     summary: 'Manage school years, terms, classes, and subjects.',
@@ -506,7 +506,7 @@ export const ADMIN_HELP_TOPICS: HelpTopic[] = [
   },
   {
     id: 'user-management',
-    section: 'System Admin',
+    section: 'Reports and system',
     title: 'User Management',
     path: '/admin/user-management',
     summary: 'Create and manage user login accounts.',
@@ -519,7 +519,7 @@ export const ADMIN_HELP_TOPICS: HelpTopic[] = [
   },
   {
     id: 'user-permissions',
-    section: 'System Admin',
+    section: 'Reports and system',
     title: 'User Permissions',
     path: '/admin/user-permissions',
     summary: 'Configure role-based access permissions.',
@@ -532,7 +532,7 @@ export const ADMIN_HELP_TOPICS: HelpTopic[] = [
   },
   {
     id: 'integrations',
-    section: 'System Admin',
+    section: 'Reports and system',
     title: 'Integrations',
     path: '/admin/integrations',
     summary: 'Connect SMS, email, and WhatsApp services.',

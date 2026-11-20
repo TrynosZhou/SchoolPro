@@ -11,6 +11,7 @@ import { ClassListPdfBranding } from '../../core/utils/class-list-pdf.util';
 import { buildReportAccessPdfBlob } from '../../core/utils/report-access-pdf.util';
 import { resolveLogoUrl } from '../../core/utils/payslip-print.util';
 import { environment } from '../../../environments/environment';
+import { sortExamTypes } from '../../core/utils/exam-type-order';
 
 interface ReportAccessChild {
   studentId: string;
@@ -101,7 +102,7 @@ export class AdminReportViewComponent implements OnInit, OnDestroy {
       next: (terms) => this.terms.set(terms),
     });
     this.api.get<{ id: string; name: string }[]>('/exams/types').subscribe({
-      next: (types) => this.examTypes.set(types),
+      next: (types) => this.examTypes.set(sortExamTypes(types)),
     });
     // No params → server resolves the current term and its current (latest published) exam type.
     this.load();

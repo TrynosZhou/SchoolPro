@@ -10,6 +10,7 @@ import { AuthService } from '../../core/services/auth.service';
 import { DIRECTOR_NAV_ITEMS } from '../../core/config/director-nav';
 import { PRINCIPAL_NAV_ITEMS } from '../../core/config/principal-nav';
 import { formatStudentClassLabel, isALevelClassOption } from '../../core/utils/class-display';
+import { sortExamTypes } from '../../core/utils/exam-type-order';
 
 interface GradeBoundaryRow {
   grade: string;
@@ -213,7 +214,7 @@ export class ExamMarksEntryComponent implements OnInit, OnDestroy {
   ]);
 
   ngOnInit() {
-    this.api.get<{ id: string; name: string }[]>('/exams/types').subscribe((t) => this.examTypes.set(t));
+    this.api.get<{ id: string; name: string }[]>('/exams/types').subscribe((t) => this.examTypes.set(sortExamTypes(t)));
     if (this.isAdminPortal()) {
       this.api
         .get<{ id: string; name: string; form?: { id: string; name: string; level: number } }[]>('/admin/classes')

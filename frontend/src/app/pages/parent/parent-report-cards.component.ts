@@ -9,6 +9,7 @@ import { reportCardPdfFilename } from '../../core/utils/report-card-filename';
 import { ApiService } from '../../core/services/api.service';
 import { AuthService } from '../../core/services/auth.service';
 import { environment } from '../../../environments/environment';
+import { sortExamTypes } from '../../core/utils/exam-type-order';
 
 interface LinkedChild {
   linkId?: string;
@@ -137,7 +138,7 @@ export class ParentReportCardsComponent implements OnInit {
     }
     this.api.get<{ id: string; name: string }[]>('/exams/types', { termId }).subscribe({
       next: (types) => {
-        this.examTypes.set(types);
+        this.examTypes.set(sortExamTypes(types));
         this.selectedExamTypeId = types[0]?.id || '';
         this.loading.set(false);
         if (!types.length) {

@@ -820,3 +820,33 @@ input[type='number'],
 .value {
   font-variant-numeric: lining-nums tabular-nums;
 }
+
+/* ============================================================
+   SOLID, CLEARLY VISIBLE DROPDOWNS (every page)
+   One solid 1.5px dark border on every enabled <select>, so the
+   outline is never lost to light page-level overrides. The selector
+   is deliberately more specific than the per-page rules, and the
+   !important matches the rest of this form-controls block.
+   Disabled dropdowns keep their dashed style.
+   ============================================================ */
+:root {
+  --select-border: #334155;
+  --select-border-hover: #0f172a;
+}
+
+html body select:not(:disabled):not([multiple]) {
+  border: 1.5px solid var(--select-border) !important;
+}
+
+html body select:not(:disabled):not([multiple]):hover {
+  border-color: var(--select-border-hover) !important;
+}
+
+/* ============================================================
+   EXAM TYPE DROPDOWNS: wide enough to show "Select exam type"
+   and long exam names in full, on every page.
+   ============================================================ */
+html body select[name='examType'],
+html body select[name='publishExamTypeId'] {
+  min-width: 14rem;
+}

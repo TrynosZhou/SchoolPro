@@ -73,6 +73,8 @@ interface BalanceEnquiryRow {
 })
 export class PortalLayoutComponent implements OnInit, OnChanges, OnDestroy {
   @Input() portalTitle = 'Portal';
+  /** Shows a short text label under each top bar icon. Off by default. */
+  @Input() showTopbarLabels = true;
   @Input() pageTitle = 'Dashboard';
   /** Target for the "Home" link in the top bar. Falls back to the first nav path. */
   @Input() homePath = '';
@@ -669,20 +671,20 @@ export class PortalLayoutComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   toggleSection(heading: string): void {
-    this.expandedSections.update((set) => {
-      const newSet = new Set(set);
-      if (newSet.has(heading)) {
-        newSet.delete(heading);
-      } else {
-        newSet.add(heading);
-      }
-      return newSet;
-    });
+    // Accordion: one major menu open at a time keeps long menus (e.g. Finance) from pushing the rest off-screen.
+    this.expandedSections.update((set) => (set.has(heading) ? new Set<string>() : new Set([heading])));
   }
 
   sectionHasActive(section: NavSection): boolean {
     if (section.path && this.isNavItemActive(section.path)) return true;
-    return section.items.some((item) => this.isNavItemActive(item.path));
+    return section.items.some((item) => this.isNavItemActive(item.path) && this.queryParamsMatch(item.queryParams));
+  }
+
+  /** An item with queryParams (e.g. Subjects → ?tab=subjects) is active only when those params are in the URL. */
+  private queryParamsMatch(expected?: Record<string, string | number>): boolean {
+    if (!expected) return true;
+    const current = this.router.parseUrl(this.router.url).queryParams;
+    return Object.entries(expected).every(([key, value]) => String(current[key]) === String(value));
   }
 
   private initExpandedSections(): void {
@@ -695,7 +697,7 @@ export class PortalLayoutComponent implements OnInit, OnChanges, OnDestroy {
   private ensureActiveSectionExpanded(): void {
     const active = this.navSections.find((section) => this.sectionHasActive(section));
     if (!active || this.expandedSections().has(active.heading)) return;
-    this.expandedSections.update((set) => new Set(set).add(active.heading));
+    this.expandedSections.set(new Set([active.heading]));
   }
 
   private isNavItemActive(path: string): boolean {
@@ -719,12 +721,14 @@ export class PortalLayoutComponent implements OnInit, OnChanges, OnDestroy {
     const h = heading.toLowerCase();
     // Teacher portal: Account sits under ADMINISTRATION, right after Communication.
     if (h === 'account' && this.portalTitle === 'Teacher Portal') return 'ADMINISTRATION';
-    if (['dashboard', 'students', 'parents', 'staff', 'teachers', 'account'].includes(h)) return 'MAIN';
+    if (['dashboard', 'students', 'students and parents', 'parents', 'staff', 'staff and hr', 'teachers', 'account'].includes(h)) return 'MAIN';
     if (['classes & subjects', 'classes', 'subjects', 'attendance', 'examinations', 'timetable', 'learning', 'academics'].includes(h)) {
       return 'ACADEMICS';
     }
-    if (['finance', 'fin. reports', 'communication', 'administration'].includes(h)) return 'ADMINISTRATION';
-    if (['analytics & reporting', 'system admin', 'system'].includes(h)) return 'SYSTEM';
+    if (['finance', 'fin. reports', 'communication', 'student welfare', 'campus operations', 'administration'].includes(h)) {
+      return 'ADMINISTRATION';
+    }
+    if (['analytics & reporting', 'system admin', 'reports and system', 'system'].includes(h)) return 'SYSTEM';
     return 'MAIN';
   }
 
@@ -746,7 +750,7 @@ export class PortalLayoutComponent implements OnInit, OnChanges, OnDestroy {
     subjects: 'subjects',
     attendance: 'attendance',
     'attendance report': 'attendance',
-    academics: 'classes',
+    academics: 'academics',
     timetable: 'timetable',
     'exams & results': 'examinations',
     'report cards': 'examinations',
@@ -789,6 +793,13 @@ export class PortalLayoutComponent implements OnInit, OnChanges, OnDestroy {
     integrations: 'system-admin',
     'audit trail': 'system-admin',
     // Major menu headings
+    'students and parents': 'students',
+    'staff and hr': 'staff-hr',
+    finance: 'finance',
+    communication: 'communication',
+    'student welfare': 'welfare',
+    'campus operations': 'campus',
+    'reports and system': 'reports-system',
     'classes & subjects': 'classes',
     examinations: 'examinations',
     learning: 'subjects',

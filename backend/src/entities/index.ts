@@ -47,6 +47,8 @@ import { PayrollRun } from './PayrollRun';
 import { Payslip } from './Payslip';
 import { StaffLeaveBalance } from './StaffLeaveBalance';
 import { LeaveRequest } from './LeaveRequest';
+import { Survey, SurveyQuestion, SurveyResponse } from './Survey';
+import { MeetingSlot, MeetingBooking } from './Meeting';
 import { TuitionExemption } from './TuitionExemption';
 import { InvoiceAdjustment } from './InvoiceAdjustment';
 import { ChartOfAccount } from './ChartOfAccount';
@@ -126,6 +128,9 @@ export const entities = [
   Payslip,
   StaffLeaveBalance,
   LeaveRequest,
+  Survey,
+  SurveyQuestion,
+  SurveyResponse,
   TuitionExemption,
   InvoiceAdjustment,
   ChartOfAccount,
@@ -155,6 +160,8 @@ export const entities = [
   Room,
   ConsentForm,
   ConsentSubmission,
+  MeetingSlot,
+  MeetingBooking,
 ];
 
 export * from './enums';
@@ -208,6 +215,9 @@ export {
   Payslip,
   StaffLeaveBalance,
   LeaveRequest,
+  Survey,
+  SurveyQuestion,
+  SurveyResponse,
   TuitionExemption,
   InvoiceAdjustment,
   ChartOfAccount,
@@ -237,5 +247,7 @@ export {
   Room,
   ConsentForm,
   ConsentSubmission,
+  MeetingSlot,
+  MeetingBooking,
 };
 

@@ -79,7 +79,7 @@ const TYPES = ['trip', 'media', 'policy', 'medical', 'general'];
   } @else {
     <div class="tab-bar" role="tablist">
       <button type="button" role="tab" [class.active]="tab==='forms'" [attr.aria-selected]="tab==='forms'" (click)="tab='forms'">Forms<span class="wf-count">{{ forms.length }}</span></button>
-      <button type="button" role="tab" [class.active]="tab==='subs'" [attr.aria-selected]="tab==='subs'" (click)="openSubs()">Submissions<span class="wf-count">{{ ov()?.signed !== undefined ? (ov()!.signed + ov()!.pending + ov()!.declined) : submissions.length }}</span></button>
+      <button type="button" role="tab" [class.active]="tab==='subs'" [attr.aria-selected]="tab==='subs'" (click)="openSubs()">Submissions<span class="wf-count">{{ submissionTabCount() }}</span></button>
     </div>
 
     <div class="wf-bar">
@@ -177,6 +177,12 @@ export class AdminConsentsComponent implements OnInit {
   showForm = false; typeFilter = ''; subStatus = ''; subFormId = ''; signName = '';
   form: any = { type: 'general', requiresSignature: true, status: 'published' };
   ov = signal<ConsentsOverview | null>(null);
+
+  /** Count shown on the Submissions tab. Safe before the overview has loaded. */
+  submissionTabCount(): number {
+    const o = this.ov();
+    return o ? o.signed + o.pending + o.declined : this.submissions.length;
+  }
   notice = signal<{ kind: 'ok' | 'bad'; text: string } | null>(null);
   private noticeTimer: any;
 
