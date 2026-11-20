@@ -11,6 +11,7 @@
   --line: #dfe2e8;
   --field: #f6f7f9;
   --focus: #1d3a6e;
+  --border-navy: #0b2a6b;
   --display: Georgia, 'Times New Roman', serif;
   --serif: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
   --sans: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
@@ -29,9 +30,9 @@
 .login-stage {
   display: flex;
   justify-content: center;
-  align-items: flex-start;
+  align-items: center;
   min-height: 100vh;
-  padding: clamp(1.5rem, 5vh, 3.5rem) 1rem 2rem;
+  padding: 0.5rem 1rem;
   box-sizing: border-box;
 }
 
@@ -46,7 +47,7 @@ button:focus-visible {
   width: 100%;
   max-width: 420px;
   background: #fff;
-  border: 0.5px solid var(--line);
+  border: 5px solid var(--border-navy);
   border-radius: 12px;
   overflow: hidden;
   box-shadow: 0 1px 2px rgba(15, 29, 54, 0.04);
@@ -60,16 +61,16 @@ button:focus-visible {
 .login-band {
   display: flex;
   align-items: center;
-  gap: 0.9rem;
-  padding: 1.4rem 1.5rem;
+  gap: 0.6rem;
+  padding: 0.45rem 1rem;
   background: var(--navy);
-  box-shadow: inset 0 -3px 0 var(--brass);
+  box-shadow: inset 0 -2px 0 var(--brass);
   color: #eef1f6;
 }
 
 .brand-mark {
-  width: 3rem;
-  height: 3rem;
+  width: 2rem;
+  height: 2rem;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -79,7 +80,7 @@ button:focus-visible {
   color: var(--brass-soft);
   font-family: var(--display);
   font-weight: 500;
-  font-size: 1.05rem;
+  font-size: 0.92rem;
   letter-spacing: 0.03em;
   overflow: hidden;
   flex-shrink: 0;
@@ -104,22 +105,22 @@ button:focus-visible {
 .brand-name {
   margin: 0;
   font-family: var(--display);
-  font-size: 1.2rem;
+  font-size: 0.98rem;
   font-weight: 500;
-  line-height: 1.15;
+  line-height: 1.1;
   color: #fff;
 }
 
 .brand-tagline {
-  margin: 0.2rem 0 0;
-  font-size: 0.8rem;
+  margin: 0.05rem 0 0;
+  font-size: 0.68rem;
   letter-spacing: 0.02em;
   color: var(--brass-soft);
 }
 
 /* —— Body —— */
 .login-body {
-  padding: 1.75rem 1.75rem 1.5rem;
+  padding: 0.65rem 1.1rem 0.5rem;
 }
 
 @media (max-width: 560px) {
@@ -129,14 +130,14 @@ button:focus-visible {
 
   .login-card {
     max-width: none;
-    border: 0;
+    border: 5px solid var(--border-navy);
     border-radius: 0;
     min-height: 100vh;
     box-shadow: none;
   }
 
   .login-body {
-    padding: 1.5rem 1.25rem 1.25rem;
+    padding: 0.65rem 0.9rem 0.5rem;
   }
 }
 
@@ -144,18 +145,18 @@ button:focus-visible {
 .mode-tabs {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  margin-bottom: 1.5rem;
+  margin-bottom: 0.45rem;
   border-bottom: 1px solid var(--line);
 }
 
 .mode-tab {
   margin-bottom: -1px;
-  padding: 0.7rem 0;
+  padding: 0.28rem 0;
   border: 0;
   border-bottom: 2px solid transparent;
   background: none;
   color: var(--muted);
-  font: 600 0.95rem var(--sans);
+  font: 600 0.88rem var(--sans);
   cursor: pointer;
   transition: color 0.15s, border-color 0.15s;
 
@@ -170,12 +171,12 @@ button:focus-visible {
 }
 
 .signin-header {
-  margin-bottom: 1.4rem;
+  margin-bottom: 0.45rem;
 
   h2 {
-    margin: 0 0 0.4rem;
+    margin: 0 0 0.1rem;
     font-family: var(--display);
-    font-size: 1.75rem;
+    font-size: 1.1rem;
     font-weight: 500;
     line-height: 1.15;
     color: var(--ink);
@@ -184,8 +185,8 @@ button:focus-visible {
   p {
     margin: 0;
     color: var(--muted);
-    font-size: 0.95rem;
-    line-height: 1.5;
+    font-size: 0.76rem;
+    line-height: 1.25;
   }
 }
 
@@ -193,13 +194,13 @@ button:focus-visible {
 .signin-form {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 0.4rem;
 }
 
 .login-card--wide .signin-form {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 1.1rem 1.5rem;
+  gap: 0.4rem 1rem;
   align-items: start;
 }
 
@@ -223,21 +224,21 @@ button:focus-visible {
 .name-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 1.5rem;
+  gap: 1rem;
 
   @media (max-width: 520px) {
     grid-template-columns: 1fr;
-    gap: 1.1rem;
+    gap: 0.4rem;
   }
 }
 
 .field {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: 0.15rem;
 
   label {
-    font-size: 0.9rem;
+    font-size: 0.76rem;
     font-weight: 600;
     color: var(--ink);
   }
@@ -249,9 +250,9 @@ button:focus-visible {
 }
 
 .field-hint {
-  font-size: 0.8rem;
+  font-size: 0.66rem;
   color: var(--faint);
-  line-height: 1.45;
+  line-height: 1.2;
 }
 
 .caps-warning {
@@ -285,7 +286,7 @@ button:focus-visible {
 .input-wrap {
   display: flex;
   align-items: center;
-  height: 3rem;
+  height: 2rem;
   border: 1px solid var(--line);
   border-radius: 3px;
   background: var(--field);
@@ -302,10 +303,12 @@ button:focus-visible {
     flex: 1;
     min-width: 0;
     height: 100%;
-    padding: 0 0.9rem;
+    padding: 0 0.75rem;
     border: 0;
     background: transparent;
-    font: 400 1rem var(--sans);
+    font: 400 0.86rem var(--sans);
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
     color: var(--ink);
     outline: none;
 
@@ -321,11 +324,11 @@ button:focus-visible {
 
 .toggle-pw {
   height: 100%;
-  padding: 0 0.9rem;
+  padding: 0 0.75rem;
   border: 0;
   background: none;
   color: var(--muted);
-  font: 600 0.82rem var(--sans);
+  font: 600 0.78rem var(--sans);
   cursor: pointer;
 
   &:hover {
@@ -334,14 +337,14 @@ button:focus-visible {
 }
 
 .form-options {
-  margin-top: -0.1rem;
+  margin-top: 0;
 }
 
 .checkbox-label {
   display: inline-flex;
   align-items: center;
-  gap: 0.55rem;
-  font-size: 0.92rem;
+  gap: 0.45rem;
+  font-size: 0.82rem;
   color: var(--muted);
   cursor: pointer;
   user-select: none;
@@ -355,8 +358,8 @@ button:focus-visible {
 
 .password-rules {
   list-style: none;
-  margin: -0.2rem 0 0;
-  padding: 0.7rem 0.9rem;
+  margin: 0;
+  padding: 0.4rem 0.7rem;
   background: var(--field);
   border: 1px solid var(--line);
   border-left: 3px solid var(--brass);
@@ -364,15 +367,15 @@ button:focus-visible {
 
   li {
     position: relative;
-    padding: 0.15rem 0 0.15rem 1rem;
-    font-size: 0.82rem;
+    padding: 0.05rem 0 0.05rem 1rem;
+    font-size: 0.74rem;
     color: var(--muted);
 
     &::before {
       content: '';
       position: absolute;
       left: 0;
-      top: 0.65rem;
+      top: 0.4rem;
       width: 5px;
       height: 5px;
       border-radius: 50%;
@@ -386,10 +389,10 @@ button:focus-visible {
   display: flex;
   align-items: flex-start;
   gap: 0.6rem;
-  padding: 0.8rem 0.95rem;
+  padding: 0.5rem 0.75rem;
   border-radius: 3px;
-  font-size: 0.92rem;
-  line-height: 1.45;
+  font-size: 0.82rem;
+  line-height: 1.3;
 }
 
 .alert-error {
@@ -426,8 +429,8 @@ button:focus-visible {
 
 .dev-reset-hint {
   margin: 0;
-  padding: 0.65rem 0.8rem;
-  font-size: 0.85rem;
+  padding: 0.4rem 0.7rem;
+  font-size: 0.78rem;
   color: #7a4a0c;
   background: #fff8ea;
   border: 1px solid #f0dcaa;
@@ -444,16 +447,16 @@ button:focus-visible {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.6rem;
+  gap: 0.5rem;
   width: 100%;
-  height: 3.1rem;
-  margin-top: 0.3rem;
+  height: 2.15rem;
+  margin-top: 0;
   border: 0;
   border-radius: 3px;
   background: var(--navy);
   box-shadow: inset 0 -3px 0 var(--brass);
   color: #fff;
-  font: 600 1rem var(--sans);
+  font: 600 0.88rem var(--sans);
   letter-spacing: 0.02em;
   cursor: pointer;
   transition: background 0.15s;
@@ -490,9 +493,9 @@ button:focus-visible {
 }
 
 .mode-switch {
-  margin: 1.4rem 0 0;
+  margin: 0.45rem 0 0;
   text-align: center;
-  font-size: 0.95rem;
+  font-size: 0.8rem;
   color: var(--muted);
 }
 
@@ -513,7 +516,7 @@ button:focus-visible {
 
   &--inline {
     margin-left: 0;
-    font-size: 0.88rem;
+    font-size: 0.82rem;
   }
 }
 
@@ -522,8 +525,8 @@ button:focus-visible {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 0.6rem 1.6rem;
-  padding: 0.95rem 1.5rem;
+  gap: 0.25rem 1.1rem;
+  padding: 0.35rem 1rem;
   border-top: 0.5px solid var(--line);
   background: #fafbfc;
 }
@@ -531,7 +534,7 @@ button:focus-visible {
 .public-nav-link {
   color: var(--muted);
   text-decoration: none;
-  font-size: 0.88rem;
+  font-size: 0.8rem;
   font-weight: 500;
 
   &:hover {
